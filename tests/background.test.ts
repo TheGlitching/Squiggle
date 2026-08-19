@@ -134,7 +134,7 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
       sw.destroy();
     });
 
-    it('responds to GET_TAB_STATE and runs analysis lifecycle via demo mode pipeline', async () => {
+    it('responds to GET_TAB_STATE and refuses analysis when no key is configured', async () => {
       const busClient = new TypedMessageBus('sidepanel');
       const sw = new BackgroundServiceWorker();
       sw.init();
@@ -144,23 +144,22 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
       expect(stateResp.state).toBeDefined();
       expect(stateResp.state?.tabId).toBe(101);
 
-      // Trigger analysis
+      // Trigger analysis with no provider configured. This used to return the
+      // bundled sample report, which reads as a verdict on the user's own page
+      // while describing a different article entirely.
       const analysisResp = await busClient.callRPC<'TRIGGER_ANALYSIS', FcRpcMap>('TRIGGER_ANALYSIS', {
         tabId: 101,
         articleText: 'Un texte de test suffisamment long pour une analyse critique complète avec arguments.',
         articleTitle: 'Titre Test',
       });
 
-      expect(analysisResp.success).toBe(true);
-      expect(analysisResp.result).toBeDefined();
-      expect(analysisResp.result?.score).toBeGreaterThanOrEqual(0);
+      expect(analysisResp.success).toBe(false);
+      expect(analysisResp.result).toBeUndefined();
+      expect(analysisResp.error).toContain('clé API');
 
       const postState = sw.getStateManager().getTabState(101);
-      // The pipeline emits 'completed'; the worker normalises it to the only
-      // spelling PipelineStatus actually declares.
-      expect(postState?.status).toBe('complete');
-      expect(postState?.findings).toBeDefined();
-
+      expect(postState?.status).toBe('error');
+      expect(postState?.result).toBeUndefined();
       busClient.destroy();
       sw.destroy();
     });

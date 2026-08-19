@@ -27,8 +27,25 @@ export interface PipelineProgressEvent {
   error?: string;
 }
 
+/**
+ * Thrown when an analysis is requested with no provider configured. It is a
+ * distinct type because the only honest response is to ask the user for a key,
+ * never to return a report.
+ */
+export class MissingProviderError extends Error {
+  constructor() {
+    super('No LLM provider is configured');
+    this.name = 'MissingProviderError';
+  }
+}
+
 export interface AnalysisPipelineOptions {
   client?: BaseLLMClient;
+  /**
+   * Return the bundled sample report instead of calling a provider. Opt-in
+   * only: a missing client must never silently select it, because a fabricated
+   * report is indistinguishable from a real one once it reaches the panel.
+   */
   demoMode?: boolean;
   onProgress?: (event: PipelineProgressEvent) => void;
 }
@@ -41,7 +58,7 @@ export class AnalysisPipeline {
 
   constructor(options: AnalysisPipelineOptions = {}) {
     this.client = options.client;
-    this.demoMode = options.demoMode ?? !options.client;
+    this.demoMode = options.demoMode === true;
     this.onProgress = options.onProgress;
   }
 
@@ -83,8 +100,12 @@ export class AnalysisPipeline {
   }): Promise<AnalysisReport> {
     this.abortController = new AbortController();
 
-    if (this.demoMode || !this.client) {
-      return this.runDemoAnalysis(input);
+    if (this.demoMode) {
+      return this.runDemoAnalysis();
+    }
+
+    if (!this.client) {
+      throw new MissingProviderError();
     }
 
     try {
@@ -155,7 +176,8 @@ export class AnalysisPipeline {
     }
   }
 
-  private async runDemoAnalysis(input: { text: string; title?: string }): Promise<AnalysisReport> {
+  /** Returns the bundled sample. It takes no input because it reads none. */
+  private async runDemoAnalysis(): Promise<AnalysisReport> {
     this.reportProgress('extracting', 'Extraction des arguments du texte...', 20);
     await new Promise((r) => setTimeout(r, 80));
 
@@ -168,10 +190,11 @@ export class AnalysisPipeline {
     this.reportProgress('scoring', 'Synthèse et calcul de la note composite...', 90);
     await new Promise((r) => setTimeout(r, 50));
 
+    // This is a fixed sample, not an analysis of `input`. Label it every time,
+    // never only when a title happened to be supplied, so it cannot be read as
+    // a verdict on the page in front of the user.
     const report: AnalysisReport = JSON.parse(JSON.stringify(DEMO_FOURCHES_CAUDINES_REPORT));
-    if (input.title) {
-      report.meta.model = 'demo-mode (Fourches Caudines)';
-    }
+    report.meta.model = 'exemple de démonstration (aucune analyse réelle)';
 
     this.reportProgress('success', 'Audit Fourches Caudines finalisé', 100);
     return report;

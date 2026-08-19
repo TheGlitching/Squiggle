@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 
 import { TypedMessageBus } from '../messaging/messageBus';
 import { UnifiedRuntime } from '../messaging/runtime';
-import { SecureKeyStorage } from '../crypto/storage';
+import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 
 import { ScoreGauge, DomainScoreGauge } from '../ui/components/ScoreGauges';
 import { VerdictStamp } from '../ui/components/VerdictStamp';
@@ -78,7 +78,14 @@ function SidepanelApp() {
       const active = await keyStorageRef.current!.getActiveProvider();
       const config = await keyStorageRef.current!.getProviderConfig(active);
       setHasKey(Boolean(config?.apiKey));
-    } catch {
+    } catch (e) {
+      // A stored key that cannot be decrypted is not the same as no key: say so,
+      // otherwise the panel invites the user to add a key they already added.
+      if (e instanceof UnreadableKeyError) {
+        setError(
+          'Votre clé API enregistrée n’a pas pu être déchiffrée. Saisissez-la à nouveau.'
+        );
+      }
       setHasKey(false);
     }
   }, []);
@@ -256,8 +263,8 @@ function SidepanelApp() {
               Configurez votre clé pour commencer
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
-              L’extension fonctionne avec votre propre clé API. Sans clé, l’analyse s’exécute sur un
-              article de démonstration.
+              L’extension fonctionne avec votre propre clé API. Sans clé, aucune analyse ne peut
+              être lancée.
             </p>
             <button
               type="button"
@@ -272,7 +279,7 @@ function SidepanelApp() {
         <button
           type="button"
           onClick={runAnalysis}
-          disabled={busy}
+          disabled={busy || hasKey === false}
           className="w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-3 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-50"
         >
           {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse éditoriale'}

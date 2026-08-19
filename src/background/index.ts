@@ -6,7 +6,7 @@
 import { UnifiedRuntime } from '../messaging/runtime';
 import { TypedMessageBus } from '../messaging/messageBus';
 import { TabStateManager } from './tabStateManager';
-import { SecureKeyStorage } from '../crypto/storage';
+import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 import { LLMClientFactory } from '../client/factory';
 import { AnalysisPipeline } from '../engine';
 // `PipelineProgressEvent` is exported by BOTH engine/types.ts ({step,progress})
@@ -312,21 +312,41 @@ export class BackgroundServiceWorker {
       return { success: false, error: err };
     }
 
-    // 2. Initialize KeyStorage & Client
+    // 2. Resolve the configured provider. Without one there is nothing to
+    // analyse with, and the only honest outcome is to ask for a key: the demo
+    // report describes a sample article, so returning it here would answer a
+    // question about the user's page with prose about a different one.
     let client;
     try {
       const activeProvider = await this.keyStorage.getActiveProvider();
       const providerConfig = await this.keyStorage.getProviderConfig(activeProvider);
-      if (providerConfig && providerConfig.apiKey) {
+      if (providerConfig?.apiKey) {
         client = LLMClientFactory.createClient(providerConfig);
       }
     } catch (e) {
-      console.warn('Failed to load active BYOK key:', e);
+      const err =
+        e instanceof UnreadableKeyError
+          ? 'Votre clé API enregistrée n’a pas pu être déchiffrée. ' +
+            'Saisissez-la à nouveau dans les réglages.'
+          : 'Impossible de lire la configuration de votre clé API. ' +
+            'Vérifiez-la dans les réglages.';
+      console.warn('Could not load the active provider key:', e);
+      this.stateManager.updateTabState(tabId, { status: 'error', error: err });
+      this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
+      return { success: false, error: err };
+    }
+
+    if (!client) {
+      const err =
+        'Aucune clé API configurée. Ajoutez votre clé dans les réglages pour ' +
+        'lancer une analyse de cette page.';
+      this.stateManager.updateTabState(tabId, { status: 'error', error: err });
+      this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
+      return { success: false, error: err };
     }
 
     const pipeline = new AnalysisPipeline({
       client,
-      demoMode: !client,
       onProgress: (evt: PipelineProgressEvent) => {
         // The pipeline emits 'completed'; TabAnalysisState.status is
         // PipelineStatus which spells it 'complete'. Normalise at this seam so
