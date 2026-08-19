@@ -1,7 +1,6 @@
 {
   "manifest_version": 3,
   "name": "Squiggle - Analyse critique de presse",
-  "version": "0.1.0",
   "description": "Évalue et vérifie la rigueur logique, factuelle et argumentative des articles de presse.",
   "permissions": [
     "activeTab",

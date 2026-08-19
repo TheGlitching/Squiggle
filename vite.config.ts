@@ -4,9 +4,19 @@ import { crx } from '@crxjs/vite-plugin';
 import { resolve } from 'path';
 import manifestChrome from './src/manifest.chrome.json';
 import manifestFirefox from './src/manifest.firefox.json';
+import pkg from './package.json';
 
 const target = process.env.TARGET || 'chrome';
-const manifest = target === 'firefox' ? manifestFirefox : manifestChrome;
+
+// The version a store sees comes from package.json alone. It used to be typed
+// into three files, which a release cannot rely on: the stores reject a re-upload
+// of a version already published, so one stale copy blocks the release, and two
+// copies that disagree ship a Chrome build and a Firefox build claiming to be
+// different versions of the same thing.
+const manifest = {
+  ...(target === 'firefox' ? manifestFirefox : manifestChrome),
+  version: pkg.version,
+};
 
 export default defineConfig({
   plugins: [

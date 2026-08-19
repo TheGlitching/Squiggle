@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish_target:
+        description: Who the new version goes live for
+        type: choice
+        default: trustedTesters
+        options: [trustedTesters, default]
+
+# Two releases uploading to the same store item would race over one version slot.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # A tag that disagrees with package.json would publish a build labelled with
+      # someone else's version number, and the store slot is spent either way.
+      - name: Tag must match package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared="$(node -p 'require("./package.json").version')"
+          if [ "$tagged" != "$declared" ]; then
+            echo "tag $GITHUB_REF_NAME declares $tagged but package.json says $declared" >&2
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+
+      - name: Build both targets
+        run: npm run build:all
+
+      - name: Test
+        run: npm test
+
+      - name: Package
+        run: node scripts/package.mjs
+
+      - name: Upload and publish to the Chrome Web Store
+        env:
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISH_TARGET: ${{ inputs.publish_target || 'default' }}
+        run: node scripts/publish-chrome.mjs
+
+      - name: Attach the packages to the release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: packages/*.zip
+          generate_release_notes: true

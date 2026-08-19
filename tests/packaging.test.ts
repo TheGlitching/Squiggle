@@ -90,4 +90,24 @@ describe('Multi-browser Build & Packaging Verification', () => {
 
     expect(new Set(contents).size).toBe(sizes.length);
   });
+
+  /**
+   * The version used to be typed into package.json and both manifests. A release
+   * cannot rely on that: the stores reject re-uploading a version already
+   * published, so one stale copy blocks a release outright, and two copies that
+   * disagree ship builds claiming to be different versions of the same thing.
+   */
+  it.each([
+    ['chrome', chromeDist],
+    ['firefox', firefoxDist],
+  ])('%s manifest takes its version from package.json', (_target, dist) => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8'),
+    ) as { version: string };
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dist, 'manifest.json'), 'utf-8'),
+    ) as { version: string };
+
+    expect(manifest.version).toBe(pkg.version);
+  });
 });

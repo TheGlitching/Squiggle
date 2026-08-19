@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets a release be dry-run from the Actions tab without cutting a tag.
+  workflow_dispatch:
+
+# A newer push makes an in-flight run of the same ref pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+
+      # The packaging tests read dist/, so both targets must be built first.
+      - name: Build both targets
+        run: npm run build:all
+
+      - name: Test
+        run: npm test
+
+      # Proves the artefact a release would upload is actually buildable and
+      # loadable, so a broken package is caught here rather than at the store.
+      - name: Package
+        run: npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: packages/*.zip
+          if-no-files-found: error
+          retention-days: 14
