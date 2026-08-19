@@ -55,6 +55,29 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   },
 ];
 
+/**
+ * Sentinel for the dropdown's escape hatch. It cannot collide with a real model
+ * id, which is why it is not simply an empty string: an empty value would also
+ * be what a cleared custom field holds.
+ */
+const CUSTOM_MODEL_OPTION = '__custom__';
+
+/**
+ * Decides whether a model belongs in the dropdown or in the free-text field.
+ *
+ * It exists as its own function because getting it wrong is silent: a model the
+ * reader saved that this build no longer lists would leave the dropdown with a
+ * value it has no option for, and the browser would settle on whichever option
+ * comes first. The reader would then be analysing with a model they never chose.
+ */
+export function resolveModelSelection(
+  preset: ProviderPreset | undefined,
+  storedModel: string | undefined
+): { model: string; usesCustomModel: boolean } {
+  const model = storedModel || preset?.defaultModel || '';
+  return { model, usesCustomModel: model !== '' && !(preset?.models ?? []).includes(model) };
+}
+
 type ValidationState =
   | { kind: 'idle' }
   | { kind: 'validating' }
@@ -78,6 +101,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   const [provider, setProvider] = useState<LLMProvider>('anthropic');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState(PROVIDER_PRESETS[0].defaultModel);
+  const [usesCustomModel, setUsesCustomModel] = useState(false);
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [validation, setValidation] = useState<ValidationState>({ kind: 'idle' });
   const [isSaving, setIsSaving] = useState(false);
@@ -97,8 +121,12 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
         setProvider(active);
         setHasStoredKey(Boolean(config?.apiKey));
         setApiKey('');
-        const activePreset = PROVIDER_PRESETS.find((p) => p.id === active);
-        setModel(config?.model || activePreset?.defaultModel || '');
+        const selection = resolveModelSelection(
+          PROVIDER_PRESETS.find((p) => p.id === active),
+          config?.model
+        );
+        setModel(selection.model);
+        setUsesCustomModel(selection.usesCustomModel);
         setValidation({ kind: 'idle' });
       } catch {
         // First run: nothing stored yet.
@@ -116,13 +144,18 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       setValidation({ kind: 'idle' });
       setApiKey('');
       const nextPreset = PROVIDER_PRESETS.find((p) => p.id === next);
+      const applySelection = (stored?: string) => {
+        const selection = resolveModelSelection(nextPreset, stored);
+        setModel(selection.model);
+        setUsesCustomModel(selection.usesCustomModel);
+      };
       try {
         const existing = await keyStorage.getProviderConfig(next);
         setHasStoredKey(Boolean(existing?.apiKey));
-        setModel(existing?.model || nextPreset?.defaultModel || '');
+        applySelection(existing?.model);
       } catch {
         setHasStoredKey(false);
-        setModel(nextPreset?.defaultModel || '');
+        applySelection(undefined);
       }
     },
     [keyStorage]
@@ -249,22 +282,55 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
             </div>
           </div>
 
+          {/*
+            A datalist on a text input looked like a dropdown without behaving as
+            one: the platform draws no usable affordance, so the list only appeared
+            if you already guessed a model name and started typing it. A native
+            select does open, which is the whole point of offering a list.
+
+            The escape hatch is not optional. OpenRouter alone exposes hundreds of
+            models and every provider's catalogue moves faster than this build, so
+            a closed list would eventually be a list of models nobody can select.
+          */}
           <label className="block">
             <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
               Modèle
             </span>
-            <input
-              list="fc-model-suggestions"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
+            <select
+              value={usesCustomModel ? CUSTOM_MODEL_OPTION : model}
+              onChange={(e) => {
+                const choice = e.target.value;
+                setUsesCustomModel(choice === CUSTOM_MODEL_OPTION);
+                if (choice !== CUSTOM_MODEL_OPTION) setModel(choice);
+              }}
               className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
-            />
-            <datalist id="fc-model-suggestions">
+            >
               {preset.models.map((m) => (
-                <option key={m} value={m} />
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
-            </datalist>
+              <option value={CUSTOM_MODEL_OPTION}>Autre modèle...</option>
+            </select>
           </label>
+
+          {usesCustomModel && (
+            <label className="block">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                Identifiant du modèle
+              </span>
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={preset.defaultModel}
+                autoFocus
+                className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+              />
+              <span className="mt-1 block text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
+                Tel qu'attendu par le fournisseur, à l'identique.
+              </span>
+            </label>
+          )}
 
           <label className="block">
             <span className="flex items-baseline justify-between">
