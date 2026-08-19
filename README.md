@@ -143,6 +143,13 @@ src/
 [ARCHITECTURE.md](ARCHITECTURE.md) covers the pipeline and why it is ordered the way
 it is. [docs/product-spec.md](docs/product-spec.md) is the original product spec.
 
+## Privacy
+
+Nothing reaches a server of mine, because there is no server of mine. The article and
+your key go straight from your browser to the provider you chose.
+[PRIVACY.md](PRIVACY.md) accounts for every byte that leaves, and
+[SECURITY.md](SECURITY.md) covers how the key is held.
+
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the build, the gates and the conventions.

@@ -5,7 +5,6 @@
   "permissions": [
     "activeTab",
     "storage",
-    "alarms",
     "scripting"
   ],
   "host_permissions": [
@@ -13,7 +12,9 @@
     "http://*/*"
   ],
   "background": {
-    "scripts": ["src/background/index.ts"],
+    "scripts": [
+      "src/background/index.ts"
+    ],
     "type": "module"
   },
   "action": {
@@ -37,8 +38,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/index.ts"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/index.ts"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -60,7 +65,9 @@
         "src/assets/*",
         "fonts/*"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

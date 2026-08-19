@@ -110,4 +110,22 @@ describe('Multi-browser Build & Packaging Verification', () => {
 
     expect(manifest.version).toBe(pkg.version);
   });
+
+  /**
+   * Every permission has to be justified to a store reviewer one by one, and a
+   * permission the code never exercises cannot be justified truthfully. Declaring
+   * one is also a straightforward rejection. So the list is pinned rather than
+   * spot-checked: adding to it should mean writing the justification too.
+   */
+  it.each([
+    ['chrome', ['activeTab', 'storage', 'sidePanel', 'scripting']],
+    ['firefox', ['activeTab', 'storage', 'scripting']],
+  ])('%s declares exactly the permissions the code uses', (target, expected) => {
+    const dist = target === 'chrome' ? chromeDist : firefoxDist;
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dist, 'manifest.json'), 'utf-8'),
+    ) as { permissions: string[] };
+
+    expect(manifest.permissions).toEqual(expected);
+  });
 });
