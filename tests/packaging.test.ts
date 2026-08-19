@@ -69,4 +69,25 @@ describe('Multi-browser Build & Packaging Verification', () => {
 
     expect(reserved).toEqual([]);
   });
+  /**
+   * Four identical 70-byte placeholders shipped for months: every size was the
+   * same stub, so the extension had no icon anywhere and nothing failed. A real
+   * icon set has one distinct raster per size, and none of them is a stub.
+   */
+  it.each([
+    ['chrome', chromeDist],
+    ['firefox', firefoxDist],
+  ])('%s build ships a real icon at every declared size', (_target, dist) => {
+    const sizes = [16, 32, 48, 128];
+    const contents = sizes.map((size) => {
+      const file = path.join(dist, 'src/assets', `icon-${size}.png`);
+      expect(fs.existsSync(file), `icon-${size}.png is missing`).toBe(true);
+      const bytes = fs.readFileSync(file);
+      // A PNG carrying an actual mark at these sizes cannot be this small.
+      expect(bytes.byteLength, `icon-${size}.png looks like a placeholder`).toBeGreaterThan(150);
+      return bytes.toString('base64');
+    });
+
+    expect(new Set(contents).size).toBe(sizes.length);
+  });
 });
