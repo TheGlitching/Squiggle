@@ -61,7 +61,21 @@ submit.
    URI. That port is what the helper below listens on.
 5. Keep the client ID and client secret: `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`.
 
-### 3. Mint a refresh token
+### 3. Store the credentials
+
+One command mints the refresh token and writes all four Actions secrets:
+
+```bash
+scripts/setup-cws-secrets.sh <extension-id> <client-id>
+```
+
+It prompts for the client secret rather than taking it on the command line, keeps the
+token off the terminal, and finishes by exchanging the stored credentials with Google,
+so a combination that would fail mid-publish fails here instead.
+
+The manual equivalent, if you would rather watch each step:
+
+### 3b. Mint a refresh token by hand
 
 The client ID and secret alone cannot upload anything; they need a token proving
 the store account consented. Run:

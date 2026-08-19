@@ -9,10 +9,15 @@
  *
  * Usage:
  *   node scripts/cws-refresh-token.mjs <client-id> <client-secret>
+ *
+ * Either value may instead arrive as CWS_CLIENT_ID / CWS_CLIENT_SECRET, which keeps
+ * the secret out of the process list when another script drives this one.
  */
 import { createServer } from 'node:http';
 
-const [clientId, clientSecret] = process.argv.slice(2);
+const [argClientId, argClientSecret] = process.argv.slice(2);
+const clientId = argClientId || process.env.CWS_CLIENT_ID;
+const clientSecret = argClientSecret || process.env.CWS_CLIENT_SECRET;
 if (!clientId || !clientSecret) {
   console.error('usage: node scripts/cws-refresh-token.mjs <client-id> <client-secret>');
   process.exit(1);
