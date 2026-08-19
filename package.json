@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "description": "Squiggle - Critical analysis and editorial verification browser extension (Chrome MV3 & Firefox MV3)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheGlitching/Squiggle.git"
+  },
+  "homepage": "https://github.com/TheGlitching/Squiggle",
+  "bugs": {
+    "url": "https://github.com/TheGlitching/Squiggle/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

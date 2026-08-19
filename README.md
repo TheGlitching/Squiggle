@@ -1,63 +1,112 @@
 # Squiggle
 
-Squiggle is a browser extension that puts any press article through a professional editorial
-review, in place, in the page you are reading.
+A browser extension that tells a reader how well the article in front of them holds
+up: which facts are actually sourced, which are checkable and merely unsourced, which
+the evidence undermines, and where the wording is doing work the evidence does not
+support.
 
-It reads the article, applies a structured critique grid, and returns a verdict
-with a score out of 100, a breakdown across ten editorial domains, the individual
-weaknesses it found with the exact quote each one refers to, and a prioritised
-revision plan. Findings are highlighted directly in the article, and hovering a
-finding in the panel connects it to the sentence it came from.
+It reads the page you are on, audits it against a structured grid, checks the audit's
+own factual objections against the web, and returns a score out of 100 with the
+weaknesses it found and the exact sentence each one refers to. Findings are
+highlighted in the article itself, and hovering one in the panel connects it to the
+passage it came from.
 
-Chrome and Firefox, Manifest V3. Bring your own API key.
+Chrome and Firefox, Manifest V3. Bring your own API key. No backend, no account, no
+telemetry.
 
-## Credit
+## Who it is for
 
-The editorial methodology behind this extension is not mine. It comes from the
-industrialised article-review prompts published by
-[**@sjowall69**](https://x.com/sjowall69) - the criteria, the scoring domains and
-the review philosophy are all theirs. This repository is an implementation of that
-method as a browser tool, nothing more.
+Someone reading a news article, not the journalist who wrote it. A reader cannot edit
+the piece, so the extension never offers rewrite advice or a pre-publication verdict.
+It explains how solid the piece is and why, and leaves the conclusion to the reader.
 
-The source prompt document itself is not redistributed here. Go read the original.
+## Inspiration
+
+The starting point was a set of industrialised article-review prompts by
+[@sjowall69](https://x.com/sjowall69), which he generously shared with me when I
+asked. The idea of holding an article to explicit, weighted criteria rather than a
+vague impression comes from there, and I am grateful for it.
+
+What this extension does has since diverged, deliberately. It addresses a reader
+instead of an author, so the criteria that graded editorial craft were dropped;
+framing and rhetorical technique became a domain of its own; assertions are checked
+against evidence rather than judged from memory; and the score is derived from the
+findings instead of being volunteered alongside them. None of that should be read as
+representing his work, and his document is private and not reproduced here.
 
 ## What it evaluates
 
-Ten weighted domains, summing to 100:
+Five weighted domains, summing to 100, chosen for a reader judging trustworthiness
+rather than an editor grading craft:
 
 | Domain | Weight |
 |---|---|
-| Factual robustness and sourcing | 20 |
-| Logical soundness | 15 |
-| Editorial coherence | 15 |
-| Clarity and readability | 10 |
-| Structure and progression | 10 |
-| Angle and impact | 10 |
-| Spelling and grammar | 5 |
-| Connection to the reader's world | 5 |
-| Preservation of the author's voice | 5 |
-| Format and calibration | 5 |
+| Robustesse factuelle et sourcing | 35 |
+| Solidité logique et argumentative | 25 |
+| Cadrage et procédés rhétoriques | 25 |
+| Déontologie et transparence | 10 |
+| Soin de la langue | 5 |
 
-The composite score maps to one of four verdicts: *publier*, *publier après
-corrections mineures*, *réviser avant publication*, *bloquer*.
+**Framing and rhetorical technique** carries as much weight as logic, because a piece
+can be factually defensible sentence by sentence and still mislead: a headline
+overstating what the body supports, loaded wording standing in for evidence, opinion
+carrying the grammar of established fact, selective quotation, a real disagreement
+presented as settled, or authority invoked without ever being named.
 
-Findings are classified as a logical fallacy, an unsupported claim, an
-overreach, a missing source, a framing bias, or a strength worth keeping.
+The composite maps to one of four bands - *solide* at 80 and above, *perfectible* at
+70, *fragile* at 60, *problématique* below that.
+
+Findings are classified as a logical fallacy, an unsupported claim, an overreach, a
+missing source, a framing problem, or a strength worth keeping.
+
+## How a factual claim is judged
+
+Each factual objection the audit raises is checked, and the result describes **what
+the article said** - never the audit's rebuttal of it. Four states, from the method:
+
+| State | Meaning |
+|---|---|
+| Vérifiée | evidence was consulted and it backs the article |
+| Non sourcée dans l'article | checkable, the article simply does not source it |
+| Douteuse | evidence casts doubt on the article's statement |
+| Non vérifiable telle qu'écrite | cannot be checked as worded |
+
+The middle two are the distinction that matters. A claim nobody sourced is a sourcing
+observation; a claim the evidence undermines is a defect. Treating them alike tells a
+reader an ordinary claim is shaky.
+
+When evidence **confirms** the article, the audit's objection was wrong. It is
+withdrawn rather than published as a fault, and recorded with the sources that
+cleared it, so a real disagreement is visible instead of silently deleted.
+
+## The score answers to the findings
+
+A model asked for a mark and a list of defects will happily supply both and let them
+disagree - describing a fabricated poll accurately in its own weakness note and still
+scoring that domain generously. So the mark is not taken at face value: every defect
+the audit raises removes a share of the marks it awarded in that domain, scaled by
+severity and by how well the defect stands up.
+
+That is a rate, not a ceiling. Defects compound, a badly sourced piece approaches zero
+on its own, and two articles judged differently stay apart afterwards - the
+distinction a cap would flatten. Evidence only ever pulls a mark down.
 
 ## Bring your own key
 
-There is no backend and no intermediary. You supply a key for one of four
-providers and calls go directly from your browser to them:
+No backend and no intermediary. You supply a key for one of four providers and calls
+go from your browser straight to them:
 
 - Anthropic
 - OpenAI
 - OpenRouter
 - Google Gemini
 
-The key is encrypted with AES-GCM and stored only in your browser's local
-extension storage. It never leaves your machine except as a request to the
-provider you chose. With no key configured, the extension runs against a bundled
-demo article so you can see the output shape before committing a key.
+The key is encrypted with AES-GCM and stored in your browser's extension storage. It
+leaves your machine only as a request to the provider you chose. With no key
+configured the extension says so and stops - it will never substitute a sample report
+for an analysis of the page you are looking at.
+
+See [SECURITY.md](SECURITY.md) for the data flow and how to report a vulnerability.
 
 ## Install from source
 
@@ -73,40 +122,32 @@ unpacked*, and select `dist/chrome`.
 **Firefox**: open `about:debugging#/runtime/this-firefox`, choose *Load Temporary
 Add-on*, and select any file inside `dist/firefox`.
 
-Then open an article, open the side panel, add your key via the gear icon, and
-run the analysis.
-
-## Development
-
-```bash
-npm run dev        # Vite dev server
-npx tsc --noEmit   # typecheck
-npm test           # unit and integration tests
-```
-
-Typecheck, build and tests are all expected to pass before a change lands.
+Then open an article, open the side panel, add your key via the gear icon, and run the
+analysis.
 
 ## Layout
 
 ```
 src/
-  engine/      review criteria, prompt construction, response validation, scoring
+  engine/      criteria, prompts, research, reconciliation, scoring
   client/      provider clients (Anthropic, OpenAI, OpenRouter, Gemini)
   crypto/      AES-GCM key encryption and local storage
   content/     article extraction, range tracking, in-page highlight overlay
   background/  service worker, tab state, analysis lifecycle
   sidepanel/   the panel application
-  ui/          design system, gauges, verdict stamp, finding cards, onboarding
-  canvas/      shareable review card export
-  adapters/    translation between the engine, content-script and UI vocabularies
+  ui/          design system, gauges, finding cards, evidence display, onboarding
+  adapters/    translation between engine, content-script and UI vocabularies
   messaging/   typed cross-context messaging and the shared RPC contract
 ```
 
-`src/adapters/` exists for a specific reason: the engine, the content script and
-the panel each name the same concepts differently. That translation lives in one
-place instead of being re-derived at every call site.
+[ARCHITECTURE.md](ARCHITECTURE.md) covers the pipeline and why it is ordered the way
+it is. [docs/product-spec.md](docs/product-spec.md) is the original product spec.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the build, the gates and the conventions.
+Releases are documented in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Licence
 
-MIT. The editorial methodology remains the work of
-[@sjowall69](https://x.com/sjowall69).
+MIT, see [LICENSE](LICENSE).
