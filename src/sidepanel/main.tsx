@@ -6,10 +6,8 @@ import { UnifiedRuntime } from '../messaging/runtime';
 import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 
 import { ScoreGauge, DomainScoreGauge } from '../ui/components/ScoreGauges';
-import { VerdictStamp } from '../ui/components/VerdictStamp';
 import { FindingCard } from '../ui/components/FindingCard';
 import { CategoryFilterBar, type FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
-import { PrioritizedRevisionPlan } from '../ui/components/PrioritizedRevisionPlan';
 import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { OnboardingTour } from '../ui/components/OnboardingTour';
@@ -306,16 +304,10 @@ function SidepanelApp() {
 
         {report && (
           <>
-            <section
-              data-tour="verdict-stamp"
-              className="p-4 rounded-xl bg-white dark:bg-[#18181B] border border-[#E7E5E4] dark:border-[#27272A] shadow-sm"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
-                  Évaluation globale
-                </h2>
-                <VerdictStamp verdict={report.verdict} score={report.score} />
-              </div>
+            <section className="p-4 rounded-xl bg-white dark:bg-[#18181B] border border-[#E7E5E4] dark:border-[#27272A] shadow-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                Évaluation globale
+              </h2>
               <div className="mt-4 flex justify-center" data-tour="score-gauges">
                 <ScoreGauge score={report.score} size={110} strokeWidth={8} showBandLabel />
               </div>
@@ -387,15 +379,6 @@ function SidepanelApp() {
                 )}
               </div>
             </section>
-
-            {report.revisionPlan && (
-              <section className="space-y-2">
-                <h3 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
-                  Plan de révision
-                </h3>
-                <PrioritizedRevisionPlan plan={report.revisionPlan} theme={theme} />
-              </section>
-            )}
           </>
         )}
 

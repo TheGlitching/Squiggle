@@ -92,8 +92,9 @@ describe('a claim the article sources is never reported as unsourced', () => {
   });
 
   it('hands the audit the article’s own source and refuses the unsourced verdict', async () => {
-    // The model is asked to research first. It declines to search and answers
-    // from memory, which must never license a factual verdict.
+    // The audit runs first, from memory; research then checks its own factual
+    // finding. The judge declines to search and answers from memory, which
+    // must never license a factual verdict.
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init: { body: string }) => {

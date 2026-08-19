@@ -2,8 +2,8 @@ import {
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
   buildFourchesCaudinesUserPrompt,
 } from './prompts';
-import { parseAndValidateLlmOutput } from './validator';
-import { researchClaims, CitedSource } from './research';
+import { parseAndValidateLlmOutput, reconcileResearchedFindings } from './validator';
+import { researchFindings, CitedSource } from './research';
 import { AnalysisInput, AnalysisReport, EvidenceSource, TextBlock } from './types';
 import { BaseLLMClient } from '../client/base';
 import { DEMO_FOURCHES_CAUDINES_REPORT } from './demoFixture';
@@ -106,6 +106,8 @@ export class AnalysisPipeline {
     blocks?: TextBlock[];
     /** Links the article itself offers as backing for its claims. */
     citedSources?: CitedSource[];
+    /** Pins "today" for the audit and its research; defaults to the real clock. */
+    now?: Date;
   }): Promise<AnalysisReport> {
     this.abortController = new AbortController();
 
@@ -118,7 +120,9 @@ export class AnalysisPipeline {
     }
 
     try {
-      this.reportProgress('preparing_prompt', 'Application de la grille des Fourches Caudines...', 20);
+      this.reportProgress('preparing_prompt', 'Application de la grille des Fourches Caudines...', 10);
+
+      const now = input.now ?? new Date();
 
       const analysisInput: AnalysisInput = {
         url: input.url || 'https://current-tab.local',
@@ -146,35 +150,18 @@ export class AnalysisPipeline {
         });
       }
 
-      // Research runs before the audit, not during it. The audit answers in one
-      // strict-JSON stream, so it cannot pause to look anything up; asked to
-      // "verify" with nothing to hand it would judge from memory, which is how a
-      // sourced fact ends up reported as false.
-      this.reportProgress('preparing_prompt', 'Vérification des faits et des sources...', 30);
-      const { claims, research } = await researchClaims({
-        client: this.client,
-        input: analysisInput,
-        citedSources,
-        onProgress: (message, pct) => this.reportProgress('preparing_prompt', message, pct),
-        abortSignal: this.abortController?.signal,
-      });
-
+      // The audit runs first, on the article alone, and answers in one
+      // strict-JSON stream. It cannot pause mid-answer to look anything up, so
+      // nothing has been researched yet at this point - only the article's own
+      // hyperlinked sources and today's date are available to it.
       const systemPrompt = FOURCHES_CAUDINES_SYSTEM_PROMPT;
-      const userPrompt = buildFourchesCaudinesUserPrompt(analysisInput, {
-        citedSources,
-        claims,
-      });
+      const userPrompt = buildFourchesCaudinesUserPrompt(analysisInput, { citedSources, now });
 
-      this.reportProgress('calling_provider', 'Audit critique en cours par le modèle IA...', 50);
+      this.reportProgress('calling_provider', 'Audit critique en cours par le modèle IA...', 20);
 
       let accumulated = '';
       const startedAt = Date.now();
 
-      // The client contract is `stream(options, callbacks)` / `complete(options)`
-      // with a `messages` array, returning a CompletionResponse object. The
-      // previous call passed `userPrompt`/`onStreamChunk` (neither exists on
-      // CompletionOptions) and treated the result as a bare string, so this
-      // branch could never have run successfully.
       const response = await this.client.stream(
         {
           messages: [{ role: 'user', content: userPrompt }],
@@ -186,22 +173,43 @@ export class AnalysisPipeline {
         {
           onChunk: (delta: string) => {
             accumulated += delta;
-            this.reportProgress('calling_provider', 'Réception continue de l’évaluation...', 70, {
+            this.reportProgress('calling_provider', 'Réception continue de l’évaluation...', 45, {
               partialText: accumulated,
             });
           },
         }
       );
 
-      this.reportProgress('parsing_response', 'Validation et notation du rapport...', 90);
+      this.reportProgress('parsing_response', 'Validation et notation du rapport...', 55);
 
-      const report = parseAndValidateLlmOutput(response.content, analysisInput, {
+      const auditedReport = parseAndValidateLlmOutput(response.content, analysisInput, {
         modelName: `${this.client.getProvider()}/${this.client.getModel()}`,
         durationMs: Date.now() - startedAt,
-        claims,
-        research,
         articleSources: sourcesByBlock,
       });
+
+      // Now the audit's own factual findings become the claims under test: the
+      // audit's objections are checked against evidence instead of being
+      // published straight from the model's memory.
+      this.reportProgress('preparing_prompt', "Vérification des constats factuels de l'audit...", 65);
+      const { claims, research } = await researchFindings({
+        client: this.client,
+        input: analysisInput,
+        findings: auditedReport.findings,
+        citedSources,
+        now,
+        onProgress: (message, pct) => this.reportProgress('preparing_prompt', message, pct),
+        abortSignal: this.abortController?.signal,
+      });
+
+      const { findings, withdrawn } = reconcileResearchedFindings(auditedReport.findings, claims);
+
+      const report: AnalysisReport = {
+        ...auditedReport,
+        findings,
+        claims,
+        research: { ...research, withdrawn },
+      };
 
       this.reportProgress('success', 'Analyse terminée avec succès', 100);
       return report;

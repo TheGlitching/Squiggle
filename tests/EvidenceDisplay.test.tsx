@@ -127,6 +127,7 @@ describe('Research disclosure', () => {
       performed: false,
       queries: [],
       skippedReason: 'le fournisseur configuré ne propose pas de recherche web',
+      withdrawn: [],
     };
 
     const markup = renderToStaticMarkup(<ResearchDisclosure research={research} claims={[]} />);
@@ -169,6 +170,7 @@ describe('Research disclosure', () => {
       performed: true,
       provider: 'anthropic',
       queries: ['budget 2024 cour des comptes', 'entrée en vigueur mesure janvier 2025'],
+      withdrawn: [],
     };
 
     const markup = renderToStaticMarkup(<ResearchDisclosure research={research} claims={claims} />);
@@ -183,5 +185,52 @@ describe('Research disclosure', () => {
     expect(markup).toContain('Le rapport cité indique une progression de 4 %.');
     expect(markup).toContain('href="https://insee.fr/statistiques/budget"');
     expect(markup).not.toContain('Les effectifs sont stables depuis 2020.');
+  });
+
+  it('shows the objections evidence refuted, and says the score predates that check', () => {
+    const research: ResearchRecord = {
+      performed: true,
+      provider: 'anthropic',
+      queries: ['maire de Nice'],
+      withdrawn: [
+        {
+          blockId: 'b1',
+          quote: 'Éric Ciotti est maire de Nice depuis juin 2024',
+          reason: 'Les sources consultées confirment ce que dit l’article.',
+          sources: [
+            {
+              title: 'Ville de Nice',
+              url: 'https://nice.fr/actualites/maire',
+              origin: 'search',
+            },
+          ],
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(<ResearchDisclosure research={research} claims={[]} />);
+
+    // A refuted objection is never shown as a fault, but it is not erased either:
+    // the reader sees what was doubted and what cleared it.
+    expect(markup).toContain('1 objection écartée après vérification');
+    expect(markup).toContain('Éric Ciotti est maire de Nice depuis juin 2024');
+    expect(markup).toContain('href="https://nice.fr/actualites/maire"');
+
+    // The score came from marks the model gave while it still believed the
+    // objection, so the disclosure has to say so rather than imply a rescoring.
+    expect(markup).toContain('avant cette vérification');
+  });
+
+  it('shows no withdrawal block when every objection survived research', () => {
+    const research: ResearchRecord = {
+      performed: true,
+      provider: 'anthropic',
+      queries: ['budget'],
+      withdrawn: [],
+    };
+
+    const markup = renderToStaticMarkup(<ResearchDisclosure research={research} claims={[]} />);
+
+    expect(markup).not.toContain('écartée après vérification');
   });
 });

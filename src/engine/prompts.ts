@@ -1,8 +1,8 @@
-import { AnalysisInput, FactualClaim } from './types';
+import { AnalysisInput } from './types';
 
-export const FOURCHES_CAUDINES_SYSTEM_PROMPT = `Tu es le moteur de relecture critique et d'audit éditorial « Fourches Caudines ».
-Ton rôle est d'analyser avec une rigueur absolue un article de presse selon les standards d'évaluation des rédactions de presse d'investigation.
-Tu dois évaluer, corriger et auditer le texte sur quatre dimensions fondamentales : exactitude formelle, solidité du fond, cohérence éditoriale et respect du lecteur.
+export const FOURCHES_CAUDINES_SYSTEM_PROMPT = `Tu es le moteur d'analyse critique « Fourches Caudines », qui aide le LECTEUR d'un article de presse à juger la solidité de ce qu'il est en train de lire.
+Ton rôle est d'expliquer avec une rigueur absolue, à l'intention de ce lecteur, dans quelle mesure l'article tient debout : quels faits sont solides, quelles affirmations sont fragiles ou non étayées, où le raisonnement flanche.
+Tu informes le lecteur sur quatre dimensions fondamentales : exactitude formelle, solidité du fond, cohérence éditoriale et respect du lecteur.
 
 Tu agis comme un exosquelette intellectuel bienveillant mais intraitable pour le lecteur :
 1. Tu vérifies les faits, chiffres, dates, sources et citations.
@@ -19,8 +19,8 @@ DIRECTIVES ABSOLUES DE RÉPONSE :
 
 /**
  * Shared block formatting reused by every prompt that embeds the article text,
- * so the extraction, judgement and audit prompts stay in lockstep with each
- * other's view of a block.
+ * so the judgement and audit prompts stay in lockstep with each other's view
+ * of a block.
  */
 function formatBlocksForPrompt(input: AnalysisInput): string {
   return input.blocks
@@ -28,37 +28,27 @@ function formatBlocksForPrompt(input: AnalysisInput): string {
     .join('\n\n');
 }
 
-export const FOURCHES_CAUDINES_CLAIM_EXTRACTION_SYSTEM_PROMPT = `Tu es l'étape d'extraction de faits vérifiables du moteur « Fourches Caudines ».
-Ton unique rôle est de repérer, dans un article segmenté par blocs, les affirmations FACTUELLES et VÉRIFIABLES (chiffres, dates, événements, déclarations attribuées, statistiques).
-Tu EXCLUS systématiquement les opinions, prédictions, jugements de valeur, tournures rhétoriques et généralités qui ne peuvent pas être confrontées à une source.
-Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.`;
-
 /**
- * Generates the user prompt for the claim-extraction stage: lists at most
- * `maxClaims` checkable assertions with their literal quote and block id.
+ * Tells every prompt that reasons about time what "today" is, in both ISO and
+ * French long form, and states the two rules that follow from it.
+ *
+ * The first is about dates: a date merely being recent or near-future relative
+ * to today is never itself an error, since a model's knowledge cutoff is not
+ * the reader's calendar.
+ *
+ * The second is the more damaging case, and it is not about dates at all. Who
+ * holds an office, what a company is called, whether a law passed: these are
+ * states of the world that change, and a model asked about one after its
+ * cutoff answers confidently from a world that has moved on. That is how the
+ * audit came to tell a reader that an article had named the wrong mayor. Such
+ * an objection has to be voiced as a doubt to be checked, never as a
+ * correction, because the research stage that follows can only test a claim it
+ * was handed.
  */
-export function buildClaimExtractionUserPrompt(input: AnalysisInput, maxClaims: number): string {
-  const blocksFormatted = formatBlocksForPrompt(input);
-
-  return `Repère au maximum ${maxClaims} affirmations factuelles vérifiables dans l'article suivant. Une affirmation vérifiable a une valeur de vérité tranchable par une recherche (un chiffre, une date, un fait rapporté, une citation attribuée) ; une opinion, une prédiction ou un jugement de valeur n'en est PAS une et doit être ignoré.
-
-TITRE : ${input.title}
-URL : ${input.url}
-
-TEXTE SEGMENTÉ PAR BLOCS :
-${blocksFormatted}
-
-FORMAT JSON STRICT ATTENDU :
-{
-  "claims": [
-    {
-      "blockId": "block_id_exact",
-      "quote": "citation littérale exacte du texte portant l'affirmation",
-      "claim": "l'affirmation reformulée de façon autonome et cherchable"
-    }
-  ]
-}
-Si aucune affirmation vérifiable n'est trouvée, renvoie { "claims": [] }.`;
+function formatTemporalContextSection(now: Date): string {
+  const iso = now.toISOString().slice(0, 10);
+  const long = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'full' }).format(now);
+  return `\n\nCONTEXTE TEMPOREL :\nNous sommes aujourd'hui le ${long} (${iso}).\nUne date récente ou proche dans le futur par rapport à cette date n'est PAS en soi une erreur : tu ne dois JAMAIS la signaler comme fautive au seul motif qu'elle est postérieure à tes connaissances internes ou proche de la limite de celles-ci. Tu ne peux contester une date que si une source que tu as réellement consultée la contredit explicitement.\nLa même prudence vaut pour tout fait qui a pu CHANGER depuis la limite de tes connaissances : titulaire d'une fonction ou d'un mandat, dirigeant, nom d'une organisation, résultat d'une élection, état d'une loi, bilan chiffré. Tes connaissances internes sont peut-être périmées, pas l'article. Si l'article contredit ce que tu crois savoir sur un tel fait, tu ne dois JAMAIS écrire qu'il se trompe ni proposer la valeur que tu crois correcte : tu formules une réserve à vérifier, et c'est une source réellement consultée qui tranchera.`;
 }
 
 export const FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines ».
@@ -74,7 +64,8 @@ Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.
 export function buildClaimJudgementUserPrompt(
   claim: { quote: string; claim: string },
   searchResults: { title: string; url: string; snippet: string }[],
-  articleSources: { href: string; domain: string; text: string }[]
+  articleSources: { href: string; domain: string; text: string }[],
+  now: Date = new Date()
 ): string {
   const searchFormatted = searchResults.length
     ? searchResults.map((r) => `- ${r.title} (${r.url})\n  ${r.snippet}`).join('\n')
@@ -85,6 +76,7 @@ export function buildClaimJudgementUserPrompt(
 
   return `AFFIRMATION À VÉRIFIER : ${claim.claim}
 CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
+${formatTemporalContextSection(now)}
 
 RÉSULTATS DE RECHERCHE (ce sont les seuls extraits que tu peux lire ; tu peux t'appuyer uniquement sur le texte affiché ci-dessous, jamais sur un titre ou une URL seuls) :
 ${searchFormatted}
@@ -116,7 +108,8 @@ Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.
  */
 export function buildClaimGroundedJudgementUserPrompt(
   claim: { quote: string; claim: string },
-  articleSources: { href: string; domain: string; text: string }[]
+  articleSources: { href: string; domain: string; text: string }[],
+  now: Date = new Date()
 ): string {
   const articleFormatted = articleSources.length
     ? articleSources.map((s) => `- ${s.text} -> ${s.href} (${s.domain})`).join('\n')
@@ -124,6 +117,7 @@ export function buildClaimGroundedJudgementUserPrompt(
 
   return `AFFIRMATION À VÉRIFIER : ${claim.claim}
 CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
+${formatTemporalContextSection(now)}
 
 Recherche sur le web les sources nécessaires pour vérifier cette affirmation avant de répondre.
 
@@ -140,44 +134,28 @@ FORMAT JSON STRICT ATTENDU :
 }`;
 }
 
-/**
- * Evidence gathered by the research stage, rendered into the audit prompt so
- * the model judges facts against what was actually found rather than being
- * ordered to "verify" with nothing to verify against.
- */
-export interface ResearchEvidenceForPrompt {
-  citedSources: { href: string; domain: string; text: string }[];
-  claims: FactualClaim[];
-}
-
-function formatCitedSourcesSection(citedSources: ResearchEvidenceForPrompt['citedSources']): string {
+function formatCitedSourcesSection(citedSources: { href: string; domain: string; text: string }[]): string {
   if (!citedSources.length) return '';
   const lines = citedSources.map((s) => `- ${s.text || s.domain} -> ${s.href} (${s.domain})`).join('\n');
   return `\n\nSOURCES CITÉES PAR L'ARTICLE :\n${lines}`;
 }
 
-function formatFactualVerificationsSection(claims: FactualClaim[]): string {
-  if (!claims.length) return '';
-  const lines = claims
-    .map((c) => {
-      const sources = c.sources.length
-        ? c.sources.map((s) => `    - [${s.origin}] ${s.title} : ${s.url}`).join('\n')
-        : '    - (aucune source)';
-      return `- Affirmation : ${c.claim}\n  Citation : "${c.quote}" (bloc ${c.blockId})\n  Verdict recherche : ${c.verification}${c.rationale ? ` (${c.rationale})` : ''}\n${sources}`;
-    })
-    .join('\n');
-  return `\n\nVÉRIFICATIONS FACTUELLES :\n${lines}`;
-}
-
 /**
- * Generates the user prompt embedding the article data and Fourches Caudines 8-block criteria
+ * Generates the user prompt embedding the article data and Fourches Caudines 8-block criteria.
+ *
+ * No factual-verification evidence is embedded here: research now runs on the
+ * audit's own findings, after this prompt is answered, so at this point
+ * nothing has been checked yet.
  */
-export function buildFourchesCaudinesUserPrompt(input: AnalysisInput, evidence?: ResearchEvidenceForPrompt): string {
+export function buildFourchesCaudinesUserPrompt(
+  input: AnalysisInput,
+  opts: { citedSources?: { href: string; domain: string; text: string }[]; now?: Date } = {}
+): string {
   const blocksFormatted = formatBlocksForPrompt(input);
-  const citedSourcesSection = formatCitedSourcesSection(evidence?.citedSources ?? []);
-  const factualVerificationsSection = formatFactualVerificationsSection(evidence?.claims ?? []);
+  const citedSourcesSection = formatCitedSourcesSection(opts.citedSources ?? []);
+  const temporalSection = formatTemporalContextSection(opts.now ?? new Date());
 
-  return `Effectue l'audit intégral selon la méthode des 8 blocs des Fourches Caudines sur l'article suivant :
+  return `Effectue l'analyse critique complète selon la méthode des Fourches Caudines sur l'article suivant, pour informer le lecteur de sa solidité :
 
 TITRE : ${input.title}
 ${input.author ? `AUTEUR : ${input.author}` : ''}
@@ -188,7 +166,7 @@ URL : ${input.url}
 TEXTE SEGMENTÉ PAR BLOCS :
 ---
 ${blocksFormatted}
----${citedSourcesSection}${factualVerificationsSection}
+---${citedSourcesSection}${temporalSection}
 
 GRILLE D'ÉVALUATION ET CRITÈRES DE NOTATION SUR 100 POINTS :
 Tu dois noter obligatoirement chacun des 10 domaines suivants :
@@ -205,7 +183,6 @@ Tu dois noter obligatoirement chacun des 10 domaines suivants :
 
 FORMAT JSON STRICT ATTENDU :
 {
-  "verdict": "publier" | "publier_apres_corrections_mineures" | "reviser_avant_publication" | "bloquer",
   "summary": "Synthèse exécutive du diagnostic en 2 à 4 phrases percutantes et pédagogiques.",
   "scores": [
     {
@@ -236,26 +213,6 @@ FORMAT JSON STRICT ATTENDU :
     "accessible": true,
     "ethique": true,
     "notes": "Bilan rapide sur les 6 axes"
-  },
-  "revisionPlan": {
-    "priority1_blocking": [
-      {
-        "problem": "Affirmation catégorique non vérifiable",
-        "reason": "Induit le lecteur en erreur sur un chiffre clé",
-        "action": "Indiquer la source ou supprimer l'affirmation",
-        "blockId": "bloc_id",
-        "quote": "extrait"
-      }
-    ],
-    "priority2_major": [],
-    "priority3_editorial_optimizations": []
-  },
-  "editorialOptimizations": {
-    "title": "Proposition d'optimisation de titre éventuelle",
-    "hook": "Optimisation de l'accroche",
-    "angle": "Recentrage d'angle",
-    "narration": "Conseil narratif",
-    "conclusion": "Ouverture constructive"
   }
 }`;
 }

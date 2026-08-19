@@ -8,7 +8,8 @@ import {
   RawLlmAnalysisResponse,
   RawLlmAnalysisResponseSchema,
   ResearchRecord,
-  TextBlock
+  TextBlock,
+  WithdrawnObjection
 } from './types';
 
 /**
@@ -98,8 +99,12 @@ export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]):
   });
 }
 
-/** Categories that assert something about the world, so they require evidence to stand. */
-const FACTUAL_CATEGORIES: Record<string, true> = {
+/**
+ * Categories that assert something about the world, so they require evidence
+ * to stand. Shared with research.ts, which uses it to pick out exactly the
+ * findings worth researching after the audit runs.
+ */
+export const FACTUAL_FINDING_CATEGORIES: Record<string, true> = {
   'source-absente': true,
   'affirmation-non-etayee': true,
   surinterpretation: true
@@ -118,7 +123,7 @@ export function enforceEvidenceHonesty(
   articleSources: Record<string, EvidenceSource[]>
 ): Finding[] {
   return findings.map((finding) => {
-    if (!FACTUAL_CATEGORIES[finding.category]) {
+    if (!FACTUAL_FINDING_CATEGORIES[finding.category]) {
       if (finding.verification === undefined) {
         return finding;
       }
@@ -148,6 +153,59 @@ export function enforceEvidenceHonesty(
 
     return next;
   });
+}
+
+/**
+ * Reconciles the audit's own factual findings against the evidence gathered
+ * for them by `researchFindings`, per the verification-subject invariant: a
+ * claim's `verification` always describes the ARTICLE's statement (the
+ * finding's `quote`), never the audit's objection to it.
+ *
+ *  - evidence CONFIRMS the article -> the audit's objection was unfounded.
+ *    The finding is withdrawn from the returned list and recorded instead as
+ *    a `WithdrawnObjection`, so a real disagreement is never silently erased.
+ *  - evidence CONTRADICTS the article -> the finding stands, carrying the
+ *    claim's sources and `verification: 'contradicted'`.
+ *  - nothing was actually read -> the finding stands as `verification:
+ *    'unverified'`, an unchecked reserve rather than an established fault.
+ *
+ * A finding with no matching claim (editorial categories, which are never
+ * researched) passes through unchanged.
+ */
+export function reconcileResearchedFindings(
+  findings: Finding[],
+  claims: FactualClaim[]
+): { findings: Finding[]; withdrawn: WithdrawnObjection[] } {
+  const claimByFindingId = new Map(claims.map((claim) => [claim.findingId, claim]));
+  const withdrawn: WithdrawnObjection[] = [];
+  const kept: Finding[] = [];
+
+  for (const finding of findings) {
+    const claim = claimByFindingId.get(finding.id);
+    if (!claim) {
+      kept.push(finding);
+      continue;
+    }
+
+    if (claim.verification === 'confirmed') {
+      withdrawn.push({
+        blockId: finding.blockId,
+        quote: finding.quote,
+        reason: `Le constat « ${finding.label} » mettait en doute cette affirmation, mais les sources consultées confirment ce que dit l'article.`,
+        sources: claim.sources
+      });
+      continue;
+    }
+
+    if (claim.verification === 'contradicted') {
+      kept.push({ ...finding, verification: 'contradicted', sources: claim.sources });
+      continue;
+    }
+
+    kept.push({ ...finding, verification: 'unverified', sources: claim.sources.length > 0 ? claim.sources : finding.sources });
+  }
+
+  return { findings: kept, withdrawn };
 }
 
 export interface ParseLlmOutputOptions {
@@ -197,7 +255,6 @@ export function parseAndValidateLlmOutput(
       const findingsParsed = Array.isArray(candidate.findings) ? candidate.findings : [];
 
       rawData = {
-        verdict: 'reviser_avant_publication',
         summary: typeof candidate.summary === 'string' ? candidate.summary : 'Analyse effectuée avec réserves.',
         scores: scoresParsed as RawLlmAnalysisResponse['scores'],
         findings: findingsParsed as RawLlmAnalysisResponse['findings'],
@@ -209,11 +266,6 @@ export function parseAndValidateLlmOutput(
           narratif: true,
           accessible: true,
           ethique: true
-        },
-        revisionPlan: {
-          priority1_blocking: [],
-          priority2_major: [],
-          priority3_editorial_optimizations: []
         }
       };
     } else {
@@ -233,27 +285,23 @@ export function parseAndValidateLlmOutput(
   const research: ResearchRecord = options.research || {
     performed: false,
     queries: [],
-    skippedReason: "Aucune étape de recherche n'a été exécutée avant la validation de cette analyse."
+    skippedReason: "Aucune étape de recherche n'a été exécutée avant la validation de cette analyse.",
+    withdrawn: []
   };
 
   // Compute composite score and normalized categories
   const scoreResult = computeFourchesCaudinesScore(
-    rawData.scores,
-    matchedFindings,
-    rawData.revisionPlan
+    rawData.scores
   );
 
   const report: AnalysisReport = {
     schemaVersion: 1,
     score: scoreResult.totalScore,
     scoreBand: scoreResult.scoreBand,
-    verdict: scoreResult.verdict,
     summary: rawData.summary,
     categories: scoreResult.normalizedCategories,
     findings: matchedFindings,
     editorialAxes: rawData.editorialAxes,
-    revisionPlan: rawData.revisionPlan,
-    editorialOptimizations: rawData.editorialOptimizations,
     claims,
     research,
     meta: {

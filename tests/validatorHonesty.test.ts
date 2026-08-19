@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { enforceEvidenceHonesty, parseAndValidateLlmOutput } from '../src/engine/validator';
-import { AnalysisInput, EvidenceSource, Finding } from '../src/engine/types';
+import { enforceEvidenceHonesty, parseAndValidateLlmOutput, reconcileResearchedFindings } from '../src/engine/validator';
+import { AnalysisInput, EvidenceSource, FactualClaim, Finding } from '../src/engine/types';
 
 function makeFinding(overrides: Partial<Finding> & Pick<Finding, 'category'>): Finding {
   return {
@@ -100,7 +100,6 @@ describe('enforceEvidenceHonesty', () => {
 
 describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
   const rawWithContradiction = JSON.stringify({
-    verdict: 'reviser_avant_publication',
     summary: 'Article globalement solide.',
     scores: [
       { domain: 'orthographe_grammaire', score: 5 },
@@ -147,7 +146,7 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
           sources: []
         }
       ],
-      research: { performed: true, provider: 'anthropic', queries: ['remplacement serveurs technologie'] }
+      research: { performed: true, provider: 'anthropic', queries: ['remplacement serveurs technologie'], withdrawn: [] }
     });
     expect(report.claims).toHaveLength(1);
     expect(report.research.performed).toBe(true);
@@ -176,12 +175,11 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
     expect(finding.sources).toEqual([]);
   });
 
-  it('leaves the pre-existing parse, score and verdict behaviour unchanged', () => {
+  it('leaves the pre-existing parse and score behaviour unchanged', () => {
     const rawLlmMarkdown = `
     Voici mon analyse :
     \`\`\`json
     {
-      "verdict": "reviser_avant_publication",
       "summary": "Article intéressant mais affirmations à sourcer.",
       "scores": [
         { "domain": "orthographe_grammaire", "score": 4 },
@@ -218,10 +216,78 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
     expect(report.summary).toContain('Article intéressant');
     expect(report.score).toBe(70);
     expect(report.scoreBand).toBe('perfectible');
-    expect(report.verdict).toBe('reviser_avant_publication');
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0].blockId).toBe('b2');
     expect(report.findings[0].charStart).toBeGreaterThan(0);
     expect(report.meta.model).toBe('gpt-4o');
+  });
+});
+
+describe('reconcileResearchedFindings', () => {
+  function makeClaim(overrides: Partial<FactualClaim> & Pick<FactualClaim, 'findingId' | 'verification'>): FactualClaim {
+    return {
+      id: 'c1',
+      blockId: 'b1',
+      quote: 'Éric Ciotti est maire de Nice.',
+      claim: 'Éric Ciotti est maire de Nice.',
+      sources: [],
+      ...overrides
+    };
+  }
+
+  it('withdraws a factual finding whose objection evidence refutes, recording it with the quote, block id, reason and sources - the reported false-accusation defect', () => {
+    const finding = makeFinding({
+      id: 'f_ciotti',
+      category: 'affirmation-non-etayee',
+      blockId: 'b1',
+      quote: 'Éric Ciotti est maire de Nice.',
+      label: 'Fait inexact : Christian Estrosi est maire de Nice, pas Éric Ciotti'
+    });
+    const source: EvidenceSource = { title: 'Mairie de Nice', url: 'https://nice.fr/maire', origin: 'search' };
+    const claim = makeClaim({ findingId: finding.id, verification: 'confirmed', sources: [source] });
+
+    const { findings, withdrawn } = reconcileResearchedFindings([finding], [claim]);
+
+    expect(findings).toEqual([]);
+    expect(withdrawn).toHaveLength(1);
+    expect(withdrawn[0]).toMatchObject({
+      blockId: 'b1',
+      quote: 'Éric Ciotti est maire de Nice.',
+      sources: [source]
+    });
+    expect(withdrawn[0].reason).toBeTruthy();
+  });
+
+  it('keeps a finding the evidence contradicts, carrying the claim\'s sources and a contradicted verification', () => {
+    const finding = makeFinding({ id: 'f1', category: 'affirmation-non-etayee' });
+    const source: EvidenceSource = { title: 'Rapport', url: 'https://example.com/rapport', origin: 'search' };
+    const claim = makeClaim({ findingId: 'f1', verification: 'contradicted', sources: [source] });
+
+    const { findings, withdrawn } = reconcileResearchedFindings([finding], [claim]);
+
+    expect(withdrawn).toEqual([]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].verification).toBe('contradicted');
+    expect(findings[0].sources).toEqual([source]);
+  });
+
+  it('keeps a finding nothing was actually read for as an unverified reserve, not an established fault', () => {
+    const finding = makeFinding({ id: 'f1', category: 'affirmation-non-etayee' });
+    const claim = makeClaim({ findingId: 'f1', verification: 'unverified', sources: [] });
+
+    const { findings, withdrawn } = reconcileResearchedFindings([finding], [claim]);
+
+    expect(withdrawn).toEqual([]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].verification).toBe('unverified');
+  });
+
+  it('passes an editorial finding through unchanged, since it was never researched and carries no claim', () => {
+    const finding = makeFinding({ id: 'f1', category: 'sophisme' });
+
+    const { findings, withdrawn } = reconcileResearchedFindings([finding], []);
+
+    expect(withdrawn).toEqual([]);
+    expect(findings).toEqual([finding]);
   });
 });

@@ -12,7 +12,7 @@ describe('EditorialCanvasRenderer', () => {
     reviewDate: '18 août 2026',
     reviewer: 'Jean Rédacteur',
     reliabilityScore: 78,
-    verdict: 'corrections',
+    scoreBand: 'perfectible',
     domainScores: [
       { id: 'sources', name: 'Sources & Citations', score: 85 },
       { id: 'logic', name: 'Raisonnement & Logique', score: 65 },
@@ -95,7 +95,7 @@ describe('EditorialCanvasRenderer', () => {
     expect(mockContext.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
   });
 
-  it('renders all sections: masthead, metadata, scores, verdict stamp, domain bars, findings, and footer', () => {
+  it('renders all sections: masthead, metadata, scores, score band badge, domain bars, findings, and footer', () => {
     const renderer = new EditorialCanvasRenderer({ theme: 'light' });
     renderer.render(mockCanvas, mockData);
 
@@ -103,17 +103,17 @@ describe('EditorialCanvasRenderer', () => {
     expect(mockContext.strokeRect).toHaveBeenCalled();
     expect(mockContext.fillText).toHaveBeenCalled();
 
-    // Verify verdict text rendered
+    // Verify score band text rendered
     const fillTextMock = mockContext.fillText as Mock;
     const fillTextCalls = fillTextMock.mock.calls.map((c) => c[0] as string);
-    expect(fillTextCalls.some((t: string) => t.includes('CORRECTIONS'))).toBe(true);
+    expect(fillTextCalls.some((t: string) => t.includes('PERFECTIBLE'))).toBe(true);
     expect(fillTextCalls.some((t: string) => t.includes('SQUIGGLE'))).toBe(true);
     expect(fillTextCalls.some((t: string) => t.includes('INDICE DE FIABILITÉ'))).toBe(true);
   });
 
   it('supports dark theme rendering properly', () => {
     const renderer = new EditorialCanvasRenderer({ theme: 'dark' });
-    renderer.render(mockCanvas, { ...mockData, verdict: 'publier', reliabilityScore: 92 });
+    renderer.render(mockCanvas, { ...mockData, scoreBand: 'solide', reliabilityScore: 92 });
 
     expect(mockCanvas.getContext).toHaveBeenCalledWith('2d');
     expect(mockContext.fillText).toHaveBeenCalled();

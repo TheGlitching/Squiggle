@@ -47,15 +47,6 @@ export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
     methodologyTip: 'Méthodologie : Nous combinons l’exigence de la presse de référence et l’analyse logique formelle pour évaluer la solidité d’un propos.',
   },
   {
-    id: 'verdict-stamp',
-    targetSelector: '[data-tour="verdict-stamp"]',
-    title: 'Le Sceau & Verdict Global',
-    badge: 'Verdict',
-    placement: 'bottom',
-    content: 'Le verdict synthétise instantanément l’état de l’écrit : « À Publier », « Corrections Mineures », « À Réviser » ou « À Bloquer ».',
-    methodologyTip: 'Un verdict « À Bloquer » signale des failles rédhibitoires ou des sophismes majeurs nécessitant une refonte immédiate avant diffusion.',
-  },
-  {
     id: 'score-gauges',
     targetSelector: '[data-tour="score-gauges"]',
     title: 'Les Jauges & Indices de Rigueur',

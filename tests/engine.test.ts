@@ -68,7 +68,6 @@ describe('Fourches Caudines Engine', () => {
 
     expect(result.totalScore).toBe(92);
     expect(result.scoreBand).toBe('solide');
-    expect(result.verdict).toBe('publier');
   });
 
   it('repairs and parses JSON responses from LLMs', () => {
@@ -76,7 +75,6 @@ describe('Fourches Caudines Engine', () => {
     Voici mon analyse :
     \`\`\`json
     {
-      "verdict": "reviser_avant_publication",
       "summary": "Article intéressant mais affirmations à sourcer.",
       "scores": [
         { "domain": "orthographe_grammaire", "score": 4 },

@@ -8,14 +8,12 @@ import type { FourchesBlockId } from '../../engine/types';
  */
 
 const BLOCK_LABELS: Record<FourchesBlockId, { short: string; label: string }> = {
-  verdict: { short: 'V', label: 'Verdict' },
   scores: { short: 'S', label: 'Scores' },
   summary: { short: 'R', label: 'Résumé' },
   surface_corrections: { short: 'C1', label: 'Corrections de surface' },
   substantive_improvements: { short: 'C2', label: 'Améliorations de fond' },
   editorial_coherence: { short: 'CE', label: 'Cohérence éditoriale' },
   editorial_power: { short: 'PE', label: 'Puissance éditoriale' },
-  prioritized_revision_plan: { short: 'PR', label: 'Plan de révision' },
 };
 
 export interface BlockTagIndicatorProps {

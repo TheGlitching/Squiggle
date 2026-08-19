@@ -1,18 +1,17 @@
 import { z } from 'zod';
 import { BaseLLMClient, SearchResult } from '../client/base';
-import { extractJsonFromResponse, repairJsonString } from './validator';
+import { extractJsonFromResponse, repairJsonString, FACTUAL_FINDING_CATEGORIES } from './validator';
 import {
   AnalysisInput,
   EvidenceSource,
   FactualClaim,
   FactualClaimSchema,
+  Finding,
   ResearchRecord
 } from './types';
 import {
-  buildClaimExtractionUserPrompt,
   buildClaimGroundedJudgementUserPrompt,
   buildClaimJudgementUserPrompt,
-  FOURCHES_CAUDINES_CLAIM_EXTRACTION_SYSTEM_PROMPT,
   FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT,
   FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT
 } from './prompts';
@@ -25,36 +24,30 @@ export interface CitedSource {
   blockId?: string;
 }
 
-export interface ResearchClaimsArgs {
+export interface ResearchFindingsArgs {
   client: BaseLLMClient;
   input: AnalysisInput;
+  /**
+   * The audit's own findings. Only the factual categories among them are
+   * researched; the claim under test is always the finding's `quote` (what
+   * the article said), never the finding's own explanation of what is wrong
+   * with it - the point of researching after the audit is to check the
+   * audit's objection, not to re-confirm it from the audit's own wording.
+   */
+  findings: Finding[];
   citedSources: CitedSource[];
-  maxClaims?: number;
   /** Forwarded to a grounded client's own search budget; ignored on the ungrounded route. */
   maxSearches?: number;
+  /** Pins "today" into every judgement prompt; defaults to the real clock. */
+  now?: Date;
   onProgress?: (msg: string, pct: number) => void;
   abortSignal?: AbortSignal;
 }
 
-export interface ResearchClaimsResult {
+export interface ResearchFindingsResult {
   claims: FactualClaim[];
   research: ResearchRecord;
 }
-
-const DEFAULT_MAX_CLAIMS = 6;
-
-/** What the extraction call must return before ids/defaults are filled in by FactualClaimSchema. */
-const ClaimExtractionSchema = z.object({
-  claims: z
-    .array(
-      z.object({
-        blockId: z.string().default(''),
-        quote: z.string().default(''),
-        claim: z.string().min(1)
-      })
-    )
-    .default([])
-});
 
 const JudgementSchema = z.object({
   verification: z.enum(['confirmed', 'contradicted', 'unverified']).default('unverified'),
@@ -96,22 +89,6 @@ function parseLooseJson(rawText: string): unknown {
   } catch {
     return JSON.parse(repairJsonString(jsonStr));
   }
-}
-
-async function extractClaims(
-  client: BaseLLMClient,
-  input: AnalysisInput,
-  maxClaims: number,
-  abortSignal?: AbortSignal
-): Promise<{ blockId: string; quote: string; claim: string }[]> {
-  const completion = await client.complete({
-    systemPrompt: FOURCHES_CAUDINES_CLAIM_EXTRACTION_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: buildClaimExtractionUserPrompt(input, maxClaims) }],
-    abortSignal
-  });
-
-  const parsed = ClaimExtractionSchema.parse(parseLooseJson(completion.content));
-  return parsed.claims.slice(0, maxClaims);
 }
 
 type JudgementRoute = 'grounded' | 'search';
@@ -174,6 +151,7 @@ async function judgeClaimViaSearch(
   claim: { quote: string; claim: string },
   searchResults: SearchResult[],
   articleSources: CitedSource[],
+  now: Date,
   abortSignal?: AbortSignal
 ): Promise<{ verification: FactualClaim['verification']; sources: EvidenceSource[]; rationale?: string }> {
   const evidencedResults = searchResults.filter((r) => r.snippet.trim().length > 0);
@@ -183,7 +161,7 @@ async function judgeClaimViaSearch(
     messages: [
       {
         role: 'user',
-        content: buildClaimJudgementUserPrompt(claim, evidencedResults, articleSources)
+        content: buildClaimJudgementUserPrompt(claim, evidencedResults, articleSources, now)
       }
     ],
     abortSignal
@@ -208,6 +186,7 @@ async function judgeClaimGrounded(
   claim: { quote: string; claim: string },
   articleSources: CitedSource[],
   maxSearches: number | undefined,
+  now: Date,
   abortSignal?: AbortSignal
 ): Promise<{ verification: FactualClaim['verification']; sources: EvidenceSource[]; rationale?: string }> {
   const answer = await client.groundedAnswer({
@@ -215,7 +194,7 @@ async function judgeClaimGrounded(
     messages: [
       {
         role: 'user',
-        content: buildClaimGroundedJudgementUserPrompt(claim, articleSources)
+        content: buildClaimGroundedJudgementUserPrompt(claim, articleSources, now)
       }
     ],
     abortSignal,
@@ -256,59 +235,55 @@ async function judgeClaimGrounded(
 }
 
 /**
- * Gathers evidence for an article's checkable factual claims before the
- * audit runs, so the audit prompt can be handed sources instead of an order
- * to "verify" with nothing to verify against.
+ * Gathers evidence for the audit's own factual findings, so what gets
+ * published as a fault is checked against reality rather than against
+ * whatever a disjoint extraction pass happened to pick out beforehand.
  *
- * Judgement runs one LLM call per claim rather than a single batched call:
- * each claim's search/judgement failure must degrade only that claim, and a
- * batched call would turn one malformed claim into a parse failure for all
- * of them.
+ * This runs AFTER the audit, not before it: the audit's factual findings are
+ * exactly the claims under test, and the claim under test is always the
+ * article's own statement (the finding's `quote`), never the finding's
+ * explanation of what the audit thinks is wrong with it. Reconciling a
+ * finding against its researched claim - keeping it, downgrading it, or
+ * withdrawing it as an unfounded objection - is `reconcileResearchedFindings`
+ * in validator.ts, not this function; this function only gathers evidence.
+ *
+ * Judgement runs one LLM call per finding rather than a single batched call:
+ * each finding's search/judgement failure must degrade only that finding, and
+ * a batched call would turn one malformed finding into a parse failure for
+ * all of them.
  */
-export async function researchClaims(args: ResearchClaimsArgs): Promise<ResearchClaimsResult> {
-  const { client, input, citedSources, maxSearches, onProgress, abortSignal } = args;
-  const maxClaims = args.maxClaims ?? DEFAULT_MAX_CLAIMS;
+export async function researchFindings(args: ResearchFindingsArgs): Promise<ResearchFindingsResult> {
+  const { client, input, findings, citedSources, maxSearches, onProgress, abortSignal } = args;
+  const now = args.now ?? new Date();
+  void input; // kept in the signature for parity with the prompt builders and future per-article context
 
-  onProgress?.('Extraction des affirmations vérifiables...', 5);
+  const factual = findings.filter((f) => FACTUAL_FINDING_CATEGORIES[f.category]);
 
-  let extracted: { blockId: string; quote: string; claim: string }[];
-  try {
-    extracted = await extractClaims(client, input, maxClaims, abortSignal);
-  } catch (err) {
-    rethrowIfAborted(err, abortSignal);
+  if (factual.length === 0) {
     return {
       claims: [],
       research: {
         performed: false,
         provider: client.getProvider(),
         queries: [],
-        skippedReason: `Extraction des affirmations impossible : ${(err as Error).message}`
+        skippedReason: "Aucun constat factuel dans l'audit à vérifier.",
+        withdrawn: []
       }
-    };
-  }
-
-  if (abortSignal?.aborted) {
-    throw new DOMException('Research aborted', 'AbortError');
-  }
-
-  if (extracted.length === 0) {
-    return {
-      claims: [],
-      research: { performed: false, provider: client.getProvider(), queries: [], skippedReason: 'Aucune affirmation factuelle vérifiable détectée.' }
     };
   }
 
   const groundedCapable = client.supportsGroundedAnswer();
   const canSearch = client.supportsWebSearch();
   if (!groundedCapable && !canSearch) {
-    const claims = extracted.map((c) =>
+    const claims = factual.map((f) =>
       FactualClaimSchema.parse({
-        blockId: c.blockId,
-        quote: c.quote,
-        claim: c.claim,
+        findingId: f.id,
+        blockId: f.blockId,
+        quote: f.quote,
+        claim: f.quote,
         verification: 'unverified',
         sources: [],
-        rationale: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web ; affirmation non vérifiée.`
+        rationale: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web ; constat non vérifié.`
       })
     );
     return {
@@ -317,7 +292,8 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
         performed: false,
         provider: client.getProvider(),
         queries: [],
-        skippedReason: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web.`
+        skippedReason: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web.`,
+        withdrawn: []
       }
     };
   }
@@ -325,32 +301,27 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
   const queries: string[] = [];
   const claims: FactualClaim[] = [];
 
-  for (let i = 0; i < extracted.length; i++) {
+  for (let i = 0; i < factual.length; i++) {
     if (abortSignal?.aborted) {
       throw new DOMException('Research aborted', 'AbortError');
     }
 
-    const raw = extracted[i];
-    const query = raw.claim;
-    queries.push(query);
-    onProgress?.(`Recherche : ${raw.claim}`, 10 + Math.round((i / extracted.length) * 80));
+    const finding = factual[i];
+    const claimUnderTest = { quote: finding.quote, claim: finding.quote };
+    queries.push(finding.quote);
+    onProgress?.(`Vérification : ${finding.quote}`, 10 + Math.round((i / factual.length) * 80));
 
-    const articleSourcesForBlock = citedSources.filter((s) => !s.blockId || s.blockId === raw.blockId);
+    const articleSourcesForBlock = citedSources.filter((s) => !s.blockId || s.blockId === finding.blockId);
 
     if (groundedCapable) {
       try {
-        const judgement = await judgeClaimGrounded(
-          client,
-          { quote: raw.quote, claim: raw.claim },
-          articleSourcesForBlock,
-          maxSearches,
-          abortSignal
-        );
+        const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, now, abortSignal);
         claims.push(
           FactualClaimSchema.parse({
-            blockId: raw.blockId,
-            quote: raw.quote,
-            claim: raw.claim,
+            findingId: finding.id,
+            blockId: finding.blockId,
+            quote: finding.quote,
+            claim: finding.quote,
             verification: judgement.verification,
             sources: judgement.sources,
             rationale: judgement.rationale
@@ -360,12 +331,13 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
         rethrowIfAborted(err, abortSignal);
         claims.push(
           FactualClaimSchema.parse({
-            blockId: raw.blockId,
-            quote: raw.quote,
-            claim: raw.claim,
+            findingId: finding.id,
+            blockId: finding.blockId,
+            quote: finding.quote,
+            claim: finding.quote,
             verification: 'unverified',
             sources: [],
-            rationale: `Vérification impossible pour cette affirmation : ${(err as Error).message}`
+            rationale: `Vérification impossible pour ce constat : ${(err as Error).message}`
           })
         );
       }
@@ -376,7 +348,7 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
     let searchFailed = false;
     let searchError = '';
     try {
-      searchResults = await client.webSearch(query);
+      searchResults = await client.webSearch(finding.quote);
     } catch (err) {
       rethrowIfAborted(err, abortSignal);
       searchFailed = true;
@@ -386,30 +358,26 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
     if (searchFailed) {
       claims.push(
         FactualClaimSchema.parse({
-          blockId: raw.blockId,
-          quote: raw.quote,
-          claim: raw.claim,
+          findingId: finding.id,
+          blockId: finding.blockId,
+          quote: finding.quote,
+          claim: finding.quote,
           verification: 'unverified',
           sources: [],
-          rationale: `Recherche web indisponible pour cette affirmation : ${searchError}`
+          rationale: `Recherche web indisponible pour ce constat : ${searchError}`
         })
       );
       continue;
     }
 
     try {
-      const judgement = await judgeClaimViaSearch(
-        client,
-        { quote: raw.quote, claim: raw.claim },
-        searchResults,
-        articleSourcesForBlock,
-        abortSignal
-      );
+      const judgement = await judgeClaimViaSearch(client, claimUnderTest, searchResults, articleSourcesForBlock, now, abortSignal);
       claims.push(
         FactualClaimSchema.parse({
-          blockId: raw.blockId,
-          quote: raw.quote,
-          claim: raw.claim,
+          findingId: finding.id,
+          blockId: finding.blockId,
+          quote: finding.quote,
+          claim: finding.quote,
           verification: judgement.verification,
           sources: judgement.sources,
           rationale: judgement.rationale
@@ -419,12 +387,13 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
       rethrowIfAborted(err, abortSignal);
       claims.push(
         FactualClaimSchema.parse({
-          blockId: raw.blockId,
-          quote: raw.quote,
-          claim: raw.claim,
+          findingId: finding.id,
+          blockId: finding.blockId,
+          quote: finding.quote,
+          claim: finding.quote,
           verification: 'unverified',
           sources: [],
-          rationale: `Vérification impossible pour cette affirmation : ${(err as Error).message}`
+          rationale: `Vérification impossible pour ce constat : ${(err as Error).message}`
         })
       );
     }
@@ -432,8 +401,11 @@ export async function researchClaims(args: ResearchClaimsArgs): Promise<Research
 
   onProgress?.('Vérifications terminées', 100);
 
+  // `withdrawn` is filled in by `reconcileResearchedFindings`, which knows
+  // which findings the evidence actually cleared; this stage only gathers
+  // the evidence.
   return {
     claims,
-    research: { performed: true, provider: client.getProvider(), queries }
+    research: { performed: true, provider: client.getProvider(), queries, withdrawn: [] }
   };
 }

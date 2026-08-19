@@ -54,7 +54,7 @@ export const EditorialReviewCard: React.FC<EditorialReviewCardProps> = ({
     setIsExporting(true);
     setErrorMsg(null);
     try {
-      const filename = `revue-editoriale-${data.verdict}-${Date.now()}.png`;
+      const filename = `revue-editoriale-${data.scoreBand}-${Date.now()}.png`;
       await EditorialCanvasRenderer.downloadPng(canvasRef.current, filename);
       if (onExportSuccess) onExportSuccess('download');
     } catch (err) {

@@ -1,8 +1,5 @@
 import {
   CategoryScore,
-  EditorialVerdict,
-  Finding,
-  PrioritizedRevisionPlan,
   SCORE_DOMAINS,
   ScoreBand,
   ScoreDomainKey
@@ -11,7 +8,6 @@ import {
 export interface ScoreComputationResult {
   totalScore: number;
   scoreBand: ScoreBand;
-  verdict: EditorialVerdict;
   normalizedCategories: CategoryScore[];
   warnings: string[];
 }
@@ -20,9 +16,7 @@ export interface ScoreComputationResult {
  * Calculates the 100-point composite score according to the Fourches Caudines grid
  */
 export function computeFourchesCaudinesScore(
-  rawScores: Array<{ domain: ScoreDomainKey; score: number; strengths?: string[]; weaknesses?: string[] }>,
-  findings: Finding[] = [],
-  revisionPlan?: PrioritizedRevisionPlan
+  rawScores: Array<{ domain: ScoreDomainKey; score: number; strengths?: string[]; weaknesses?: string[] }>
 ): ScoreComputationResult {
   const warnings: string[] = [];
   const normalizedCategories: CategoryScore[] = [];
@@ -68,37 +62,9 @@ export function computeFourchesCaudinesScore(
   // Determine score band
   const scoreBand = determineScoreBand(totalScore);
 
-  // Check critical penalty conditions (e.g. blocking factual errors or logic failures)
-  const hasBlockingRevisions = Boolean(
-    revisionPlan && revisionPlan.priority1_blocking && revisionPlan.priority1_blocking.length > 0
-  );
-  const hasSeverity3Findings = findings.some(
-    (f) => f.severity === 3 && (f.category === 'affirmation-non-etayee' || f.category === 'sophisme' || f.category === 'surinterpretation')
-  );
-
-  const factualCategory = normalizedCategories.find((c) => c.domain === 'robustesse_factuelle');
-  const logicCategory = normalizedCategories.find((c) => c.domain === 'solidite_logique');
-
-  const isFactualCritical = factualCategory ? factualCategory.score < factualCategory.maxScore * 0.4 : false;
-  const isLogicCritical = logicCategory ? logicCategory.score < logicCategory.maxScore * 0.4 : false;
-
-  // Determine editorial verdict
-  let verdict: EditorialVerdict;
-
-  if (hasBlockingRevisions || isFactualCritical || isLogicCritical || totalScore < 50) {
-    verdict = 'bloquer';
-  } else if (totalScore >= 90 && !hasSeverity3Findings) {
-    verdict = 'publier';
-  } else if (totalScore >= 80 && !hasSeverity3Findings) {
-    verdict = 'publier_apres_corrections_mineures';
-  } else {
-    verdict = 'reviser_avant_publication';
-  }
-
   return {
     totalScore,
     scoreBand,
-    verdict,
     normalizedCategories,
     warnings
   };

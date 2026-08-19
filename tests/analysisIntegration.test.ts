@@ -25,8 +25,7 @@ describe('analysis pipeline -> UI/content adapters', () => {
 
     expect(report.score).toBeGreaterThanOrEqual(0);
     expect(report.score).toBeLessThanOrEqual(100);
-    expect(['publier', 'publier_apres_corrections_mineures', 'reviser_avant_publication', 'bloquer'])
-      .toContain(report.verdict);
+    expect(['solide', 'perfectible', 'fragile', 'problematique']).toContain(report.scoreBand);
     expect(report.findings.length).toBeGreaterThan(0);
     expect(report.categories.length).toBeGreaterThan(0);
 

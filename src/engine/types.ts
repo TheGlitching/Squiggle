@@ -24,17 +24,15 @@ export interface AnalysisInput {
 }
 
 /**
- * 8 Fourches Caudines Criteria Block IDs
+ * Fourches Caudines Criteria Block IDs
  */
 export type FourchesBlockId =
-  | 'verdict'
   | 'scores'
   | 'summary'
   | 'surface_corrections'
   | 'substantive_improvements'
   | 'editorial_coherence'
-  | 'editorial_power'
-  | 'prioritized_revision_plan';
+  | 'editorial_power';
 
 /**
  * The 10 domains of the 100-point scoring grid from Fourches Caudines
@@ -179,15 +177,6 @@ export const SCORE_DOMAINS: Record<ScoreDomainKey, ScoreDomainDefinition> = {
   }
 };
 
-/**
- * Editorial verdict levels
- */
-export type EditorialVerdict =
-  | 'publier'
-  | 'publier_apres_corrections_mineures'
-  | 'reviser_avant_publication'
-  | 'bloquer';
-
 export type ScoreBand = 'solide' | 'perfectible' | 'fragile' | 'problematique';
 
 export type FindingCategory =
@@ -226,11 +215,17 @@ export interface EvidenceSource {
 export type VerificationState = 'confirmed' | 'contradicted' | 'unverified';
 
 /**
- * A checkable factual assertion lifted out of the article, carrying the result
- * of actually researching it.
+ * A checkable factual assertion lifted out of an audit finding, carrying the
+ * result of actually researching it.
  */
 export interface FactualClaim {
   id: string;
+  /**
+   * The audit finding this claim was researched for. The claim under test is
+   * always what the article said (the finding's `quote`), never the audit's
+   * objection to it, per the verification-subject invariant.
+   */
+  findingId?: string;
   blockId: string;
   /** Literal excerpt asserting it. */
   quote: string;
@@ -242,6 +237,22 @@ export interface FactualClaim {
   rationale?: string;
 }
 
+/**
+ * A factual objection the audit raised from memory that the research stage
+ * then checked against the article's own statement and found unfounded: the
+ * evidence confirmed what the article said, not what the audit doubted. The
+ * finding is withdrawn from `AnalysisReport.findings` rather than published as
+ * a fault, and recorded here instead so the disagreement is never silently
+ * erased.
+ */
+export interface WithdrawnObjection {
+  blockId: string;
+  /** The article's own statement, i.e. what was actually verified. */
+  quote: string;
+  reason: string;
+  sources: EvidenceSource[];
+}
+
 /** What the research stage actually did, so the report can never imply more. */
 export interface ResearchRecord {
   performed: boolean;
@@ -250,6 +261,8 @@ export interface ResearchRecord {
   queries: string[];
   /** Present whenever research was skipped or partial; names the limitation. */
   skippedReason?: string;
+  /** Audit objections evidence refuted; see `WithdrawnObjection`. */
+  withdrawn: WithdrawnObjection[];
 }
 
 /**
@@ -302,43 +315,16 @@ export interface EditorialAxesCheck {
 }
 
 /**
- * Block 8: Prioritized Revision Plan
- */
-export interface RevisionItem {
-  id: string;
-  problem: string;
-  reason: string;
-  action: string;
-  blockId?: string;
-  quote?: string;
-}
-
-export interface PrioritizedRevisionPlan {
-  priority1_blocking: RevisionItem[];
-  priority2_major: RevisionItem[];
-  priority3_editorial_optimizations: RevisionItem[];
-}
-
-/**
- * Full 8-Block Fourches Caudines Analysis Report
+ * Full Fourches Caudines Analysis Report
  */
 export interface AnalysisReport {
   schemaVersion: number;
   score: number; // 0-100
   scoreBand: ScoreBand;
-  verdict: EditorialVerdict;
   summary: string;
   categories: CategoryScore[];
   findings: Finding[];
   editorialAxes: EditorialAxesCheck;
-  revisionPlan: PrioritizedRevisionPlan;
-  editorialOptimizations?: {
-    title?: string;
-    hook?: string;
-    angle?: string;
-    narration?: string;
-    conclusion?: string;
-  };
   /** Factual assertions actually researched, with their evidence. */
   claims: FactualClaim[];
   /** What research ran. Never optional: silence here would read as "checked". */
@@ -388,6 +374,7 @@ export const VerificationStateSchema = z.enum(['confirmed', 'contradicted', 'unv
  */
 export const FactualClaimSchema = z.object({
   id: z.string().default(() => `c_${Math.random().toString(36).slice(2, 9)}`),
+  findingId: z.string().optional(),
   blockId: z.string().default(''),
   quote: z.string().default(''),
   claim: z.string().min(1),
@@ -433,13 +420,6 @@ export const CategoryScoreSchema = z.object({
   weaknesses: z.array(z.string()).default([])
 });
 
-export const EditorialVerdictSchema = z.enum([
-  'publier',
-  'publier_apres_corrections_mineures',
-  'reviser_avant_publication',
-  'bloquer'
-]);
-
 export const EditorialAxesCheckSchema = z.object({
   constructif: z.boolean().default(true),
   accrocheur: z.boolean().default(true),
@@ -450,23 +430,8 @@ export const EditorialAxesCheckSchema = z.object({
   notes: z.string().optional()
 });
 
-export const RevisionItemSchema = z.object({
-  id: z.string().default(() => `rev_${Math.random().toString(36).slice(2, 9)}`),
-  problem: z.string().min(1),
-  reason: z.string().min(1),
-  action: z.string().min(1),
-  blockId: z.string().optional(),
-  quote: z.string().optional()
-});
-
-export const PrioritizedRevisionPlanSchema = z.object({
-  priority1_blocking: z.array(RevisionItemSchema).default([]),
-  priority2_major: z.array(RevisionItemSchema).default([]),
-  priority3_editorial_optimizations: z.array(RevisionItemSchema).default([])
-});
 
 export const RawLlmAnalysisResponseSchema = z.object({
-  verdict: EditorialVerdictSchema.default('reviser_avant_publication'),
   summary: z.string().min(1),
   scores: z.array(CategoryScoreSchema).min(1),
   findings: z.array(FindingSchema).default([]),
@@ -478,21 +443,7 @@ export const RawLlmAnalysisResponseSchema = z.object({
     narratif: true,
     accessible: true,
     ethique: true
-  }),
-  revisionPlan: PrioritizedRevisionPlanSchema.default({
-    priority1_blocking: [],
-    priority2_major: [],
-    priority3_editorial_optimizations: []
-  }),
-  editorialOptimizations: z
-    .object({
-      title: z.string().optional(),
-      hook: z.string().optional(),
-      angle: z.string().optional(),
-      narration: z.string().optional(),
-      conclusion: z.string().optional()
-    })
-    .optional()
+  })
 });
 
 export type RawLlmAnalysisResponse = z.infer<typeof RawLlmAnalysisResponseSchema>;

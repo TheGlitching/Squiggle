@@ -3,7 +3,7 @@
  * High-resolution 2x Retina rendering for editorial review scorecards
  */
 
-import { EditorialCardData, CanvasExportOptions, VerdictType } from './types';
+import { EditorialCardData, CanvasExportOptions, ScoreBand } from './types';
 
 interface ThemePalette {
   bg: string;
@@ -18,8 +18,8 @@ interface ThemePalette {
   textFaint: string;
   accent: string;
   accentSubtle: string;
-  // Verdict colors
-  verdict: {
+  // Score band colors
+  band: {
     primary: string;
     border: string;
     bg: string;
@@ -35,46 +35,46 @@ interface ThemePalette {
   severities: Record<string, string>;
 }
 
-const VERDICT_THEMES: Record<VerdictType, {
+const SCORE_BAND_THEMES: Record<ScoreBand, {
   label: string;
   sublabel: string;
   latinMotto: string;
   colorLight: { primary: string; border: string; bg: string; text: string };
   colorDark: { primary: string; border: string; bg: string; text: string };
 }> = {
-  publier: {
-    label: 'PUBLIER',
-    sublabel: 'CERTIFIÉ CONFORME',
+  solide: {
+    label: 'SOLIDE',
+    sublabel: 'ARTICLE FIABLE',
     latinMotto: 'VERITAS ET RIGOR',
     colorLight: { primary: '#1B4D3E', border: '#1B4D3E', bg: 'rgba(27, 77, 62, 0.08)', text: '#14382D' },
     colorDark: { primary: '#34D399', border: '#34D399', bg: 'rgba(52, 211, 153, 0.12)', text: '#A7F3D0' },
   },
-  corrections: {
-    label: 'CORRECTIONS',
-    sublabel: 'AMENDEMENTS REQUIS',
+  perfectible: {
+    label: 'PERFECTIBLE',
+    sublabel: 'RÉSERVES MINEURES',
     latinMotto: 'CAUTELA NECESSARIA',
     colorLight: { primary: '#854D0E', border: '#854D0E', bg: 'rgba(133, 77, 14, 0.08)', text: '#713F12' },
     colorDark: { primary: '#FBBF24', border: '#FBBF24', bg: 'rgba(251, 191, 36, 0.12)', text: '#FDE68A' },
   },
-  reviser: {
-    label: 'RÉVISER',
-    sublabel: 'RÉÉCRITURE MAJEURE',
+  fragile: {
+    label: 'FRAGILE',
+    sublabel: 'FAIBLESSES NOTABLES',
     latinMotto: 'AUDIATUR ET ALTERA PARS',
     colorLight: { primary: '#C2410C', border: '#C2410C', bg: 'rgba(194, 65, 12, 0.08)', text: '#9A3412' },
     colorDark: { primary: '#FB923C', border: '#FB923C', bg: 'rgba(251, 146, 60, 0.12)', text: '#FED7AA' },
   },
-  bloquer: {
-    label: 'BLOQUER',
-    sublabel: 'NON DIFFUSABLE',
+  problematique: {
+    label: 'PROBLÉMATIQUE',
+    sublabel: 'À LIRE AVEC PRUDENCE',
     latinMotto: 'NIHIL PROBATUR',
     colorLight: { primary: '#881337', border: '#881337', bg: 'rgba(136, 19, 55, 0.08)', text: '#701A75' },
     colorDark: { primary: '#F43F5E', border: '#F43F5E', bg: 'rgba(244, 63, 94, 0.12)', text: '#FECDD3' },
   },
 };
 
-function getPalette(theme: 'light' | 'dark', verdict: VerdictType): ThemePalette {
+function getPalette(theme: 'light' | 'dark', scoreBand: ScoreBand): ThemePalette {
   const isDark = theme === 'dark';
-  const vTheme = isDark ? VERDICT_THEMES[verdict].colorDark : VERDICT_THEMES[verdict].colorLight;
+  const bandTheme = isDark ? SCORE_BAND_THEMES[scoreBand].colorDark : SCORE_BAND_THEMES[scoreBand].colorLight;
 
   if (isDark) {
     return {
@@ -90,7 +90,7 @@ function getPalette(theme: 'light' | 'dark', verdict: VerdictType): ThemePalette
       textFaint: '#6B7280',
       accent: '#E05338',
       accentSubtle: 'rgba(224, 83, 56, 0.15)',
-      verdict: vTheme,
+      band: bandTheme,
       scoreSolide: '#34D399',
       scorePerfectible: '#60A5FA',
       scoreFragile: '#FBBF24',
@@ -125,7 +125,7 @@ function getPalette(theme: 'light' | 'dark', verdict: VerdictType): ThemePalette
     textFaint: '#8C857B',
     accent: '#B91C1C',
     accentSubtle: 'rgba(185, 28, 28, 0.08)',
-    verdict: vTheme,
+    band: bandTheme,
     scoreSolide: '#15803D',
     scorePerfectible: '#0369A1',
     scoreFragile: '#B45309',
@@ -240,8 +240,8 @@ export class EditorialCanvasRenderer {
     // Scale drawing context so logical coordinates match w & h
     ctx.setTransform(pr, 0, 0, pr, 0, 0);
 
-    const palette = getPalette(this.theme, data.verdict);
-    const verdictInfo = VERDICT_THEMES[data.verdict];
+    const palette = getPalette(this.theme, data.scoreBand);
+    const bandInfo = SCORE_BAND_THEMES[data.scoreBand];
 
     // 1. Background with editorial paper texture feel
     ctx.fillStyle = palette.bg;
@@ -263,10 +263,10 @@ export class EditorialCanvasRenderer {
     const contentStartY = 145;
     const nextY = this.renderArticleMeta(ctx, 40, contentStartY, w - 80, palette, data);
 
-    // Middle Split: Score Gauge / Verdict Stamp vs Domain Breakdown
+    // Middle Split: Score Gauge / Score Band Badge vs Domain Breakdown
     const splitY = nextY + 15;
     const midSectionHeight = 270;
-    this.renderScoresAndVerdictSection(ctx, 40, splitY, w - 80, midSectionHeight, palette, data, verdictInfo);
+    this.renderScoresAndBandSection(ctx, 40, splitY, w - 80, midSectionHeight, palette, data, bandInfo);
 
     // Key Findings & Editorial Summary Section
     const findingsY = splitY + midSectionHeight + 20;
@@ -379,9 +379,9 @@ export class EditorialCanvasRenderer {
   }
 
   /**
-   * 3. Score Gauges & Verdict Stamp Section
+   * 3. Score Gauges & Score Band Section
    */
-  private renderScoresAndVerdictSection(
+  private renderScoresAndBandSection(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
@@ -389,7 +389,7 @@ export class EditorialCanvasRenderer {
     height: number,
     palette: ThemePalette,
     data: EditorialCardData,
-    verdictInfo: (typeof VERDICT_THEMES)[VerdictType]
+    bandInfo: (typeof SCORE_BAND_THEMES)[ScoreBand]
   ): void {
     // Card container
     ctx.fillStyle = palette.surface;
@@ -402,8 +402,8 @@ export class EditorialCanvasRenderer {
 
     const colWidth = (width - 30) / 2;
 
-    // Left Column: Composite Score & Verdict Stamp
-    this.renderCompositeScoreAndStamp(ctx, x + 15, y + 15, colWidth, height - 30, palette, data, verdictInfo);
+    // Left Column: Composite Score & Score Band Badge
+    this.renderCompositeScoreAndBand(ctx, x + 15, y + 15, colWidth, height - 30, palette, data, bandInfo);
 
     // Vertical Divider
     ctx.strokeStyle = palette.borderSubtle;
@@ -418,9 +418,9 @@ export class EditorialCanvasRenderer {
   }
 
   /**
-   * 3a. Composite Score Gauge Arc & Verdict Stamp
+   * 3a. Composite Score Gauge Arc & Score Band Badge
    */
-  private renderCompositeScoreAndStamp(
+  private renderCompositeScoreAndBand(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
@@ -428,7 +428,7 @@ export class EditorialCanvasRenderer {
     _height: number,
     palette: ThemePalette,
     data: EditorialCardData,
-    verdictInfo: (typeof VERDICT_THEMES)[VerdictType]
+    bandInfo: (typeof SCORE_BAND_THEMES)[ScoreBand]
   ): void {
     const centerX = x + width / 2;
     const gaugeCenterY = y + 70;
@@ -479,46 +479,41 @@ export class EditorialCanvasRenderer {
     ctx.font = `700 9px ${this.fontMono}`;
     ctx.fillText('INDICE DE FIABILITÉ', centerX, gaugeCenterY + 45);
 
-    // Editorial Verdict Stamp (Box with double borders, rot angle, rubber stamp look)
-    const stampY = y + 150;
-    const stampW = width - 40;
-    const stampH = 75;
-    const stampX = x + 20;
+    // Score Band Badge (flat labeled panel describing the qualitative band)
+    const badgeY = y + 150;
+    const badgeW = width - 40;
+    const badgeH = 75;
+    const badgeX = x + 20;
 
     ctx.save();
-    // Slight authentic stamp rotation (-2.5 deg)
-    ctx.translate(stampX + stampW / 2, stampY + stampH / 2);
-    ctx.rotate((-2.5 * Math.PI) / 180);
 
-    const halfW = stampW / 2;
-    const halfH = stampH / 2;
+    // Badge background tint
+    ctx.fillStyle = palette.band.bg;
+    this.drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 8);
+    ctx.fill();
 
-    // Stamp background tint
-    ctx.fillStyle = palette.verdict.bg;
-    ctx.fillRect(-halfW, -halfH, stampW, stampH);
+    // Border
+    ctx.strokeStyle = palette.band.border;
+    ctx.lineWidth = 2;
+    this.drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 8);
+    ctx.stroke();
 
-    // Double border
-    ctx.strokeStyle = palette.verdict.border;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(-halfW, -halfH, stampW, stampH);
+    const badgeCenterX = badgeX + badgeW / 2;
 
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-halfW + 4, -halfH + 4, stampW - 8, stampH - 8);
-
-    // Stamp main text
-    ctx.fillStyle = palette.verdict.primary;
+    // Band label
+    ctx.fillStyle = palette.band.primary;
     ctx.font = `900 20px ${this.fontHeading}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`★ ${verdictInfo.label} ★`, 0, -14);
+    ctx.fillText(bandInfo.label, badgeCenterX, badgeY + badgeH / 2 - 14);
 
     // Sublabel & Latin Motto
     ctx.font = `700 10px ${this.fontMono}`;
-    ctx.fillText(verdictInfo.sublabel, 0, 8);
+    ctx.fillText(bandInfo.sublabel, badgeCenterX, badgeY + badgeH / 2 + 8);
 
     ctx.font = `italic 600 9px ${this.fontHeading}`;
-    ctx.fillStyle = palette.verdict.text;
-    ctx.fillText(`« ${verdictInfo.latinMotto} »`, 0, 24);
+    ctx.fillStyle = palette.band.text;
+    ctx.fillText(`« ${bandInfo.latinMotto} »`, badgeCenterX, badgeY + badgeH / 2 + 24);
 
     ctx.restore();
   }

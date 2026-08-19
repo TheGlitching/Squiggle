@@ -2,7 +2,7 @@
  * Editorial Review Card Canvas Types and Options
  */
 
-export type VerdictType = 'publier' | 'corrections' | 'reviser' | 'bloquer';
+export type ScoreBand = 'solide' | 'perfectible' | 'fragile' | 'problematique';
 
 export interface DomainScoreItem {
   id: string;
@@ -26,7 +26,7 @@ export interface EditorialCardData {
   reviewDate?: string;
   reviewer?: string;
   reliabilityScore: number; // 0-100
-  verdict: VerdictType;
+  scoreBand: ScoreBand;
   domainScores: DomainScoreItem[];
   keyFindings: KeyFindingItem[];
   summaryText?: string;

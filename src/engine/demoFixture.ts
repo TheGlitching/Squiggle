@@ -68,7 +68,6 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
   schemaVersion: 1,
   score: 62,
   scoreBand: 'fragile',
-  verdict: 'reviser_avant_publication',
   summary: "L'article pose un débat d'intérêt public crucial avec une réelle tension éditoriale, mais présente de sévères fragilités méthodologiques dans sa première partie : chiffre d'adoption non sourcé, étude sensationnaliste non référencée, et faux dilemme caricatural. Le dernier paragraphe apporte heureusement un contrepoint constructif et nuancé.",
   categories: [
     {
@@ -227,51 +226,6 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
     accessible: true,
     ethique: false,
     notes: 'Manque de rigueur déontologique sur les sources de la première partie, bien rattrapé par l’axe constructif de la conclusion.'
-  },
-  revisionPlan: {
-    priority1_blocking: [
-      {
-        id: 'rev_1',
-        problem: 'Étude majeure non nommée et chiffre de 95 % invérifiable',
-        reason: 'Risque de désinformation et de perte totale de crédibilité auprès des lecteurs avertis',
-        action: 'Ajouter les hyperliens ou références précises des deux études mentionnées',
-        blockId: 'b3_study',
-        quote: 'Une étude récente et incontestable menée sur 50 000 élèves'
-      },
-      {
-        id: 'rev_2',
-        problem: 'Faux dilemme binaire',
-        reason: 'Raisonnement fallacieux qui affaiblit la portée démonstrative de la tribune',
-        action: 'Reformuler le paragraphe 4 en présentant la diversité des choix pédagogiques possibles',
-        blockId: 'b4_quote_dilemma',
-        quote: 'deux choix seulement s\'offrent à notre société : soit nous bannissons totalement...'
-      }
-    ],
-    priority2_major: [
-      {
-        id: 'rev_3',
-        problem: 'Citation anonyme non vérifiable',
-        reason: 'L’autorité de l’argument repose sur un intervenant sans identité vérifiable',
-        action: 'Identifier clairement la personne citée ou supprimer les guillemets',
-        blockId: 'b4_quote_dilemma'
-      }
-    ],
-    priority3_editorial_optimizations: [
-      {
-        id: 'rev_4',
-        problem: 'Coquille typographique',
-        reason: 'Espace manquant dans « laSilicon Valley »',
-        action: 'Corriger en « la Silicon Valley »',
-        blockId: 'b4_quote_dilemma'
-      }
-    ]
-  },
-  editorialOptimizations: {
-    title: 'IA à l’école : comment dépasser la panique morale pour former l’esprit critique des élèves',
-    hook: 'Entre mirage du progrès instantané et angoisse de la dépendance cognitive, l’école fait face à un défi pédagogique sans précédent.',
-    angle: 'Axer la réflexion sur la formation méthodologique plutôt que sur la vaine tentative d’interdiction technique.',
-    narration: 'Articuler dès l’introduction les observations de terrain des enseignants avec les données réelles de la recherche.',
-    conclusion: 'Réaffirmer la mission fondamentale de l’école : faire de l’IA un objet d’étude critique plutôt qu’un substitut à la pensée.'
   },
   meta: {
     model: 'demo-fixture-v1',

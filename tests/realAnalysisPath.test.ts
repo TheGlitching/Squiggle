@@ -105,11 +105,11 @@ describe('analysis with a configured key', () => {
       articleTitle: 'La dette et ses promesses',
     });
 
-    // The provider is called for research before the audit, so the audit is not
-    // the first call. The audit is the last one, and it is the call that has to
-    // carry the user's own article.
+    // The audit runs first now, on the article alone; research on the audit's
+    // own findings only happens afterward. So the audit is the FIRST call, and
+    // it is the call that has to carry the user's own article.
     expect(requests.length).toBeGreaterThan(1);
-    const audit = requests[requests.length - 1];
+    const audit = requests[0];
     expect(audit.url).toContain('/messages');
     expect(audit.body).toContain('La dette et ses promesses');
     expect(audit.body).toContain('la dette baissera dès 2027');
