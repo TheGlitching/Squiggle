@@ -130,4 +130,30 @@ describe('article extraction recovery', () => {
     expect(res.error ?? '').not.toContain('abonnés');
     expect(res.error ?? '').not.toContain('Impossible de lire cette page');
   });
+
+  /**
+   * A social feed is read perfectly well and simply holds no article. Measured on
+   * a live x.com profile: nine `<article>` elements, one `<p>` in the whole
+   * document, and nothing the extractor collects - so it answers with empty text
+   * rather than failing. That answer used to produce the unreachable-page message,
+   * which told the reader to reload a page that had just been read successfully.
+   */
+  it('tells the reader a social feed holds no article, rather than to reload it', async () => {
+    receiverMissing = false;
+    extraction = {
+      fullText: '',
+      cleanText: '',
+      wordCount: 0,
+      blocks: [],
+      metadata: { title: 'Watt The Duck (@sjowall69) / X' },
+    };
+
+    const sw = new BackgroundServiceWorker();
+    const res = await sw.runAnalysisForTab(TAB);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('aucun article');
+    // The page was reachable, so reloading it is not the advice.
+    expect(res.error ?? '').not.toContain('rechargez');
+  });
 });

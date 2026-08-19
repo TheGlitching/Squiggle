@@ -315,12 +315,18 @@ export class BackgroundServiceWorker {
     }
 
     if (!articleText) {
-      // The content script never answered, even after re-injection. The usual
-      // cause is a page the browser will not let the extension touch at all
-      // (its own settings pages, the extension gallery, a PDF viewer).
-      const err =
-        'Impossible de lire cette page. Ouvrez un article sur un site de presse, ' +
-        'puis rechargez la page avant de relancer l’analyse.';
+      // Two different failures used to share one message, and the advice only fit
+      // the first: an answer that came back empty means the page was read fine, so
+      // telling the reader to reload it sends them round a loop that cannot help.
+      const readButEmpty = Boolean(extracted);
+      const err = readButEmpty
+        ? 'Cette page a été lue, mais aucun article n’y a été trouvé. Squiggle ' +
+          'analyse un article de presse : sur un fil de réseau social, une page ' +
+          'd’accueil ou une liste de résultats, il n’y a rien à évaluer. Ouvrez ' +
+          'l’article lui-même.'
+        : 'Impossible de lire cette page. Le navigateur interdit aux extensions ' +
+          'd’accéder à certaines pages (ses réglages, un PDF, la galerie ' +
+          'd’extensions). Sur un site de presse, rechargez la page puis relancez.';
       this.stateManager.updateTabState(tabId, { status: 'error', error: err });
       return { success: false, error: err };
     }
