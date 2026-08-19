@@ -43,4 +43,30 @@ describe('Multi-browser Build & Packaging Verification', () => {
     expect(fs.existsSync(path.join(firefoxDist, 'src/sidepanel/index.html'))).toBe(true);
     expect(fs.existsSync(path.join(firefoxDist, 'src/welcome/index.html'))).toBe(true);
   });
+
+  /**
+   * Chrome refuses to load an unpacked extension whose tree contains any file
+   * or directory whose name starts with an underscore, apart from the reserved
+   * `_locales`. One stray file anywhere is a hard load failure with no partial
+   * mode, so the whole tree is checked rather than the top level.
+   */
+  it.each([
+    ['chrome', chromeDist],
+    ['firefox', firefoxDist],
+  ])('%s build contains no filenames reserved by the browser', (_target, dist) => {
+    const reserved: string[] = [];
+    const walk = (dir: string, rel = '') => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('_') && entry.name !== '_locales') {
+          reserved.push(path.join(rel, entry.name));
+        }
+        if (entry.isDirectory()) {
+          walk(path.join(dir, entry.name), path.join(rel, entry.name));
+        }
+      }
+    };
+    walk(dist);
+
+    expect(reserved).toEqual([]);
+  });
 });

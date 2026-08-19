@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { AnalysisPipeline } from '../src/engine/pipeline';
 import { SCORE_DOMAINS } from '../src/engine/types';
 import {
@@ -107,19 +106,5 @@ describe('analysis pipeline -> UI/content adapters', () => {
 
     // 'all' is a passthrough.
     expect(filterFindings(report.findings, 'all').length).toBe(report.findings.length);
-  });
-
-  it('emits the report as a fixture for local UI verification', async () => {
-    const pipeline = new AnalysisPipeline({ demoMode: true });
-    const report = await pipeline.analyze({ text: 'Un article de test.', title: 'Test' });
-
-    // Written into the build output so the served bundle can render a genuine
-    // engine report instead of hand-written sample data.
-    const dir = 'dist/chrome';
-    if (existsSync('dist')) {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(`${dir}/__report.json`, JSON.stringify(report, null, 2));
-    }
-    expect(report.findings.length).toBeGreaterThan(0);
   });
 });
