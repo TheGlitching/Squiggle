@@ -21,6 +21,32 @@ and creating it requires the one-off developer registration fee.
 
 Only this first upload is manual. Every later version goes through the pipeline.
 
+### Listing assets
+
+Generated, so they cannot drift from the icon:
+
+```bash
+python3 scripts/build-icon.py
+```
+
+| Asset | Size | Where |
+|---|---|---|
+| Extension icon | 128x128, artwork inset to 96 | `src/assets/icon-128.png`, already in the zip |
+| Small promotional tile | 440x280 | `store/promo-small-440x280.png` **(required)** |
+| Marquee tile | 1400x560 | `store/promo-marquee-1400x560.png` (optional, needed to be featured) |
+
+Screenshots have to come from a real browser, so they are the one thing not generated
+here. One is the minimum, five the maximum, and they must be full bleed at exactly
+1280x800 or 640x400. Capture the panel open beside an analysed article, then:
+
+```bash
+scripts/store-screenshot.sh ~/Desktop/shot.png
+```
+
+That crops to 16:10 before scaling. Cropping the other way round, or letting `sips`
+fit the image, pads it with borders - which is exactly what the store asks you not to
+submit.
+
 ### 2. Allow the pipeline to talk to the store
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project.
