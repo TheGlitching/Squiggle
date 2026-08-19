@@ -14,11 +14,11 @@ describe('EditorialCanvasRenderer', () => {
     reliabilityScore: 78,
     scoreBand: 'perfectible',
     domainScores: [
-      { id: 'sources', name: 'Sources & Citations', score: 85 },
-      { id: 'logic', name: 'Raisonnement & Logique', score: 65 },
-      { id: 'framing', name: 'Cadrage & Neutralité', score: 70 },
-      { id: 'facts', name: 'Exactitude Factuelle', score: 80 },
-      { id: 'clarity', name: 'Clarté & Précision', score: 90 },
+      { id: 'robustesse_factuelle', name: 'Robustesse factuelle et sourcing', score: 30, weight: 35 },
+      { id: 'solidite_logique', name: 'Solidité logique et argumentative', score: 65, weight: 25 },
+      { id: 'cadrage_manipulation', name: 'Cadrage et procédés rhétoriques', score: 48, weight: 25 },
+      { id: 'deontologie', name: 'Déontologie et transparence', score: 70, weight: 10 },
+      { id: 'orthographe_grammaire', name: 'Soin de la langue', score: 90, weight: 5 },
     ],
     keyFindings: [
       {
@@ -109,6 +109,40 @@ describe('EditorialCanvasRenderer', () => {
     expect(fillTextCalls.some((t: string) => t.includes('PERFECTIBLE'))).toBe(true);
     expect(fillTextCalls.some((t: string) => t.includes('SQUIGGLE'))).toBe(true);
     expect(fillTextCalls.some((t: string) => t.includes('INDICE DE FIABILITÉ'))).toBe(true);
+  });
+
+  it('draws one meter per domain of the scoring grid, labelled as the reader sees them', () => {
+    const renderer = new EditorialCanvasRenderer({ theme: 'light' });
+    renderer.render(mockCanvas, mockData);
+
+    const drawn = (mockContext.fillText as Mock).mock.calls.map((c) => c[0] as string);
+    expect(drawn).toContain('ANALYSE PAR DOMAINE');
+    for (const domain of mockData.domainScores) {
+      expect(drawn).toContain(domain.name);
+    }
+    expect(drawn).not.toContain('ANALYSE PAR DOMAINE ÉDITORIAL');
+  });
+
+  it('states that the domain detail is missing rather than drawing plausible bars', () => {
+    const renderer = new EditorialCanvasRenderer({ theme: 'light' });
+    renderer.render(mockCanvas, { ...mockData, domainScores: [] });
+
+    const drawn = (mockContext.fillText as Mock).mock.calls.map((c) => c[0] as string);
+    expect(drawn).toContain('Détail par domaine indisponible.');
+    // The retired placeholder set would have produced these invented marks.
+    expect(drawn.some((t) => t.includes('Sources & Citations'))).toBe(false);
+    expect(drawn.some((t) => t.includes('Clarté & Précision'))).toBe(false);
+    expect(drawn.some((t) => /^\d+%$/.test(t))).toBe(false);
+  });
+
+  it('puts the score band where the verdict stamp used to sit', () => {
+    const renderer = new EditorialCanvasRenderer({ theme: 'light' });
+    renderer.render(mockCanvas, { ...mockData, scoreBand: 'problematique', reliabilityScore: 28 });
+
+    const drawn = (mockContext.fillText as Mock).mock.calls.map((c) => c[0] as string);
+    expect(drawn).toContain('PROBLÉMATIQUE');
+    expect(drawn).toContain('À LIRE AVEC PRUDENCE');
+    expect(drawn).toContain('28');
   });
 
   it('supports dark theme rendering properly', () => {

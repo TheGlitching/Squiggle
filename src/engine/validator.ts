@@ -258,15 +258,7 @@ export function parseAndValidateLlmOutput(
         summary: typeof candidate.summary === 'string' ? candidate.summary : 'Analyse effectuée avec réserves.',
         scores: scoresParsed as RawLlmAnalysisResponse['scores'],
         findings: findingsParsed as RawLlmAnalysisResponse['findings'],
-        claims: [],
-        editorialAxes: {
-          constructif: true,
-          accrocheur: true,
-          iconoclaste: false,
-          narratif: true,
-          accessible: true,
-          ethique: true
-        }
+        claims: []
       };
     } else {
       throw new Error(`Invalid Fourches Caudines LLM response structure: ${validationResult.error.message}`);
@@ -289,9 +281,11 @@ export function parseAndValidateLlmOutput(
     withdrawn: []
   };
 
-  // Compute composite score and normalized categories
+  // Compute composite score and normalized categories, enforcing the scoring
+  // anchors against the findings actually published to the reader.
   const scoreResult = computeFourchesCaudinesScore(
-    rawData.scores
+    rawData.scores,
+    matchedFindings
   );
 
   const report: AnalysisReport = {
@@ -301,7 +295,6 @@ export function parseAndValidateLlmOutput(
     summary: rawData.summary,
     categories: scoreResult.normalizedCategories,
     findings: matchedFindings,
-    editorialAxes: rawData.editorialAxes,
     claims,
     research,
     meta: {

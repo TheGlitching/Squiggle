@@ -3,6 +3,7 @@ import { Finding } from '../../engine/types';
 import { SeverityBadge } from './SeverityBadge';
 import { VerificationBadge } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
+import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
 
 export interface FindingCardProps {
   finding: Finding;
@@ -34,7 +35,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
     >
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="font-mono text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-400">
-          {finding.category}
+          {CATEGORY_LABELS_FR[finding.category] ?? finding.category}
         </span>
         <span className="flex items-center gap-1.5">
           {finding.verification && <VerificationBadge verification={finding.verification} />}
@@ -50,12 +51,6 @@ export const FindingCard: React.FC<FindingCardProps> = ({
       <p className="text-xs text-stone-700 dark:text-stone-300 leading-relaxed mb-2">
         {finding.explanation}
       </p>
-      {finding.suggestion && (
-        <div className="text-[11px] bg-stone-100 dark:bg-stone-800/80 p-2 rounded text-stone-700 dark:text-stone-300">
-          <span className="font-semibold text-amber-700 dark:text-amber-400">Suggestion: </span>
-          {finding.suggestion}
-        </div>
-      )}
       <SourceCitations sources={finding.sources ?? []} />
     </div>
   );

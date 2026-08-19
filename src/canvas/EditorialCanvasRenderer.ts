@@ -35,6 +35,12 @@ interface ThemePalette {
   severities: Record<string, string>;
 }
 
+/**
+ * The scoring grid has five domains and the card's right-hand column is sized
+ * for exactly that many rows. Anything beyond would be drawn past the section.
+ */
+const DOMAIN_METER_ROWS = 5;
+
 const SCORE_BAND_THEMES: Record<ScoreBand, {
   label: string;
   sublabel: string;
@@ -216,6 +222,23 @@ export class EditorialCanvasRenderer {
       lines.push(currentLine);
     }
     return lines;
+  }
+
+  /**
+   * Helper: single-line ellipsis for text that must not run into whatever sits
+   * to its right. Canvas has no overflow rule, so the clipping is done here.
+   */
+  private truncateToWidth(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number
+  ): string {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let clipped = text;
+    while (clipped.length > 0 && ctx.measureText(clipped + '…').width > maxWidth) {
+      clipped = clipped.slice(0, -1);
+    }
+    return clipped + '…';
   }
 
   /**
@@ -534,29 +557,31 @@ export class EditorialCanvasRenderer {
     ctx.font = `bold 12px ${this.fontMono}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('ANALYSE PAR DOMAINE ÉDITORIAL', x, y);
+    ctx.fillText('ANALYSE PAR DOMAINE', x, y);
 
-    const domains = data.domainScores.length > 0
-      ? data.domainScores
-      : [
-          { id: 'sources', name: 'Sources & Citations', score: 75 },
-          { id: 'logic', name: 'Raisonnement & Logique', score: 60 },
-          { id: 'framing', name: 'Cadrage & Neutralité', score: 85 },
-          { id: 'facts', name: 'Exactitude Factuelle', score: 70 },
-          { id: 'clarity', name: 'Clarté & Précision', score: 90 },
-        ];
+    // A card built without domain marks must not fill the slot with plausible
+    // numbers: on an image meant to be shared, an invented bar is
+    // indistinguishable from a measured one.
+    if (data.domainScores.length === 0) {
+      ctx.fillStyle = palette.textMuted;
+      ctx.font = `italic 11px ${this.fontBody}`;
+      ctx.fillText('Détail par domaine indisponible.', x, y + 25);
+      return;
+    }
 
+    const domains = data.domainScores.slice(0, DOMAIN_METER_ROWS);
     const availableHeight = height - 30;
     const rowHeight = Math.min(42, availableHeight / domains.length);
     let curY = y + 25;
 
-    for (const domain of domains.slice(0, 5)) {
-      // Domain label
+    for (const domain of domains) {
+      // Domain label. The grid's labels are long sentences, so the label yields
+      // to the mark on its right rather than colliding with it.
       ctx.fillStyle = palette.text;
       ctx.font = `600 11px ${this.fontBody}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText(domain.name, x, curY);
+      ctx.fillText(this.truncateToWidth(ctx, domain.name, width - 42), x, curY);
 
       // Score Value
       ctx.font = `700 11px ${this.fontMono}`;
@@ -667,13 +692,7 @@ export class EditorialCanvasRenderer {
       ctx.textBaseline = 'middle';
       const titleX = x + 32 + catWidth;
       const maxTitleW = width - (titleX - x) - 20;
-      let titleText = finding.title;
-      if (ctx.measureText(titleText).width > maxTitleW) {
-        while (titleText.length > 0 && ctx.measureText(titleText + '...').width > maxTitleW) {
-          titleText = titleText.substring(0, titleText.length - 1);
-        }
-        titleText += '...';
-      }
+      const titleText = this.truncateToWidth(ctx, finding.title, maxTitleW);
       ctx.fillText(titleText, titleX, curY + 6);
 
       // Excerpt if available

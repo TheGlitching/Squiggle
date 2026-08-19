@@ -13,7 +13,6 @@ export {
   SeverityLevelSchema,
   FindingSchema,
   CategoryScoreSchema,
-  EditorialAxesCheckSchema,
   RawLlmAnalysisResponseSchema,
 } from './types';
 export type {
@@ -27,7 +26,6 @@ export type {
   SeverityLevel,
   Finding,
   CategoryScore,
-  EditorialAxesCheck,
   AnalysisReport,
   AnalysisResult,
   PipelineStatus,

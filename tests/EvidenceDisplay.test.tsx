@@ -86,6 +86,19 @@ describe('Finding evidence display', () => {
     expect(markup).toContain('Majeur');
   });
 
+  // The reader of an article cannot rewrite it, so the card explains the defect
+  // and stops there. `explanation` carries the substance.
+  it('explains a finding without offering rewrite advice', () => {
+    const markup = renderToStaticMarkup(<FindingCard finding={baseFinding} />);
+
+    expect(markup).toContain('Le chiffre avancé demande une source.');
+    expect(markup).not.toContain('Suggestion');
+    expect(markup).not.toContain('Reformul');
+    expect(markup).not.toContain('reformul');
+    expect(markup).not.toContain('corrig');
+    expect(markup).not.toContain('avant publication');
+  });
+
   it('follows a citation without toggling the card it was read from', () => {
     const onSelect = vi.fn();
     const host = document.createElement('div');

@@ -66,89 +66,49 @@ Pourtant, plusieurs académies pilotes qui ont intégré des modules d'explicati
 
 export const DEMO_FOURCHES_CAUDINES_REPORT = {
   schemaVersion: 1,
-  score: 62,
-  scoreBand: 'fragile',
-  summary: "L'article pose un débat d'intérêt public crucial avec une réelle tension éditoriale, mais présente de sévères fragilités méthodologiques dans sa première partie : chiffre d'adoption non sourcé, étude sensationnaliste non référencée, et faux dilemme caricatural. Le dernier paragraphe apporte heureusement un contrepoint constructif et nuancé.",
+  score: 45,
+  scoreBand: 'problematique',
+  summary: "L'article pose un débat d'intérêt public réel, mais sa première partie ne tient pas : un taux d'adoption et une étude de 50 000 élèves sont avancés comme des faits établis sans la moindre source, et le texte referme le débat sur un faux dilemme binaire. Le dernier paragraphe apporte heureusement un contrepoint constructif et nuancé, mais ne suffit pas à compenser ces défauts majeurs.",
   categories: [
     {
-      domain: 'orthographe_grammaire',
-      label: 'Orthographe, grammaire, syntaxe, ponctuation',
-      score: 4.5,
-      maxScore: 5,
-      strengths: ['Syntaxe soignée et vocabulaire riche.'],
-      weaknesses: ['Espace manquant dans « laSilicon Valley ».']
-    },
-    {
-      domain: 'clarte_lisibilite',
-      label: 'Clarté et lisibilité',
-      score: 8.5,
-      maxScore: 10,
-      strengths: ['Expression limpide et découpage clair en paragraphes thématiques.'],
-      weaknesses: ['Quelques formules hyperboliques qui nuisent à la précision.']
-    },
-    {
-      domain: 'structure_progression',
-      label: 'Structure et progression',
-      score: 7.0,
-      maxScore: 10,
-      strengths: ['Titre accrocheur et chute constructive.'],
-      weaknesses: ['Rupture brutale de ton entre le réquisitoire du milieu et la nuance finale.']
+      domain: 'robustesse_factuelle',
+      label: 'Robustesse factuelle et sourcing',
+      score: 10.5,
+      maxScore: 35,
+      strengths: ['Mention de données d’expérimentation académique dans le dernier paragraphe.'],
+      weaknesses: ['Le chiffre de « 95 % » et « l’étude sur 50 000 élèves » sont avancés comme des faits établis sans référence, institut ni méthodologie : ce défaut pèse sur la note du domaine.']
     },
     {
       domain: 'solidite_logique',
       label: 'Solidité logique et argumentative',
-      score: 6.5,
-      maxScore: 15,
+      score: 17,
+      maxScore: 25,
       strengths: ['Présence d’un contre-exemple appuyé sur des données d’académies pilotes.'],
-      weaknesses: ['Faux dilemme (« soit bannir totalement, soit capituler ») et généralisation hâtive.']
+      weaknesses: ['Généralisation hâtive assimilant tout usage numérique en classe à un nivellement par le bas.']
     },
     {
-      domain: 'robustesse_factuelle',
-      label: 'Robustesse factuelle et sourcing',
-      score: 8.5,
-      maxScore: 20,
-      strengths: ['Mention de données d’expérimentation académique.'],
-      weaknesses: ['Le chiffre de « 95 % » et « l’étude sur 50 000 élèves » sont dépourvus de référence ou lien.']
+      domain: 'cadrage_manipulation',
+      label: 'Cadrage et procédés rhétoriques',
+      score: 12.5,
+      maxScore: 25,
+      strengths: ['Le dernier paragraphe rouvre un débat que le texte avait refermé trop tôt.'],
+      weaknesses: ['Faux dilemme manichéen (« soit bannir totalement, soit capituler ») qui occulte toute position intermédiaire : ce défaut pèse sur la note du domaine.']
     },
     {
-      domain: 'coherence_editoriale',
-      label: 'Cohérence éditoriale (6 axes)',
-      score: 10.5,
-      maxScore: 15,
-      strengths: ['Axe constructif et accrocheur bien tenus en conclusion.'],
-      weaknesses: ['Axe éthique perfectible en raison du recours à une citation anonyme invérifiable.']
-    },
-    {
-      domain: 'angle_impact',
-      label: 'Angle et impact éditorial',
-      score: 7.5,
+      domain: 'deontologie',
+      label: 'Déontologie et transparence',
+      score: 6,
       maxScore: 10,
-      strengths: ['Sujet d’actualité prégnant touchant à la fois l’école et les technologies.'],
-      weaknesses: ['Tendance initiale au catastrophisme avant d’amorcer la nuance.']
+      strengths: ['Le commentaire de l’auteur reste globalement distinct du récit des faits.'],
+      weaknesses: ['La citation d’un « éminent pédagogue anonyme » n’est attribuée à personne d’identifiable.']
     },
     {
-      domain: 'connexion_quotidien',
-      label: 'Connexion au quotidien et utilité lecteur',
-      score: 4.0,
-      maxScore: 5,
-      strengths: ['Questionne directement l’expérience des parents, élèves et enseignants.'],
-      weaknesses: ['Manque d’exemples d’exercices pratiques ou d’usages concrets en classe.']
-    },
-    {
-      domain: 'preservation_voix',
-      label: 'Préservation de la voix d’auteur et style',
-      score: 3.5,
-      maxScore: 5,
-      strengths: ['Rythme soutenu et verve polémique entraînante.'],
-      weaknesses: ['Formules toutes faites (« c’est l’évidence même », « constat accablant »).']
-    },
-    {
-      domain: 'format_calibrage',
-      label: 'Format et calibrage',
+      domain: 'orthographe_grammaire',
+      label: 'Soin de la langue',
       score: 4.5,
       maxScore: 5,
-      strengths: ['Format court et percutant adapté à une tribune ou chronique.'],
-      weaknesses: []
+      strengths: ['Syntaxe soignée et vocabulaire riche.'],
+      weaknesses: ['Espace manquant dans « laSilicon Valley ».']
     }
   ],
   findings: [
@@ -161,8 +121,7 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       category: 'source-absente',
       severity: 2,
       label: 'Chiffre d’adoption non sourcé',
-      explanation: 'Un taux de 95 % d’adoption constitue une affirmation statistique majeure nécessitant impérativement une source officielle (MENJ, DEPP, OCDE).',
-      suggestion: 'Préciser la source de l’enquête ou reformuler (« selon une estimation récente... »).',
+      explanation: 'Un taux de 95 % d’adoption constitue une affirmation statistique majeure présentée sans aucune source officielle (MENJ, DEPP, OCDE) : vous ne pouvez pas vérifier d’où il vient.',
       confidence: 0.96
     },
     {
@@ -174,8 +133,7 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       category: 'affirmation-non-etayee',
       severity: 3,
       label: 'Affirmation d’infaillibilité sans référence',
-      explanation: 'Aucune étude scientifique ne peut être qualifiée d’« incontestable » sans nommer le laboratoire, les auteurs ou la revue à comité de lecture.',
-      suggestion: 'Citer expressément les auteurs et l’année de publication de cette étude.',
+      explanation: 'Cette étude est présentée comme un fait établi sans qu’aucun laboratoire, auteur ou revue à comité de lecture ne soit nommé : rien ne permet au lecteur de la retrouver ni de la vérifier.',
       confidence: 0.98
     },
     {
@@ -187,8 +145,7 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       category: 'sophisme',
       severity: 2,
       label: 'Généralisation hâtive et déterminisme technologique',
-      explanation: 'Affirmer un lien de causalité automatique et absolu sans démonstration relève du sophisme de la pente savonneuse.',
-      suggestion: 'Nuancer le propos en précisant les conditions pédagogiques d’usage.',
+      explanation: 'Le texte vous présente un lien de causalité automatique et absolu sans démonstration : c’est le sophisme de la pente savonneuse.',
       confidence: 0.92
     },
     {
@@ -197,11 +154,10 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       quote: 'soit nous bannissons totalement l\'IA de l\'enceinte républicaine pour préserver les Lumières, soit nous capitulons devant laSilicon Valley',
       charStart: 902,
       charEnd: 1045,
-      category: 'sophisme',
+      category: 'cadrage',
       severity: 3,
       label: 'Faux dilemme manichéen',
-      explanation: 'L’auteur réduit abusivement les alternatives à deux postures extrêmes et opposées, occultant délibérément les voies de régulation et d’apprentissage critique.',
-      suggestion: 'Intégrer les approches intermédiaires d’éducation aux médias et à l’algorithmique.',
+      explanation: 'L’article vous réduit les alternatives à deux postures extrêmes et opposées, occultant délibérément les voies intermédiaires de régulation et d’apprentissage critique : un vrai débat nuancé est présenté comme déjà tranché entre deux camps.',
       confidence: 0.99
     },
     {
@@ -214,19 +170,9 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       severity: 1,
       label: 'Apport de données empiriques et perspective constructive',
       explanation: 'Le texte démontre une réelle capacité à dépasser la polémique stérile en présentant des pistes concrètes d’expérimentation pédagogique évaluées sur le terrain.',
-      suggestion: 'Conserver et développer davantage cet angle constructif.',
       confidence: 0.95
     }
   ],
-  editorialAxes: {
-    constructif: true,
-    accrocheur: true,
-    iconoclaste: false,
-    narratif: true,
-    accessible: true,
-    ethique: false,
-    notes: 'Manque de rigueur déontologique sur les sources de la première partie, bien rattrapé par l’axe constructif de la conclusion.'
-  },
   meta: {
     model: 'demo-fixture-v1',
     promptVersion: '1.0.0-fourches-caudines',

@@ -62,7 +62,7 @@ export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
     badge: 'Taxonomie',
     placement: 'bottom',
     content: 'Filtrez instantanément les anomalies par typologie : Sophismes, Affirmations Non Étayées, Extrapolations, Sources Absentes et Cadrages Biaisés.',
-    methodologyTip: 'Cliquez sur les compteurs pour isoler les points d’attention majeurs et prioriser vos retouches éditoriales.',
+    methodologyTip: 'Cliquez sur les compteurs pour isoler les points d’attention majeurs et concentrer votre lecture sur les points les plus sensibles.',
   },
   {
     id: 'finding-cards',
@@ -118,12 +118,62 @@ export function resetTourCompletionStatus(storageKey = DEFAULT_STORAGE_KEY, stor
   setTourCompletionStatus(false, storageKey, undefined, storageProvider);
 }
 
-export function computeTourPosition(targetElement: HTMLElement | null, placement: 'top' | 'bottom' | 'left' | 'right' | 'center' = 'bottom', _padding = 8) {
+/** Distance kept between the highlighted element and the card. */
+const CARD_GAP = 12;
+/** Smallest margin the card keeps from a viewport edge. */
+const VIEWPORT_MARGIN = 12;
+
+export interface TourViewportMetrics {
+  viewportHeight: number;
+  cardHeight: number;
+}
+
+/**
+ * Anchors the card near its target without ever pushing it off screen.
+ *
+ * The card's measured height is an input rather than an assumption. The panel
+ * is narrow, so each step's prose wraps to a height that is only known once
+ * rendered; assuming a height is what pushed the footer - and with it the only
+ * control that advances the visit - below the fold on the longer steps.
+ *
+ * A step's declared side is a preference, not a guarantee: it is honoured when
+ * the card fits there, the opposite side is taken when it does not, and the
+ * final clamp wins over both, because a card that stays on screen matters more
+ * than one that sits where it asked to.
+ *
+ * Only the vertical anchor is consumed: the card spans the panel width, so
+ * `left` reports the target's centre for callers that draw a pointer at it.
+ */
+export function computeTourPosition(
+  targetElement: HTMLElement | null,
+  placement: 'top' | 'bottom' | 'left' | 'right' | 'center' = 'bottom',
+  _padding = 8,
+  metrics: Partial<TourViewportMetrics> = {},
+) {
+  const viewportHeight =
+    metrics.viewportHeight ?? (typeof window !== 'undefined' ? window.innerHeight : 600);
+  const cardHeight = metrics.cardHeight ?? 0;
+
   if (!targetElement || placement === 'center' || typeof window === 'undefined') {
-    return { top: typeof window !== 'undefined' ? window.innerHeight / 2 : 300, left: typeof window !== 'undefined' ? window.innerWidth / 2 : 400, placement: 'center' as const, targetRect: null };
+    return {
+      top: viewportHeight / 2,
+      left: typeof window !== 'undefined' ? window.innerWidth / 2 : 400,
+      placement: 'center' as const,
+      targetRect: null,
+    };
   }
+
   const rect = targetElement.getBoundingClientRect();
-  return { top: rect.bottom + 12, left: rect.left + rect.width / 2 - 180, placement, targetRect: rect };
+  const above = rect.top - CARD_GAP - cardHeight;
+  const below = rect.bottom + CARD_GAP;
+  const fitsAbove = above >= VIEWPORT_MARGIN;
+  const fitsBelow = below + cardHeight + VIEWPORT_MARGIN <= viewportHeight;
+
+  const preferred = placement === 'top' ? (fitsAbove ? above : below) : fitsBelow ? below : above;
+  const lowestTop = Math.max(VIEWPORT_MARGIN, viewportHeight - cardHeight - VIEWPORT_MARGIN);
+  const top = Math.min(Math.max(preferred, VIEWPORT_MARGIN), lowestTop);
+
+  return { top, left: rect.left + rect.width / 2, placement, targetRect: rect };
 }
 
 export const OnboardingTour: React.FC<OnboardingTourProps> = ({
@@ -167,16 +217,26 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
       const target = step.targetSelector
         ? (document.querySelector(step.targetSelector) as HTMLElement | null)
         : null;
-      setPosition(computeTourPosition(target, step.placement ?? 'bottom', step.highlightPadding ?? 8));
+      setPosition(
+        computeTourPosition(target, step.placement ?? 'bottom', step.highlightPadding ?? 8, {
+          cardHeight: cardRef.current?.offsetHeight ?? 0,
+        }),
+      );
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
     reposition();
     window.addEventListener('resize', reposition);
     window.addEventListener('scroll', reposition, true);
+    // The first pass measures the card before this step's prose has wrapped, so
+    // it reads the previous step's height. Watching the card re-anchors it once
+    // the real height settles, which is what keeps the footer reachable.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reposition) : null;
+    if (cardRef.current && observer) observer.observe(cardRef.current);
     return () => {
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition, true);
+      observer?.disconnect();
     };
   }, [visible, step]);
 
@@ -268,7 +328,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
         ref={cardRef}
         style={{
           position: 'absolute',
-          top: centered ? '50%' : Math.max(12, Math.min(position.top, window.innerHeight - 240)),
+          top: centered ? '50%' : position.top,
           left: centered ? '50%' : 16,
           right: centered ? undefined : 16,
           transform: centered ? 'translate(-50%, -50%)' : undefined,
@@ -278,42 +338,53 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
           borderRadius: 16,
           padding: 16,
           boxShadow: '0 18px 48px rgba(0,0,0,0.28)',
+          // A step whose prose is taller than the panel scrolls its own text
+          // rather than growing past the viewport, so the controls below stay
+          // on screen and reachable at every step.
+          maxHeight: `calc(100vh - ${VIEWPORT_MARGIN * 2}px)`,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {step.badge && (
-          <span
-            style={{
-              display: 'inline-block',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: mutedText,
-              marginBottom: 6,
-            }}
-          >
-            {step.badge}
-          </span>
-        )}
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: primaryText }}>{step.title}</h3>
-        <p style={{ margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.55, color: mutedText }}>
-          {step.content}
-        </p>
-        {step.methodologyTip && (
-          <p
-            style={{
-              margin: '10px 0 0',
-              padding: '8px 10px',
-              borderRadius: 10,
-              background: dark ? '#27272A' : '#F5F5F4',
-              fontSize: 11.5,
-              lineHeight: 1.5,
-              color: mutedText,
-            }}
-          >
-            {step.methodologyTip}
+        {/* Only the prose scrolls, so the controls below it never leave the screen. */}
+        <div style={{ overflowY: 'auto', minHeight: 0 }}>
+          {step.badge && (
+            <span
+              style={{
+                display: 'inline-block',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: mutedText,
+                marginBottom: 6,
+              }}
+            >
+              {step.badge}
+            </span>
+          )}
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: primaryText }}>
+            {step.title}
+          </h3>
+          <p style={{ margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.55, color: mutedText }}>
+            {step.content}
           </p>
-        )}
+          {step.methodologyTip && (
+            <p
+              style={{
+                margin: '10px 0 0',
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: dark ? '#27272A' : '#F5F5F4',
+                fontSize: 11.5,
+                lineHeight: 1.5,
+                color: mutedText,
+              }}
+            >
+              {step.methodologyTip}
+            </p>
+          )}
+        </div>
 
         <div
           style={{
@@ -322,6 +393,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
             justifyContent: 'space-between',
             gap: 10,
             marginTop: 14,
+            flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', gap: 5 }} aria-hidden="true">
@@ -386,6 +458,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
             color: mutedText,
             fontSize: 11.5,
             cursor: 'pointer',
+            flexShrink: 0,
           }}
         >
           Passer la visite

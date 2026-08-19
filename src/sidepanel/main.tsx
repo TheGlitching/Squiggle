@@ -13,6 +13,7 @@ import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { OnboardingTour } from '../ui/components/OnboardingTour';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
+import { SCORE_DOMAINS } from '../engine/types';
 import type { AnalysisResult, Finding, ScoreDomainKey } from '../engine/types';
 
 /**
@@ -221,6 +222,14 @@ function SidepanelApp() {
   const counts = useMemo(() => countFindingsByFilterCategory(findings), [findings]);
   const visibleFindings = useMemo(() => filterFindings(findings, category), [findings, category]);
 
+  // A stored analysis produced under an earlier grid can name domains this build
+  // no longer scores. Their weights are gone, so they are dropped rather than
+  // shown against a denominator that no longer applies.
+  const scoredDomains = useMemo(
+    () => (report?.categories ?? []).filter((c) => c.domain in SCORE_DOMAINS),
+    [report]
+  );
+
   const busy = progress.status === 'extracting' || progress.status === 'analyzing';
   const theme = isDark ? 'dark' : 'light';
 
@@ -232,7 +241,7 @@ function SidepanelApp() {
             Squiggle
           </h1>
           <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">
-            Analyse critique et rigueur éditoriale
+            Analyse critique de la fiabilité de l’article
           </p>
         </div>
         <div className="flex items-center gap-1" data-tour="export-actions">
@@ -281,7 +290,7 @@ function SidepanelApp() {
           disabled={busy || hasKey === false}
           className="w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-3 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-50"
         >
-          {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse éditoriale'}
+          {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse critique'}
         </button>
 
         {busy && (
@@ -323,13 +332,13 @@ function SidepanelApp() {
               )}
             </section>
 
-            {report.categories?.length > 0 && (
+            {scoredDomains.length > 0 && (
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
                   Domaines évalués
                 </h3>
                 <div className="space-y-1.5">
-                  {report.categories.map((c) => (
+                  {scoredDomains.map((c) => (
                     <DomainScoreGauge
                       key={c.domain}
                       domainKey={c.domain}

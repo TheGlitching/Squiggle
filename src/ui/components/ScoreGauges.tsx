@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScoreBand, ScoreDomainKey, SCORE_DOMAINS } from '../../engine/types';
+import { determineScoreBand, getScoreBandLabel } from '../../engine/scoring';
 
 export interface ScoreGaugeProps {
   score: number; // 0 to 100
@@ -10,11 +11,12 @@ export interface ScoreGaugeProps {
   className?: string;
 }
 
-export function getScoreBand(score: number): ScoreBand {
-  if (score >= 85) return 'solide';
-  if (score >= 70) return 'perfectible';
-  if (score >= 50) return 'fragile';
-  return 'problematique';
+/**
+ * Domain marks carry one decimal, and this panel is French: a raw `10.5` would
+ * print an English decimal point in the middle of French copy.
+ */
+export function formatPoints(value: number): string {
+  return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 }
 
 export function getScoreBandColor(band: ScoreBand): { stroke: string; text: string; bg: string } {
@@ -39,7 +41,7 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
   scoreBand,
   className = '',
 }) => {
-  const effectiveBand = scoreBand || getScoreBand(score);
+  const effectiveBand = scoreBand || determineScoreBand(score);
   const colors = getScoreBandColor(effectiveBand);
 
   const radius = (size - strokeWidth) / 2;
@@ -83,9 +85,11 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
         </span>
       </div>
 
+      {/* The band key is an identifier, not copy: rendered raw it reached the
+          reader as an unaccented "PROBLEMATIQUE". */}
       {showBandLabel && (
-        <span className={`mt-2 font-mono text-xs font-bold uppercase tracking-wider ${colors.text}`}>
-          {effectiveBand}
+        <span className={`mt-2 font-mono text-xs font-bold uppercase tracking-wider text-center ${colors.text}`}>
+          {getScoreBandLabel(effectiveBand).title}
         </span>
       )}
     </div>
@@ -104,7 +108,8 @@ export interface DomainGaugeProps {
 }
 
 /**
- * 10-Domain individual gauge bar with criteria checklist and strengths/weaknesses breakdown
+ * One bar per domain of the scoring grid, expandable onto its criteria and the
+ * strengths and weaknesses found.
  */
 export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
   domainKey,
@@ -116,17 +121,15 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
   onToggle,
   className = '',
 }) => {
-  const def = SCORE_DOMAINS[domainKey] || {
-    key: domainKey,
-    label: domainKey,
-    weight: 10,
-    description: '',
-    criteria: [],
-  };
+  // A stored analysis produced under an earlier grid can carry a domain this
+  // build no longer knows. Its weight and criteria are gone, so there is no
+  // honest denominator to draw a bar against: skip it rather than invent one.
+  const def = SCORE_DOMAINS[domainKey];
+  if (!def) return null;
 
   const weight = maxScore ?? def.weight;
   const percentage = Math.round((Math.max(0, Math.min(weight, score)) / weight) * 100);
-  const band = getScoreBand(percentage);
+  const band = determineScoreBand(percentage);
   const colors = getScoreBandColor(band);
 
   return (
@@ -134,16 +137,18 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
       className={`p-3 rounded border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 transition-colors ${className}`}
     >
       <div
-        className="flex items-center justify-between cursor-pointer select-none"
+        className="flex items-start justify-between cursor-pointer select-none"
         onClick={onToggle}
       >
-        <div className="flex-1 pr-2">
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="font-sans font-bold text-stone-800 dark:text-stone-200">
+        <div className="flex-1 min-w-0 pr-2">
+          {/* The side panel is narrow and these labels are long: the label owns
+              the slack and wraps, the mark stays on one line and never shrinks. */}
+          <div className="flex items-baseline justify-between gap-2 text-xs mb-1">
+            <span className="font-sans font-bold text-stone-800 dark:text-stone-200 min-w-0 break-words leading-snug">
               {def.label}
             </span>
-            <span className="font-mono font-semibold text-stone-600 dark:text-stone-400">
-              <strong className="text-stone-900 dark:text-stone-100">{score}</strong> / {weight} pts
+            <span className="font-mono font-semibold text-stone-600 dark:text-stone-400 shrink-0 whitespace-nowrap tabular-nums">
+              <strong className="text-stone-900 dark:text-stone-100">{formatPoints(score)}</strong> / {formatPoints(weight)} pts
             </span>
           </div>
 
@@ -159,7 +164,9 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
           </div>
         </div>
 
-        <div className="font-mono text-xs text-stone-400 pl-1">
+        {/* Anchored to the first line rather than centred: a label that wraps to
+            two lines would otherwise pull the caret away from the row it opens. */}
+        <div className="font-mono text-xs text-stone-400 pl-1 shrink-0">
           {expanded ? '▲' : '▼'}
         </div>
       </div>
@@ -175,7 +182,9 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
               <div className="font-sans uppercase text-[10px] font-bold text-stone-500 tracking-wider mb-1">
                 Critères vérifiés
               </div>
-              <ul className="list-disc list-inside space-y-0.5 text-stone-700 dark:text-stone-300">
+              {/* Outside markers: at side-panel width most of these wrap, and an
+                  inside marker sends the second line back under the bullet. */}
+              <ul className="list-disc list-outside pl-4 space-y-0.5 text-stone-700 dark:text-stone-300">
                 {def.criteria.map((crit, idx) => (
                   <li key={idx} className="text-[12px]">{crit}</li>
                 ))}
@@ -185,8 +194,8 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
           {strengths.length > 0 && (
             <div className="mt-2 text-emerald-700 dark:text-emerald-400">
-              <span className="font-bold text-[11px] uppercase tracking-wide">Points forts:</span>
-              <ul className="list-disc list-inside text-[12px] space-y-0.5 mt-0.5">
+              <span className="font-bold text-[11px] uppercase tracking-wide">Points forts :</span>
+              <ul className="list-disc list-outside pl-4 text-[12px] space-y-0.5 mt-0.5">
                 {strengths.map((s, idx) => (
                   <li key={idx}>{s}</li>
                 ))}
@@ -196,8 +205,8 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
           {weaknesses.length > 0 && (
             <div className="mt-2 text-rose-700 dark:text-rose-400">
-              <span className="font-bold text-[11px] uppercase tracking-wide">Faiblesses / Vigilances:</span>
-              <ul className="list-disc list-inside text-[12px] space-y-0.5 mt-0.5">
+              <span className="font-bold text-[11px] uppercase tracking-wide">Faiblesses relevées :</span>
+              <ul className="list-disc list-outside pl-4 text-[12px] space-y-0.5 mt-0.5">
                 {weaknesses.map((w, idx) => (
                   <li key={idx}>{w}</li>
                 ))}

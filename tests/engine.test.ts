@@ -32,10 +32,10 @@ describe('Fourches Caudines Engine', () => {
     ]
   };
 
-  it('defines 10 score domains summing to 100 points', () => {
+  it('defines 5 score domains summing to 100 points', () => {
     const totalWeight = Object.values(SCORE_DOMAINS).reduce((acc, def) => acc + def.weight, 0);
     expect(totalWeight).toBe(100);
-    expect(Object.keys(SCORE_DOMAINS)).toHaveLength(10);
+    expect(Object.keys(SCORE_DOMAINS)).toHaveLength(5);
   });
 
   it('builds prompts with Fourches Caudines criteria', () => {
@@ -55,15 +55,10 @@ describe('Fourches Caudines Engine', () => {
 
     const result = computeFourchesCaudinesScore([
       { domain: 'orthographe_grammaire', score: 5 },
-      { domain: 'clarte_lisibilite', score: 9 },
-      { domain: 'structure_progression', score: 9 },
-      { domain: 'solidite_logique', score: 14 },
-      { domain: 'robustesse_factuelle', score: 18 },
-      { domain: 'coherence_editoriale', score: 14 },
-      { domain: 'angle_impact', score: 9 },
-      { domain: 'connexion_quotidien', score: 4.5 },
-      { domain: 'preservation_voix', score: 4.5 },
-      { domain: 'format_calibrage', score: 5 }
+      { domain: 'solidite_logique', score: 23 },
+      { domain: 'robustesse_factuelle', score: 33 },
+      { domain: 'cadrage_manipulation', score: 22 },
+      { domain: 'deontologie', score: 9 }
     ]);
 
     expect(result.totalScore).toBe(92);
@@ -78,15 +73,10 @@ describe('Fourches Caudines Engine', () => {
       "summary": "Article intéressant mais affirmations à sourcer.",
       "scores": [
         { "domain": "orthographe_grammaire", "score": 4 },
-        { "domain": "clarte_lisibilite", "score": 8 },
-        { "domain": "structure_progression", "score": 8 },
-        { "domain": "solidite_logique", "score": 10 },
-        { "domain": "robustesse_factuelle", "score": 12 },
-        { "domain": "coherence_editoriale", "score": 10 },
-        { "domain": "angle_impact", "score": 7 },
-        { "domain": "connexion_quotidien", "score": 3 },
-        { "domain": "preservation_voix", "score": 4 },
-        { "domain": "format_calibrage", "score": 4 }
+        { "domain": "solidite_logique", "score": 18 },
+        { "domain": "robustesse_factuelle", "score": 25 },
+        { "domain": "cadrage_manipulation", "score": 18 },
+        { "domain": "deontologie", "score": 5 }
       ],
       "findings": [
         {
@@ -109,8 +99,11 @@ describe('Fourches Caudines Engine', () => {
     });
 
     expect(report.summary).toContain('Article intéressant');
-    expect(report.score).toBe(70);
-    expect(report.scoreBand).toBe('perfectible');
+    // The marks sum to 70, but the audit also reported an unsourced assertion of
+    // severity 2 against factual robustness. Nothing could confirm it, so it
+    // still costs that domain a share of its 25 awarded points rather than none.
+    expect(report.score).toBe(65);
+    expect(report.scoreBand).toBe('fragile');
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0].blockId).toBe('b2');
     expect(report.findings[0].charStart).toBeGreaterThan(0);

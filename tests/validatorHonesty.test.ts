@@ -103,15 +103,10 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
     summary: 'Article globalement solide.',
     scores: [
       { domain: 'orthographe_grammaire', score: 5 },
-      { domain: 'clarte_lisibilite', score: 9 },
-      { domain: 'structure_progression', score: 9 },
-      { domain: 'solidite_logique', score: 10 },
-      { domain: 'robustesse_factuelle', score: 13 },
-      { domain: 'coherence_editoriale', score: 10 },
-      { domain: 'angle_impact', score: 8 },
-      { domain: 'connexion_quotidien', score: 4 },
-      { domain: 'preservation_voix', score: 4 },
-      { domain: 'format_calibrage', score: 4 }
+      { domain: 'solidite_logique', score: 20 },
+      { domain: 'robustesse_factuelle', score: 28 },
+      { domain: 'cadrage_manipulation', score: 20 },
+      { domain: 'deontologie', score: 8 }
     ],
     findings: [
       {
@@ -183,15 +178,10 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
       "summary": "Article intéressant mais affirmations à sourcer.",
       "scores": [
         { "domain": "orthographe_grammaire", "score": 4 },
-        { "domain": "clarte_lisibilite", "score": 8 },
-        { "domain": "structure_progression", "score": 8 },
-        { "domain": "solidite_logique", "score": 10 },
-        { "domain": "robustesse_factuelle", "score": 12 },
-        { "domain": "coherence_editoriale", "score": 10 },
-        { "domain": "angle_impact", "score": 7 },
-        { "domain": "connexion_quotidien", "score": 3 },
-        { "domain": "preservation_voix", "score": 4 },
-        { "domain": "format_calibrage", "score": 4 }
+        { "domain": "solidite_logique", "score": 18 },
+        { "domain": "robustesse_factuelle", "score": 25 },
+        { "domain": "cadrage_manipulation", "score": 18 },
+        { "domain": "deontologie", "score": 5 }
       ],
       "findings": [
         {
@@ -214,8 +204,10 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
     });
 
     expect(report.summary).toContain('Article intéressant');
-    expect(report.score).toBe(70);
-    expect(report.scoreBand).toBe('perfectible');
+    // The awarded marks sum to 70; the unconfirmed severity-2 sourcing defect the
+    // audit reported takes a share of factual robustness back off.
+    expect(report.score).toBe(65);
+    expect(report.scoreBand).toBe('fragile');
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0].blockId).toBe('b2');
     expect(report.findings[0].charStart).toBeGreaterThan(0);

@@ -38,16 +38,11 @@ export type FourchesBlockId =
  * The 10 domains of the 100-point scoring grid from Fourches Caudines
  */
 export type ScoreDomainKey =
-  | 'orthographe_grammaire'
-  | 'clarte_lisibilite'
-  | 'structure_progression'
-  | 'solidite_logique'
   | 'robustesse_factuelle'
-  | 'coherence_editoriale'
-  | 'angle_impact'
-  | 'connexion_quotidien'
-  | 'preservation_voix'
-  | 'format_calibrage';
+  | 'solidite_logique'
+  | 'cadrage_manipulation'
+  | 'deontologie'
+  | 'orthographe_grammaire';
 
 export interface ScoreDomainDefinition {
   key: ScoreDomainKey;
@@ -58,47 +53,22 @@ export interface ScoreDomainDefinition {
 }
 
 export const SCORE_DOMAINS: Record<ScoreDomainKey, ScoreDomainDefinition> = {
-  orthographe_grammaire: {
-    key: 'orthographe_grammaire',
-    label: 'Orthographe, grammaire, syntaxe, ponctuation',
-    weight: 5,
-    description: 'Exactitude linguistique, propreté de surface, fluidité des phrases',
+  robustesse_factuelle: {
+    key: 'robustesse_factuelle',
+    label: 'Robustesse factuelle et sourcing',
+    weight: 35,
+    description: 'Vérifiabilité, précision, datation, contextualisation, niveau de certitude des faits avancés',
     criteria: [
-      'Accords grammaticaux et concordance des temps',
-      'Homophones et orthographe lexicale',
-      'Ponctuation et découpage des phrases',
-      'Stabilité des références pronominales',
-      'Typographie éditoriale'
-    ]
-  },
-  clarte_lisibilite: {
-    key: 'clarte_lisibilite',
-    label: 'Clarté et lisibilité',
-    weight: 10,
-    description: 'Accessibilité, pédagogie, clarté du propos, maîtrise du jargon',
-    criteria: [
-      'Définition des notions dès leur première apparition',
-      'Maîtrise et vulgarisation du jargon technique',
-      'Progressivité pédagogique des explications',
-      'Charge cognitive équilibrée par paragraphe'
-    ]
-  },
-  structure_progression: {
-    key: 'structure_progression',
-    label: 'Structure et progression',
-    weight: 10,
-    description: 'Titre, introduction, enchaînements, hiérarchie, conclusion',
-    criteria: [
-      'Titre tendu, mémorisable et fidèle',
-      'Introduction entrant immédiatement dans le sujet sans préambule scolaire',
-      'Enchaînements logiques et transitions utiles',
-      'Conclusion active ouvrant une perspective'
+      'Précision des chiffres, dates, noms et citations',
+      'Sourcing explicite des assertions et données sensibles',
+      'Contextualisation méthodologique des données chiffrées (institut, méthode, date pour un sondage ou une étude)',
+      'Distinction stricte entre faits vérifiés, interprétations et jugements'
     ]
   },
   solidite_logique: {
     key: 'solidite_logique',
     label: 'Solidité logique et argumentative',
-    weight: 15,
+    weight: 25,
     description: 'Cohérence, nuance, qualité des inférences, résistance aux objections',
     criteria: [
       'Absence de causalités non démontrées (corrélation vs causalité)',
@@ -107,72 +77,42 @@ export const SCORE_DOMAINS: Record<ScoreDomainKey, ScoreDomainDefinition> = {
       'Anticipation et traitement des objections adverses prévisibles'
     ]
   },
-  robustesse_factuelle: {
-    key: 'robustesse_factuelle',
-    label: 'Robustesse factuelle et sourcing',
-    weight: 20,
-    description: 'Vérifiabilité, précision, datation, contextualisation, niveau de certitude',
+  cadrage_manipulation: {
+    key: 'cadrage_manipulation',
+    label: 'Cadrage et procédés rhétoriques',
+    weight: 25,
+    description: 'Détection des tournures qui orientent le jugement du lecteur sans apporter de preuve : ce que le titre promet et que le corps ne tient pas, le vocabulaire qui charge un constat, l’opinion parée de la grammaire du fait, la citation tronquée, le débat réel présenté comme tranché ou l’inverse, l’autorité invoquée sans être nommée.',
     criteria: [
-      'Précision des chiffres, dates, noms et citations',
-      'Sourcing explicite des assertions et données sensibles',
-      'Contextualisation méthodologique des données chiffrées',
-      'Distinction stricte entre faits vérifiés, interprétations et jugements'
+      'Le titre ou le chapô n’affirme rien que le corps de l’article ne démontre pas',
+      'Le vocabulaire employé ne charge pas émotionnellement un constat qui devrait rester factuel',
+      'Une opinion ou une interprétation n’est jamais formulée avec la grammaire d’un fait établi',
+      'Les citations rapportées ne sont pas tronquées ou sorties de leur contexte au point d’en changer le sens',
+      'Un désaccord réel n’est pas présenté comme tranché, ni une question réglée comme encore ouverte',
+      'Toute autorité invoquée (« des experts », « une étude ») est nommée et identifiable'
     ]
   },
-  coherence_editoriale: {
-    key: 'coherence_editoriale',
-    label: 'Cohérence éditoriale (6 axes)',
-    weight: 15,
-    description: 'Constructif, accrocheur, iconoclaste, narratif, accessible, éthique',
-    criteria: [
-      'Axe Constructif : ouvre un débouché, une solution ou un critère de discernement',
-      'Axe Accrocheur : paradoxe, tension ou promesse explicite',
-      'Axe Iconoclaste : angle neuf sans répéter une doxa ou contre-doxa usée',
-      'Axe Narratif : fil conducteur, incarnation et tension',
-      'Axe Accessible : compréhensible sans expertise préalable',
-      'Axe Éthique : rigueur déontologique sans procès d’intention gratuit'
-    ]
-  },
-  angle_impact: {
-    key: 'angle_impact',
-    label: 'Angle et impact éditorial',
+  deontologie: {
+    key: 'deontologie',
+    label: 'Déontologie et transparence',
     weight: 10,
-    description: 'Originalité, intérêt, force de l’attaque, promesse tenue',
+    description: 'Vérifie que l’article respecte les règles élémentaires de transparence envers le lecteur : distinction entre fait rapporté et commentaire, mention des conflits d’intérêt, citations attribuées à des personnes identifiables, absence de procès d’intention non étayé.',
     criteria: [
-      'Angle clair (démystification, éclairage, enquête, controverse, etc.)',
-      'Promesse initiale tenue jusqu’au terme du texte',
-      'Pertinence et fécondité éditoriale du cadrage choisi'
+      'Le fait rapporté et le commentaire de l’auteur sont clairement distingués',
+      'Les conflits d’intérêt éventuels (liens financiers, institutionnels, personnels) sont signalés',
+      'Les citations sont attribuées à une personne identifiable, pas à une source anonyme sans justification',
+      'Aucune intention ou motivation n’est prêtée à quelqu’un sans preuve à l’appui'
     ]
   },
-  connexion_quotidien: {
-    key: 'connexion_quotidien',
-    label: 'Connexion au quotidien et utilité lecteur',
+  orthographe_grammaire: {
+    key: 'orthographe_grammaire',
+    label: 'Soin de la langue',
     weight: 5,
-    description: 'Impact concret sur la vie du lecteur, capacité à rendre le sujet tangible',
+    description: 'Exactitude linguistique et propreté de surface, comme indice de rigueur plutôt que comme critère de qualité rédactionnelle',
     criteria: [
-      'Réponse concrète à la question « Pourquoi cela me concerne-t-il ? »',
-      'Incarnation par des situations réelles ou arbitrages tangibles'
-    ]
-  },
-  preservation_voix: {
-    key: 'preservation_voix',
-    label: 'Préservation de la voix d’auteur et style',
-    weight: 5,
-    description: 'Conservation du style, du rythme, de l’énergie propre sans affadissement',
-    criteria: [
-      'Rythme vivant et précision lexicale',
-      'Absence de clichés et formulations automatiques (« en conclusion », « force est de constater »)',
-      'Respect du tempérament et de la tonalité propre de l’auteur'
-    ]
-  },
-  format_calibrage: {
-    key: 'format_calibrage',
-    label: 'Format et calibrage',
-    weight: 5,
-    description: 'Respect de la longueur, densité et logique du format',
-    criteria: [
-      'Densité proportionnée sans longueurs ni détours creux',
-      'Adéquation entre le format choisi et l’ampleur du propos'
+      'Accords grammaticaux et concordance des temps',
+      'Homophones et orthographe lexicale',
+      'Ponctuation et découpage des phrases',
+      'Stabilité des références pronominales'
     ]
   }
 };
@@ -278,7 +218,6 @@ export interface Finding {
   severity: SeverityLevel;
   label: string;
   explanation: string;
-  suggestion?: string;
   confidence: number;
   /**
    * Set on findings that assert something about the world rather than about the
@@ -302,19 +241,6 @@ export interface CategoryScore {
 }
 
 /**
- * 6 editorial axes compliance check
- */
-export interface EditorialAxesCheck {
-  constructif: boolean;
-  accrocheur: boolean;
-  iconoclaste: boolean;
-  narratif: boolean;
-  accessible: boolean;
-  ethique: boolean;
-  notes?: string;
-}
-
-/**
  * Full Fourches Caudines Analysis Report
  */
 export interface AnalysisReport {
@@ -324,7 +250,6 @@ export interface AnalysisReport {
   summary: string;
   categories: CategoryScore[];
   findings: Finding[];
-  editorialAxes: EditorialAxesCheck;
   /** Factual assertions actually researched, with their evidence. */
   claims: FactualClaim[];
   /** What research ran. Never optional: silence here would read as "checked". */
@@ -395,7 +320,6 @@ export const FindingSchema = z.object({
   severity: SeverityLevelSchema.default(2),
   label: z.string().min(1),
   explanation: z.string().min(1),
-  suggestion: z.string().optional(),
   confidence: z.number().min(0).max(1).default(0.9),
   verification: VerificationStateSchema.optional(),
   sources: z.array(EvidenceSourceSchema).default([])
@@ -403,16 +327,11 @@ export const FindingSchema = z.object({
 
 export const CategoryScoreSchema = z.object({
   domain: z.enum([
-    'orthographe_grammaire',
-    'clarte_lisibilite',
-    'structure_progression',
-    'solidite_logique',
     'robustesse_factuelle',
-    'coherence_editoriale',
-    'angle_impact',
-    'connexion_quotidien',
-    'preservation_voix',
-    'format_calibrage'
+    'solidite_logique',
+    'cadrage_manipulation',
+    'deontologie',
+    'orthographe_grammaire'
   ]),
   score: z.number().min(0),
   maxScore: z.number().optional(),
@@ -420,30 +339,11 @@ export const CategoryScoreSchema = z.object({
   weaknesses: z.array(z.string()).default([])
 });
 
-export const EditorialAxesCheckSchema = z.object({
-  constructif: z.boolean().default(true),
-  accrocheur: z.boolean().default(true),
-  iconoclaste: z.boolean().default(true),
-  narratif: z.boolean().default(true),
-  accessible: z.boolean().default(true),
-  ethique: z.boolean().default(true),
-  notes: z.string().optional()
-});
-
-
 export const RawLlmAnalysisResponseSchema = z.object({
   summary: z.string().min(1),
   scores: z.array(CategoryScoreSchema).min(1),
   findings: z.array(FindingSchema).default([]),
-  claims: z.array(FactualClaimSchema).default([]),
-  editorialAxes: EditorialAxesCheckSchema.default({
-    constructif: true,
-    accrocheur: true,
-    iconoclaste: true,
-    narratif: true,
-    accessible: true,
-    ethique: true
-  })
+  claims: z.array(FactualClaimSchema).default([])
 });
 
 export type RawLlmAnalysisResponse = z.infer<typeof RawLlmAnalysisResponseSchema>;
