@@ -10,7 +10,7 @@ import React, {
   HTMLAttributes,
 } from 'react';
 import { durationTokens, easingCurves } from '../../tokens';
-import { useReducedMotion, getMotionSafeTransition } from '../../useReducedMotion';
+import { useReducedMotion } from '../../useReducedMotion';
 
 /* =========================================================================
    1. Interactive Press Button (Scale 0.97 Feedback, Blur mask state switch)
@@ -159,7 +159,7 @@ export const ExpandableCard: React.FC<ExpandableCardProps> = ({
   const isReduced = useReducedMotion(reducedMotion);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(isExpanded ? undefined : 0);
-  const [isMounted, setIsMounted] = useState(false);
+  const [, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);

@@ -169,7 +169,7 @@ export class ShadowHighlightOverlay {
     if (this.isDestroyed || !this.containerElement) return;
 
     // Recalculate range bounding boxes from live Range instances
-    for (const [findingId, hl] of this.highlightsMap.entries()) {
+    for (const hl of this.highlightsMap.values()) {
       if (hl.range) {
         try {
           const clientRects = Array.from(hl.range.getClientRects());
@@ -229,7 +229,7 @@ export class ShadowHighlightOverlay {
 
       const createdBoxes: HTMLElement[] = [];
 
-      hl.rects.forEach((rect, idx) => {
+      hl.rects.forEach((rect, _idx) => {
         const box = document.createElement('div');
         box.className = `fc-highlight-rect fc-severity-${hl.target.severity}`;
         box.dataset.findingId = findingId;

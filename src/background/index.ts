@@ -9,7 +9,15 @@ import { TabStateManager } from './tabStateManager';
 import { SecureKeyStorage } from '../crypto/storage';
 import { LLMClientFactory } from '../client/factory';
 import { AnalysisPipeline } from '../engine';
-import { AnalysisResult, PipelineProgressEvent } from '../engine/types';
+// `PipelineProgressEvent` is exported by BOTH engine/types.ts ({step,progress})
+// and engine/pipeline.ts ({status,stage,message,progress}). The star barrel makes
+// the bare name ambiguous, and the types.ts variant (which this file used to
+// import) has no `status` field at all. Import the real runtime shape directly.
+import type { PipelineProgressEvent } from '../engine/pipeline';
+import type { AnalysisResult } from '../engine/types';
+import { findingsToHighlightTargets } from '../adapters/findingAdapters';
+import type { ExtractedArticle } from '../content/types';
+import type { FcRpcMap } from '../messaging/protocol';
 
 export interface BackgroundServiceWorkerOptions {
   bus?: TypedMessageBus;
@@ -117,7 +125,7 @@ export class BackgroundServiceWorker {
    */
   private setupRPCHandlers(): void {
     // Get current tab analysis state
-    this.bus.registerRPC('GET_TAB_STATE', async (req: { tabId?: number }) => {
+    this.bus.registerRPC<'GET_TAB_STATE', FcRpcMap>('GET_TAB_STATE', async (req) => {
       let targetTabId = req?.tabId;
       if (!targetTabId) {
         const activeTab = await UnifiedRuntime.getActiveTab();
@@ -129,7 +137,7 @@ export class BackgroundServiceWorker {
     });
 
     // Start / Trigger analysis on target tab
-    this.bus.registerRPC('TRIGGER_ANALYSIS', async (req: { tabId?: number; articleText?: string; articleTitle?: string; modelConfig?: any }) => {
+    this.bus.registerRPC<'TRIGGER_ANALYSIS', FcRpcMap>('TRIGGER_ANALYSIS', async (req) => {
       let targetTabId = req?.tabId;
       if (!targetTabId) {
         const activeTab = await UnifiedRuntime.getActiveTab();
@@ -141,7 +149,7 @@ export class BackgroundServiceWorker {
     });
 
     // Cancel / Abort analysis on target tab
-    this.bus.registerRPC('CANCEL_ANALYSIS', async (req: { tabId: number }) => {
+    this.bus.registerRPC<'CANCEL_ANALYSIS', FcRpcMap>('CANCEL_ANALYSIS', async (req) => {
       const pipeline = this.activePipelines.get(req.tabId);
       if (pipeline) {
         pipeline.abort();
@@ -155,7 +163,7 @@ export class BackgroundServiceWorker {
     });
 
     // Sync finding selection and highlights
-    this.bus.registerRPC('SELECT_FINDING', async (req: { tabId?: number; findingId: string | null }) => {
+    this.bus.registerRPC<'SELECT_FINDING', FcRpcMap>('SELECT_FINDING', async (req) => {
       let targetTabId = req?.tabId;
       if (!targetTabId) {
         const activeTab = await UnifiedRuntime.getActiveTab();
@@ -178,25 +186,37 @@ export class BackgroundServiceWorker {
   }
 
   /**
+   * `bus.dispatch` awaits runtime.sendMessage, which rejects with
+   * "Could not establish connection" whenever no other context is listening -
+   * i.e. every time the sidepanel is closed. These are fire-and-forget
+   * notifications, so swallow that specific failure instead of emitting an
+   * unhandled rejection on every progress tick.
+   */
+  private safeDispatch(type: string, payload: unknown): void {
+    void this.bus.dispatch(type, payload).catch(() => {
+      // No listening context; nothing to notify.
+    });
+  }
+
+  /**
    * Setup unidirectional events & highlight sync forwarding
    */
   private setupEventForwarding(): void {
     // When content script sends FC_HIGHLIGHT_CLICKED or FC_HIGHLIGHT_HOVERED
-    this.bus.on('FC_HIGHLIGHT_CLICKED', (payload: any, sender) => {
+    this.bus.on('FC_HIGHLIGHT_CLICKED', (payload: { findingId?: string }, sender) => {
       const tabId = sender.tab?.id;
       if (tabId) {
         this.stateManager.updateTabState(tabId, { selectedFindingId: payload?.findingId });
       }
-      // Broadcast to sidepanel
-      this.bus.dispatch('FC_SIDEBAR_FINDING_SELECTED', { ...payload, tabId });
+      this.safeDispatch('FC_SIDEBAR_FINDING_SELECTED', { ...payload, tabId });
     });
 
-    this.bus.on('FC_HIGHLIGHT_HOVERED', (payload: any, sender) => {
+    this.bus.on('FC_HIGHLIGHT_HOVERED', (payload: { findingId?: string }, sender) => {
       const tabId = sender.tab?.id;
       if (tabId) {
         this.stateManager.updateTabState(tabId, { hoveredFindingId: payload?.findingId });
       }
-      this.bus.dispatch('FC_SIDEBAR_FINDING_HOVERED', { ...payload, tabId });
+      this.safeDispatch('FC_SIDEBAR_FINDING_HOVERED', { ...payload, tabId });
     });
   }
 
@@ -213,13 +233,18 @@ export class BackgroundServiceWorker {
     // 1. If article not provided, request extraction from content script
     if (!articleText) {
       try {
-        const contentResp = await UnifiedRuntime.sendTabMessage<{ success: boolean; data?: any }>(tabId, {
-          type: 'FC_EXTRACT_CONTENT',
-        });
+        const contentResp = await UnifiedRuntime.sendTabMessage<{
+          success: boolean;
+          data?: ExtractedArticle;
+        }>(tabId, { type: 'FC_EXTRACT_CONTENT' });
         if (contentResp?.success && contentResp.data) {
-          articleText = contentResp.data.fullText || contentResp.data.content;
-          articleTitle = contentResp.data.title;
-          this.stateManager.updateTabState(tabId, { article: contentResp.data });
+          const article = contentResp.data;
+          // ExtractedArticle has no `title`/`content` at the top level; the
+          // title lives on `metadata`. Reading `data.title` yielded undefined
+          // on every extraction.
+          articleText = article.fullText || article.cleanText;
+          articleTitle = article.metadata?.title || undefined;
+          this.stateManager.updateTabState(tabId, { article });
         }
       } catch (err) {
         console.warn('Could not extract content directly from tab:', err);
@@ -248,14 +273,16 @@ export class BackgroundServiceWorker {
       client,
       demoMode: !client,
       onProgress: (evt: PipelineProgressEvent) => {
+        // The pipeline emits 'completed'; TabAnalysisState.status is
+        // PipelineStatus which spells it 'complete'. Normalise at this seam so
+        // the sidepanel only ever sees one spelling.
         this.stateManager.updateTabState(tabId, {
-          status: evt.status,
+          status: evt.status === 'completed' ? 'complete' : evt.status,
           progress: evt.progress,
           currentStep: evt.message,
         });
 
-        // Relay progress to sidepanel & runtime
-        this.bus.dispatch('ANALYSIS_PROGRESS', { tabId, ...evt });
+        this.safeDispatch('ANALYSIS_PROGRESS', { tabId, ...evt });
       },
     });
 
@@ -273,33 +300,35 @@ export class BackgroundServiceWorker {
       });
 
       this.stateManager.updateTabState(tabId, {
-        status: 'completed',
+        status: 'complete',
         progress: 100,
         result,
         findings: result.findings,
       });
 
-      // Forward findings to content script for DOM range highlight anchoring
+      // The content script expects FindingHighlightTarget[] (findingId, string
+      // severities, snake_case categories). Posting raw engine Finding[] left
+      // findingId undefined and every anchor silently failed.
       if (result.findings && result.findings.length > 0) {
         try {
           await UnifiedRuntime.sendTabMessage(tabId, {
             type: 'FC_APPLY_HIGHLIGHTS',
-            payload: result.findings,
+            payload: findingsToHighlightTargets(result.findings),
           });
         } catch {
           // Non-blocking if content script not loaded
         }
       }
 
-      this.bus.dispatch('ANALYSIS_COMPLETE', { tabId, result });
+      this.safeDispatch('ANALYSIS_COMPLETE', { tabId, result });
       return { success: true, result };
-    } catch (err: any) {
-      const errorMsg = err?.message || 'Erreur lors de l’analyse critique';
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Erreur lors de l’analyse critique';
       this.stateManager.updateTabState(tabId, {
         status: 'error',
         error: errorMsg,
       });
-      this.bus.dispatch('ANALYSIS_ERROR', { tabId, error: errorMsg });
+      this.safeDispatch('ANALYSIS_ERROR', { tabId, error: errorMsg });
       return { success: false, error: errorMsg };
     } finally {
       this.activePipelines.delete(tabId);

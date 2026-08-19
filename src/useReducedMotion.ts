@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, useCallback } from 'react';
+import { useSyncExternalStore } from 'react';
 import { easingCurves, durationTokens } from './tokens';
 
 /**
@@ -20,10 +20,10 @@ function subscribeReducedMotion(callback: () => void) {
     mediaQueryList.addEventListener('change', callback);
     return () => mediaQueryList.removeEventListener('change', callback);
   } else {
-    // @ts-expect-error fallback for legacy MediaQueryList
+    // addListener/removeListener are deprecated but still declared in lib.dom,
+    // so the previous @ts-expect-error suppressions had nothing to suppress.
     mediaQueryList.addListener(callback);
     return () => {
-      // @ts-expect-error fallback for legacy MediaQueryList
       mediaQueryList.removeListener(callback);
     };
   }

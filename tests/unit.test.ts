@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ArticleExtractor } from '../src/content/extractor';
 import { RangeTracker } from '../src/content/rangeTracker';
 import { ContentScriptController } from '../src/content/contentScript';
-import { TextBlock, FindingHighlightTarget } from '../src/content/types';
 
 describe('Article Detection & Extraction Unit Tests', () => {
   let mockDoc: Document;

@@ -425,7 +425,7 @@ export class EditorialCanvasRenderer {
     x: number,
     y: number,
     width: number,
-    height: number,
+    _height: number,
     palette: ThemePalette,
     data: EditorialCardData,
     verdictInfo: (typeof VERDICT_THEMES)[VerdictType]
@@ -765,35 +765,15 @@ export class EditorialCanvasRenderer {
    * Export Canvas to PNG Blob
    */
   public static async toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-    const withResolversFn = (Promise as unknown as {
-      withResolvers?: <T>() => {
-        promise: Promise<T>;
-        resolve: (value: T) => void;
-        reject: (reason?: unknown) => void;
-      };
-    }).withResolvers;
-
-    const { promise, resolve, reject } = (typeof withResolversFn === 'function'
-      ? withResolversFn.call(Promise)
-      : (() => {
-          let res!: (value: Blob) => void;
-          let rej!: (reason?: unknown) => void;
-          const p = new Promise<Blob>((a, b) => {
-            res = a;
-            rej = b;
-          });
-          return { promise: p, resolve: res, reject: rej };
-        })());
-
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error('Canvas export to Blob failed'));
-      }
-    }, 'image/png');
-
-    return promise;
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Canvas export to Blob failed'));
+        }
+      }, 'image/png');
+    });
   }
 
   /**

@@ -9,14 +9,7 @@ import React, {
   CSSProperties,
   ReactNode,
 } from 'react';
-import {
-  durationTokens,
-  easingCurves,
-  springPresets,
-  CubicBezierCurve,
-  SpringConfig,
-} from '../../tokens';
-import { useReducedMotion, getMotionSafeTransition, getMotionSafeTransform } from '../../useReducedMotion';
+import { useReducedMotion } from '../../useReducedMotion';
 /* =========================================================================
    1. Types & Timeline Specifications (§6.3 Specs)
    ========================================================================= */
@@ -311,7 +304,9 @@ export function useScoreRevelation(
       nextStage = 'panel_fade';
     }
 
-    if (nextStage !== stageRef.current && nextStage !== 'completed') {
+    // The old guard also tested `nextStage !== 'completed'`, which is not a
+    // member of the stage union and so was always true - a dead condition.
+    if (nextStage !== stageRef.current) {
       setStage(nextStage);
       config.onStageChange?.(nextStage);
     }
@@ -516,7 +511,6 @@ export interface AnimatedScoreCounterProps {
 
 export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
   score: controlledScore,
-  maxScore = 100,
   label = 'INDICE DE FIABILITÉ',
   theme = 'light',
   className = '',

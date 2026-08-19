@@ -87,8 +87,15 @@ export function resolveAnchorCoordinate(
 ): Point | null {
   if (!target) return null;
 
-  // 1. Direct Point
-  if ('x' in target && 'y' in target && typeof target.x === 'number' && typeof target.y === 'number') {
+  // 1. Direct Point. `in` is only valid on objects, and AnchorTarget also
+  // admits a CSS-selector string, so narrow that out first.
+  if (
+    typeof target !== 'string' &&
+    'x' in target &&
+    'y' in target &&
+    typeof target.x === 'number' &&
+    typeof target.y === 'number'
+  ) {
     const x = containerRect ? target.x - containerRect.left : target.x;
     const y = containerRect ? target.y - containerRect.top : target.y;
     return { x, y };
@@ -356,7 +363,10 @@ export function useAnchorTracking(
    4. Single Guide Line (SVG Path Component)
    ========================================================================= */
 
-export interface ConnectingGuideLineProps extends SVGAttributes<SVGPathElement> {
+// `result` is also an SVG filter attribute (typed as string), so it must be
+// omitted from the extended set before being redeclared as a BezierResult.
+export interface ConnectingGuideLineProps
+  extends Omit<SVGAttributes<SVGPathElement>, 'result'> {
   result: BezierResult;
   color?: string;
   strokeWidth?: number;

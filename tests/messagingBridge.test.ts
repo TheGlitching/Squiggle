@@ -64,7 +64,7 @@ describe('Messaging Bridge', () => {
         lastError: null,
       },
       tabs: {
-        query: vi.fn((queryInfo, callback) => {
+        query: vi.fn((_queryInfo, callback) => {
           callback([{ id: 123, url: 'https://example.com', active: true }]);
         }),
         sendMessage: vi.fn((tabId: number, msg: unknown, callback?: (resp: unknown) => void) => {
@@ -145,17 +145,20 @@ describe('Messaging Bridge', () => {
       const busServer = new TypedMessageBus('background');
 
       interface TestRPCMap {
+        // The bus constrains its map to RPCProtocolMap, which carries a string
+        // index signature; the declared channel below keeps its exact types.
+        [channel: string]: { request: unknown; response: unknown };
         CALCULATE_SUM: {
           request: { a: number; b: number };
           response: { sum: number };
         };
       }
 
-      busServer.registerRPC<keyof TestRPCMap, TestRPCMap>('CALCULATE_SUM', async (req) => {
+      busServer.registerRPC<'CALCULATE_SUM', TestRPCMap>('CALCULATE_SUM', async (req) => {
         return { sum: req.a + req.b };
       });
 
-      const res = await busClient.callRPC<keyof TestRPCMap, TestRPCMap>('CALCULATE_SUM', { a: 10, b: 25 });
+      const res = await busClient.callRPC<'CALCULATE_SUM', TestRPCMap>('CALCULATE_SUM', { a: 10, b: 25 });
       expect(res).toEqual({ sum: 35 });
 
       busClient.destroy();

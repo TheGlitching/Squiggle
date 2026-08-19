@@ -5,7 +5,7 @@ import {
 import { parseAndValidateLlmOutput } from './validator';
 import { AnalysisInput, AnalysisReport } from './types';
 import { BaseLLMClient } from '../client/base';
-import { DEMO_ARTICLE, DEMO_FOURCHES_CAUDINES_REPORT } from '../../tree/root/children/root-01/children/root-01-04/artifacts/demoFixture';
+import { DEMO_FOURCHES_CAUDINES_REPORT } from './demoFixture';
 
 export type PipelineStage =
   | 'idle'
@@ -112,24 +112,36 @@ export class AnalysisPipeline {
       this.reportProgress('calling_provider', 'Audit critique en cours par le modèle IA...', 50);
 
       let accumulated = '';
-      const responseText = await this.client.complete({
-        systemPrompt,
-        userPrompt,
-        temperature: 0.1,
-        maxTokens: 4096,
-        onStreamChunk: (chunk: string) => {
-          accumulated += chunk;
-          this.reportProgress('calling_provider', 'Réception continue de l’évaluation...', 70, {
-            partialText: accumulated,
-          });
+      const startedAt = Date.now();
+
+      // The client contract is `stream(options, callbacks)` / `complete(options)`
+      // with a `messages` array, returning a CompletionResponse object. The
+      // previous call passed `userPrompt`/`onStreamChunk` (neither exists on
+      // CompletionOptions) and treated the result as a bare string, so this
+      // branch could never have run successfully.
+      const response = await this.client.stream(
+        {
+          messages: [{ role: 'user', content: userPrompt }],
+          systemPrompt,
+          temperature: 0.1,
+          maxTokens: 4096,
+          abortSignal: this.abortController?.signal,
         },
-      });
+        {
+          onChunk: (delta: string) => {
+            accumulated += delta;
+            this.reportProgress('calling_provider', 'Réception continue de l’évaluation...', 70, {
+              partialText: accumulated,
+            });
+          },
+        }
+      );
 
       this.reportProgress('parsing_response', 'Validation et notation du rapport...', 90);
 
-      const report = parseAndValidateLlmOutput(responseText, analysisInput, {
-        modelName: this.client.getProvider(),
-        durationMs: 1500,
+      const report = parseAndValidateLlmOutput(response.content, analysisInput, {
+        modelName: `${this.client.getProvider()}/${this.client.getModel()}`,
+        durationMs: Date.now() - startedAt,
       });
 
       this.reportProgress('success', 'Analyse terminée avec succès', 100);

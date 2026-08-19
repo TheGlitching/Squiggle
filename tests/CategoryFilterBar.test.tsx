@@ -1,8 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import {
-  CATEGORY_DEFINITIONS,
-  FindingCategory,
-} from '../src/ui/components/CategoryFilterBar';
+import { describe, it, expect } from 'vitest';
+import { CATEGORY_DEFINITIONS } from '../src/ui/components/CategoryFilterBar';
 
 describe('CategoryFilterBar Definitions & Logic', () => {
   it('defines all 7 category definitions with appropriate metadata and colors', () => {

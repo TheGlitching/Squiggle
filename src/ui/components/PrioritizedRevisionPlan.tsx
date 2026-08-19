@@ -280,7 +280,7 @@ export const PrioritizedRevisionPlan: React.FC<RevisionPlanProps> = ({
           }}
           aria-label="Statistiques par niveau de priorité"
         >
-          {tierStats.map(({ tier, total, resolved, pending }) => {
+          {tierStats.map(({ tier, resolved, pending }) => {
             const tierColor = currentTheme[tier.colorKey] as string;
             const tierSubtle = currentTheme[tier.subtleColorKey] as string;
             const tierBorder = currentTheme[tier.borderColorKey] as string;

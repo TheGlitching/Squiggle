@@ -82,7 +82,7 @@ export class UnifiedRuntime {
     }
     return new Promise<TResponse>((resolve, reject) => {
       try {
-        const maybePromise = runtime.sendMessage(message, (response: TResponse) => {
+        const maybePromise: unknown = runtime.sendMessage(message, (response: TResponse) => {
           const lastError = runtime.lastError;
           if (lastError) {
             reject(new Error(lastError.message || 'Extension runtime message error'));
@@ -119,7 +119,7 @@ export class UnifiedRuntime {
           }
         };
 
-        const maybePromise = sendOptions
+        const maybePromise: unknown = sendOptions
           ? tabs.sendMessage(tabId, message, sendOptions, callback)
           : tabs.sendMessage(tabId, message, callback);
 
@@ -181,7 +181,7 @@ export class UnifiedRuntime {
     const tabs = this.getTabs();
     return new Promise((resolve, reject) => {
       try {
-        const maybePromise = tabs.query(queryInfo, (result) => {
+        const maybePromise: unknown = tabs.query(queryInfo, (result) => {
           const lastError = this.getRuntime().lastError;
           if (lastError) {
             reject(new Error(lastError.message));

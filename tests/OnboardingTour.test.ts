@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DEFAULT_EDITORIAL_TOUR_STEPS, DEFAULT_STORAGE_KEY, DEFAULT_STORAGE_VERSION, getTourCompletionStatus, setTourCompletionStatus, resetTourCompletionStatus, computeTourPosition } from '../src/ui/components/OnboardingTour';
+import { DEFAULT_EDITORIAL_TOUR_STEPS, DEFAULT_STORAGE_KEY, DEFAULT_STORAGE_VERSION, getTourCompletionStatus, setTourCompletionStatus, resetTourCompletionStatus } from '../src/ui/components/OnboardingTour';
 
 describe('OnboardingTour & Walkthrough Logic', () => {
   let mockStorage: Record<string, string> = {};

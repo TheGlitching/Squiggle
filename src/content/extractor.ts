@@ -9,7 +9,7 @@
  * 4. Readability-grade text block extraction with XPath and Character-offset mapping
  */
 
-import { ArticleMetadata, ExtractedArticle, TextBlock, DOMNodeCoordinates } from './types';
+import { ArticleMetadata, ExtractedArticle, TextBlock } from './types';
 
 export class ArticleExtractor {
   private doc: Document;
@@ -250,7 +250,6 @@ export class ArticleExtractor {
 
     for (const el of allDivs) {
       // Exclude navigation, header, footer, sidebar, comments
-      const tag = el.tagName.toLowerCase();
       const idAndClass = `${el.id} ${el.className}`.toLowerCase();
       if (/nav|header|footer|sidebar|comment|menu|ad-|banner|promo|social/i.test(idAndClass)) {
         continue;

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BackgroundServiceWorker } from '../src/background';
 import { TabStateManager } from '../src/background/tabStateManager';
 import { TypedMessageBus } from '../src/messaging/messageBus';
+import type { FcRpcMap } from '../src/messaging/protocol';
 
 describe('BackgroundServiceWorker & TabStateManager', () => {
   let mockRuntimeListeners: Array<(msg: unknown, sender: unknown, sendResp: (r?: unknown) => void) => boolean | void>;
@@ -43,11 +44,11 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
         lastError: null,
       },
       tabs: {
-        query: vi.fn((queryInfo, callback) => {
+        query: vi.fn((_queryInfo, callback) => {
           callback([{ id: 101, url: 'https://lemonde.fr/article-1', active: true }]);
         }),
         get: vi.fn().mockResolvedValue({ id: 101, windowId: 1 }),
-        sendMessage: vi.fn((tabId: number, msg: unknown, callback?: (resp: unknown) => void) => {
+        sendMessage: vi.fn((_tabId: number, msg: unknown, callback?: (resp: unknown) => void) => {
           if (callback) {
             // Mock content script extraction responses
             const msgObj = msg as { type?: string };
@@ -139,12 +140,12 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
       sw.init();
 
       // RPC GET_TAB_STATE
-      const stateResp = await busClient.callRPC<{ state: { tabId: number; status: string } | null }>('GET_TAB_STATE', { tabId: 101 });
+      const stateResp = await busClient.callRPC<'GET_TAB_STATE', FcRpcMap>('GET_TAB_STATE', { tabId: 101 });
       expect(stateResp.state).toBeDefined();
       expect(stateResp.state?.tabId).toBe(101);
 
       // Trigger analysis
-      const analysisResp = await busClient.callRPC<{ success: boolean; result?: { score: number; findings: unknown[] } }>('TRIGGER_ANALYSIS', {
+      const analysisResp = await busClient.callRPC<'TRIGGER_ANALYSIS', FcRpcMap>('TRIGGER_ANALYSIS', {
         tabId: 101,
         articleText: 'Un texte de test suffisamment long pour une analyse critique complète avec arguments.',
         articleTitle: 'Titre Test',
@@ -155,7 +156,9 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
       expect(analysisResp.result?.score).toBeGreaterThanOrEqual(0);
 
       const postState = sw.getStateManager().getTabState(101);
-      expect(postState?.status).toBe('completed');
+      // The pipeline emits 'completed'; the worker normalises it to the only
+      // spelling PipelineStatus actually declares.
+      expect(postState?.status).toBe('complete');
       expect(postState?.findings).toBeDefined();
 
       busClient.destroy();
@@ -166,8 +169,8 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
       const sw = new BackgroundServiceWorker();
       sw.init();
 
-      sw.getStateManager().updateTabState(101, { status: 'completed', progress: 100 });
-      expect(sw.getStateManager().getTabState(101)?.status).toBe('completed');
+      sw.getStateManager().updateTabState(101, { status: 'complete', progress: 100 });
+      expect(sw.getStateManager().getTabState(101)?.status).toBe('complete');
 
       // Trigger tab reload navigation
       mockTabsOnUpdated?.(101, { status: 'loading', url: 'https://newurl.com' });

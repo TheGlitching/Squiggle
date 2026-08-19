@@ -2,7 +2,8 @@
  * Tab State Manager & Analysis State Machine for Background Service Worker
  */
 
-import { AnalysisResult, PipelineStatus } from '../engine/types';
+import { AnalysisResult, Finding, PipelineStatus } from '../engine/types';
+import type { ExtractedArticle } from '../content/types';
 
 export interface TabAnalysisState {
   tabId: number;
@@ -11,8 +12,8 @@ export interface TabAnalysisState {
   status: PipelineStatus | 'idle';
   progress: number;
   currentStep?: string;
-  article?: unknown;
-  findings?: unknown[];
+  article?: ExtractedArticle;
+  findings?: Finding[];
   result?: AnalysisResult;
   error?: string;
   selectedFindingId?: string | null;
