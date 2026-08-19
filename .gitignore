@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Fractal harness bookkeeping (semantic memory, not project code)
+tree/
+.fractal/
+trace.json
+digest.md
+.fractal_decision_*
+
+# OS
+.DS_Store
+
+# Local env
+.env
+.env.local

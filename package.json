@@ -1,0 +1,46 @@
+{
+  "name": "fourches-caudines-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fourches Caudines - Critical analysis and editorial verification browser extension (Chrome MV3 & Firefox MV3)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:firefox": "TARGET=firefox vite",
+    "build": "vite build",
+    "build:chrome": "TARGET=chrome vite build",
+    "build:firefox": "TARGET=firefox vite build",
+    "build:all": "npm run build:chrome && npm run build:firefox",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^0.475.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.0.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@types/chrome": "^0.0.306",
+    "@types/node": "^22.13.4",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/webextension-polyfill": "^0.10.7",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5",
+    "webextension-polyfill": "^0.12.0"
+  }
+}
