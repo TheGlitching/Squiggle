@@ -2,9 +2,12 @@ import { computeFourchesCaudinesScore } from './scoring';
 import {
   AnalysisInput,
   AnalysisReport,
+  EvidenceSource,
+  FactualClaim,
   Finding,
   RawLlmAnalysisResponse,
   RawLlmAnalysisResponseSchema,
+  ResearchRecord,
   TextBlock
 } from './types';
 
@@ -95,10 +98,69 @@ export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]):
   });
 }
 
+/** Categories that assert something about the world, so they require evidence to stand. */
+const FACTUAL_CATEGORIES: Record<string, true> = {
+  'source-absente': true,
+  'affirmation-non-etayee': true,
+  surinterpretation: true
+};
+
+/**
+ * Enforces in code what the prompt cannot guarantee: a factual finding that
+ * claims the article is wrong ('contradicted') but carries no evidence is
+ * downgraded to 'unverified' rather than published as a contradiction, and a
+ * 'source-absente' finding on a block the article itself hyperlinked is
+ * re-categorised instead of standing on a false premise. Editorial findings
+ * never carry a verification state, since they judge prose, not the world.
+ */
+export function enforceEvidenceHonesty(
+  findings: Finding[],
+  articleSources: Record<string, EvidenceSource[]>
+): Finding[] {
+  return findings.map((finding) => {
+    if (!FACTUAL_CATEGORIES[finding.category]) {
+      if (finding.verification === undefined) {
+        return finding;
+      }
+      const { verification: _verification, ...rest } = finding;
+      return rest as Finding;
+    }
+
+    let next: Finding = { ...finding, verification: finding.verification ?? 'unverified' };
+
+    if (next.category === 'source-absente') {
+      const cited = articleSources[next.blockId];
+      if (cited && cited.length > 0) {
+        const articleSource: EvidenceSource = { ...cited[0], origin: 'article' };
+        next = {
+          ...next,
+          category: 'affirmation-non-etayee',
+          verification: 'unverified',
+          sources: [...(next.sources || []), articleSource],
+          explanation: `${next.explanation} (Une source est citée dans l'article mais n'a pas été prise en compte dans ce constat.)`
+        };
+      }
+    }
+
+    if (next.verification === 'contradicted' && (!next.sources || next.sources.length === 0)) {
+      next = { ...next, verification: 'unverified' };
+    }
+
+    return next;
+  });
+}
+
 export interface ParseLlmOutputOptions {
   modelName?: string;
   durationMs?: number;
+  /** Factual claims already researched upstream, used when the model response carries none of its own. */
+  claims?: FactualClaim[];
+  /** What the research stage actually did; defaults to "no research ran" so the report never implies more. */
+  research?: ResearchRecord;
+  /** The article's own hyperlinked sources, keyed by blockId, so 'source-absente' can be checked against reality. */
+  articleSources?: Record<string, EvidenceSource[]>;
 }
+
 
 /**
  * Validates, repairs and constructs full AnalysisReport from raw LLM text output
@@ -139,6 +201,7 @@ export function parseAndValidateLlmOutput(
         summary: typeof candidate.summary === 'string' ? candidate.summary : 'Analyse effectuée avec réserves.',
         scores: scoresParsed as RawLlmAnalysisResponse['scores'],
         findings: findingsParsed as RawLlmAnalysisResponse['findings'],
+        claims: [],
         editorialAxes: {
           constructif: true,
           accrocheur: true,
@@ -160,8 +223,18 @@ export function parseAndValidateLlmOutput(
     rawData = validationResult.data;
   }
 
-  // Anchor and match findings to text blocks
-  const matchedFindings = matchFindingsToBlocks(rawData.findings, input.blocks);
+  // Anchor findings to text blocks, then downgrade any that assert more than they can back up
+  const matchedFindings = enforceEvidenceHonesty(
+    matchFindingsToBlocks(rawData.findings, input.blocks),
+    options.articleSources || {}
+  );
+
+  const claims = rawData.claims.length > 0 ? rawData.claims : options.claims || [];
+  const research: ResearchRecord = options.research || {
+    performed: false,
+    queries: [],
+    skippedReason: "Aucune étape de recherche n'a été exécutée avant la validation de cette analyse."
+  };
 
   // Compute composite score and normalized categories
   const scoreResult = computeFourchesCaudinesScore(
@@ -181,6 +254,8 @@ export function parseAndValidateLlmOutput(
     editorialAxes: rawData.editorialAxes,
     revisionPlan: rawData.revisionPlan,
     editorialOptimizations: rawData.editorialOptimizations,
+    claims,
+    research,
     meta: {
       model: options.modelName || 'llm-byok',
       promptVersion: '1.0.0-fourches-caudines',

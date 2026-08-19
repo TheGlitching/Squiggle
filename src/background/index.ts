@@ -15,7 +15,7 @@ import { AnalysisPipeline } from '../engine';
 // import) has no `status` field at all. Import the real runtime shape directly.
 import type { PipelineProgressEvent } from '../engine/pipeline';
 import type { AnalysisResult } from '../engine/types';
-import { findingsToHighlightTargets } from '../adapters/findingAdapters';
+import { findingsToHighlightTargets, textBlockToEngineBlock } from '../adapters/findingAdapters';
 import type { ExtractedArticle } from '../content/types';
 import type { FcRpcMap } from '../messaging/protocol';
 
@@ -372,6 +372,12 @@ export class BackgroundServiceWorker {
       const result = await pipeline.analyze({
         text: articleText,
         title: articleTitle,
+        url: extracted?.metadata?.canonicalUrl || undefined,
+        // Sending the real structure and the article's own links is what lets the
+        // audit check a claim against the source the piece already cites, rather
+        // than calling it unsourced.
+        blocks: extracted?.blocks?.map(textBlockToEngineBlock),
+        citedSources: extracted?.citedSources,
       });
 
       this.stateManager.updateTabState(tabId, {

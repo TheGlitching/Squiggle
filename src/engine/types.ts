@@ -201,6 +201,58 @@ export type FindingCategory =
 export type SeverityLevel = 1 | 2 | 3;
 
 /**
+ * A source backing (or refuting) a factual claim.
+ *
+ * `origin` records how it reached us, which the reader needs in order to weigh
+ * it: `article` means the piece itself hyperlinked it, `search` means the
+ * research stage found it.
+ */
+export interface EvidenceSource {
+  title: string;
+  url: string;
+  /** Excerpt that carries the support, when the source gave one. */
+  quote?: string;
+  origin: 'article' | 'search';
+}
+
+/**
+ * Whether a factual assertion was actually checked against evidence.
+ *
+ * `unverified` is a first-class outcome, not a failure: without it a model asked
+ * to verify with no evidence to hand will invent a contradiction rather than
+ * admit it could not look. Most wrong "c'est faux" verdicts are this state
+ * misreported as `contradicted`.
+ */
+export type VerificationState = 'confirmed' | 'contradicted' | 'unverified';
+
+/**
+ * A checkable factual assertion lifted out of the article, carrying the result
+ * of actually researching it.
+ */
+export interface FactualClaim {
+  id: string;
+  blockId: string;
+  /** Literal excerpt asserting it. */
+  quote: string;
+  /** The assertion, restated so it can be searched for. */
+  claim: string;
+  verification: VerificationState;
+  sources: EvidenceSource[];
+  /** Why the research landed where it did, for the reader to audit. */
+  rationale?: string;
+}
+
+/** What the research stage actually did, so the report can never imply more. */
+export interface ResearchRecord {
+  performed: boolean;
+  /** Provider that ran the searches, when one did. */
+  provider?: string;
+  queries: string[];
+  /** Present whenever research was skipped or partial; names the limitation. */
+  skippedReason?: string;
+}
+
+/**
  * An annotation / finding located in the text
  */
 export interface Finding {
@@ -215,6 +267,13 @@ export interface Finding {
   explanation: string;
   suggestion?: string;
   confidence: number;
+  /**
+   * Set on findings that assert something about the world rather than about the
+   * prose. Absent on purely editorial findings, where it would be meaningless.
+   */
+  verification?: VerificationState;
+  /** Evidence actually consulted. A contradiction with none is not reported. */
+  sources?: EvidenceSource[];
 }
 
 /**
@@ -280,6 +339,10 @@ export interface AnalysisReport {
     narration?: string;
     conclusion?: string;
   };
+  /** Factual assertions actually researched, with their evidence. */
+  claims: FactualClaim[];
+  /** What research ran. Never optional: silence here would read as "checked". */
+  research: ResearchRecord;
   meta: {
     model: string;
     promptVersion: string;
@@ -310,6 +373,28 @@ export const FindingCategorySchema = z.enum([
   'cadrage',
   'point-fort'
 ]);
+export const EvidenceSourceSchema = z.object({
+  title: z.string().default(''),
+  url: z.string().url(),
+  quote: z.string().optional(),
+  origin: z.enum(['article', 'search']).default('search')
+});
+
+export const VerificationStateSchema = z.enum(['confirmed', 'contradicted', 'unverified']);
+
+/**
+ * Note the default: a model that omits the field has told us nothing about
+ * whether it checked, and `unverified` is the only reading of nothing.
+ */
+export const FactualClaimSchema = z.object({
+  id: z.string().default(() => `c_${Math.random().toString(36).slice(2, 9)}`),
+  blockId: z.string().default(''),
+  quote: z.string().default(''),
+  claim: z.string().min(1),
+  verification: VerificationStateSchema.default('unverified'),
+  sources: z.array(EvidenceSourceSchema).default([]),
+  rationale: z.string().optional()
+});
 
 export const SeverityLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 
@@ -324,7 +409,9 @@ export const FindingSchema = z.object({
   label: z.string().min(1),
   explanation: z.string().min(1),
   suggestion: z.string().optional(),
-  confidence: z.number().min(0).max(1).default(0.9)
+  confidence: z.number().min(0).max(1).default(0.9),
+  verification: VerificationStateSchema.optional(),
+  sources: z.array(EvidenceSourceSchema).default([])
 });
 
 export const CategoryScoreSchema = z.object({
@@ -383,6 +470,7 @@ export const RawLlmAnalysisResponseSchema = z.object({
   summary: z.string().min(1),
   scores: z.array(CategoryScoreSchema).min(1),
   findings: z.array(FindingSchema).default([]),
+  claims: z.array(FactualClaimSchema).default([]),
   editorialAxes: EditorialAxesCheckSchema.default({
     constructif: true,
     accrocheur: true,

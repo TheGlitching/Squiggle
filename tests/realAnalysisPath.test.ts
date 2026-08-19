@@ -105,13 +105,14 @@ describe('analysis with a configured key', () => {
       articleTitle: 'La dette et ses promesses',
     });
 
-    // The provider was actually called.
-    expect(requests).toHaveLength(1);
-    expect(requests[0].url).toContain('/messages');
-
-    // With the user's own article, and its title, in the prompt.
-    expect(requests[0].body).toContain('La dette et ses promesses');
-    expect(requests[0].body).toContain('la dette baissera dès 2027');
+    // The provider is called for research before the audit, so the audit is not
+    // the first call. The audit is the last one, and it is the call that has to
+    // carry the user's own article.
+    expect(requests.length).toBeGreaterThan(1);
+    const audit = requests[requests.length - 1];
+    expect(audit.url).toContain('/messages');
+    expect(audit.body).toContain('La dette et ses promesses');
+    expect(audit.body).toContain('la dette baissera dès 2027');
 
     // And the answer came back from that call, not from the bundled sample.
     expect(res.success).toBe(true);

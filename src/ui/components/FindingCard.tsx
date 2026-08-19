@@ -1,6 +1,8 @@
 import React from 'react';
 import { Finding } from '../../engine/types';
 import { SeverityBadge } from './SeverityBadge';
+import { VerificationBadge } from './VerificationBadge';
+import { SourceCitations } from './SourceCitations';
 
 export interface FindingCardProps {
   finding: Finding;
@@ -34,7 +36,10 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         <span className="font-mono text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-400">
           {finding.category}
         </span>
-        <SeverityBadge severity={finding.severity} />
+        <span className="flex items-center gap-1.5">
+          {finding.verification && <VerificationBadge verification={finding.verification} />}
+          <SeverityBadge severity={finding.severity} />
+        </span>
       </div>
       <h4 className="font-serif font-bold text-sm text-stone-900 dark:text-stone-100 mb-1">
         {finding.label}
@@ -51,6 +56,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
           {finding.suggestion}
         </div>
       )}
+      <SourceCitations sources={finding.sources ?? []} />
     </div>
   );
 };

@@ -10,6 +10,7 @@ import { VerdictStamp } from '../ui/components/VerdictStamp';
 import { FindingCard } from '../ui/components/FindingCard';
 import { CategoryFilterBar, type FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 import { PrioritizedRevisionPlan } from '../ui/components/PrioritizedRevisionPlan';
+import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { OnboardingTour } from '../ui/components/OnboardingTour';
 
@@ -322,6 +323,11 @@ function SidepanelApp() {
                 <p className="mt-3 text-xs leading-relaxed text-[#57534E] dark:text-[#D4D4D8]">
                   {report.summary}
                 </p>
+              )}
+              {/* A report restored from an older stored analysis carries no
+                  research record; saying nothing beats inventing a claim. */}
+              {report.research && (
+                <ResearchDisclosure research={report.research} claims={report.claims ?? []} />
               )}
             </section>
 

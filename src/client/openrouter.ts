@@ -22,4 +22,22 @@ export class OpenRouterClient extends OpenAIClient {
       ...this.config.customHeaders,
     };
   }
+
+  /**
+   * Web search on OpenRouter is a `:online` model suffix rather than a
+   * per-model capability, so every routed model can search, unlike the
+   * bare OpenAI provider it extends.
+   */
+  override supportsWebSearch(): boolean {
+    return true;
+  }
+
+  protected override resolveWebSearchModel(): string {
+    const model = this.config.model || this.defaultModel;
+    return model.endsWith(':online') ? model : `${model}:online`;
+  }
+
+  protected override buildWebSearchExtras(): Record<string, unknown> {
+    return {};
+  }
 }

@@ -4,6 +4,7 @@ import type {
   CompletionResponse,
   StreamCallbacks,
 } from '../types/byok';
+import type { GroundedAnswer, SearchResult } from './base';
 import { BaseLLMClient } from './base';
 
 export class OpenAIClient extends BaseLLMClient {
@@ -29,6 +30,31 @@ export class OpenAIClient extends BaseLLMClient {
       Authorization: `Bearer ${this.config.apiKey}`,
       ...this.config.customHeaders,
     };
+  }
+
+  /**
+   * Only the search-preview family accepts `web_search_options`; every other
+   * chat-completions model rejects the field, so support is tied to the
+   * configured model id rather than assumed for the whole provider.
+   */
+  protected get searchCapableModelPattern(): RegExp {
+    return /search-preview/i;
+  }
+
+  override supportsWebSearch(): boolean {
+    return this.searchCapableModelPattern.test(this.config.model || this.defaultModel);
+  }
+
+  /**
+   * Split out so OpenRouter, which searches via a `:online` model suffix
+   * instead of this field, can override without duplicating the request.
+   */
+  protected resolveWebSearchModel(): string {
+    return this.config.model || this.defaultModel;
+  }
+
+  protected buildWebSearchExtras(): Record<string, unknown> {
+    return { web_search_options: {} };
   }
 
   async complete(options: CompletionOptions): Promise<CompletionResponse> {
@@ -244,5 +270,172 @@ export class OpenAIClient extends BaseLLMClient {
       callbacks.onError?.(error);
       throw error;
     }
+  }
+
+  override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
+    if (!this.supportsWebSearch()) {
+      throw new Error(`${this.providerName} model "${this.config.model || this.defaultModel}" does not support web search`);
+    }
+
+    const body: Record<string, unknown> = {
+      model: this.resolveWebSearchModel(),
+      messages: [{ role: 'user', content: query }],
+      ...this.buildWebSearchExtras(),
+    };
+
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let errorData: unknown;
+      let errorMessage = response.statusText || `${this.providerName} web search request failed`;
+      try {
+        errorData = await response.json();
+        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
+          const errObj = errorData.error;
+          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
+            errorMessage = errObj.message;
+          }
+        }
+      } catch {
+        errorData = await response.text();
+      }
+      throw new BYOKError({
+        provider: this.providerName,
+        statusCode: response.status,
+        message: errorMessage,
+        raw: errorData,
+      });
+    }
+
+    const data = await response.json() as { choices?: unknown };
+    const firstChoice = Array.isArray(data.choices) ? data.choices[0] : undefined;
+    const message = firstChoice && typeof firstChoice === 'object' && 'message' in firstChoice ? firstChoice.message : undefined;
+    const annotations = message && typeof message === 'object' && 'annotations' in message ? message.annotations : undefined;
+
+    return this.parseAnnotations(annotations, opts?.maxResults);
+  }
+
+  /**
+   * Grounded answers require the same search-preview model gating as
+   * `webSearch`, since `web_search_options` is rejected by every other
+   * chat-completions model.
+   */
+  override supportsGroundedAnswer(): boolean {
+    return this.supportsWebSearch();
+  }
+
+  override async groundedAnswer(options: CompletionOptions & { maxSearches?: number }): Promise<GroundedAnswer> {
+    if (!this.supportsGroundedAnswer()) {
+      throw new Error(`${this.providerName} model "${this.config.model || this.defaultModel}" does not support grounded answers`);
+    }
+
+    const { system, messages } = this.formatSystemAndUserMessages(options);
+    const formattedMessages = [];
+    if (system) {
+      formattedMessages.push({ role: 'system', content: system });
+    }
+    for (const m of messages) {
+      formattedMessages.push({ role: m.role, content: m.content });
+    }
+
+    const body: Record<string, unknown> = {
+      model: this.resolveWebSearchModel(),
+      messages: formattedMessages,
+      ...this.buildWebSearchExtras(),
+    };
+
+    if (options.maxTokens) {
+      body.max_tokens = options.maxTokens;
+    }
+
+    if (options.jsonSchema) {
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          name: 'analysis_response',
+          strict: true,
+          schema: options.jsonSchema,
+        },
+      };
+    }
+
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+      signal: options.abortSignal,
+    });
+
+    if (!response.ok) {
+      let errorData: unknown;
+      let errorMessage = response.statusText || `${this.providerName} grounded answer request failed`;
+      try {
+        errorData = await response.json();
+        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
+          const errObj = errorData.error;
+          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
+            errorMessage = errObj.message;
+          }
+        }
+      } catch {
+        errorData = await response.text();
+      }
+      throw new BYOKError({
+        provider: this.providerName,
+        statusCode: response.status,
+        message: errorMessage,
+        raw: errorData,
+      });
+    }
+
+    const data = await response.json() as { choices?: unknown };
+    const firstChoice = Array.isArray(data.choices) ? data.choices[0] : undefined;
+    const message = firstChoice && typeof firstChoice === 'object' && 'message' in firstChoice ? firstChoice.message : undefined;
+
+    const content = message && typeof message === 'object' && 'content' in message && typeof message.content === 'string'
+      ? message.content.trim()
+      : '';
+    if (!content) {
+      throw new Error(`${this.providerName} grounded answer returned no answer text`);
+    }
+
+    const annotations = message && typeof message === 'object' && 'annotations' in message ? message.annotations : undefined;
+    const citations = this.dedupeCitations(this.parseAnnotations(annotations, options.maxSearches));
+
+    return { content, citations };
+  }
+
+  /**
+   * OpenAI and OpenRouter both return citations as `url_citation` annotations
+   * on the assistant message; OpenRouter extends this client and reuses the
+   * parser for its own `:online` responses.
+   */
+  protected parseAnnotations(annotations: unknown, maxResults?: number): SearchResult[] {
+    if (!Array.isArray(annotations)) {
+      return [];
+    }
+
+    const results: SearchResult[] = [];
+    for (const entry of annotations) {
+      if (!entry || typeof entry !== 'object' || !('url_citation' in entry)) {
+        continue;
+      }
+      const citation = entry.url_citation;
+      if (!citation || typeof citation !== 'object' || !('url' in citation) || typeof citation.url !== 'string' || citation.url.length === 0) {
+        continue;
+      }
+      const title = 'title' in citation && typeof citation.title === 'string' && citation.title.length > 0 ? citation.title : citation.url;
+      const snippet = 'content' in citation && typeof citation.content === 'string' ? citation.content : '';
+      results.push({ title, url: citation.url, snippet });
+      if (maxResults && results.length >= maxResults) {
+        break;
+      }
+    }
+
+    return results;
   }
 }

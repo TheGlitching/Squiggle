@@ -15,7 +15,12 @@
  * mapping lives in exactly one place instead of being re-guessed per consumer.
  */
 
-import type { Finding, FindingCategory as EngineCategory, SeverityLevel } from '../engine/types';
+import type {
+  Finding,
+  FindingCategory as EngineCategory,
+  SeverityLevel,
+  TextBlock as EngineTextBlock,
+} from '../engine/types';
 import type { FindingHighlightTarget } from '../content/types';
 import type { FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 
@@ -117,4 +122,41 @@ export function filterFindings(findings: Finding[], category: FilterCategory): F
   const engineCategory = filterCategoryToEngine(category);
   if (!engineCategory) return findings;
   return findings.filter((f) => f.category === engineCategory);
+}
+
+/**
+ * DOM block -> engine block.
+ *
+ * The page describes a block by how it was marked up (`tagName`, plus
+ * `isHeading`/`isQuote`/`isList` flags); the engine's contract wants one closed
+ * `type`. Projecting here keeps the audit able to name the block a quote came
+ * from, which is what lets a finding be located in the page and lets the
+ * article's own links be matched to the passage they back.
+ */
+export function textBlockToEngineBlock(block: {
+  id: string;
+  text: string;
+  cleanText?: string;
+  charStart: number;
+  tagName?: string;
+  isHeading?: boolean;
+  isQuote?: boolean;
+  isList?: boolean;
+}): EngineTextBlock {
+  const type: EngineTextBlock['type'] = block.isHeading
+    ? 'heading'
+    : block.isQuote
+      ? 'quote'
+      : block.isList
+        ? 'list-item'
+        : block.tagName?.toLowerCase() === 'figcaption'
+          ? 'caption'
+          : 'paragraph';
+
+  return {
+    id: block.id,
+    type,
+    text: block.cleanText || block.text,
+    charStart: block.charStart,
+  };
 }

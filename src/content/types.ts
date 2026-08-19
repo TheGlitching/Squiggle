@@ -36,6 +36,14 @@ export interface TextBlock {
   domPath: string;
   xpath: string;
   nodeCoordinates: DOMNodeCoordinates;
+  links?: { text: string; href: string }[];
+}
+
+export interface CitedSource {
+  href: string;
+  domain: string;
+  text: string;
+  blockId?: string;
 }
 
 export interface ExtractedArticle {
@@ -47,6 +55,7 @@ export interface ExtractedArticle {
   detectionMethod: 'json-ld' | 'semantic-article' | 'text-density' | 'readability-fallback';
   extractionConfidence: number; // 0.0 - 1.0
   rootContainerSelector: string;
+  citedSources: CitedSource[];
 }
 
 export type HighlightSeverity = 'critical' | 'warning' | 'info' | 'positive';

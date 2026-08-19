@@ -3,7 +3,8 @@ import {
   buildFourchesCaudinesUserPrompt,
 } from './prompts';
 import { parseAndValidateLlmOutput } from './validator';
-import { AnalysisInput, AnalysisReport } from './types';
+import { researchClaims, CitedSource } from './research';
+import { AnalysisInput, AnalysisReport, EvidenceSource, TextBlock } from './types';
 import { BaseLLMClient } from '../client/base';
 import { DEMO_FOURCHES_CAUDINES_REPORT } from './demoFixture';
 
@@ -97,6 +98,14 @@ export class AnalysisPipeline {
     url?: string;
     author?: string;
     outlet?: string;
+    /**
+     * The article's real block structure. Without it every finding can only
+     * point at one synthetic block, which makes a quote impossible to locate in
+     * the page and leaves per-block citations unusable.
+     */
+    blocks?: TextBlock[];
+    /** Links the article itself offers as backing for its claims. */
+    citedSources?: CitedSource[];
   }): Promise<AnalysisReport> {
     this.abortController = new AbortController();
 
@@ -117,18 +126,44 @@ export class AnalysisPipeline {
         author: input.author,
         outlet: input.outlet,
         language: 'fr',
-        blocks: [
-          {
-            id: 'b1',
-            type: 'paragraph',
-            text: input.text,
-            charStart: 0,
-          },
-        ],
+        blocks:
+          input.blocks && input.blocks.length > 0
+            ? input.blocks
+            : [{ id: 'b1', type: 'paragraph', text: input.text, charStart: 0 }],
       };
 
+      const citedSources = input.citedSources ?? [];
+
+      // The validator checks a 'source-absente' finding against the block it was
+      // raised on, so the same links have to be reachable by block id.
+      const sourcesByBlock: Record<string, EvidenceSource[]> = {};
+      for (const s of citedSources) {
+        if (!s.blockId) continue;
+        (sourcesByBlock[s.blockId] ??= []).push({
+          title: s.text || s.domain,
+          url: s.href,
+          origin: 'article',
+        });
+      }
+
+      // Research runs before the audit, not during it. The audit answers in one
+      // strict-JSON stream, so it cannot pause to look anything up; asked to
+      // "verify" with nothing to hand it would judge from memory, which is how a
+      // sourced fact ends up reported as false.
+      this.reportProgress('preparing_prompt', 'Vérification des faits et des sources...', 30);
+      const { claims, research } = await researchClaims({
+        client: this.client,
+        input: analysisInput,
+        citedSources,
+        onProgress: (message, pct) => this.reportProgress('preparing_prompt', message, pct),
+        abortSignal: this.abortController?.signal,
+      });
+
       const systemPrompt = FOURCHES_CAUDINES_SYSTEM_PROMPT;
-      const userPrompt = buildFourchesCaudinesUserPrompt(analysisInput);
+      const userPrompt = buildFourchesCaudinesUserPrompt(analysisInput, {
+        citedSources,
+        claims,
+      });
 
       this.reportProgress('calling_provider', 'Audit critique en cours par le modèle IA...', 50);
 
@@ -163,6 +198,9 @@ export class AnalysisPipeline {
       const report = parseAndValidateLlmOutput(response.content, analysisInput, {
         modelName: `${this.client.getProvider()}/${this.client.getModel()}`,
         durationMs: Date.now() - startedAt,
+        claims,
+        research,
+        articleSources: sourcesByBlock,
       });
 
       this.reportProgress('success', 'Analyse terminée avec succès', 100);

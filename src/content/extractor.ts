@@ -9,7 +9,7 @@
  * 4. Readability-grade text block extraction with XPath and Character-offset mapping
  */
 
-import { ArticleMetadata, ExtractedArticle, TextBlock } from './types';
+import { ArticleMetadata, CitedSource, ExtractedArticle, TextBlock } from './types';
 
 export class ArticleExtractor {
   private doc: Document;
@@ -31,6 +31,10 @@ export class ArticleExtractor {
     let currentOffset = 0;
 
     const candidateElements = this.collectContentElements(container);
+    const articleBaseUrl = this.resolveArticleBaseUrl();
+    const articleHost = articleBaseUrl ? this.safeHostname(articleBaseUrl) : null;
+    const citedSources: CitedSource[] = [];
+    const citedSourceIndexByHref = new Map<string, number>();
 
     let blockIdx = 0;
     for (const el of candidateElements) {
@@ -46,9 +50,11 @@ export class ArticleExtractor {
 
       const xpath = this.getElementXPath(el);
       const cssSelector = this.getElementCSSPath(el);
+      const blockId = `block-${blockIdx}`;
+      const links = this.extractBlockLinks(el, articleBaseUrl);
 
       const block: TextBlock = {
-        id: `block-${blockIdx}`,
+        id: blockId,
         index: blockIdx,
         text: rawText,
         cleanText: trimmedText,
@@ -66,6 +72,7 @@ export class ArticleExtractor {
           startOffset: 0,
           endOffset: rawText.length,
         },
+        ...(links.length > 0 ? { links } : {}),
       };
 
       blocks.push(block);
@@ -73,6 +80,21 @@ export class ArticleExtractor {
       cleanText += (cleanText ? ' ' : '') + trimmedText;
       currentOffset += trimmedText.length + 1;
       blockIdx++;
+
+      // The article's own hyperlinks are the reader's citations; a self-link is
+      // navigation, not a source, so it is excluded from the cited-source list.
+      for (const link of links) {
+        const domain = this.safeHostname(link.href);
+        if (!domain || domain === articleHost) continue;
+
+        const existingIdx = citedSourceIndexByHref.get(link.href);
+        if (existingIdx === undefined) {
+          citedSourceIndexByHref.set(link.href, citedSources.length);
+          citedSources.push({ href: link.href, domain, text: link.text, blockId });
+        } else if (link.text.length > citedSources[existingIdx].text.length) {
+          citedSources[existingIdx].text = link.text;
+        }
+      }
     }
 
     const words = cleanText.split(/\s+/).filter(w => w.length > 0);
@@ -86,6 +108,7 @@ export class ArticleExtractor {
       detectionMethod: method,
       extractionConfidence: confidence,
       rootContainerSelector: this.getElementCSSPath(container),
+      citedSources,
     };
   }
 
@@ -296,6 +319,65 @@ export class ArticleExtractor {
     // Heuristic: weighted text length, boosted by paragraph count, penalized by link density
     const score = (textLen * 0.5 + pCount * 80) * (1 - linkDensity);
     return score;
+  }
+
+  /**
+   * Capture the citable anchors inside a content block: absolute http(s) links only,
+   * excluding in-page fragments and non-navigable schemes the reader could never open.
+   */
+  private extractBlockLinks(el: HTMLElement, baseUrl: string | null): { text: string; href: string }[] {
+    const anchors = Array.from(el.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+    const links: { text: string; href: string }[] = [];
+
+    for (const a of anchors) {
+      const rawHref = a.getAttribute('href')?.trim();
+      if (!rawHref || rawHref.startsWith('#') || /^(javascript|mailto):/i.test(rawHref)) continue;
+
+      let absolute: URL;
+      try {
+        absolute = new URL(rawHref, baseUrl ?? undefined);
+      } catch {
+        continue; // unresolvable without a base: not a usable citation
+      }
+      if (absolute.protocol !== 'http:' && absolute.protocol !== 'https:') continue;
+
+      links.push({
+        text: (a.textContent || '').replace(/\s+/g, ' ').trim(),
+        href: absolute.href,
+      });
+    }
+
+    return links;
+  }
+
+  /**
+   * Resolve the URL the article's own relative links are anchored against: an explicit
+   * <base>/document URI when present, otherwise the canonical link, otherwise the
+   * hosting window's location. Without one of these, relative hrefs cannot be trusted.
+   */
+  private resolveArticleBaseUrl(): string | null {
+    // An explicit <base> wins outright: it is the author's own statement of the
+    // document's URL and always outranks the ambient document.baseURI.
+    if (this.doc.querySelector('base[href]')) return this.doc.baseURI;
+
+    const canonicalLink = this.doc.querySelector('link[rel="canonical"]')?.getAttribute('href');
+    if (canonicalLink) return canonicalLink;
+
+    if (this.doc.baseURI && this.doc.baseURI !== 'about:blank') return this.doc.baseURI;
+    if (typeof window !== 'undefined' && window.location?.href) return window.location.href;
+    return null;
+  }
+
+  /**
+   * Registrable-ish domain for comparing hosts (self-link exclusion, source de-duplication):
+   * strips the leading "www." so "www.example.com" and "example.com" are the same source.
+   */
+  private safeHostname(url: string): string | null {
+    try {
+      return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+      return null;
+    }
   }
 
   /**
