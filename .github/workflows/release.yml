@@ -3,10 +3,16 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Not a rehearsal: this uploads the package and publishes it for real, spending
+  # the version in package.json. The store keeps one slot per version and refuses
+  # a second upload of one it already holds, so a manual run needs its own
+  # `npm version patch` first, and will fail outright while a version sits in
+  # review. `trustedTesters` narrows who can install it; it does not make the
+  # publish provisional.
   workflow_dispatch:
     inputs:
       publish_target:
-        description: Who the new version goes live for
+        description: Who this really goes live for (a version is spent either way)
         type: choice
         default: trustedTesters
         options: [trustedTesters, default]

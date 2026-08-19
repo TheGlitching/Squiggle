@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Lets a release be dry-run from the Actions tab without cutting a tag.
+  # Runs the gates and builds the packages on demand. This publishes nothing;
+  # the Release workflow is the only thing that talks to a store.
   workflow_dispatch:
 
 # A newer push makes an in-flight run of the same ref pointless.
