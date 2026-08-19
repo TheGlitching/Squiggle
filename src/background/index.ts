@@ -37,6 +37,8 @@ export class BackgroundServiceWorker {
   private stateManager: TabStateManager;
   private keyStorage: SecureKeyStorage;
   private activePipelines = new Map<number, AnalysisPipeline>();
+  private navigationAbortedTabIds = new Set<number>();
+  private tabListenerCleanups: Array<() => void> = [];
 
   constructor(options?: BackgroundServiceWorkerOptions) {
     this.bus = options?.bus || new TypedMessageBus('background');
@@ -97,34 +99,57 @@ export class BackgroundServiceWorker {
   }
 
   /**
-   * Monitor tab lifecycle (closure, URL navigation, activation)
+   * Monitor tab lifecycle (closure, URL navigation, activation).
+   *
+   * `chrome.*` only exists on Chrome; on Firefox this whole block used to be a
+   * silent no-op, so a tab closing or navigating never cleared its state or
+   * stopped its analysis on that browser at all.
    */
   private setupTabListeners(): void {
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.onRemoved?.addListener((tabId) => {
+    this.tabListenerCleanups.push(
+      UnifiedRuntime.onTabRemoved((tabId) => {
         this.stateManager.removeTabState(tabId);
-        const pipeline = this.activePipelines.get(tabId);
-        if (pipeline) {
-          pipeline.abort();
-          this.activePipelines.delete(tabId);
-        }
-      });
+        this.abortPipelineForTab(tabId);
+      })
+    );
 
-      chrome.tabs.onUpdated?.addListener((tabId, changeInfo) => {
-        if (changeInfo.status === 'loading' && changeInfo.url) {
-          this.stateManager.updateTabState(tabId, {
-            status: 'idle',
-            progress: 0,
-            url: changeInfo.url,
-            findings: [],
-            result: undefined,
-            error: undefined,
-            selectedFindingId: null,
-            hoveredFindingId: null,
-          });
-        }
-      });
-    }
+    this.tabListenerCleanups.push(
+      UnifiedRuntime.onTabUpdated((tabId, changeInfo) => {
+        // A full page load reports the new URL while `status` is 'loading';
+        // a same-document route change (history.pushState, common on news
+        // sites) never enters a loading phase but still reports the new
+        // URL. Either way the document under the tab is no longer the one
+        // any stored state or in-flight analysis was computed from.
+        if (!changeInfo.url) return;
+        this.abortPipelineForTab(tabId);
+        this.stateManager.updateTabState(tabId, {
+          status: 'idle',
+          progress: 0,
+          url: changeInfo.url,
+          findings: [],
+          result: undefined,
+          error: undefined,
+          selectedFindingId: null,
+          hoveredFindingId: null,
+        });
+      })
+    );
+  }
+
+  /**
+   * Stop a tab's running analysis because the tab it was reading is gone or
+   * has navigated elsewhere. `navigationAbortedTabIds` remembers this was a
+   * deliberate cancellation, not a failure: `runAnalysisForTab`'s catch block
+   * checks it before writing an "error" over state that was just reset, or
+   * telling a panel that has already moved on that its (no longer displayed)
+   * analysis failed.
+   */
+  private abortPipelineForTab(tabId: number): void {
+    const pipeline = this.activePipelines.get(tabId);
+    if (!pipeline) return;
+    this.navigationAbortedTabIds.add(tabId);
+    pipeline.abort();
+    this.activePipelines.delete(tabId);
   }
 
   /**
@@ -404,6 +429,15 @@ export class BackgroundServiceWorker {
       this.safeDispatch('ANALYSIS_COMPLETE', { tabId, result });
       return { success: true, result };
     } catch (err: unknown) {
+      // A pipeline killed by `abortPipelineForTab` because its tab
+      // navigated or closed is not a failed analysis: the tab's state was
+      // already reset to idle for the new page (or removed entirely), and
+      // writing an "error" here - or telling a panel that has since cleared
+      // itself for a different article that its analysis failed - would
+      // misattribute this run's outcome to a page it was never about.
+      if (this.navigationAbortedTabIds.delete(tabId)) {
+        return { success: false, error: 'Analyse interrompue : la page a changé.' };
+      }
       const errorMsg = err instanceof Error ? err.message : 'Erreur lors de l’analyse critique';
       this.stateManager.updateTabState(tabId, {
         status: 'error',
@@ -412,7 +446,12 @@ export class BackgroundServiceWorker {
       this.safeDispatch('ANALYSIS_ERROR', { tabId, error: errorMsg });
       return { success: false, error: errorMsg };
     } finally {
-      this.activePipelines.delete(tabId);
+      // A second analysis on the same tab, started right after this one was
+      // aborted, may already have installed its own pipeline under the same
+      // key; only remove the entry if it is still this run's.
+      if (this.activePipelines.get(tabId) === pipeline) {
+        this.activePipelines.delete(tabId);
+      }
     }
   }
 
@@ -422,10 +461,13 @@ export class BackgroundServiceWorker {
 
   public destroy(): void {
     this.bus.destroy();
+    for (const cleanup of this.tabListenerCleanups) cleanup();
+    this.tabListenerCleanups = [];
     for (const pipeline of this.activePipelines.values()) {
       pipeline.abort();
     }
     this.activePipelines.clear();
+    this.navigationAbortedTabIds.clear();
     this.stateManager.clearAll();
   }
 }

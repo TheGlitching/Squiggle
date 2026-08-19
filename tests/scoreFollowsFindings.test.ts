@@ -79,10 +79,10 @@ describe('a domain mark follows the defects the audit reported in it', () => {
 
   it('weighs an unproven suspicion less than a defect the evidence confirmed', () => {
     const suspected = computeFourchesCaudinesScore(generous(), [
-      { category: 'source-absente', severity: 3, verification: 'unverified' },
+      { category: 'source-absente', severity: 3, verification: 'non-verifiable' },
     ]);
     const proven = computeFourchesCaudinesScore(generous(), [
-      { category: 'source-absente', severity: 3, verification: 'contradicted' },
+      { category: 'source-absente', severity: 3, verification: 'douteuse' },
     ]);
 
     expect(marksFor(proven, 'robustesse_factuelle')).toBeLessThan(
@@ -115,7 +115,7 @@ describe('a domain mark follows the defects the audit reported in it', () => {
     // Generous marks everywhere, yet the audit reported the fabricated poll as a
     // grave sourcing defect and the piece's framing as a grave one too.
     const result = computeFourchesCaudinesScore(generous(), [
-      { category: 'source-absente', severity: 3, verification: 'contradicted' },
+      { category: 'source-absente', severity: 3, verification: 'douteuse' },
       { category: 'cadrage', severity: 3 },
       { category: 'sophisme', severity: 2 },
     ]);

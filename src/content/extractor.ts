@@ -361,7 +361,24 @@ export class ArticleExtractor {
     if (this.doc.querySelector('base[href]')) return this.doc.baseURI;
 
     const canonicalLink = this.doc.querySelector('link[rel="canonical"]')?.getAttribute('href');
-    if (canonicalLink) return canonicalLink;
+    if (canonicalLink) {
+      // The attribute is frequently a bare path ("/section/article-123"), and
+      // using it unresolved as a base makes every relative link in the article
+      // fail to resolve, silently discarding every citation. Resolve it
+      // against the document's own location before trusting it as a base.
+      const documentLocation =
+        this.doc.baseURI && this.doc.baseURI !== 'about:blank'
+          ? this.doc.baseURI
+          : typeof window !== 'undefined'
+            ? window.location?.href
+            : undefined;
+      try {
+        return new URL(canonicalLink, documentLocation).href;
+      } catch {
+        // Neither absolute on its own nor resolvable against a known location:
+        // fall through to the other bases rather than handing back garbage.
+      }
+    }
 
     if (this.doc.baseURI && this.doc.baseURI !== 'about:blank') return this.doc.baseURI;
     if (typeof window !== 'undefined' && window.location?.href) return window.location.href;
@@ -369,12 +386,19 @@ export class ArticleExtractor {
   }
 
   /**
-   * Registrable-ish domain for comparing hosts (self-link exclusion, source de-duplication):
-   * strips the leading "www." so "www.example.com" and "example.com" are the same source.
+   * Registrable-domain approximation for comparing hosts (self-link exclusion,
+   * source de-duplication): keeps only the last two labels of the hostname, so
+   * every subdomain of a publisher ("www.", "abonne.", "mobile.", ...) is
+   * treated as the same source. This is a deliberate simplification - it
+   * mishandles multi-part public suffixes such as "co.uk" - but it is exactly
+   * what self-link exclusion needs: a paywall or subscription pitch hosted on
+   * a different subdomain of the same publisher must never be counted as an
+   * independent citation.
    */
   private safeHostname(url: string): string | null {
     try {
-      return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+      const labels = new URL(url).hostname.toLowerCase().split('.').filter(Boolean);
+      return labels.length <= 2 ? labels.join('.') : labels.slice(-2).join('.');
     } catch {
       return null;
     }

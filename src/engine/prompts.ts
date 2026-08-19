@@ -15,7 +15,9 @@ DIRECTIVES ABSOLUES DE RÉPONSE :
 2. Pour chaque finding (remarque sur le texte), tu DOIS fournir une citation EXACTE et LITTÉRALE ('quote') tirée fidèlement du texte (≤ 25 mots), ainsi que l'identifiant exact du bloc 'blockId' correspondant.
 3. Si le texte dépasse 50/100, tu DOIS obligatoirement inclure au moins un point fort (category: 'point-fort').
 4. Tu produis UNIQUEMENT du JSON valide conforme au schéma fourni, sans aucun texte introductif ni markdown autour (ou dans un bloc \`\`\`json \`\`\`).
-5. Un finding factuel ne peut affirmer qu'une assertion est fausse ou non étayée que s'il cite une source à l'appui ; à défaut de source, formule-le comme une réserve non vérifiée. Tu ne dois JAMAIS qualifier une affirmation de 'source-absente' si l'article la fait suivre d'un lien hypertexte : consulte la section SOURCES CITÉES PAR L'ARTICLE avant de conclure à une absence de source.`;
+5. Un finding factuel ne peut affirmer qu'une assertion est fausse ou non étayée que s'il cite une source à l'appui ; à défaut de source, formule-le comme une réserve non vérifiable. Tu ne dois JAMAIS qualifier une affirmation de 'source-absente' si l'article la fait suivre d'un lien hypertexte : consulte la section SOURCES CITÉES PAR L'ARTICLE avant de conclure à une absence de source.
+6. Chaque assertion vérifiable est classée dans l'un de ces quatre états, et dans aucun autre : 'vérifiée' (une source consultée l'établit), 'non sourcée dans le texte' (elle est vérifiable mais l'article ne cite rien pour l'étayer - ce n'est pas une accusation, c'est un simple constat de sourcing), 'douteuse' (une source consultée la contredit) ou 'non vérifiable telle qu'écrite' (elle ne peut être ni établie ni contredite, faute de preuve mobilisable). Une affirmation sensible - chiffre spectaculaire, date, citation attribuée - doit être confrontée à plusieurs sources fiables avant d'être qualifiée de douteuse.
+7. Règle absolue : aucune correction factuelle n'est jamais proposée au doigt mouillé. Tu ne remplaces jamais un chiffre, une date ou un nom par celui que tu crois exact ; en cas d'incertitude, tu signales un point à vérifier, jamais une correction.`;
 
 /**
  * Shared block formatting reused by every prompt that embeds the article text,
@@ -53,8 +55,8 @@ function formatTemporalContextSection(now: Date): string {
 
 export const FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines ».
 On te donne une affirmation, les résultats de recherche web obtenus pour elle, et les sources que l'article lui-même cite en lien hypertexte.
-Tu ne peux répondre 'confirmed' ou 'contradicted' QUE si au moins une source fournie (recherche ou article) étaye explicitement ce verdict ; toute source utilisée DOIT figurer dans 'sources'.
-Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'unverified' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
+Tu ne peux répondre 'verifiee' ou 'douteuse' QUE si au moins une source fournie (recherche ou article) étaye explicitement ce verdict ; toute source utilisée DOIT figurer dans 'sources'.
+Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'non-verifiable' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
 Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.`;
 
 /**
@@ -86,7 +88,7 @@ ${articleFormatted}
 
 FORMAT JSON STRICT ATTENDU :
 {
-  "verification": "confirmed" | "contradicted" | "unverified",
+  "verification": "verifiee" | "douteuse" | "non-verifiable",
   "sources": [
     { "title": "titre de la source", "url": "https://...", "quote": "extrait pertinent", "origin": "article" | "search" }
   ],
@@ -96,8 +98,8 @@ FORMAT JSON STRICT ATTENDU :
 
 export const FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines », en mode recherche intégrée.
 Effectue toi-même les recherches nécessaires avant de répondre, puis vérifie l'affirmation donnée à la lumière des pages que tu as réellement consultées et des sources que l'article cite en lien hypertexte.
-Tu ne peux répondre 'confirmed' ou 'contradicted' QUE si au moins une page consultée ou une source de l'article étaye explicitement ce verdict ; cite dans 'sources' chaque source que tu as effectivement lue et utilisée pour juger.
-Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'unverified' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
+Tu ne peux répondre 'verifiee' ou 'douteuse' QUE si au moins une page consultée ou une source de l'article étaye explicitement ce verdict ; cite dans 'sources' chaque source que tu as effectivement lue et utilisée pour juger.
+Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'non-verifiable' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
 Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.`;
 
 /**
@@ -126,7 +128,7 @@ ${articleFormatted}
 
 FORMAT JSON STRICT ATTENDU :
 {
-  "verification": "confirmed" | "contradicted" | "unverified",
+  "verification": "verifiee" | "douteuse" | "non-verifiable",
   "sources": [
     { "title": "titre de la source", "url": "https://...", "quote": "extrait pertinent", "origin": "article" | "search" }
   ],
@@ -170,7 +172,7 @@ ${blocksFormatted}
 
 GRILLE D'ÉVALUATION ET CRITÈRES DE NOTATION SUR 100 POINTS :
 Tu dois noter obligatoirement chacun des 5 domaines suivants :
-1. "robustesse_factuelle" (Max 35 pts) : chiffres précis, dates, citations sourcées, contextualisation méthodologique des données chiffrées (institut, méthode, date pour un sondage ou une étude), distinction faits/opinions.
+1. "robustesse_factuelle" (Max 35 pts) : chiffres précis, dates, citations sourcées, contextualisation méthodologique des données chiffrées (institut, année, périmètre et, si besoin, méthode, pour un sondage ou une étude), distinction faits/opinions.
 2. "solidite_logique" (Max 25 pts) : cohérence, nuances, absence de sophismes / épouvantails / faux dilemmes / confusions corrélation-causalité.
 3. "cadrage_manipulation" (Max 25 pts) : titre ou chapô qui ne dépasse pas ce que le texte démontre, vocabulaire non chargé émotionnellement, opinion jamais formulée avec la grammaire du fait établi, citations non tronquées, désaccord réel non présenté comme tranché, autorité invoquée toujours nommée.
 4. "deontologie" (Max 10 pts) : distinction claire entre fait rapporté et commentaire, conflits d'intérêt signalés, citations attribuées à des personnes identifiables, aucun procès d'intention non étayé.
@@ -180,9 +182,9 @@ COHÉRENCE ENTRE TA NOTE ET TES CONSTATS :
 Chaque défaut que tu relèves dans un domaine réduit mécaniquement la note de ce
 domaine, en proportion de sa sévérité. Ne note donc pas un domaine comme solide
 tout en y relevant un défaut grave : la note doit être celle d'un article qui
-porte ce défaut. Un chiffre présenté comme un fait établi sans institut, méthode
-ni date identifiables est un défaut grave de "robustesse_factuelle", pas une
-réserve mineure.
+porte ce défaut. Un chiffre présenté comme un fait établi sans institut, année,
+périmètre ni méthode identifiables est un défaut grave de "robustesse_factuelle",
+pas une réserve mineure.
 
 RÈGLE DE COMPLÉTUDE, CONTRAIGNANTE :
 Tout défaut mentionné dans un "weaknesses" DOIT aussi figurer dans "findings",

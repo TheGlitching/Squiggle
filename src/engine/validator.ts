@@ -100,9 +100,12 @@ export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]):
 }
 
 /**
- * Categories that assert something about the world, so they require evidence
- * to stand. Shared with research.ts, which uses it to pick out exactly the
- * findings worth researching after the audit runs.
+ * Categories that describe the world rather than the prose, so they carry a
+ * verification state at all. `source-absente` belongs here too, even though
+ * it is never externally researched (see `RESEARCHABLE_FINDING_CATEGORIES`
+ * below): whether the article sourced a statement is a fact about the text
+ * itself, settled once by `enforceEvidenceHonesty` against the article's own
+ * citations, not something a web search could confirm or refute.
  */
 export const FACTUAL_FINDING_CATEGORIES: Record<string, true> = {
   'source-absente': true,
@@ -111,12 +114,33 @@ export const FACTUAL_FINDING_CATEGORIES: Record<string, true> = {
 };
 
 /**
+ * The subset of `FACTUAL_FINDING_CATEGORIES` whose truth value external
+ * research can actually adjudicate. `source-absente` is deliberately absent:
+ * it is a sourcing observation about the text, always resolved to
+ * 'non-sourcee' by `enforceEvidenceHonesty` before research ever runs, and
+ * researching whether the underlying fact happens to be true elsewhere would
+ * silently overwrite that sourcing observation with a truth verdict that
+ * answers a different question - exactly the confusion the four-state model
+ * exists to end. Shared with research.ts, which uses it to pick out exactly
+ * the findings worth researching after the audit runs.
+ */
+export const RESEARCHABLE_FINDING_CATEGORIES: Record<string, true> = {
+  'affirmation-non-etayee': true,
+  surinterpretation: true
+};
+
+/**
  * Enforces in code what the prompt cannot guarantee: a factual finding that
- * claims the article is wrong ('contradicted') but carries no evidence is
- * downgraded to 'unverified' rather than published as a contradiction, and a
- * 'source-absente' finding on a block the article itself hyperlinked is
- * re-categorised instead of standing on a false premise. Editorial findings
- * never carry a verification state, since they judge prose, not the world.
+ * claims the article is wrong ('douteuse') but carries no evidence is
+ * downgraded to 'non-verifiable' rather than published as a doubt, and a
+ * 'source-absente' finding is always classified 'non-sourcee' - a sourcing
+ * observation, never an accusation that the statement is unsound. When the
+ * block it targets does carry a citation, that citation is attached as
+ * evidence for the reader, but the finding's own explanation is never made
+ * to admit the citation was not looked at: a finding that undermines its own
+ * publication that way must not be published in that form. Editorial
+ * findings never carry a verification state, since they judge prose, not
+ * the world.
  */
 export function enforceEvidenceHonesty(
   findings: Finding[],
@@ -131,24 +155,21 @@ export function enforceEvidenceHonesty(
       return rest as Finding;
     }
 
-    let next: Finding = { ...finding, verification: finding.verification ?? 'unverified' };
-
-    if (next.category === 'source-absente') {
-      const cited = articleSources[next.blockId];
-      if (cited && cited.length > 0) {
-        const articleSource: EvidenceSource = { ...cited[0], origin: 'article' };
-        next = {
-          ...next,
-          category: 'affirmation-non-etayee',
-          verification: 'unverified',
-          sources: [...(next.sources || []), articleSource],
-          explanation: `${next.explanation} (Une source est citée dans l'article mais n'a pas été prise en compte dans ce constat.)`
-        };
-      }
+    if (finding.category === 'source-absente') {
+      const cited = articleSources[finding.blockId];
+      const articleSource: EvidenceSource | undefined =
+        cited && cited.length > 0 ? { ...cited[0], origin: 'article' } : undefined;
+      return {
+        ...finding,
+        verification: 'non-sourcee',
+        sources: articleSource ? [...(finding.sources || []), articleSource] : finding.sources
+      };
     }
 
-    if (next.verification === 'contradicted' && (!next.sources || next.sources.length === 0)) {
-      next = { ...next, verification: 'unverified' };
+    let next: Finding = { ...finding, verification: finding.verification ?? 'non-verifiable' };
+
+    if (next.verification === 'douteuse' && (!next.sources || next.sources.length === 0)) {
+      next = { ...next, verification: 'non-verifiable' };
     }
 
     return next;
@@ -161,13 +182,15 @@ export function enforceEvidenceHonesty(
  * claim's `verification` always describes the ARTICLE's statement (the
  * finding's `quote`), never the audit's objection to it.
  *
- *  - evidence CONFIRMS the article -> the audit's objection was unfounded.
- *    The finding is withdrawn from the returned list and recorded instead as
- *    a `WithdrawnObjection`, so a real disagreement is never silently erased.
- *  - evidence CONTRADICTS the article -> the finding stands, carrying the
- *    claim's sources and `verification: 'contradicted'`.
+ *  - evidence CONFIRMS the article ('verifiee') -> the audit's objection was
+ *    unfounded. The finding is withdrawn from the returned list and recorded
+ *    instead as a `WithdrawnObjection`, so a real disagreement is never
+ *    silently erased.
+ *  - evidence CASTS DOUBT on the article ('douteuse') -> the finding stands,
+ *    carrying the claim's sources and `verification: 'douteuse'`.
  *  - nothing was actually read -> the finding stands as `verification:
- *    'unverified'`, an unchecked reserve rather than an established fault.
+ *    'non-verifiable'`, an unchecked reserve rather than an established
+ *    fault.
  *
  * A finding with no matching claim (editorial categories, which are never
  * researched) passes through unchanged.
@@ -187,7 +210,7 @@ export function reconcileResearchedFindings(
       continue;
     }
 
-    if (claim.verification === 'confirmed') {
+    if (claim.verification === 'verifiee') {
       withdrawn.push({
         blockId: finding.blockId,
         quote: finding.quote,
@@ -197,16 +220,17 @@ export function reconcileResearchedFindings(
       continue;
     }
 
-    if (claim.verification === 'contradicted') {
-      kept.push({ ...finding, verification: 'contradicted', sources: claim.sources });
+    if (claim.verification === 'douteuse') {
+      kept.push({ ...finding, verification: 'douteuse', sources: claim.sources });
       continue;
     }
 
-    kept.push({ ...finding, verification: 'unverified', sources: claim.sources.length > 0 ? claim.sources : finding.sources });
+    kept.push({ ...finding, verification: 'non-verifiable', sources: claim.sources.length > 0 ? claim.sources : finding.sources });
   }
 
   return { findings: kept, withdrawn };
 }
+
 
 export interface ParseLlmOutputOptions {
   modelName?: string;

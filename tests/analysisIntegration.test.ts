@@ -90,6 +90,39 @@ describe('analysis pipeline -> UI/content adapters', () => {
     expect(target.category).toBe('rigorous_journalism');
   });
 
+  // The in-page highlight is the loudest thing the extension does, and it used
+  // to shout at the same volume whatever the verification state said. A missing
+  // citation is not a wrong statement, so it must never be painted critical.
+  it('never paints an unsourced-but-checkable claim as critical, and keeps that for a doubt', () => {
+    const base = {
+      id: 'f-src',
+      blockId: 'b1',
+      quote: 'un entretien accordé la semaine dernière',
+      category: 'source-absente' as const,
+      severity: 3 as const,
+      label: 'Source absente',
+      explanation: 'L’article ne nomme pas le média.',
+      confidence: 0.9,
+    };
+
+    const [unsourced] = findingsToHighlightTargets([{ ...base, verification: 'non-sourcee' }]);
+    expect(unsourced.severity).toBe('info');
+
+    const [uncheckable] = findingsToHighlightTargets([{ ...base, verification: 'non-verifiable' }]);
+    expect(uncheckable.severity).toBe('warning');
+
+    const [doubted] = findingsToHighlightTargets([{ ...base, verification: 'douteuse' }]);
+    expect(doubted.severity).toBe('critical');
+
+    // Evidence backed the article on this one, so there is no fault left to
+    // shout about even though the model rated it severity 3.
+    const [backed] = findingsToHighlightTargets([{ ...base, verification: 'verifiee' }]);
+    expect(backed.severity).toBe('info');
+
+    // And the badge the reader sees in the page names the constat, not a verdict.
+    expect(unsourced.category).toBe('unverified_source');
+  });
+
   it('filter counts and filtering agree with the engine taxonomy', async () => {
     const pipeline = new AnalysisPipeline({ demoMode: true });
     const report = await pipeline.analyze({ text: 'Un article de test.', title: 'Test' });

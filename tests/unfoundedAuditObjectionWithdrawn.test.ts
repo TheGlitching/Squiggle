@@ -58,7 +58,7 @@ const AUDIT = {
 const CONFIRMING_SOURCE_URL = 'https://www.nice.fr/fr/actualites/eric-ciotti-maire-de-nice';
 
 const JUDGEMENT_CONFIRMING_THE_ARTICLE = {
-  verification: 'confirmed',
+  verification: 'verifiee',
   sources: [
     {
       title: 'Ville de Nice - actualités',
@@ -164,7 +164,7 @@ describe('an audit objection the evidence confirms is withdrawn, not published a
 
     // The researched claim itself is on the record too, confirmed with its source.
     expect(report.claims).toHaveLength(1);
-    expect(report.claims[0].verification).toBe('confirmed');
+    expect(report.claims[0].verification).toBe('verifiee');
     expect(report.claims[0].sources[0].url).toBe(CONFIRMING_SOURCE_URL);
   });
 });

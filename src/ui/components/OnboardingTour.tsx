@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
+
+import { SCORE_DOMAINS, type ScoreBand } from '../../engine/types';
+import { determineScoreBand, getScoreBandLabel } from '../../engine/scoring';
+import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
 
 export interface TourStep {
   id: string;
@@ -37,61 +41,127 @@ export interface OnboardingTourProps {
 export const DEFAULT_STORAGE_KEY = 'squiggle_onboarding_tour_v1';
 export const DEFAULT_STORAGE_VERSION = '1.0.0';
 
+/**
+ * The grid the reader is shown, taken from the engine that applies it.
+ *
+ * Naming the domains in prose is how this copy came to announce three fictional
+ * ones. Anything the visit says about the grid or the bands is derived from the
+ * scoring code instead, so the tour cannot describe a product that no longer
+ * exists.
+ */
+const WEIGHTED_DOMAINS = Object.values(SCORE_DOMAINS)
+  .map((domain) => `${domain.label} (${domain.weight})`)
+  .join(', ');
+
+const SORTABLE_CATEGORIES = Object.values(CATEGORY_LABELS_FR).join(', ');
+
+/** The bands are monotonic, so the first score to land in one is its floor. */
+function bandFloor(band: ScoreBand): number {
+  for (let score = 0; score <= 100; score += 1) {
+    if (determineScoreBand(score) === band) return score;
+  }
+  return 0;
+}
+
+const SOLID_FLOOR = bandFloor('solide');
+const FRAGILE_FLOOR = bandFloor('fragile');
+
+/**
+ * The visit as a reader meets it, in the order the panel itself reads.
+ *
+ * The opening steps carry no anchor on purpose: on a first run there is no
+ * report, and those are the steps that have to explain what the extension does
+ * and why it asks for a key. Everything anchored describes a result, and is
+ * shown only once that result is on screen.
+ */
 export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
   {
-    id: 'welcome-overview',
-    title: 'Bienvenue dans Squiggle',
-    badge: 'Guide Éditorial',
+    id: 'reading-this-page',
+    title: 'Ce que Squiggle regarde pour vous',
+    badge: 'Lecture critique',
     placement: 'center',
-    content: 'Squiggle applique la grille des Fourches Caudines pour évaluer la rigueur argumentative, l’intégrité des sources et l’équilibre rhétorique de tout texte ou article web.',
-    methodologyTip: 'Méthodologie : Nous combinons l’exigence de la presse de référence et l’analyse logique formelle pour évaluer la solidité d’un propos.',
+    content: 'Squiggle lit l’article ouvert dans l’onglet actif et le passe à la grille des Fourches Caudines : la solidité des faits avancés, la tenue du raisonnement, et les tournures qui orientent votre jugement sans rien démontrer.',
+    methodologyTip: 'La méthode porte sur le texte publié, jamais sur les intentions qu’on pourrait lui prêter. Chaque remarque renvoie à un passage précis, que vous pouvez relire et juger par vous-même.',
   },
   {
-    id: 'score-gauges',
-    targetSelector: '[data-tour="score-gauges"]',
-    title: 'Les Jauges & Indices de Rigueur',
-    badge: 'Métrique 0-100',
+    id: 'your-own-key',
+    targetSelector: '[data-tour="settings"]',
+    title: 'L’analyse tourne chez votre fournisseur',
+    badge: 'Votre clé',
     placement: 'bottom',
-    content: 'Trois cadrans d’évaluation décomposent la qualité : Solidité Argumentative, Traçabilité des Faits, et Neutralité du Cadrage.',
-    methodologyTip: 'Seuil de vigilance : Tout score sous 60/100 appelle une révision ciblée. Un score supérieur à 85/100 atteste d’une démonstration robuste.',
+    content: 'Squiggle n’héberge aucun service. Vous renseignez ici votre propre clé API, et l’article est analysé par le modèle de votre choix, appelé depuis votre navigateur. Sans clé, aucune analyse n’est possible.',
+    methodologyTip: 'Le modèle qui a rendu le verdict est indiqué en bas du panneau : vous savez toujours d’où vient ce que vous lisez.',
   },
   {
-    id: 'filter-bar',
+    id: 'run-analysis',
+    targetSelector: '[data-tour="run-analysis"]',
+    title: 'Analyser l’article que vous avez sous les yeux',
+    badge: 'Sur la page ouverte',
+    placement: 'bottom',
+    content: 'Le texte est extrait de la page en cours, audité, puis les faits qu’il avance sont confrontés à des sources consultées en ligne. Les passages en cause sont surlignés dans l’article lui-même.',
+    methodologyTip: 'La recherche vient après la lecture, jamais avant : l’audit dit d’abord ce qu’il lit dans le texte, et les sources viennent ensuite le confirmer ou le démentir.',
+  },
+  {
+    id: 'global-score',
+    targetSelector: '[data-tour="score-gauges"]',
+    title: 'Le verdict d’ensemble',
+    badge: 'Score sur 100',
+    placement: 'bottom',
+    content: `À partir de ${SOLID_FLOOR}/100, l’article est présenté comme « ${getScoreBandLabel('solide').title} ». En dessous de ${FRAGILE_FLOOR}/100, comme « ${getScoreBandLabel('problematique').title} ».`,
+    methodologyTip: 'Le score n’est pas une note donnée à côté des constats : chaque constat retire une part des points du domaine qu’il concerne, d’autant plus grande qu’il est grave. Un défaut visible dans ce panneau coûte donc forcément des points.',
+  },
+  {
+    id: 'verification-record',
+    targetSelector: '[data-tour="research-disclosure"]',
+    title: 'Ce qui a été vérifié, et où',
+    badge: 'Sources',
+    placement: 'bottom',
+    content: 'Les affirmations vérifiables sont confrontées à des sources listées ici avec leur lien, que vous pouvez ouvrir. Quand les sources donnent raison à l’article, le constat est retiré et vous le voyez aussi.',
+    methodologyTip: 'Une vérification qui n’a pas pu avoir lieu est annoncée comme telle, plutôt que remplacée par une certitude de façade.',
+  },
+  {
+    id: 'weighted-domains',
+    targetSelector: '[data-tour="domain-scores"]',
+    title: 'Les domaines et leur poids',
+    badge: 'Pondération',
+    placement: 'top',
+    content: `Les 100 points se répartissent sur des domaines pondérés selon ce qu’ils engagent pour vous : ${WEIGHTED_DOMAINS}. Dépliez un domaine pour voir ce qui lui a été retenu.`,
+    methodologyTip: 'La pondération inscrit une hiérarchie dans le calcul : un fait faux pèse plus lourd qu’une faute d’accord, et cela ne dépend pas de l’humeur du moment.',
+  },
+  {
+    id: 'sort-findings',
     targetSelector: '[data-tour="category-filters"]',
-    title: 'Filtres & Taxonomie des Failles',
+    title: 'Trier les constats par nature',
     badge: 'Taxonomie',
     placement: 'bottom',
-    content: 'Filtrez instantanément les anomalies par typologie : Sophismes, Affirmations Non Étayées, Extrapolations, Sources Absentes et Cadrages Biaisés.',
-    methodologyTip: 'Cliquez sur les compteurs pour isoler les points d’attention majeurs et concentrer votre lecture sur les points les plus sensibles.',
+    content: `Chaque compteur isole une nature de constat : ${SORTABLE_CATEGORIES}. Le dernier n’est pas un reproche : l’audit relève aussi ce que l’article fait correctement.`,
+    methodologyTip: 'Une affirmation non étayée et un cadrage orienté ne se lisent pas de la même manière : l’une manque de preuve, l’autre en donne l’impression sans en apporter.',
   },
   {
     id: 'finding-cards',
     targetSelector: '[data-tour="finding-card"]',
-    title: 'Fiches Critiques & Conduite de Relecture',
-    badge: 'Analyse Détaillée',
+    title: 'Chaque constat cite le passage visé',
+    badge: 'Analyse détaillée',
     placement: 'top',
-    content: 'Chaque carte détaille un passage problématique, explique la faille logique et propose une formulation de remplacement prête à l’emploi.',
-    methodologyTip: 'Trait de conduite : Le survol d’une fiche relie visuellement la critique au passage surligné dans l’article d’origine.',
-  },
-  {
-    id: 'severity-levels',
-    targetSelector: '[data-tour="severity-badges"]',
-    title: 'Niveaux de Gravité & Priorisation',
-    badge: 'Gravité',
-    placement: 'top',
-    content: 'Les badges Rouge (Critique), Ambre (Majeur) et Bleu (Mineur) hiérarchisent les interventions du rédacteur en chef.',
-    methodologyTip: 'Conseil de rédaction : Traitez d’abord les anomalies critiques pour assainir la thèse maîtresse avant d’ajuster les nuances lexicales.',
-  },
-  {
-    id: 'export-canvas',
-    targetSelector: '[data-tour="export-actions"]',
-    title: 'Export & Partage du Rapport',
-    badge: 'Export Retina',
-    placement: 'top',
-    content: 'Générez en un clic un carton de synthèse haute définition (2x Retina) ou copiez le plan de révision pour le partager avec vos pairs.',
-    methodologyTip: 'Le carton certifié résume les métriques clés pour vos revues de pairs ou votre communication publique.',
+    content: 'Une fiche par constat : le passage exact tel qu’il est écrit, ce qui lui est reproché, sa gravité (Critique, Majeur ou Mineur) et l’état de vérification de l’affirmation citée. Survolez une fiche pour retrouver le passage surligné dans la page.',
+    methodologyTip: 'L’état de vérification décrit toujours la phrase de l’article, pas l’objection qui lui est faite. Une affirmation que le texte ne source pas n’est pas fausse pour autant, et se distingue de celle que les sources mettent en doute.',
   },
 ];
+
+/**
+ * The steps that can actually show something, given which anchors are on screen.
+ *
+ * Most of the visit describes a report, and on a first run there is none, so
+ * every anchored step would darken the panel and highlight nothing - useless at
+ * the one moment the visit matters most. A step is kept when it stands on its
+ * own prose, or when the element it points at exists.
+ */
+export function selectAvailableSteps(
+  steps: TourStep[],
+  isAnchorPresent: (selector: string) => boolean,
+): TourStep[] {
+  return steps.filter((step) => !step.targetSelector || isAnchorPresent(step.targetSelector));
+}
 
 export function getTourCompletionStatus(storageKey = DEFAULT_STORAGE_KEY, storageProvider = typeof window !== 'undefined' ? window.localStorage : ({} as Storage)) {
   try {
@@ -206,8 +276,29 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   }, [autoStartIfUnseen, isOpen, storageKey, store]);
 
   const visible = isOpen ?? autoStarted;
-  const step = steps[stepIndex];
-  const isLast = stepIndex >= steps.length - 1;
+
+  // The anchors belong to the host's markup, which React only puts in the
+  // document when it commits: reading them while rendering finds nothing at all
+  // on a first mount, and would throw away the very steps that matter then. A
+  // layout effect resolves them once the DOM exists and before the browser
+  // paints, so the reader never sees the unfiltered list, and resolving only as
+  // the visit opens keeps the list from shifting under them mid-walk.
+  const [resolvedSteps, setResolvedSteps] = useState<TourStep[] | null>(null);
+
+  useLayoutEffect(() => {
+    if (!visible || typeof document === 'undefined') {
+      setResolvedSteps(null);
+      return;
+    }
+    setResolvedSteps(
+      selectAvailableSteps(steps, (selector) => document.querySelector(selector) !== null),
+    );
+  }, [visible, steps]);
+
+  const activeSteps = resolvedSteps ?? steps;
+
+  const step = activeSteps[stepIndex];
+  const isLast = stepIndex >= activeSteps.length - 1;
 
   // Re-anchor on step change and whenever the layout moves under us.
   useEffect(() => {
@@ -262,14 +353,14 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
       if (e.key === 'Escape') finish(true);
       else if (e.key === 'ArrowRight' || e.key === 'Enter') {
         if (isLast) finish(false);
-        else setStepIndex((i) => Math.min(i + 1, steps.length - 1));
+        else setStepIndex((i) => Math.min(i + 1, activeSteps.length - 1));
       } else if (e.key === 'ArrowLeft') {
         setStepIndex((i) => Math.max(i - 1, 0));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [visible, isLast, steps.length, finish]);
+  }, [visible, isLast, activeSteps.length, finish]);
 
   const highlightBox = useMemo(() => {
     const rect = position.targetRect;
@@ -397,7 +488,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
           }}
         >
           <div style={{ display: 'flex', gap: 5 }} aria-hidden="true">
-            {steps.map((s, i) => (
+            {activeSteps.map((s, i) => (
               <span
                 key={s.id}
                 style={{

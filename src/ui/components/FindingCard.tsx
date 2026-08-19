@@ -33,11 +33,11 @@ export const FindingCard: React.FC<FindingCardProps> = ({
           : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900'
       }`}
     >
-      <div className="flex items-center justify-between gap-2 mb-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
         <span className="font-mono text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-400">
           {CATEGORY_LABELS_FR[finding.category] ?? finding.category}
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className="flex flex-wrap items-center justify-end gap-1.5">
           {finding.verification && <VerificationBadge verification={finding.verification} />}
           <SeverityBadge severity={finding.severity} />
         </span>

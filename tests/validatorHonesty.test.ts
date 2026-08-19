@@ -33,32 +33,32 @@ const sampleInput: AnalysisInput = {
 };
 
 describe('enforceEvidenceHonesty', () => {
-  it('downgrades a contradicted factual finding with no sources to unverified', () => {
+  it('downgrades a douteuse factual finding with no sources to non-verifiable', () => {
     const [result] = enforceEvidenceHonesty(
-      [makeFinding({ category: 'affirmation-non-etayee', verification: 'contradicted', sources: [] })],
+      [makeFinding({ category: 'affirmation-non-etayee', verification: 'douteuse', sources: [] })],
       {}
     );
-    expect(result.verification).toBe('unverified');
+    expect(result.verification).toBe('non-verifiable');
   });
 
-  it('keeps a contradicted factual finding backed by sources as contradicted', () => {
+  it('keeps a douteuse factual finding backed by sources as douteuse', () => {
     const source: EvidenceSource = { title: 'INSEE', url: 'https://insee.fr/taux', origin: 'search' };
     const [result] = enforceEvidenceHonesty(
-      [makeFinding({ category: 'affirmation-non-etayee', verification: 'contradicted', sources: [source] })],
+      [makeFinding({ category: 'affirmation-non-etayee', verification: 'douteuse', sources: [source] })],
       {}
     );
-    expect(result.verification).toBe('contradicted');
+    expect(result.verification).toBe('douteuse');
     expect(result.sources).toEqual([source]);
   });
 
-  it('defaults a factual finding with no verification at all to unverified', () => {
+  it('defaults a factual finding with no verification at all to non-verifiable', () => {
     const [result] = enforceEvidenceHonesty([makeFinding({ category: 'surinterpretation' })], {});
-    expect(result.verification).toBe('unverified');
+    expect(result.verification).toBe('non-verifiable');
   });
 
   it('keeps verification undefined for editorial categories, even if the model set one', () => {
     const [sophisme] = enforceEvidenceHonesty(
-      [makeFinding({ category: 'sophisme', verification: 'contradicted' })],
+      [makeFinding({ category: 'sophisme', verification: 'douteuse' })],
       {}
     );
     expect(sophisme.verification).toBeUndefined();
@@ -70,7 +70,7 @@ describe('enforceEvidenceHonesty', () => {
     expect(cadrage.verification).toBeUndefined();
   });
 
-  it('re-categorises source-absente on a block the article actually cited, attaching the article source', () => {
+  it('classifies source-absente on a block the article actually cited as non-sourcee, attaching the citation without any self-undermining aside', () => {
     const articleSource: EvidenceSource = {
       title: 'Rapport officiel',
       url: 'https://gouv.fr/rapport',
@@ -81,20 +81,21 @@ describe('enforceEvidenceHonesty', () => {
       { b2: [articleSource] }
     );
 
-    expect(result.category).toBe('affirmation-non-etayee');
-    expect(result.verification).toBe('unverified');
+    expect(result.category).toBe('source-absente');
+    expect(result.verification).toBe('non-sourcee');
     expect(result.sources).toHaveLength(1);
     expect(result.sources?.[0]).toMatchObject({ url: 'https://gouv.fr/rapport', origin: 'article' });
-    expect(result.explanation).toContain('source');
+    expect(result.explanation).not.toContain('pas été prise en compte');
   });
 
-  it('leaves source-absente untouched when the block carries no cited source', () => {
+  it('classifies source-absente as non-sourcee with no attached source when the block carries none', () => {
     const [result] = enforceEvidenceHonesty(
       [makeFinding({ blockId: 'b1', category: 'source-absente' })],
       { b2: [{ title: 'Autre', url: 'https://example.com/x', origin: 'search' }] }
     );
     expect(result.category).toBe('source-absente');
-    expect(result.verification).toBe('unverified');
+    expect(result.verification).toBe('non-sourcee');
+    expect(result.sources).toBeUndefined();
   });
 });
 
@@ -117,7 +118,7 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
         label: 'Source absente',
         explanation: "Le bloc affirme un fait sans citer de source.",
         confidence: 0.9,
-        verification: 'contradicted'
+        verification: 'douteuse'
       }
     ]
   });
@@ -137,7 +138,7 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
           blockId: 'b2',
           quote: 'cette technologie va remplacer tous les serveurs',
           claim: 'La technologie remplacera tous les serveurs.',
-          verification: 'unverified',
+          verification: 'non-verifiable',
           sources: []
         }
       ],
@@ -148,7 +149,7 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
     expect(report.research.provider).toBe('anthropic');
   });
 
-  it('re-categorises a source-absente finding on a block the article cited, via articleSources', () => {
+  it('classifies a source-absente finding on a block the article cited as non-sourcee, via articleSources', () => {
     const report = parseAndValidateLlmOutput(rawWithContradiction, sampleInput, {
       articleSources: {
         b2: [{ title: 'Étude citée', url: 'https://example.com/etude', origin: 'search' }]
@@ -157,16 +158,17 @@ describe('parseAndValidateLlmOutput honesty and evidence wiring', () => {
 
     expect(report.findings).toHaveLength(1);
     const [finding] = report.findings;
-    expect(finding.category).toBe('affirmation-non-etayee');
-    expect(finding.verification).toBe('unverified');
+    expect(finding.category).toBe('source-absente');
+    expect(finding.verification).toBe('non-sourcee');
     expect(finding.sources).toHaveLength(1);
     expect(finding.sources?.[0].origin).toBe('article');
   });
 
-  it('downgrades an uncited contradicted finding to unverified instead of publishing a contradiction', () => {
+  it('classifies an uncited source-absente finding as non-sourcee, regardless of what verification the model attempted to set', () => {
     const report = parseAndValidateLlmOutput(rawWithContradiction, sampleInput, {});
     const [finding] = report.findings;
-    expect(finding.verification).toBe('unverified');
+    expect(finding.category).toBe('source-absente');
+    expect(finding.verification).toBe('non-sourcee');
     expect(finding.sources).toEqual([]);
   });
 
@@ -236,7 +238,7 @@ describe('reconcileResearchedFindings', () => {
       label: 'Fait inexact : Christian Estrosi est maire de Nice, pas Éric Ciotti'
     });
     const source: EvidenceSource = { title: 'Mairie de Nice', url: 'https://nice.fr/maire', origin: 'search' };
-    const claim = makeClaim({ findingId: finding.id, verification: 'confirmed', sources: [source] });
+    const claim = makeClaim({ findingId: finding.id, verification: 'verifiee', sources: [source] });
 
     const { findings, withdrawn } = reconcileResearchedFindings([finding], [claim]);
 
@@ -250,28 +252,28 @@ describe('reconcileResearchedFindings', () => {
     expect(withdrawn[0].reason).toBeTruthy();
   });
 
-  it('keeps a finding the evidence contradicts, carrying the claim\'s sources and a contradicted verification', () => {
+  it('keeps a finding the evidence casts doubt on, carrying the claim\'s sources and a douteuse verification', () => {
     const finding = makeFinding({ id: 'f1', category: 'affirmation-non-etayee' });
     const source: EvidenceSource = { title: 'Rapport', url: 'https://example.com/rapport', origin: 'search' };
-    const claim = makeClaim({ findingId: 'f1', verification: 'contradicted', sources: [source] });
+    const claim = makeClaim({ findingId: 'f1', verification: 'douteuse', sources: [source] });
 
     const { findings, withdrawn } = reconcileResearchedFindings([finding], [claim]);
 
     expect(withdrawn).toEqual([]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].verification).toBe('contradicted');
+    expect(findings[0].verification).toBe('douteuse');
     expect(findings[0].sources).toEqual([source]);
   });
 
-  it('keeps a finding nothing was actually read for as an unverified reserve, not an established fault', () => {
+  it('keeps a finding nothing was actually read for as a non-verifiable reserve, not an established fault', () => {
     const finding = makeFinding({ id: 'f1', category: 'affirmation-non-etayee' });
-    const claim = makeClaim({ findingId: 'f1', verification: 'unverified', sources: [] });
+    const claim = makeClaim({ findingId: 'f1', verification: 'non-verifiable', sources: [] });
 
     const { findings, withdrawn } = reconcileResearchedFindings([finding], [claim]);
 
     expect(withdrawn).toEqual([]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].verification).toBe('unverified');
+    expect(findings[0].verification).toBe('non-verifiable');
   });
 
   it('passes an editorial finding through unchanged, since it was never researched and carries no claim', () => {

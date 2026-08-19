@@ -14,6 +14,7 @@ export type PipelineStage =
   | 'preparing_prompt'
   | 'calling_provider'
   | 'parsing_response'
+  | 'researching'
   | 'scoring'
   | 'storing'
   | 'success'
@@ -26,6 +27,21 @@ export interface PipelineProgressEvent {
   progress: number;
   partialText?: string;
   error?: string;
+}
+
+/**
+ * The share of the overall bar that the research stage owns.
+ *
+ * A stage that counts its own work from zero has no idea where it sits in the
+ * run, so the pipeline places that count rather than passing it through. The
+ * window stops short of 100 because the run is not finished when research is.
+ */
+const RESEARCH_WINDOW = { from: 65, to: 95 } as const;
+
+/** Places a stage's own 0-100 count inside the window it occupies. */
+function placeInWindow(pct: number, window: { from: number; to: number }): number {
+  const share = Math.max(0, Math.min(100, pct)) / 100;
+  return Math.round(window.from + (window.to - window.from) * share);
 }
 
 /**
@@ -191,14 +207,19 @@ export class AnalysisPipeline {
       // Now the audit's own factual findings become the claims under test: the
       // audit's objections are checked against evidence instead of being
       // published straight from the model's memory.
-      this.reportProgress('preparing_prompt', "Vérification des constats factuels de l'audit...", 65);
+      this.reportProgress('researching', "Vérification des constats factuels de l'audit...", RESEARCH_WINDOW.from);
       const { claims, research } = await researchFindings({
         client: this.client,
         input: analysisInput,
         findings: auditedReport.findings,
         citedSources,
         now,
-        onProgress: (message, pct) => this.reportProgress('preparing_prompt', message, pct),
+        // The research stage counts its own claims from 0 to 100. Forwarding that
+        // raw made the bar fall back to the start the moment research began, which
+        // reads as the analysis having failed and started over. It is one stage of a
+        // longer run, so its count belongs inside the share of the bar it owns.
+        onProgress: (message, pct) =>
+          this.reportProgress('researching', message, placeInWindow(pct, RESEARCH_WINDOW)),
         abortSignal: this.abortController?.signal,
       });
 

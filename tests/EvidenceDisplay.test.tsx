@@ -40,18 +40,18 @@ const searchSource: EvidenceSource = {
 };
 
 describe('Finding evidence display', () => {
-  it('renders a contradicted finding with its sources as safe external links', () => {
+  it('renders a doubted finding with its sources as safe external links', () => {
     const markup = renderToStaticMarkup(
       <FindingCard
         finding={{
           ...baseFinding,
-          verification: 'contradicted',
+          verification: 'douteuse',
           sources: [articleSource, searchSource],
         }}
       />
     );
 
-    expect(markup).toContain(VERIFICATION_STYLES.contradicted.label);
+    expect(markup).toContain(VERIFICATION_STYLES.douteuse.label);
     expect(markup).toContain('href="https://www.ccomptes.fr/rapport-2024"');
     expect(markup).toContain('href="https://insee.fr/statistiques/budget"');
     expect(markup).toContain('target="_blank"');
@@ -67,23 +67,97 @@ describe('Finding evidence display', () => {
     expect(markup).toContain('trouvé en recherche');
   });
 
-  it('renders an unverified finding as an absence of proof rather than a fault', () => {
+  // The whole reason the classification grew a fourth state. An article that
+  // mentions an interview without naming the outlet has a sourcing gap; showing
+  // that as a doubt reads as an accusation of being wrong.
+  it('renders an unsourced-but-checkable claim as a sourcing observation, never as a doubt', () => {
     const markup = renderToStaticMarkup(
-      <FindingCard finding={{ ...baseFinding, verification: 'unverified' }} />
+      <FindingCard finding={{ ...baseFinding, verification: 'non-sourcee' }} />
     );
 
-    expect(markup).toContain('Non vérifié');
-    expect(markup).toContain('ni confirmé ni infirmé');
-    expect(markup).not.toContain(VERIFICATION_STYLES.contradicted.label);
+    expect(markup).toContain('Non sourcée dans l’article');
+    expect(markup).toContain('pas un doute sur son exactitude');
+    expect(markup).not.toContain(VERIFICATION_STYLES.douteuse.label);
+    expect(markup).not.toContain(VERIFICATION_STYLES['non-verifiable'].label);
     expect(markup).not.toContain('faux');
+
+    // A sourcing remark must not borrow the colours that mean "problem".
+    expect(markup).toContain(VERIFICATION_STYLES['non-sourcee'].className);
+    expect(markup).not.toContain('rose-');
+    expect(markup).not.toContain('border-dashed');
+  });
+
+  it('renders a claim that cannot be checked as worded as a limit, not a fault', () => {
+    const markup = renderToStaticMarkup(
+      <FindingCard finding={{ ...baseFinding, verification: 'non-verifiable' }} />
+    );
+
+    expect(markup).toContain('Non vérifiable telle qu’écrite');
+    expect(markup).toContain('ne peut pas être confrontée à des sources');
+    expect(markup).toContain('rien ne permet de la reprocher à l’article');
+    expect(markup).not.toContain(VERIFICATION_STYLES.douteuse.label);
     expect(markup).not.toContain('Sources consultées');
+  });
+
+  it('renders a confirmed claim as settled', () => {
+    const markup = renderToStaticMarkup(
+      <FindingCard finding={{ ...baseFinding, verification: 'verifiee', sources: [searchSource] }} />
+    );
+
+    expect(markup).toContain('Vérifiée');
+    expect(markup).toContain('confirment ce point de l’article');
+    expect(markup).toContain('emerald-');
+  });
+
+  // Two of the four states used to share the old neutral style, which is exactly
+  // the conflation being removed: a reader has to be able to tell them apart at
+  // a glance, label and colour both.
+  it('gives each of the four states an appearance no other state shares', () => {
+    const states = ['verifiee', 'non-sourcee', 'douteuse', 'non-verifiable'] as const;
+
+    const labels = states.map((state) => VERIFICATION_STYLES[state].label);
+    expect(new Set(labels).size).toBe(4);
+
+    const classNames = states.map((state) => VERIFICATION_STYLES[state].className);
+    expect(new Set(classNames).size).toBe(4);
+
+    const hints = states.map((state) => VERIFICATION_STYLES[state].hint);
+    expect(new Set(hints).size).toBe(4);
+
+    // And the rendered badge keeps the accessible name pattern for every one.
+    for (const state of states) {
+      const markup = renderToStaticMarkup(
+        <FindingCard finding={{ ...baseFinding, verification: state }} />
+      );
+      expect(markup).toContain(
+        `aria-label="${VERIFICATION_STYLES[state].label}. ${VERIFICATION_STYLES[state].hint}"`
+      );
+    }
   });
 
   it('omits the verification badge on a finding that carries no verification', () => {
     const markup = renderToStaticMarkup(<FindingCard finding={baseFinding} />);
 
-    expect(markup).not.toContain('Non vérifié');
+    expect(markup).not.toContain('Non vérifiable');
+    expect(markup).not.toContain('Non sourcée');
     expect(markup).toContain('Majeur');
+  });
+
+  // The old fallback sent anything unknown to the neutral style, which is how a
+  // state could be shown wearing another state's meaning. An unknown state now
+  // says so rather than impersonating one of the four.
+  it('does not let an unrecognised state borrow another state’s appearance', () => {
+    const markup = renderToStaticMarkup(
+      <FindingCard
+        finding={{ ...baseFinding, verification: 'etat-inconnu' as unknown as Finding['verification'] }}
+      />
+    );
+
+    expect(markup).toContain('État non reconnu');
+    for (const style of Object.values(VERIFICATION_STYLES)) {
+      expect(markup).not.toContain(style.label);
+      expect(markup).not.toContain(style.className);
+    }
   });
 
   // The reader of an article cannot rewrite it, so the card explains the defect
@@ -108,7 +182,7 @@ describe('Finding evidence display', () => {
     act(() => {
       root.render(
         <FindingCard
-          finding={{ ...baseFinding, verification: 'contradicted', sources: [articleSource] }}
+          finding={{ ...baseFinding, verification: 'douteuse', sources: [articleSource] }}
           onSelect={onSelect}
         />
       );
@@ -150,14 +224,14 @@ describe('Research disclosure', () => {
     expect(markup).toContain('le fournisseur configuré ne propose pas de recherche web');
   });
 
-  it('reports how many claims were checked and how many searches ran', () => {
+  it('counts only the claims actually confronted with a source, and never inflates that with unsourced or uncheckable ones', () => {
     const claims: FactualClaim[] = [
       {
         id: 'c1',
         blockId: 'b1',
         quote: 'Le budget a doublé en deux ans.',
         claim: 'Le budget a doublé entre 2022 et 2024.',
-        verification: 'contradicted',
+        verification: 'douteuse',
         sources: [articleSource],
         rationale: 'Le rapport cité indique une progression de 4 %.',
       },
@@ -166,7 +240,7 @@ describe('Research disclosure', () => {
         blockId: 'b2',
         quote: 'La mesure entre en vigueur en janvier.',
         claim: 'La mesure entre en vigueur en janvier 2025.',
-        verification: 'confirmed',
+        verification: 'verifiee',
         sources: [searchSource],
       },
       {
@@ -174,7 +248,15 @@ describe('Research disclosure', () => {
         blockId: 'b3',
         quote: 'Les effectifs stagnent.',
         claim: 'Les effectifs sont stables depuis 2020.',
-        verification: 'unverified',
+        verification: 'non-verifiable',
+        sources: [],
+      },
+      {
+        id: 'c4',
+        blockId: 'b4',
+        quote: 'Un entretien accordé la semaine dernière.',
+        claim: 'L’intéressé a accordé un entretien la semaine dernière.',
+        verification: 'non-sourcee',
         sources: [],
       },
     ];
@@ -188,16 +270,28 @@ describe('Research disclosure', () => {
 
     const markup = renderToStaticMarkup(<ResearchDisclosure research={research} claims={claims} />);
 
-    expect(markup).toContain('2 affirmations vérifiées sur 3');
+    // Only 'verifiee' and 'douteuse' mean evidence was read. Counting the other
+    // two would claim the audit checked things it never looked at.
+    expect(markup).toContain('2 affirmations sur 4 confrontées à une source');
     expect(markup).toContain('2 recherches menées');
     expect(markup).toContain('via anthropic');
     expect(markup).not.toContain('non effectuée');
+    expect(markup).not.toContain('4 affirmations sur 4');
 
-    // The two claims with evidence are listed; the unchecked one has nothing to show.
+    // The two claims with evidence are listed; the ones with nothing to show are not.
     expect(markup).toContain('Voir les 2 affirmations examinées');
     expect(markup).toContain('Le rapport cité indique une progression de 4 %.');
     expect(markup).toContain('href="https://insee.fr/statistiques/budget"');
     expect(markup).not.toContain('Les effectifs sont stables depuis 2020.');
+
+    // The breakdown names each state in the method's own words, so a reader who
+    // never opens the details still knows how the four states divide up, and a
+    // sourcing gap is named as one rather than lumped in with the doubts.
+    expect(markup).toContain('1 vérifiée');
+    expect(markup).toContain('1 douteuse');
+    expect(markup).toContain('1 non sourcée dans l’article');
+    expect(markup).toContain('1 non vérifiable telle qu’écrite');
+    expect(markup).not.toContain('2 douteuses');
   });
 
   it('shows the objections evidence refuted, and says the score predates that check', () => {

@@ -122,7 +122,8 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       severity: 2,
       label: 'Chiffre d’adoption non sourcé',
       explanation: 'Un taux de 95 % d’adoption constitue une affirmation statistique majeure présentée sans aucune source officielle (MENJ, DEPP, OCDE) : vous ne pouvez pas vérifier d’où il vient.',
-      confidence: 0.96
+      confidence: 0.96,
+      verification: 'non-sourcee'
     },
     {
       id: 'f_study_hyperbole',

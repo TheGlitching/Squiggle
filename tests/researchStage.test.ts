@@ -98,8 +98,11 @@ function makeFinding(overrides: Partial<Finding> & Pick<Finding, 'category'>): F
 }
 
 describe('researchFindings', () => {
-  it('researches only the factual findings among the audit\'s findings, and marks research unperformed with all-unverified claims when the client cannot search', async () => {
+  it('researches only the externally-researchable factual findings, and marks research unperformed with all-non-verifiable claims when the client cannot search', async () => {
     const findings = [
+      // source-absente is factual but never externally researched: it is a
+      // sourcing observation about the text, already resolved by
+      // enforceEvidenceHonesty, not a truth claim a web search could settle.
       makeFinding({ category: 'source-absente', quote: 'a' }),
       makeFinding({ category: 'affirmation-non-etayee', quote: 'b' }),
       makeFinding({ category: 'surinterpretation', quote: 'c' }),
@@ -112,13 +115,14 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings, citedSources: [] });
 
-    expect(result.claims).toHaveLength(3);
+    expect(result.claims).toHaveLength(2);
+    expect(result.claims.map((c) => c.quote)).toEqual(['b', 'c']);
     expect(result.research.performed).toBe(false);
     expect(result.research.skippedReason).toMatch(/recherche web/i);
     expect(result.research.queries).toEqual([]);
     expect(result.research.withdrawn).toEqual([]);
     for (const claim of result.claims) {
-      expect(claim.verification).toBe('unverified');
+      expect(claim.verification).toBe('non-verifiable');
       expect(claim.sources).toEqual([]);
     }
   });
@@ -134,7 +138,7 @@ describe('researchFindings', () => {
     expect(result.research.skippedReason).toMatch(/aucun constat factuel/i);
   });
 
-  it.each(['confirmed', 'contradicted'] as const)('forces a %s verdict with no sources down to unverified', async (verdict) => {
+  it.each(['verifiee', 'douteuse'] as const)('forces a %s verdict with no sources down to non-verifiable', async (verdict) => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
     const judgement = JSON.stringify({ verification: verdict, sources: [], rationale: 'Ça semble correct.' });
 
@@ -147,16 +151,16 @@ describe('researchFindings', () => {
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
     expect(result.claims).toHaveLength(1);
-    expect(result.claims[0].verification).toBe('unverified');
+    expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
     expect(result.claims[0].rationale).toMatch(/rejeté/i);
     expect(result.claims[0].findingId).toBe(finding.id);
   });
 
-  it('keeps a confirmed verdict with its sources when backed by search results, and records the finding\'s quote as the query', async () => {
+  it('keeps a verifiee verdict with its sources when backed by search results, and records the finding\'s quote as the query', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
     const judgement = JSON.stringify({
-      verification: 'confirmed',
+      verification: 'verifiee',
       sources: [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }],
       rationale: 'Corroboré par un communiqué officiel.'
     });
@@ -170,7 +174,7 @@ describe('researchFindings', () => {
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
     expect(result.claims).toHaveLength(1);
-    expect(result.claims[0].verification).toBe('confirmed');
+    expect(result.claims[0].verification).toBe('verifiee');
     expect(result.claims[0].sources).toEqual([
       { title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }
     ]);
@@ -180,9 +184,9 @@ describe('researchFindings', () => {
 
   it('degrades only the finding whose web search throws, leaving the run and its other findings intact, and still records every query', async () => {
     const findingA = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
-    const findingB = makeFinding({ category: 'source-absente', quote: 'autre extrait' });
+    const findingB = makeFinding({ category: 'surinterpretation', quote: 'autre extrait' });
     const judgementForB = JSON.stringify({
-      verification: 'confirmed',
+      verification: 'verifiee',
       sources: [{ title: 'Source B', url: 'https://news.example/b', origin: 'search' }],
       rationale: 'ok'
     });
@@ -200,15 +204,15 @@ describe('researchFindings', () => {
 
     expect(result.claims).toHaveLength(2);
     const [claimA, claimB] = result.claims;
-    expect(claimA.verification).toBe('unverified');
+    expect(claimA.verification).toBe('non-verifiable');
     expect(claimA.sources).toEqual([]);
     expect(claimA.rationale).toMatch(/network down/);
-    expect(claimB.verification).toBe('confirmed');
+    expect(claimB.verification).toBe('verifiee');
     expect(claimB.sources).toHaveLength(1);
     expect(result.research.queries).toEqual([findingA.quote, findingB.quote]);
   });
 
-  it('propagates an aborted search instead of silently degrading the finding to unverified', async () => {
+  it('propagates an aborted search instead of silently degrading the finding to non-verifiable', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
     const controller = new AbortController();
 
@@ -226,9 +230,9 @@ describe('researchFindings', () => {
     ).rejects.toThrow(/aborted/i);
   });
 
-  it('runs exactly one grounded call and keeps a confirmed verdict backed by the provider citations, even with empty snippets', async () => {
+  it('runs exactly one grounded call and keeps a verifiee verdict backed by the provider citations, even with empty snippets', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
-    const judgement = JSON.stringify({ verification: 'confirmed', sources: [], rationale: 'Confirmé par la page consultée.' });
+    const judgement = JSON.stringify({ verification: 'verifiee', sources: [], rationale: 'Confirmé par la page consultée.' });
 
     const client = new StubClient({
       completions: [],
@@ -248,7 +252,7 @@ describe('researchFindings', () => {
     expect(client.groundedCalls).toHaveLength(1);
     expect(client.completeCalls).toHaveLength(0);
     expect(result.claims).toHaveLength(1);
-    expect(result.claims[0].verification).toBe('confirmed');
+    expect(result.claims[0].verification).toBe('verifiee');
     expect(result.claims[0].sources).toEqual([{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }]);
     expect(result.research.performed).toBe(true);
     expect(result.research.provider).toBe('anthropic');
@@ -260,7 +264,7 @@ describe('researchFindings', () => {
     // The model declined to search and answered from memory, naming a plausible
     // url. Nothing was read, so nothing was verified.
     const judgement = JSON.stringify({
-      verification: 'contradicted',
+      verification: 'douteuse',
       sources: [{ title: 'Insee', url: 'https://www.insee.fr/statistiques/plan-social', origin: 'search' }],
       rationale: 'Le chiffre est démenti.'
     });
@@ -273,7 +277,7 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    expect(result.claims[0].verification).toBe('unverified');
+    expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
     expect(result.claims[0].rationale).toMatch(/aucune source n'a été consultée/);
   });
@@ -281,7 +285,7 @@ describe('researchFindings', () => {
   it('credits only the retrieved urls when the model names more sources than were fetched', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
     const judgement = JSON.stringify({
-      verification: 'contradicted',
+      verification: 'douteuse',
       sources: [
         { title: 'Page lue', url: 'https://news.example/lu', quote: 'Le plan portait sur 120 postes.', origin: 'search' },
         { title: 'Jamais récupérée', url: 'https://www.insee.fr/inventee', origin: 'search' }
@@ -300,15 +304,15 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    expect(result.claims[0].verification).toBe('contradicted');
+    expect(result.claims[0].verification).toBe('douteuse');
     expect(result.claims[0].sources.map((s) => s.url)).toEqual(['https://news.example/lu']);
     // The quote the model gave for the url it really read is kept.
     expect(result.claims[0].sources[0].quote).toBe('Le plan portait sur 120 postes.');
   });
 
-  it('forces a grounded confirmed/contradicted verdict with zero sources down to unverified', async () => {
+  it('forces a grounded verifiee/douteuse verdict with zero sources down to non-verifiable', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
-    const judgement = JSON.stringify({ verification: 'contradicted', sources: [], rationale: 'Ça semble faux.' });
+    const judgement = JSON.stringify({ verification: 'douteuse', sources: [], rationale: 'Ça semble faux.' });
 
     const client = new StubClient({
       completions: [],
@@ -318,12 +322,12 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    expect(result.claims[0].verification).toBe('unverified');
+    expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
     expect(result.claims[0].rationale).toMatch(/rejeté/i);
   });
 
-  it('propagates an aborted grounded call instead of silently degrading the finding to unverified', async () => {
+  it('propagates an aborted grounded call instead of silently degrading the finding to non-verifiable', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
     const controller = new AbortController();
 
@@ -341,10 +345,10 @@ describe('researchFindings', () => {
     ).rejects.toThrow(/aborted/i);
   });
 
-  it('yields unverified when every search result has a blank snippet, no matter what verdict the judge returned - the regression this stage exists to close', async () => {
+  it('yields non-verifiable when every search result has a blank snippet, no matter what verdict the judge returned - the regression this stage exists to close', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
     const judgement = JSON.stringify({
-      verification: 'confirmed',
+      verification: 'verifiee',
       sources: [{ title: 'Un article', url: 'https://news.example/blank', origin: 'search' }],
       rationale: "Ça a l'air vrai."
     });
@@ -357,14 +361,14 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    expect(result.claims[0].verification).toBe('unverified');
+    expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
     expect(result.claims[0].rationale).toMatch(/texte source lisible/i);
   });
 
   it('never hands the ungrounded judge a blank-snippet search result, while a real-snippet result still reaches it', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
-    const judgement = JSON.stringify({ verification: 'unverified', sources: [], rationale: 'rien à signaler' });
+    const judgement = JSON.stringify({ verification: 'non-verifiable', sources: [], rationale: 'rien à signaler' });
 
     const client = new StubClient({
       completions: [judgement],
@@ -382,10 +386,10 @@ describe('researchFindings', () => {
     expect(judgePrompt).toContain('https://news.example/real');
   });
 
-  it('reaches a confirmed verdict on the ungrounded route when the search results carry real snippets', async () => {
+  it('reaches a verifiee verdict on the ungrounded route when the search results carry real snippets', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
     const judgement = JSON.stringify({
-      verification: 'confirmed',
+      verification: 'verifiee',
       sources: [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }],
       rationale: 'Corroboré.'
     });
@@ -398,14 +402,14 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    expect(result.claims[0].verification).toBe('confirmed');
+    expect(result.claims[0].verification).toBe('verifiee');
     expect(result.claims[0].sources).toEqual([{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }]);
   });
 
-  it('forces unverified when a search-route judge names only the article\'s own cited source, with every search result blank - anchor text is not read page content', async () => {
-    const finding = makeFinding({ category: 'source-absente' });
+  it('forces non-verifiable when a search-route judge names only the article\'s own cited source, with every search result blank - anchor text is not read page content', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
     const judgement = JSON.stringify({
-      verification: 'confirmed',
+      verification: 'verifiee',
       sources: [{ title: 'cette étude', url: 'https://src.example/p', origin: 'article' }],
       rationale: "Confirmé par la source de l'article."
     });
@@ -423,7 +427,7 @@ describe('researchFindings', () => {
       citedSources: [{ href: 'https://src.example/p', domain: 'src.example', text: 'cette étude', blockId: 'b1' }]
     });
 
-    expect(result.claims[0].verification).toBe('unverified');
+    expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
     expect(result.claims[0].rationale).toMatch(/texte source lisible/i);
   });

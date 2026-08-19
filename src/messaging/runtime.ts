@@ -216,6 +216,43 @@ export class UnifiedRuntime {
     return () => runtime.onConnect.removeListener(callback);
   }
 
+  /**
+   * A page's identity is the pair (tab, document). Tab switches and
+   * same-tab navigations are two different Chrome/Firefox events; anything
+   * that needs to notice "the reader is now looking at a different article"
+   * has to listen to both.
+   */
+  public static onTabActivated(listener: (activeInfo: { tabId: number; windowId?: number }) => void): () => void {
+    const tabs = this.getTabs();
+    const callback = (activeInfo: chrome.tabs.TabActiveInfo) => listener(activeInfo);
+    tabs.onActivated.addListener(callback);
+    return () => tabs.onActivated.removeListener(callback);
+  }
+
+  /**
+   * Fires on every tab mutation, not just navigation, so callers must check
+   * `changeInfo.url` themselves. A full page load reports the new URL while
+   * `status` is `'loading'`; a same-document route change (`history.pushState`)
+   * never enters a loading phase at all but still reports the new URL, so a
+   * listener that only checks for `status === 'loading'` misses it entirely.
+   */
+  public static onTabUpdated(
+    listener: (tabId: number, changeInfo: { status?: string; url?: string }, tab: ExtensionTab) => void
+  ): () => void {
+    const tabs = this.getTabs();
+    const callback = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) =>
+      listener(tabId, changeInfo, tab as unknown as ExtensionTab);
+    tabs.onUpdated.addListener(callback);
+    return () => tabs.onUpdated.removeListener(callback);
+  }
+
+  public static onTabRemoved(listener: (tabId: number) => void): () => void {
+    const tabs = this.getTabs();
+    const callback = (tabId: number) => listener(tabId);
+    tabs.onRemoved.addListener(callback);
+    return () => tabs.onRemoved.removeListener(callback);
+  }
+
   public static async queryTabs(queryInfo: chrome.tabs.QueryInfo): Promise<ExtensionTab[]> {
     const tabs = this.getTabs();
     return new Promise((resolve, reject) => {

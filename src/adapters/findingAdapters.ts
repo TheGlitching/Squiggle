@@ -19,6 +19,7 @@ import type {
   Finding,
   FindingCategory as EngineCategory,
   SeverityLevel,
+  VerificationState,
   TextBlock as EngineTextBlock,
 } from '../engine/types';
 import type { FindingHighlightTarget } from '../content/types';
@@ -70,15 +71,27 @@ export function filterCategoryToEngine(category: FilterCategory): EngineCategory
 /**
  * A 'point-fort' is a strength, not a defect, so it maps to 'positive'
  * regardless of its numeric severity.
+ *
+ * A `non-sourcee` finding is capped at 'info' whatever severity the model gave
+ * it. The state means the article did not source a checkable statement, which
+ * is a remark about its sourcing and not a claim that the statement is wrong;
+ * painting that passage in the critical colour is what made a mention of an
+ * unnamed interview read, in the page itself, as an accusation. A `verifiee`
+ * finding is capped for the converse reason: evidence backed the article, so
+ * there is no fault left to shout about. Only `douteuse` and
+ * `non-verifiable` keep the severity as given, and only `douteuse` can reach
+ * 'critical'.
  */
 function severityToHighlightSeverity(
   severity: SeverityLevel,
-  category: EngineCategory
+  category: EngineCategory,
+  verification?: VerificationState
 ): FindingHighlightTarget['severity'] {
   if (category === 'point-fort') return 'positive';
+  if (verification === 'non-sourcee' || verification === 'verifiee') return 'info';
   switch (severity) {
     case 3:
-      return 'critical';
+      return verification === 'non-verifiable' ? 'warning' : 'critical';
     case 2:
       return 'warning';
     default:
@@ -97,7 +110,7 @@ export function findingToHighlightTarget(finding: Finding): FindingHighlightTarg
     findingId: finding.id,
     blockId: finding.blockId,
     quote: finding.quote,
-    severity: severityToHighlightSeverity(finding.severity, finding.category),
+    severity: severityToHighlightSeverity(finding.severity, finding.category, finding.verification),
     category: ENGINE_TO_HIGHLIGHT[finding.category] ?? 'missing_context',
     title: finding.label || CATEGORY_LABELS_FR[finding.category] || 'Constat',
     explanation: finding.explanation,

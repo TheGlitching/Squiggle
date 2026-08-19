@@ -125,4 +125,44 @@ describe('Article Extractor - hyperlink capture', () => {
       { text: 'annexes', href: 'https://exemple-info.fr/dossier/annexes.html' },
     ]);
   });
+
+  it('excludes a subscription pitch hosted on another subdomain of the publisher from citedSources - the reported registrable-domain defect', () => {
+    setCanonical('https://www.lamontagne.fr/politique/article-123.html');
+    addParagraph(
+      'Cet article est réservé aux abonnés, <a href="https://abonne.lamontagne.fr/offre">découvrez nos offres</a> ' +
+        'ou lisez cette <a href="https://www.insee.fr/statistiques/12345">étude de l\'Insee</a>.'
+    );
+
+    const article = new ArticleExtractor(mockDoc).extract();
+
+    expect(article.citedSources).toEqual([
+      {
+        href: 'https://www.insee.fr/statistiques/12345',
+        domain: 'insee.fr',
+        text: "étude de l'Insee",
+        blockId: 'block-0',
+      },
+    ]);
+  });
+
+  it('resolves a relative canonical href before using it as a base, instead of discarding every citation - the reported canonical-resolution defect', () => {
+    setCanonical('/politique/article-123');
+    addParagraph(
+      'Selon une <a href="https://www.insee.fr/statistiques/12345">étude de l\'Insee</a> publiée hier, la tendance se confirme.'
+    );
+
+    const article = new ArticleExtractor(mockDoc).extract();
+
+    expect(article.blocks[0].links).toEqual([
+      { text: "étude de l'Insee", href: 'https://www.insee.fr/statistiques/12345' },
+    ]);
+    expect(article.citedSources).toEqual([
+      {
+        href: 'https://www.insee.fr/statistiques/12345',
+        domain: 'insee.fr',
+        text: "étude de l'Insee",
+        blockId: 'block-0',
+      },
+    ]);
+  });
 });

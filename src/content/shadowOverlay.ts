@@ -369,11 +369,16 @@ export class ShadowHighlightOverlay {
     });
   }
 
+  // The in-page labels name the constat, never a verdict on it. 'Source
+  // Invérifiée' and 'Erreur Factuelle' both asserted more than the audit
+  // knows: the first turned a missing citation into a judgement on the source,
+  // the second turned an unsupported statement into an established error. The
+  // verification state carries that judgement, and it is shown in the panel.
   private formatCategoryLabel(cat: string): string {
     const labels: Record<string, string> = {
       logical_fallacy: 'Sophisme',
-      unverified_source: 'Source Invérifiée',
-      factual_error: 'Erreur Factuelle',
+      unverified_source: 'Source absente',
+      factual_error: 'Affirmation non étayée',
       manipulation: 'Manipulation Rhétorique',
       editorial_bias: 'Biais Éditorial',
       missing_context: 'Contexte Manquant',

@@ -4,6 +4,7 @@ import { TYPOGRAPHY, GOOGLE_FONTS_URL, typographyTokens } from '../src/ui/tokens
 import { formatPoints, getScoreBandColor } from '../src/ui/components/ScoreGauges';
 import { determineScoreBand } from '../src/engine/scoring';
 import { SCORE_DOMAINS, ScoreDomainKey } from '../src/engine/types';
+import { VERIFICATION_STYLES } from '../src/ui/components/VerificationBadge';
 
 describe('Editorial Design System & Tokens', () => {
   it('should define complete color tokens for both light and dark modes', () => {
@@ -105,5 +106,45 @@ describe('Editorial Design System & Tokens', () => {
     expect(formatPoints(10.5)).toBe('10,5');
     expect(formatPoints(35)).toBe('35');
     expect(formatPoints(4.5)).toBe('4,5');
+  });
+});
+
+// The badge palette is the reader's only cue to how damning a finding is, so it
+// belongs to the design system rather than to one component's taste. Method
+// section 3.5 defines four states, and their weights are not interchangeable.
+describe('Verification badge palette', () => {
+  it('names the four states with the method’s own reader-facing wording', () => {
+    expect(VERIFICATION_STYLES.verifiee.label).toBe('Vérifiée');
+    expect(VERIFICATION_STYLES['non-sourcee'].label).toBe('Non sourcée dans l’article');
+    expect(VERIFICATION_STYLES.douteuse.label).toBe('Douteuse');
+    expect(VERIFICATION_STYLES['non-verifiable'].label).toBe('Non vérifiable telle qu’écrite');
+  });
+
+  it('escalates colour only where the evidence justifies it', () => {
+    expect(VERIFICATION_STYLES.verifiee.className).toContain('emerald');
+    expect(VERIFICATION_STYLES.douteuse.className).toContain('rose');
+
+    // A sourcing observation is not a fault. It takes the neutral stone of the
+    // palette, with a solid border, so it never reads as a warning: the reader
+    // has to see it as a remark on the article's citations, nothing more.
+    expect(VERIFICATION_STYLES['non-sourcee'].className).toContain('stone');
+    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('rose');
+    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('amber');
+    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('border-dashed');
+
+    // Nothing was established either way, so the border stays provisional
+    // instead of asserting a verdict, the same dashed amber the panel already
+    // uses to declare a research stage that never ran.
+    expect(VERIFICATION_STYLES['non-verifiable'].className).toContain('amber');
+    expect(VERIFICATION_STYLES['non-verifiable'].className).toContain('border-dashed');
+    expect(VERIFICATION_STYLES['non-verifiable'].className).not.toContain('rose');
+  });
+
+  it('carries a dark-mode variant for every state, like every other token', () => {
+    for (const style of Object.values(VERIFICATION_STYLES)) {
+      expect(style.className).toContain('dark:bg-');
+      expect(style.className).toContain('dark:text-');
+      expect(style.className).toContain('dark:border-');
+    }
   });
 });

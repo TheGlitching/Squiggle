@@ -10,7 +10,7 @@ import { FindingCard } from '../ui/components/FindingCard';
 import { CategoryFilterBar, type FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
-import { OnboardingTour } from '../ui/components/OnboardingTour';
+import { OnboardingTour, getTourCompletionStatus } from '../ui/components/OnboardingTour';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
 import { SCORE_DOMAINS } from '../engine/types';
@@ -43,6 +43,17 @@ function SidepanelApp() {
   const keyStorageRef = useRef<SecureKeyStorage | null>(null);
   if (!keyStorageRef.current) keyStorageRef.current = new SecureKeyStorage();
 
+  // The panel is one long-lived surface that many different pages pass
+  // through, so "which page" cannot live in a state variable set once at
+  // mount: it has to be read fresh, from a ref, inside listeners that fire
+  // for the lifetime of the panel.
+  const currentTabIdRef = useRef<number | null>(null);
+  const lastUrlRef = useRef<string | undefined>(undefined);
+  // Bumped every time the tracked tab or document changes. A response still
+  // in flight for an earlier epoch describes a page that is no longer on
+  // screen and must be discarded rather than painted over whatever the
+  // panel has since reset to.
+  const analysisEpochRef = useRef(0);
   const [tabId, setTabId] = useState<number | null>(null);
   const [report, setReport] = useState<AnalysisResult | null>(null);
   const [progress, setProgress] = useState<ProgressState>(IDLE_PROGRESS);
@@ -53,7 +64,9 @@ function SidepanelApp() {
   const [expandedDomain, setExpandedDomain] = useState<ScoreDomainKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [tourOpen, setTourOpen] = useState(false);
+  // The visit earns its keep on the very first run, when the panel is empty and
+  // nothing on screen says what the extension does or why it wants a key.
+  const [tourOpen, setTourOpen] = useState(() => !getTourCompletionStatus().completed);
   const [isDark, setIsDark] = useState(
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
   );
@@ -90,20 +103,14 @@ function SidepanelApp() {
     }
   }, []);
 
-  // Resolve the tab, hydrate any analysis already stored for it, and decide
-  // whether this is a first run.
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const activeTab = await UnifiedRuntime.getActiveTab();
-      if (cancelled) return;
-      const resolvedId = activeTab?.id ?? null;
-      setTabId(resolvedId);
-
-      await refreshKeyPresence();
-      if (cancelled) return;
-
+  /**
+   * Fetch whatever the background has stored for a tab and apply it to the
+   * panel. Shared between the initial mount and switching back to a tab that
+   * already has its own analysis, so a stored report only ever appears
+   * attributed to the tab it was actually computed for.
+   */
+  const hydrateTabState = useCallback(
+    async (resolvedId: number | null, isStale: () => boolean) => {
       try {
         const response = (await bus.callRPC('GET_TAB_STATE', { tabId: resolvedId ?? undefined })) as {
           state?: {
@@ -115,7 +122,7 @@ function SidepanelApp() {
           } | null;
         };
         const state = response?.state;
-        if (cancelled || !state) return;
+        if (isStale() || !state) return;
         if (state.result) setReport(state.result);
         if (state.error) setError(state.error);
         if (state.status && state.status !== 'idle') {
@@ -126,24 +133,110 @@ function SidepanelApp() {
           });
         }
       } catch {
-        // Background worker asleep on first open; nothing to restore.
+        // Background worker asleep; nothing to restore.
       }
+    },
+    [bus]
+  );
+
+  /**
+   * The tracked tab or the document inside it changed. A report, an error or
+   * a running progress bar all describe the page that is no longer showing,
+   * so none of it can stay on screen - and bumping the epoch makes any
+   * response or event still in flight for the old page a no-op when it
+   * eventually arrives.
+   */
+  const resetForNewPage = useCallback(() => {
+    analysisEpochRef.current += 1;
+    setReport(null);
+    setError(null);
+    setProgress(IDLE_PROGRESS);
+    setSelectedFindingId(null);
+    setHoveredFindingId(null);
+  }, []);
+
+  // Resolve the tab, hydrate any analysis already stored for it, and decide
+  // whether this is a first run.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const activeTab = await UnifiedRuntime.getActiveTab();
+      if (cancelled) return;
+      const resolvedId = activeTab?.id ?? null;
+      currentTabIdRef.current = resolvedId;
+      lastUrlRef.current = activeTab?.url;
+      setTabId(resolvedId);
+
+      await refreshKeyPresence();
+      if (cancelled) return;
+
+      await hydrateTabState(resolvedId, () => cancelled);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [bus, refreshKeyPresence]);
+  }, [bus, refreshKeyPresence, hydrateTabState]);
+
+  /**
+   * Keep the panel pointed at the page the reader is actually looking at.
+   * `onActivated` covers switching to a different tab; `onUpdated` covers
+   * navigating within the same tab, including a client-side route change
+   * (common on news sites) that never enters a loading phase but still
+   * reports a new URL. Both are subscribed for the lifetime of the panel and
+   * unsubscribed on unmount, so closing the panel never leaves a listener
+   * registered against a panel instance that no longer exists.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const offActivated = UnifiedRuntime.onTabActivated(() => {
+      void (async () => {
+        const activeTab = await UnifiedRuntime.getActiveTab();
+        if (cancelled) return;
+        const nextId = activeTab?.id ?? null;
+        if (nextId === currentTabIdRef.current) return;
+        currentTabIdRef.current = nextId;
+        lastUrlRef.current = activeTab?.url;
+        resetForNewPage();
+        setTabId(nextId);
+        const epochAtSwitch = analysisEpochRef.current;
+        await hydrateTabState(nextId, () => cancelled || analysisEpochRef.current !== epochAtSwitch);
+      })();
+    });
+
+    const offUpdated = UnifiedRuntime.onTabUpdated((updatedTabId, changeInfo) => {
+      if (updatedTabId !== currentTabIdRef.current) return;
+      if (!changeInfo.url || changeInfo.url === lastUrlRef.current) return;
+      lastUrlRef.current = changeInfo.url;
+      resetForNewPage();
+    });
+
+    return () => {
+      cancelled = true;
+      offActivated();
+      offUpdated();
+    };
+  }, [hydrateTabState, resetForNewPage]);
 
   useEffect(() => {
     if (hasKey === false && !report) setTourOpen(true);
   }, [hasKey, report]);
 
-  // Live analysis events from the background worker.
+  // Live analysis events from the background worker, filtered to the
+  // currently tracked tab: an event addressed to a tab the reader has since
+  // switched away from must never repaint the panel. The same-tab case (the
+  // tab id is unchanged but the document underneath it changed) is instead
+  // guarded at the source - `abortPipelineForTab` on the background side
+  // kills the pipeline the moment the navigation is observed.
   useEffect(() => {
+    const isTrackedTab = (payloadTabId: number) => payloadTabId === currentTabIdRef.current;
+
     const offProgress = bus.on<{ tabId: number; status: string; message: string; progress: number }>(
       'ANALYSIS_PROGRESS',
       (payload) => {
+        if (!isTrackedTab(payload.tabId)) return;
         setProgress({
           status: (payload.status === 'completed' ? 'complete' : payload.status) as Status,
           message: payload.message ?? '',
@@ -153,12 +246,14 @@ function SidepanelApp() {
     );
 
     const offComplete = bus.on<{ tabId: number; result: AnalysisResult }>('ANALYSIS_COMPLETE', (payload) => {
+      if (!isTrackedTab(payload.tabId)) return;
       setReport(payload.result);
       setError(null);
       setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100 });
     });
 
     const offError = bus.on<{ tabId: number; error: string }>('ANALYSIS_ERROR', (payload) => {
+      if (!isTrackedTab(payload.tabId)) return;
       setError(payload.error);
       setProgress({ status: 'error', message: payload.error, progress: 0 });
     });
@@ -183,6 +278,7 @@ function SidepanelApp() {
   useEffect(() => () => bus.destroy(), [bus]);
 
   const runAnalysis = useCallback(async () => {
+    const epoch = analysisEpochRef.current;
     setError(null);
     setReport(null);
     setProgress({ status: 'extracting', message: 'Extraction de l’article…', progress: 5 });
@@ -193,6 +289,11 @@ function SidepanelApp() {
         { timeoutMs: 180000 }
       )) as { success: boolean; result?: AnalysisResult; error?: string };
 
+      // The reader may have navigated away while this call was in flight; a
+      // response arriving after that point describes a page that is no
+      // longer on screen and must be dropped rather than displayed.
+      if (analysisEpochRef.current !== epoch) return;
+
       if (response?.success && response.result) {
         setReport(response.result);
         setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100 });
@@ -202,6 +303,7 @@ function SidepanelApp() {
         setProgress({ status: 'error', message, progress: 0 });
       }
     } catch (err: unknown) {
+      if (analysisEpochRef.current !== epoch) return;
       const message = err instanceof Error ? err.message : 'L’analyse a échoué.';
       setError(message);
       setProgress({ status: 'error', message, progress: 0 });
@@ -244,7 +346,7 @@ function SidepanelApp() {
             Analyse critique de la fiabilité de l’article
           </p>
         </div>
-        <div className="flex items-center gap-1" data-tour="export-actions">
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setTourOpen(true)}
@@ -254,6 +356,7 @@ function SidepanelApp() {
             ?
           </button>
           <button
+            data-tour="settings"
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Configurer la clé API"
@@ -286,6 +389,7 @@ function SidepanelApp() {
 
         <button
           type="button"
+          data-tour="run-analysis"
           onClick={runAnalysis}
           disabled={busy || hasKey === false}
           className="w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-3 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-50"
@@ -328,7 +432,9 @@ function SidepanelApp() {
               {/* A report restored from an older stored analysis carries no
                   research record; saying nothing beats inventing a claim. */}
               {report.research && (
-                <ResearchDisclosure research={report.research} claims={report.claims ?? []} />
+                <div data-tour="research-disclosure">
+                  <ResearchDisclosure research={report.research} claims={report.claims ?? []} />
+                </div>
               )}
             </section>
 
@@ -337,7 +443,7 @@ function SidepanelApp() {
                 <h3 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
                   Domaines évalués
                 </h3>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-tour="domain-scores">
                   {scoredDomains.map((c) => (
                     <DomainScoreGauge
                       key={c.domain}

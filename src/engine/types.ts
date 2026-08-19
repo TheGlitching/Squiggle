@@ -145,14 +145,20 @@ export interface EvidenceSource {
 }
 
 /**
- * Whether a factual assertion was actually checked against evidence.
+ * The four-state classification of a factual assertion, per the method's
+ * "robustesse factuelle" grid: an assertion is never simply true or false,
+ * it is either backed by evidence, doubted by evidence, unsourced in the
+ * text despite being checkable, or not even checkable as worded.
  *
- * `unverified` is a first-class outcome, not a failure: without it a model asked
- * to verify with no evidence to hand will invent a contradiction rather than
- * admit it could not look. Most wrong "c'est faux" verdicts are this state
- * misreported as `contradicted`.
+ * `non-sourcee` is a sourcing observation, not an accusation: the article
+ * simply didn't cite anything for the statement, which says nothing about
+ * whether the statement is true. `non-verifiable` is the honest default when
+ * nothing could be checked at all - without it, a model asked to verify with
+ * no evidence to hand will invent a contradiction rather than admit it could
+ * not look. Most wrong "c'est faux" verdicts are this state misreported as
+ * `douteuse`.
  */
-export type VerificationState = 'confirmed' | 'contradicted' | 'unverified';
+export type VerificationState = 'verifiee' | 'non-sourcee' | 'douteuse' | 'non-verifiable';
 
 /**
  * A checkable factual assertion lifted out of an audit finding, carrying the
@@ -291,11 +297,11 @@ export const EvidenceSourceSchema = z.object({
   origin: z.enum(['article', 'search']).default('search')
 });
 
-export const VerificationStateSchema = z.enum(['confirmed', 'contradicted', 'unverified']);
+export const VerificationStateSchema = z.enum(['verifiee', 'non-sourcee', 'douteuse', 'non-verifiable']);
 
 /**
  * Note the default: a model that omits the field has told us nothing about
- * whether it checked, and `unverified` is the only reading of nothing.
+ * whether it checked, and `non-verifiable` is the only reading of nothing.
  */
 export const FactualClaimSchema = z.object({
   id: z.string().default(() => `c_${Math.random().toString(36).slice(2, 9)}`),
@@ -303,7 +309,7 @@ export const FactualClaimSchema = z.object({
   blockId: z.string().default(''),
   quote: z.string().default(''),
   claim: z.string().min(1),
-  verification: VerificationStateSchema.default('unverified'),
+  verification: VerificationStateSchema.default('non-verifiable'),
   sources: z.array(EvidenceSourceSchema).default([]),
   rationale: z.string().optional()
 });

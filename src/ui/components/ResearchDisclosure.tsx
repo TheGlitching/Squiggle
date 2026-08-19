@@ -1,7 +1,24 @@
 import React from 'react';
-import { FactualClaim, ResearchRecord } from '../../engine/types';
-import { VerificationBadge } from './VerificationBadge';
+import { FactualClaim, ResearchRecord, VerificationState } from '../../engine/types';
+import { VerificationBadge, VERIFICATION_COUNT_LABELS_FR } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
+
+/**
+ * Reading order of the four states, from the most reassuring to the least
+ * conclusive. The breakdown drops any state nobody landed on, so a report never
+ * shows a zero next to a word like "douteuse" that the reader would remember
+ * anyway.
+ */
+const STATE_ORDER: VerificationState[] = ['verifiee', 'douteuse', 'non-sourcee', 'non-verifiable'];
+
+function summariseStates(claims: FactualClaim[]): string {
+  return STATE_ORDER.flatMap((state) => {
+    const count = claims.filter((claim) => claim.verification === state).length;
+    if (count === 0) return [];
+    const [one, many] = VERIFICATION_COUNT_LABELS_FR[state];
+    return [`${count} ${count > 1 ? many : one}`];
+  }).join(', ');
+}
 
 export interface ResearchDisclosureProps {
   research: ResearchRecord;
@@ -27,7 +44,14 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
   if (!research) return null;
 
   const queryCount = research.queries?.length ?? 0;
-  const checkedCount = claims.filter((claim) => claim.verification !== 'unverified').length;
+  // Evidence was actually consulted only for these two states. `non-verifiable`
+  // means nothing could be read either way, and `non-sourcee` is settled against
+  // the article's own text before research ever runs, so neither counts as a
+  // claim confronted with a source. Asking "is it verified or not" would have
+  // swept both into the checked tally and overstated what the audit did.
+  const confrontedCount = claims.filter(
+    (claim) => claim.verification === 'verifiee' || claim.verification === 'douteuse'
+  ).length;
   const examined = claims.filter((claim) => claim.sources.length > 0 || claim.rationale);
   const withdrawn = research.withdrawn ?? [];
 
@@ -58,18 +82,24 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
         Vérification factuelle
       </span>
       <p className="mt-1 text-xs leading-relaxed text-stone-700 dark:text-stone-300">
-        {checkedCount} affirmation{checkedCount > 1 ? 's' : ''} vérifiée
-        {checkedCount > 1 ? 's' : ''} sur {claims.length}, {queryCount} recherche
+        {confrontedCount} affirmation{confrontedCount > 1 ? 's' : ''} sur {claims.length}{' '}
+        confrontée{confrontedCount > 1 ? 's' : ''} à une source, {queryCount} recherche
         {queryCount > 1 ? 's' : ''} menée{queryCount > 1 ? 's' : ''}
         {research.provider ? ` via ${research.provider}` : ''}.
         {research.skippedReason ? ` Limite : ${research.skippedReason}` : ''}
       </p>
+      {claims.length > 0 && (
+        <p className="mt-1 text-xs leading-relaxed text-stone-600 dark:text-stone-400">
+          Classement des affirmations : {summariseStates(claims)}.
+        </p>
+      )}
 
       {examined.length > 0 && (
         <details className="mt-2">
           <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200">
-            Voir les {examined.length} affirmation{examined.length > 1 ? 's' : ''} examinée
-            {examined.length > 1 ? 's' : ''}
+            {examined.length > 1
+              ? `Voir les ${examined.length} affirmations examinées`
+              : 'Voir l’affirmation examinée'}
           </summary>
           <ul className="mt-2 space-y-2.5">
             {examined.map((claim) => (

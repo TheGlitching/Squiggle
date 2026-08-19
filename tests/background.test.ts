@@ -69,10 +69,16 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
           addListener: vi.fn((cb) => {
             mockTabsOnRemoved = cb;
           }),
+          removeListener: vi.fn(() => {
+            mockTabsOnRemoved = null;
+          }),
         },
         onUpdated: {
           addListener: vi.fn((cb) => {
             mockTabsOnUpdated = cb;
+          }),
+          removeListener: vi.fn(() => {
+            mockTabsOnUpdated = null;
           }),
         },
       },

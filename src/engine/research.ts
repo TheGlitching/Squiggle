@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BaseLLMClient, SearchResult } from '../client/base';
-import { extractJsonFromResponse, repairJsonString, FACTUAL_FINDING_CATEGORIES } from './validator';
+import { extractJsonFromResponse, repairJsonString, RESEARCHABLE_FINDING_CATEGORIES } from './validator';
 import {
   AnalysisInput,
   EvidenceSource,
@@ -50,7 +50,7 @@ export interface ResearchFindingsResult {
 }
 
 const JudgementSchema = z.object({
-  verification: z.enum(['confirmed', 'contradicted', 'unverified']).default('unverified'),
+  verification: z.enum(['verifiee', 'douteuse', 'non-verifiable']).default('non-verifiable'),
   sources: z
     .array(
       z.object({
@@ -67,9 +67,9 @@ const JudgementSchema = z.object({
 /**
  * A cancelled request rejects the same way a flaky network does, but the two
  * must never be handled alike: three call sites in this module degrade a
- * research failure to `unverified`, and every one of them must let a genuine
- * cancellation propagate instead of quietly reporting it as an unverified
- * claim the caller never asked to abandon research for.
+ * research failure to `non-verifiable`, and every one of them must let a
+ * genuine cancellation propagate instead of quietly reporting it as a
+ * non-verifiable claim the caller never asked to abandon research for.
  */
 function rethrowIfAborted(err: unknown, abortSignal?: AbortSignal): void {
   if (abortSignal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
@@ -94,8 +94,8 @@ function parseLooseJson(rawText: string): unknown {
 type JudgementRoute = 'grounded' | 'search';
 
 /**
- * Forces the honesty invariant in code: a `confirmed`/`contradicted` verdict
- * with no backing evidence is exactly the confabulated-verdict bug this stage
+ * Forces the honesty invariant in code: a `verifiee`/`douteuse` verdict with
+ * no backing evidence is exactly the confabulated-verdict bug this stage
  * exists to close, so it is made unrepresentable here rather than left to a
  * prompt instruction the model can ignore.
  *
@@ -104,7 +104,7 @@ type JudgementRoute = 'grounded' | 'search';
  * - `grounded`: the provider itself fed the model the page content inside the
  *   single grounded call, so every source the model names (plus every
  *   citation the provider actually returned) is genuine evidence, even one
- *   whose `snippet`/`quote` is empty. Only a bare zero forces `unverified`.
+ *   whose `snippet`/`quote` is empty. Only a bare zero forces `non-verifiable`.
  * - `search`: the judge saw nothing but what this module put in its prompt.
  *   `evidencedUrls` is exactly the search results that carried real excerpt
  *   text - the article's own cited sources are shown as context but never
@@ -119,7 +119,7 @@ function enforceSourcedVerdict(
   route: JudgementRoute,
   evidencedUrls: Set<string>
 ): z.infer<typeof JudgementSchema> {
-  if (judgement.verification === 'unverified') {
+  if (judgement.verification === 'non-verifiable') {
     return judgement;
   }
 
@@ -131,7 +131,7 @@ function enforceSourcedVerdict(
         ? `Verdict '${judgement.verification}' rejeté : aucune source fournie ne contenait de texte source lisible, une URL nue ne peut jamais justifier un verdict.`
         : `Verdict '${judgement.verification}' rejeté : aucune source fournie à l'appui.`;
     return {
-      verification: 'unverified',
+      verification: 'non-verifiable',
       sources: [],
       rationale: `${reason} ${judgement.rationale ?? ''}`.trim()
     };
@@ -209,7 +209,7 @@ async function judgeClaimGrounded(
   // recollection is what makes a true, sourced claim get called false.
   if (answer.citations.length === 0) {
     return {
-      verification: 'unverified',
+      verification: 'non-verifiable',
       sources: [],
       rationale:
         `Verdict '${parsed.verification}' rejeté : aucune source n'a été consultée, ` +
@@ -239,6 +239,12 @@ async function judgeClaimGrounded(
  * published as a fault is checked against reality rather than against
  * whatever a disjoint extraction pass happened to pick out beforehand.
  *
+ * Only `RESEARCHABLE_FINDING_CATEGORIES` are candidates: `source-absente`
+ * findings are already fully resolved by `enforceEvidenceHonesty` before this
+ * runs, and are deliberately never re-opened here, or a claim of
+ * `non-verifiable` from a fruitless search would silently overwrite the
+ * `non-sourcee` sourcing observation with an unrelated truth verdict.
+ *
  * This runs AFTER the audit, not before it: the audit's factual findings are
  * exactly the claims under test, and the claim under test is always the
  * article's own statement (the finding's `quote`), never the finding's
@@ -257,7 +263,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
   const now = args.now ?? new Date();
   void input; // kept in the signature for parity with the prompt builders and future per-article context
 
-  const factual = findings.filter((f) => FACTUAL_FINDING_CATEGORIES[f.category]);
+  const factual = findings.filter((f) => RESEARCHABLE_FINDING_CATEGORIES[f.category]);
 
   if (factual.length === 0) {
     return {
@@ -281,7 +287,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         blockId: f.blockId,
         quote: f.quote,
         claim: f.quote,
-        verification: 'unverified',
+        verification: 'non-verifiable',
         sources: [],
         rationale: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web ; constat non vérifié.`
       })
@@ -335,7 +341,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
             blockId: finding.blockId,
             quote: finding.quote,
             claim: finding.quote,
-            verification: 'unverified',
+            verification: 'non-verifiable',
             sources: [],
             rationale: `Vérification impossible pour ce constat : ${(err as Error).message}`
           })
@@ -362,7 +368,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
           blockId: finding.blockId,
           quote: finding.quote,
           claim: finding.quote,
-          verification: 'unverified',
+          verification: 'non-verifiable',
           sources: [],
           rationale: `Recherche web indisponible pour ce constat : ${searchError}`
         })
@@ -391,7 +397,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
           blockId: finding.blockId,
           quote: finding.quote,
           claim: finding.quote,
-          verification: 'unverified',
+          verification: 'non-verifiable',
           sources: [],
           rationale: `Vérification impossible pour ce constat : ${(err as Error).message}`
         })

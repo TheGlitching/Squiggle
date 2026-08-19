@@ -8,8 +8,11 @@ import { AnthropicClient } from '../src/client/anthropic';
  * and hyperlinked in the article. Two behaviours have to hold for a reader to
  * trust the result, and neither is about prose quality:
  *
- *  1. a claim the article hyperlinks must never be reported as unsourced,
- *  2. a verdict of "false" must be impossible without a source that was read.
+ *  1. a claim the article hyperlinks is always shown that citation, never
+ *     dressed up as an established doubt or a confession that it went
+ *     unchecked,
+ *  2. a verdict of "douteuse" must be impossible without a source that was
+ *     read.
  */
 
 const ARTICLE_BLOCKS = [
@@ -64,7 +67,7 @@ const AUDIT = {
   ],
 };
 
-describe('a claim the article sources is never reported as unsourced', () => {
+describe('a claim the article sources is classified non-sourcee, with its citation always shown', () => {
   let bodies: string[];
 
   beforeEach(async () => {
@@ -91,7 +94,7 @@ describe('a claim the article sources is never reported as unsourced', () => {
     });
   });
 
-  it('hands the audit the article’s own source and refuses the unsourced verdict', async () => {
+  it('hands the audit the article’s own source, classifies the finding non-sourcee, and never dresses it up as a checked doubt', async () => {
     // The audit runs first, from memory; research then checks its own factual
     // finding. The judge declines to search and answers from memory, which
     // must never license a factual verdict.
@@ -138,11 +141,13 @@ describe('a claim the article sources is never reported as unsourced', () => {
     expect(auditPrompt).toBeDefined();
     expect(auditPrompt).toContain('insee.fr');
 
-    // And the unsourced verdict did not survive: the article does cite a source
-    // for that passage, so the finding is re-framed rather than published as-is.
+    // The finding stays classified as a sourcing observation, never dressed
+    // up as an established doubt: the article does cite a source for that
+    // passage, and it is attached for the reader to judge for themselves.
     const finding = report.findings[0];
-    expect(finding.category).not.toBe('source-absente');
-    expect(finding.verification).toBe('unverified');
+    expect(finding.category).toBe('source-absente');
+    expect(finding.verification).toBe('non-sourcee');
+    expect(finding.explanation).not.toContain('pas été prise en compte');
     expect(finding.sources?.[0]).toMatchObject({
       url: 'https://www.insee.fr/fr/statistiques/deficit-2023',
       origin: 'article',
@@ -150,7 +155,7 @@ describe('a claim the article sources is never reported as unsourced', () => {
 
     // Nothing was actually retrieved, so no claim may read as checked.
     for (const claim of report.claims) {
-      expect(claim.verification).toBe('unverified');
+      expect(claim.verification).toBe('non-verifiable');
     }
   });
 });

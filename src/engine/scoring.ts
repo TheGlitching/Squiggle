@@ -46,13 +46,25 @@ type ScoredFinding = Pick<Finding, 'category' | 'severity'> & {
 /**
  * How much a defect counts once the evidence has spoken.
  *
- * A defect the research proved, and an editorial one visible in the text
- * without needing any source, both count in full. A suspicion nothing could
- * confirm still counts, because a reader deserves to see doubt reflected in the
- * mark, but it cannot weigh as much as a proven fault.
+ * The four states are not equally damning. `douteuse` is evidence actively
+ * undermining the article, so it counts in full, same as an editorial defect
+ * visible in the text without needing any source at all (no verification
+ * state - `?? 1` below). `non-verifiable` is a suspicion nothing could
+ * confirm or refute either way; a reader still deserves to see it reflected
+ * in the mark, but it cannot weigh as much as a proven fault. `non-sourcee`
+ * is lighter still: it is a sourcing observation, not an accusation that the
+ * statement is unsound, so it costs the least. `verifiee` never costs
+ * anything - evidence backed the article, there is nothing left to penalise.
  */
+const EVIDENCE_WEIGHT: Record<VerificationState, number> = {
+  douteuse: 1,
+  'non-verifiable': 0.6,
+  'non-sourcee': 0.25,
+  verifiee: 0
+};
+
 function evidenceWeight(finding: ScoredFinding): number {
-  return finding.verification === 'unverified' ? 0.6 : 1;
+  return finding.verification === undefined ? 1 : EVIDENCE_WEIGHT[finding.verification];
 }
 
 /**
