@@ -63,13 +63,13 @@ export class ShadowHighlightOverlay {
     if (typeof document === 'undefined') return;
 
     // Check if host already exists
-    const existing = document.getElementById('fourches-caudines-overlay-host');
+    const existing = document.getElementById('squiggle-overlay-host');
     if (existing) {
       existing.remove();
     }
 
     this.hostElement = document.createElement('div');
-    this.hostElement.id = 'fourches-caudines-overlay-host';
+    this.hostElement.id = 'squiggle-overlay-host';
     this.hostElement.style.cssText = `
       position: absolute;
       top: 0;

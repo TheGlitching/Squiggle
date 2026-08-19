@@ -1,5 +1,5 @@
 /**
- * Fourches Caudines - Color Tokens
+ * Squiggle - Color Tokens
  * Light and Dark themes for authentic editorial press aesthetic.
  */
 

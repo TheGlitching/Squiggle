@@ -1,6 +1,6 @@
 /**
  * Content Script & In-Page Overlay Types
- * Fourches Caudines Editorial Verification Extension
+ * Squiggle Editorial Verification Extension
  */
 
 export interface ArticleMetadata {

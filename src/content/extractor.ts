@@ -1,6 +1,6 @@
 /**
  * Article Detector & Semantic Extractor
- * Fourches Caudines Editorial Verification Extension
+ * Squiggle Editorial Verification Extension
  *
  * Implements:
  * 1. JSON-LD structured data parsing (schema.org/NewsArticle, Article, ReportageNewsArticle)

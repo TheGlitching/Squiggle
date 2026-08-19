@@ -17,8 +17,8 @@ export class OpenRouterClient extends OpenAIClient {
     return {
       'content-type': 'application/json',
       Authorization: `Bearer ${this.config.apiKey}`,
-      'HTTP-Referer': 'https://github.com/fourches-caudines',
-      'X-Title': 'Fourches Caudines Extension',
+      'HTTP-Referer': 'https://github.com/TheGlitching/Squiggle',
+      'X-Title': 'Squiggle',
       ...this.config.customHeaders,
     };
   }

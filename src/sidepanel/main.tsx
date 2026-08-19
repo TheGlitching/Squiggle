@@ -223,7 +223,7 @@ function SidepanelApp() {
       <header className="flex items-start justify-between gap-2 pb-3 border-b border-[#E7E5E4] dark:border-[#27272A]">
         <div>
           <h1 className="text-lg font-bold font-display tracking-tight text-[#1C1917] dark:text-[#FAFAFA]">
-            Fourches Caudines
+            Squiggle
           </h1>
           <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">
             Analyse critique et rigueur éditoriale

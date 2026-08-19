@@ -286,7 +286,7 @@ export class EditorialCanvasRenderer {
     palette: ThemePalette,
     data: EditorialCardData
   ): void {
-    const appName = data.branding?.appName || 'FOURCHES CAUDINES';
+    const appName = data.branding?.appName || 'SQUIGGLE';
     const tagline = data.branding?.tagline || 'REVUE ÉDITORIALE & AUDIT CRITIQUE';
     const edition = data.branding?.edition || 'FICHE D’ÉVALUATION MÉTHODOLOGIQUE';
 
@@ -747,7 +747,7 @@ export class EditorialCanvasRenderer {
     ctx.font = `600 9px ${this.fontMono}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('FOURCHES CAUDINES • AUDIT DE RIGUEUR ET CONTRÔLE FACTUEL', x, y + 18);
+    ctx.fillText('SQUIGGLE • MÉTHODE DES FOURCHES CAUDINES', x, y + 18);
 
     // Cryptographic / Review Stamp ID
     const hash = Math.abs(
@@ -779,7 +779,7 @@ export class EditorialCanvasRenderer {
   /**
    * One-click download as PNG file
    */
-  public static async downloadPng(canvas: HTMLCanvasElement, filename = 'fourches-caudines-review.png'): Promise<void> {
+  public static async downloadPng(canvas: HTMLCanvasElement, filename = 'squiggle-review.png'): Promise<void> {
     const blob = await this.toBlob(canvas);
     const url = URL.createObjectURL(blob);
     const a = document.body.appendChild(document.createElement('a'));

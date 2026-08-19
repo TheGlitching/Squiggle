@@ -43,6 +43,7 @@ export type RuntimeMessageListener = (
 interface BrowserNamespace {
   runtime?: typeof chrome.runtime;
   tabs?: typeof chrome.tabs;
+  scripting?: typeof chrome.scripting;
 }
 
 export class UnifiedRuntime {
@@ -70,6 +71,44 @@ export class UnifiedRuntime {
 
   public static getURL(path: string): string {
     return this.getRuntime().getURL(path);
+  }
+
+  /**
+   * The parsed extension manifest. Used to discover the content-script files
+   * rather than hardcoding a bundled filename that changes every build.
+   */
+  public static getManifest(): chrome.runtime.Manifest | undefined {
+    try {
+      return this.getRuntime().getManifest() as chrome.runtime.Manifest;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Inject script files into a tab.
+   *
+   * Chrome MV3 and Firefox MV3 both expose `scripting`, but Firefox shipped it
+   * later, so fall back to the tabs-based injection it has always supported.
+   */
+  public static async injectScript(tabId: number, files: string[]): Promise<void> {
+    const browserGlobal = (globalThis as unknown as { browser?: BrowserNamespace }).browser;
+    const scripting =
+      browserGlobal?.scripting ?? (typeof chrome !== 'undefined' ? chrome.scripting : undefined);
+
+    if (scripting?.executeScript) {
+      await scripting.executeScript({ target: { tabId }, files });
+      return;
+    }
+
+    // Older Firefox builds only offer tabs.executeScript, one file at a time.
+    const tabs = this.getTabs();
+    if (!('executeScript' in tabs) || typeof tabs.executeScript !== 'function') {
+      throw new Error('No script injection API available');
+    }
+    for (const file of files) {
+      await tabs.executeScript(tabId, { file });
+    }
   }
 
   public static async sendMessage<TResponse = unknown>(

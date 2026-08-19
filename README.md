@@ -1,6 +1,6 @@
-# Fourches Caudines
+# Squiggle
 
-A browser extension that puts any press article through a professional editorial
+Squiggle is a browser extension that puts any press article through a professional editorial
 review, in place, in the page you are reading.
 
 It reads the article, applies a structured critique grid, and returns a verdict
@@ -15,7 +15,7 @@ Chrome and Firefox, Manifest V3. Bring your own API key.
 
 The editorial methodology behind this extension is not mine. It comes from the
 industrialised article-review prompts published by
-[**@sjowall69**](https://x.com/sjowall69) — the criteria, the scoring domains and
+[**@sjowall69**](https://x.com/sjowall69) - the criteria, the scoring domains and
 the review philosophy are all theirs. This repository is an implementation of that
 method as a browser tool, nothing more.
 

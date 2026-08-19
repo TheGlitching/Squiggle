@@ -107,7 +107,7 @@ describe('EditorialCanvasRenderer', () => {
     const fillTextMock = mockContext.fillText as Mock;
     const fillTextCalls = fillTextMock.mock.calls.map((c) => c[0] as string);
     expect(fillTextCalls.some((t: string) => t.includes('CORRECTIONS'))).toBe(true);
-    expect(fillTextCalls.some((t: string) => t.includes('FOURCHES CAUDINES'))).toBe(true);
+    expect(fillTextCalls.some((t: string) => t.includes('SQUIGGLE'))).toBe(true);
     expect(fillTextCalls.some((t: string) => t.includes('INDICE DE FIABILITÉ'))).toBe(true);
   });
 

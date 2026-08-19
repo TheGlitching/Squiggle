@@ -14,7 +14,7 @@ describe('Multi-browser Build & Packaging Verification', () => {
 
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.name).toBe('Fourches Caudines - Analyse critique de presse');
+    expect(manifest.name).toBe('Squiggle - Analyse critique de presse');
     expect(manifest.permissions).toContain('sidePanel');
     expect(manifest.permissions).toContain('storage');
     expect(manifest.permissions).toContain('activeTab');
@@ -34,7 +34,7 @@ describe('Multi-browser Build & Packaging Verification', () => {
 
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.browser_specific_settings?.gecko?.id).toBe('fourches-caudines@presse-critique.fr');
+    expect(manifest.browser_specific_settings?.gecko?.id).toBe('squiggle@presse-critique.fr');
     expect(manifest.sidebar_action?.default_panel).toBe('src/sidepanel/index.html');
     expect(manifest.background?.scripts).toBeDefined();
     expect(manifest.permissions).not.toContain('sidePanel'); // sidePanel is Chrome-specific

@@ -34,16 +34,16 @@ export interface OnboardingTourProps {
   zIndex?: number;
 }
 
-export const DEFAULT_STORAGE_KEY = 'fourches_caudines_onboarding_tour_v1';
+export const DEFAULT_STORAGE_KEY = 'squiggle_onboarding_tour_v1';
 export const DEFAULT_STORAGE_VERSION = '1.0.0';
 
 export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
   {
     id: 'welcome-overview',
-    title: 'Bienvenue dans les Fourches Caudines',
+    title: 'Bienvenue dans Squiggle',
     badge: 'Guide Éditorial',
     placement: 'center',
-    content: 'Les Fourches Caudines analysent la rigueur argumentative, l’intégrité des sources et l’équilibre rhétorique de tout texte ou article web.',
+    content: 'Squiggle applique la grille des Fourches Caudines pour évaluer la rigueur argumentative, l’intégrité des sources et l’équilibre rhétorique de tout texte ou article web.',
     methodologyTip: 'Méthodologie : Nous combinons l’exigence de la presse de référence et l’analyse logique formelle pour évaluer la solidité d’un propos.',
   },
   {

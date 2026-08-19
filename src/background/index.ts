@@ -19,6 +19,13 @@ import { findingsToHighlightTargets } from '../adapters/findingAdapters';
 import type { ExtractedArticle } from '../content/types';
 import type { FcRpcMap } from '../messaging/protocol';
 
+/**
+ * Below this word count a page is a teaser rather than an article. Real French
+ * press articles run well past this; paywalled previews land near a hundred
+ * words, which is not enough to judge sourcing or argument structure.
+ */
+const MIN_ANALYSABLE_WORDS = 200;
+
 export interface BackgroundServiceWorkerOptions {
   bus?: TypedMessageBus;
   stateManager?: TabStateManager;
@@ -221,6 +228,47 @@ export class BackgroundServiceWorker {
   }
 
   /**
+   * Ask the page's content script for the article.
+   *
+   * A content script declared in the manifest is only injected into pages loaded
+   * *after* the extension was installed or reloaded, so any tab already open at
+   * that moment has no receiver and every analysis on it fails. Rather than
+   * blaming the article, inject the script on demand and ask again.
+   */
+  private async extractArticle(tabId: number): Promise<ExtractedArticle | undefined> {
+    const ask = async (): Promise<ExtractedArticle | undefined> => {
+      const resp = await UnifiedRuntime.sendTabMessage<{
+        success: boolean;
+        data?: ExtractedArticle;
+      }>(tabId, { type: 'FC_EXTRACT_CONTENT' });
+      return resp?.success && resp.data ? resp.data : undefined;
+    };
+
+    try {
+      return await ask();
+    } catch {
+      // No receiver in the page. Fall through to injection.
+    }
+
+    const files = UnifiedRuntime.getManifest()?.content_scripts?.[0]?.js ?? [];
+    if (!files.length) return undefined;
+
+    try {
+      await UnifiedRuntime.injectScript(tabId, files);
+    } catch (err) {
+      console.warn('Could not inject the content script into the tab:', err);
+      return undefined;
+    }
+
+    try {
+      return await ask();
+    } catch (err) {
+      console.warn('Content script still unreachable after injection:', err);
+      return undefined;
+    }
+  }
+
+  /**
    * Execute analysis pipeline for a given tab
    */
   public async runAnalysisForTab(
@@ -230,29 +278,36 @@ export class BackgroundServiceWorker {
     let articleText = options?.articleText;
     let articleTitle = options?.articleTitle;
 
-    // 1. If article not provided, request extraction from content script
+    // 1. If article not provided, request extraction from the content script.
+    let extracted: ExtractedArticle | undefined;
     if (!articleText) {
-      try {
-        const contentResp = await UnifiedRuntime.sendTabMessage<{
-          success: boolean;
-          data?: ExtractedArticle;
-        }>(tabId, { type: 'FC_EXTRACT_CONTENT' });
-        if (contentResp?.success && contentResp.data) {
-          const article = contentResp.data;
-          // ExtractedArticle has no `title`/`content` at the top level; the
-          // title lives on `metadata`. Reading `data.title` yielded undefined
-          // on every extraction.
-          articleText = article.fullText || article.cleanText;
-          articleTitle = article.metadata?.title || undefined;
-          this.stateManager.updateTabState(tabId, { article });
-        }
-      } catch (err) {
-        console.warn('Could not extract content directly from tab:', err);
+      extracted = await this.extractArticle(tabId);
+      if (extracted) {
+        articleText = extracted.fullText || extracted.cleanText;
+        articleTitle = extracted.metadata?.title || undefined;
+        this.stateManager.updateTabState(tabId, { article: extracted });
       }
     }
 
     if (!articleText) {
-      const err = 'Impossible de récupérer le contenu de l’article pour analyse.';
+      // The content script never answered, even after re-injection. The usual
+      // cause is a page the browser will not let the extension touch at all
+      // (its own settings pages, the extension gallery, a PDF viewer).
+      const err =
+        'Impossible de lire cette page. Ouvrez un article sur un site de presse, ' +
+        'puis rechargez la page avant de relancer l’analyse.';
+      this.stateManager.updateTabState(tabId, { status: 'error', error: err });
+      return { success: false, error: err };
+    }
+
+    // A paywalled article yields only its teaser. Scoring those few sentences
+    // would produce a confident verdict on something that is not the article,
+    // which is worse than declining, so say what happened instead.
+    if (extracted && extracted.wordCount > 0 && extracted.wordCount < MIN_ANALYSABLE_WORDS) {
+      const err =
+        `Seuls ${extracted.wordCount} mots ont pu être lus sur cette page : ` +
+        'l’article est probablement réservé aux abonnés. ' +
+        'Ouvrez la version complète pour lancer l’analyse.';
       this.stateManager.updateTabState(tabId, { status: 'error', error: err });
       return { success: false, error: err };
     }

@@ -1,5 +1,5 @@
 /**
- * Fourches Caudines - Shadow and Elevation Tokens
+ * Squiggle - Shadow and Elevation Tokens
  */
 
 export const shadowTokens = {

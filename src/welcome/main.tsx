@@ -6,7 +6,7 @@ export function WelcomeApp() {
     <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-[#FBFBFA] dark:bg-[#121214] text-[#1C1917] dark:text-[#E7E5E4]">
       <div className="max-w-xl w-full p-8 rounded-2xl bg-white dark:bg-[#18181B] border border-[#E7E5E4] dark:border-[#27272A] shadow-lg text-center space-y-6">
         <h1 className="text-3xl font-bold font-display text-[#1C1917] dark:text-[#FAFAFA]">
-          Fourches Caudines
+          Squiggle
         </h1>
         <p className="text-sm leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
           Bienvenue dans votre atelier de vérification éditoriale et d'analyse critique pour Chrome et Firefox MV3.

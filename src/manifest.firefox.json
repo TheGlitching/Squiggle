@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Fourches Caudines - Analyse critique de presse",
+  "name": "Squiggle - Analyse critique de presse",
   "version": "0.1.0",
   "description": "Évalue et vérifie la rigueur logique, factuelle et argumentative des articles de presse.",
   "permissions": [
@@ -24,7 +24,7 @@
       "48": "src/assets/icon-48.png",
       "128": "src/assets/icon-128.png"
     },
-    "default_title": "Analyser cet article avec Fourches Caudines"
+    "default_title": "Analyser cet article avec Squiggle"
   },
   "sidebar_action": {
     "default_panel": "src/sidepanel/index.html",
@@ -34,7 +34,7 @@
       "48": "src/assets/icon-48.png",
       "128": "src/assets/icon-128.png"
     },
-    "default_title": "Fourches Caudines"
+    "default_title": "Squiggle"
   },
   "content_scripts": [
     {
@@ -51,7 +51,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "fourches-caudines@presse-critique.fr",
+      "id": "squiggle@presse-critique.fr",
       "strict_min_version": "115.0"
     }
   },

@@ -1,5 +1,5 @@
 /**
- * Fourches Caudines - Spacing & Radius Tokens
+ * Squiggle - Spacing & Radius Tokens
  */
 
 export const spacingTokens = {

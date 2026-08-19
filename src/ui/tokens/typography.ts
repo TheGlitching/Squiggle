@@ -1,5 +1,5 @@
 /**
- * Fourches Caudines - Typography Tokens
+ * Squiggle - Typography Tokens
  * Defines font families (Bricolage Grotesque, Newsreader, IBM Plex Mono),
  * size scale, weights, line heights, and letter spacings.
  */

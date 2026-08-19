@@ -14,7 +14,7 @@ export interface KeyStorageSchema {
   activeProvider: LLMProvider;
 }
 
-const STORAGE_KEY = 'fourches_caudines_byok_config';
+const STORAGE_KEY = 'squiggle_byok_config';
 const DEFAULT_SALT_FALLBACK_KEY = 'fc_master_salt_passphrase';
 
 // Fallback seed when no user master password is provided (e.g. extension local storage level)
