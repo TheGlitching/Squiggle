@@ -89,4 +89,19 @@ describe('the model a reader has chosen', () => {
       );
     }
   });
+
+  it('treats a model the live catalogue advertises as a known option, tilde and all', () => {
+    // OpenRouter's "latest" DeepSeek alias exists only as the tilde-prefixed
+    // id; the bare form OpenRouter rejects with "not a valid model ID".
+    const liveIds = ['~deepseek/deepseek-v4-flash-latest'];
+
+    const selection = resolveModelSelection(
+      PROVIDER_PRESETS.find((p) => p.id === 'openrouter')!,
+      '~deepseek/deepseek-v4-flash-latest',
+      liveIds,
+    );
+
+    expect(selection.model).toBe('~deepseek/deepseek-v4-flash-latest');
+    expect(selection.usesCustomModel).toBe(false);
+  });
 });

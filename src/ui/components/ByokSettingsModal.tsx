@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SecureKeyStorage } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
+import { listOpenRouterModels, OpenRouterModel } from '../../client/openrouter';
 import type { LLMProvider, ProviderConfig } from '../../types/byok';
 
 /**
@@ -69,13 +70,48 @@ const CUSTOM_MODEL_OPTION = '__custom__';
  * reader saved that this build no longer lists would leave the dropdown with a
  * value it has no option for, and the browser would settle on whichever option
  * comes first. The reader would then be analysing with a model they never chose.
+ *
+ * `liveModels` is the fetched catalogue for providers whose list moves faster
+ * than the build (OpenRouter), so a model they advertised yesterday is offered
+ * as a real option, not silently demoted to the free-text field.
  */
 export function resolveModelSelection(
   preset: ProviderPreset | undefined,
-  storedModel: string | undefined
+  storedModel: string | undefined,
+  liveModels: readonly string[] = []
 ): { model: string; usesCustomModel: boolean } {
   const model = storedModel || preset?.defaultModel || '';
-  return { model, usesCustomModel: model !== '' && !(preset?.models ?? []).includes(model) };
+  const known = new Set<string>([...(preset?.models ?? []), ...liveModels]);
+  return { model, usesCustomModel: model !== '' && !known.has(model) };
+}
+
+export interface OpenRouterModelGroup {
+  author: string;
+  models: OpenRouterModel[];
+}
+
+/**
+ * Groups the live catalogue by author org, ids sorted within a group and
+ * groups by name, so the picker is navigable instead of a flat wall of 400
+ * entries. Exported for the tests to assert against without a browser.
+ */
+export function groupOpenRouterModels(models: OpenRouterModel[]): OpenRouterModelGroup[] {
+  const byAuthor = new Map<string, OpenRouterModel[]>();
+  for (const m of models) {
+    const bucket = byAuthor.get(m.author) ?? [];
+    bucket.push(m);
+    byAuthor.set(m.author, bucket);
+  }
+  return Array.from(byAuthor.entries())
+    .map(([author, group]) => ({
+      author,
+      // The tilde marks OpenRouter alias ids and must not move them around in
+      // the list, so it is stripped for ordering but never from the id itself.
+      models: group.sort((a, b) =>
+        a.id.replace(/^[^a-zA-Z0-9]+/, '').localeCompare(b.id.replace(/^[^a-zA-Z0-9]+/, ''))
+      ),
+    }))
+    .sort((a, b) => a.author.localeCompare(b.author));
 }
 
 type ValidationState =
@@ -89,6 +125,12 @@ export interface ByokSettingsModalProps {
   onClose: () => void;
   onSaved?: (provider: LLMProvider) => void;
   storage?: SecureKeyStorage;
+  /**
+   * Injected for tests only: how the OpenRouter catalogue is fetched. Defaults
+   * to the real fetching listOpenRouterModels; a test passes a stub so the
+   * modal render never touches the network.
+   */
+  openModelsLoader?: () => Promise<OpenRouterModel[]>;
 }
 
 export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
@@ -96,6 +138,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   onClose,
   onSaved,
   storage,
+  openModelsLoader,
 }) => {
   const [keyStorage] = useState(() => storage ?? new SecureKeyStorage());
   const [provider, setProvider] = useState<LLMProvider>('anthropic');
@@ -105,8 +148,33 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [validation, setValidation] = useState<ValidationState>({ kind: 'idle' });
   const [isSaving, setIsSaving] = useState(false);
+  /** OpenRouter models fetched live; empty means "not loaded, use the preset". */
+  const [liveOpenModels, setLiveOpenModels] = useState<OpenRouterModel[]>([]);
 
   const preset = PROVIDER_PRESETS.find((p) => p.id === provider) ?? PROVIDER_PRESETS[0];
+
+  // Fetch the live catalogue when OpenRouter is the selected provider. It is
+  // public and keyless; any failure leaves the static preset in charge. Once
+  // the fetch lands, re-run the model selection so a model the static preset
+  // never listed (say `~deepseek/deepseek-v4-flash-latest`) is offered as a
+  // real option instead of the free-text field.
+  useEffect(() => {
+    if (!isOpen || provider !== 'openrouter') return;
+    let cancelled = false;
+
+    (async () => {
+      const list = openModelsLoader ? await openModelsLoader() : await listOpenRouterModels();
+      if (cancelled) return;
+      setLiveOpenModels(list);
+      const selection = resolveModelSelection(preset, model, list.map((m) => m.id));
+      setModel(selection.model);
+      setUsesCustomModel(selection.usesCustomModel);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, provider, openModelsLoader]);
 
   // Load whatever is already configured whenever the modal opens.
   useEffect(() => {
@@ -305,11 +373,21 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               }}
               className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
             >
-              {preset.models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
+              {provider === 'openrouter' && liveOpenModels.length > 0
+                ? groupOpenRouterModels(liveOpenModels).map((group) => (
+                    <optgroup key={group.author} label={group.author}>
+                      {group.models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
+                : preset.models.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
               <option value={CUSTOM_MODEL_OPTION}>Autre modèle...</option>
             </select>
           </label>
