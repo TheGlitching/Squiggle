@@ -1,5 +1,5 @@
 import React from 'react';
-import { FactualClaim, ResearchRecord, VerificationState } from '../../engine/types';
+import { FactualClaim, ResearchRecord, SourceCheck, VerificationState } from '../../engine/types';
 import { VerificationBadge, VERIFICATION_COUNT_LABELS_FR } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
 
@@ -121,6 +121,83 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                 <SourceCitations sources={claim.sources} label="Sources" />
               </li>
             ))}
+          </ul>
+        </details>
+      )}
+
+      {research.sourceChecks && research.sourceChecks.length > 0 && (
+        <details className="mt-2 border-t border-stone-200 dark:border-stone-800 pt-2">
+          <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200">
+            {research.sourceChecks.length} page{research.sourceChecks.length > 1 ? 's' : ''} citée
+            {research.sourceChecks.length > 1 ? 's' : ''} par l’article inspectée
+            {research.sourceChecks.length > 1 ? 's' : ''}
+          </summary>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-stone-600 dark:text-stone-400">
+            Les liens que l’article donne à l’appui de ses affirmations ont été ouverts et lus.
+            « Contredit » signifie que la page citée dit le contraire de ce que l’article
+            prétend qu’elle dit.
+          </p>
+          <ul className="mt-2 space-y-2.5">
+            {research.sourceChecks.map((check, i) => {
+              const relationLabel: Record<SourceCheck['relation'], string> = {
+                supporte: 'Soutient l’affirmation',
+                contredit: 'Contredit l’affirmation',
+                'sans-rapport': 'Sans rapport avec elle',
+                inaccessible: 'Page inaccessible'
+              };
+              const fiabiliteLabel: Record<SourceCheck['fiabilite'], string> = {
+                fiable: 'Source fiable',
+                partielle: 'Fiabilité partielle',
+                douteuse: 'Source douteuse',
+                indeterminee: 'Fiabilité indéterminée'
+              };
+              const risk = check.relation === 'contredit' || check.fiabilite === 'douteuse';
+              const relationTone = risk
+                ? 'text-red-700 dark:text-red-400 border-red-300 dark:border-red-800'
+                : check.relation === 'supporte'
+                ? 'text-emerald-700 dark:text-emerald-500 border-emerald-300 dark:border-emerald-800'
+                : 'text-stone-600 dark:text-stone-400 border-stone-300 dark:border-stone-700';
+              return (
+                <li
+                  key={`${check.url}-${i}`}
+                  className="border-l-2 border-stone-200 dark:border-stone-800 pl-2.5"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`font-mono text-[10px] font-semibold uppercase tracking-wider border rounded px-1 py-0.5 ${relationTone}`}
+                    >
+                      {relationLabel[check.relation]}
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-stone-400">
+                      {fiabiliteLabel[check.fiabilite]}
+                    </span>
+                  </div>
+                  <a
+                    href={check.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block text-xs font-medium text-stone-800 dark:text-stone-200 underline decoration-stone-300 dark:decoration-stone-700 decoration-dotted hover:decoration-solid break-words"
+                  >
+                    {check.title}
+                  </a>
+                  {check.discordance && (
+                    <p className="mt-1 text-[11px] leading-snug text-red-700 dark:text-red-400">
+                      Ce que dit la page : {check.discordance}
+                    </p>
+                  )}
+                  {check.passage && !check.discordance && (
+                    <p className="mt-1 text-[11px] leading-snug text-stone-600 dark:text-stone-400">
+                      Extrait : « {check.passage} »
+                    </p>
+                  )}
+                  {check.reason && (
+                    <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-500 italic">
+                      {check.reason}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </details>
       )}

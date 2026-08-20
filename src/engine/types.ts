@@ -199,7 +199,32 @@ export interface WithdrawnObjection {
   sources: EvidenceSource[];
 }
 
-/** What the research stage actually did, so the report can never imply more. */
+/**
+ * What the article's own citation actually says, once the linked page has been
+ * fetched and read. The audit and the research stage both only ever see the
+ * citation's URL and anchor text; neither knows whether the page supports the
+ * claim, contradicts it, or never addresses it, which is exactly the gap that
+ * lets an article cite a source saying the opposite and still read as sourced.
+ *
+ * `relation` is what the page says about the claim, `fiabilite` is who the page
+ * is: the two must never be conflated, so they are judged separately - a
+ * prestigious-looking page that says the opposite is still a contradiction.
+ */
+export interface SourceCheck {
+  /** The claim this check was run for. */
+  claimId?: string;
+  url: string;
+  title: string;
+  relation: 'supporte' | 'contredit' | 'sans-rapport' | 'inaccessible';
+  fiabilite: 'fiable' | 'partielle' | 'douteuse' | 'indeterminee';
+  /** The passage of the cited page that bears on the claim, when one was read. */
+  passage?: string;
+  /** When `contredit`: what the page actually says, against what the article claims. */
+  discordance?: string;
+  reason?: string;
+}
+
+/** What research actually did, so the report can never imply more. */
 export interface ResearchRecord {
   performed: boolean;
   /** Provider that ran the searches, when one did. */
@@ -209,6 +234,8 @@ export interface ResearchRecord {
   skippedReason?: string;
   /** Audit objections evidence refuted; see `WithdrawnObjection`. */
   withdrawn: WithdrawnObjection[];
+  /** Pages the article cited that were actually fetched and read. Absent = none were. */
+  sourceChecks?: SourceCheck[];
 }
 
 /**

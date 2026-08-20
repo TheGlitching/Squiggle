@@ -12,6 +12,8 @@ import {
 import {
   buildClaimGroundedJudgementUserPrompt,
   buildClaimJudgementUserPrompt,
+  buildCounterfactualProbePrompt,
+  COUNTERFACTUAL_PROBE_SYSTEM_PROMPT,
   FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT,
   FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT
 } from './prompts';
@@ -94,6 +96,47 @@ function parseLooseJson(rawText: string): unknown {
 type JudgementRoute = 'grounded' | 'search';
 
 /**
+ * Counterfactual probing, the complement of judging: before a claim is
+ * accepted, the research stage deliberately searches FOR a contradiction.
+ * Probes are generated per claim - the claim restated, a variant aimed at the
+ * most checkable element, and a refutation-targeted query - and their results
+ * are handed to the judge together with the straightforward ones.
+ *
+ * Every failure path degrades to the claim alone rather than throwing: a
+ * malformed generation or an empty result restores the historical
+ * single-query behaviour, which is the guaranteed floor, and the hunt itself
+ * is an enrichment, never a hard requirement.
+ */
+const ProbeQueriesSchema = z.object({
+  probes: z.array(z.string()).max(4).default([])
+});
+
+/** Cap on distinct searches issued per claim, the claim itself included. */
+const MAX_PROBES_PER_CLAIM = 4;
+
+async function generateProbeQueries(
+  client: BaseLLMClient,
+  claim: { quote: string; claim: string },
+  abortSignal?: AbortSignal
+): Promise<string[]> {
+  try {
+    const completion = await client.complete({
+      systemPrompt: COUNTERFACTUAL_PROBE_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildCounterfactualProbePrompt(claim) }],
+      abortSignal,
+      temperature: 0.1,
+      maxTokens: 500
+    });
+    const parsed = ProbeQueriesSchema.parse(parseLooseJson(completion.content));
+    const variants = parsed.probes.map((p) => p.trim()).filter((p) => p.length > 0);
+    return [claim.claim, ...variants].slice(0, MAX_PROBES_PER_CLAIM);
+  } catch (err) {
+    rethrowIfAborted(err, abortSignal);
+    return [claim.claim];
+  }
+}
+
+/**
  * Forces the honesty invariant in code: a `verifiee`/`douteuse` verdict with
  * no backing evidence is exactly the confabulated-verdict bug this stage
  * exists to close, so it is made unrepresentable here rather than left to a
@@ -152,7 +195,8 @@ async function judgeClaimViaSearch(
   searchResults: SearchResult[],
   articleSources: CitedSource[],
   now: Date,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  counterfactualProbes: string[] = []
 ): Promise<{ verification: FactualClaim['verification']; sources: EvidenceSource[]; rationale?: string }> {
   const evidencedResults = searchResults.filter((r) => r.snippet.trim().length > 0);
 
@@ -161,7 +205,7 @@ async function judgeClaimViaSearch(
     messages: [
       {
         role: 'user',
-        content: buildClaimJudgementUserPrompt(claim, evidencedResults, articleSources, now)
+        content: buildClaimJudgementUserPrompt(claim, evidencedResults, articleSources, now, counterfactualProbes)
       }
     ],
     abortSignal
@@ -314,7 +358,6 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
 
     const finding = factual[i];
     const claimUnderTest = { quote: finding.quote, claim: finding.quote };
-    queries.push(finding.quote);
     onProgress?.(`Vérification : ${finding.quote}`, 10 + Math.round((i / factual.length) * 80));
 
     const articleSourcesForBlock = citedSources.filter((s) => !s.blockId || s.blockId === finding.blockId);
@@ -322,6 +365,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     if (groundedCapable) {
       try {
         const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, now, abortSignal);
+        queries.push(finding.quote);
         claims.push(
           FactualClaimSchema.parse({
             findingId: finding.id,
@@ -353,8 +397,26 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     let searchResults: SearchResult[] = [];
     let searchFailed = false;
     let searchError = '';
+    const searchedQueries: string[] = [];
     try {
-      searchResults = await client.webSearch(finding.quote);
+      // Counterfactual hunt: generate the probe set (claim restated, targeted
+      // variant, contradiction-seeking query), then search each. Results are
+      // merged de-duplicated by url, so the judge sees both the confirming and
+      // the negating evidence and must weigh the contradiction explicitly.
+      const probes = await generateProbeQueries(client, claimUnderTest, abortSignal);
+      const seenUrls = new Set<string>();
+      for (const probe of probes) {
+        if (abortSignal?.aborted) {
+          throw new DOMException('Research aborted', 'AbortError');
+        }
+        const results = await client.webSearch(probe, { maxResults: 5 });
+        for (const r of results) {
+          if (seenUrls.has(r.url)) continue;
+          seenUrls.add(r.url);
+          searchResults.push(r);
+        }
+        searchedQueries.push(probe);
+      }
     } catch (err) {
       rethrowIfAborted(err, abortSignal);
       searchFailed = true;
@@ -362,6 +424,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     }
 
     if (searchFailed) {
+      queries.push(finding.quote);
       claims.push(
         FactualClaimSchema.parse({
           findingId: finding.id,
@@ -376,8 +439,10 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
       continue;
     }
 
+    queries.push(...searchedQueries);
+
     try {
-      const judgement = await judgeClaimViaSearch(client, claimUnderTest, searchResults, articleSourcesForBlock, now, abortSignal);
+      const judgement = await judgeClaimViaSearch(client, claimUnderTest, searchResults, articleSourcesForBlock, now, abortSignal, searchedQueries);
       claims.push(
         FactualClaimSchema.parse({
           findingId: finding.id,

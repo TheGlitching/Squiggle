@@ -4,7 +4,8 @@ import { AnalysisInput, Finding } from '../src/engine/types';
 import {
   buildClaimGroundedJudgementUserPrompt,
   buildClaimJudgementUserPrompt,
-  buildFourchesCaudinesUserPrompt
+  buildFourchesCaudinesUserPrompt,
+  COUNTERFACTUAL_PROBE_SYSTEM_PROMPT
 } from '../src/engine/prompts';
 import { CitedSource, researchFindings } from '../src/engine/research';
 import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '../src/types/byok';
@@ -21,6 +22,7 @@ class StubClient extends BaseLLMClient {
   private readonly searchImpl: (query: string) => Promise<SearchResult[]>;
   private readonly groundedImpl: (options: CompletionOptions & { maxSearches?: number }) => Promise<GroundedAnswer>;
   readonly completeCalls: CompletionOptions[] = [];
+  readonly probeCalls: CompletionOptions[] = [];
   readonly groundedCalls: (CompletionOptions & { maxSearches?: number })[] = [];
 
   constructor(opts: {
@@ -44,6 +46,26 @@ class StubClient extends BaseLLMClient {
 
   async complete(options: CompletionOptions): Promise<CompletionResponse> {
     this.completeCalls.push(options);
+    // The counterfactual probe generator asks for 3 contradiction-hunting
+    // queries. Existing tests were written when research issued one completion
+    // per claim, so answering from the queue here would shift the judge's
+    // verdict into the generator. Answer deterministically instead, with probes
+    // derived from the claim actually being verified (the CITATION line), so
+    // every test's queued completions stay exactly the judge's, the widened
+    // search still runs, and one finding's probes never collide with another's.
+    if (options.systemPrompt === COUNTERFACTUAL_PROBE_SYSTEM_PROMPT) {
+      this.probeCalls.push(options);
+      const user = (options.messages?.find((m) => m.role === 'user')?.content as string) ?? '';
+      const match = user.match(/CITATION EXACTE DANS L'ARTICLE : ([^\n]+)/);
+      const quote = match?.[1]?.trim() || "L'usine a licencié 200 salariés en 2023.";
+      return {
+        content: JSON.stringify({
+          probes: [quote, `${quote} démenti`, `${quote} contexte`]
+        }),
+        model: this.getModel(),
+        provider: this.getProvider()
+      };
+    }
     const content = this.completionQueue.shift();
     if (content === undefined) {
       throw new Error('StubClient: no more queued completions');
@@ -179,7 +201,10 @@ describe('researchFindings', () => {
       { title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }
     ]);
     expect(result.research.performed).toBe(true);
-    expect(result.research.queries).toEqual([finding.quote]);
+    // The query record names the claim and every counterfactual probe issued
+    // for it, so the disclosure reflects the widened hunt rather than hiding it.
+    expect(result.research.queries.length).toBeGreaterThan(1);
+    expect(result.research.queries[0]).toBe(finding.quote);
   });
 
   it('degrades only the finding whose web search throws, leaving the run and its other findings intact, and still records every query', async () => {
@@ -209,7 +234,9 @@ describe('researchFindings', () => {
     expect(claimA.rationale).toMatch(/network down/);
     expect(claimB.verification).toBe('verifiee');
     expect(claimB.sources).toHaveLength(1);
-    expect(result.research.queries).toEqual([findingA.quote, findingB.quote]);
+    expect(result.research.queries.length).toBeGreaterThan(2);
+    expect(result.research.queries[0]).toBe(findingA.quote);
+    expect(result.research.queries.find((q) => q === findingB.quote)).toBeDefined();
   });
 
   it('propagates an aborted search instead of silently degrading the finding to non-verifiable', async () => {
@@ -381,7 +408,9 @@ describe('researchFindings', () => {
 
     await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    const judgePrompt = client.completeCalls[0].messages[0].content;
+    // The last completion is the judgement; the earlier probe-generation call
+    // carries the claim but must not be mistaken for it.
+    const judgePrompt = client.completeCalls.at(-1)!.messages[0].content;
     expect(judgePrompt).not.toContain('https://news.example/empty');
     expect(judgePrompt).toContain('https://news.example/real');
   });

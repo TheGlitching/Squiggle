@@ -164,6 +164,10 @@ export class BackgroundServiceWorker {
         targetTabId = activeTab?.id;
       }
       if (!targetTabId) return { state: null };
+      // The panel asks the moment it opens, which is also when a just-revived worker
+      // is still reading its mirror. Answering first would report idle for an
+      // analysis that is about to reappear, and invite paying for it twice.
+      await this.stateManager.ready;
       const state = this.stateManager.getTabState(targetTabId);
       return { state: state || this.stateManager.getOrCreateTabState(targetTabId) };
     });
