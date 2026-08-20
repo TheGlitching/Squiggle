@@ -4,6 +4,7 @@ import {
 } from './prompts';
 import { parseAndValidateLlmOutput, reconcileResearchedFindings } from './validator';
 import { researchFindings, CitedSource } from './research';
+import { verifyCitedSources } from './sourceVerification';
 import { AnalysisInput, AnalysisReport, EvidenceSource, TextBlock } from './types';
 import { BaseLLMClient } from '../client/base';
 import { DEMO_FOURCHES_CAUDINES_REPORT } from './demoFixture';
@@ -223,13 +224,33 @@ export class AnalysisPipeline {
         abortSignal: this.abortController?.signal,
       });
 
-      const { findings, withdrawn } = reconcileResearchedFindings(auditedReport.findings, claims);
+      // The article's own citations are then fetched and read - the half of
+      // sourcing that searching cannot cover. A web search answers what the
+      // wider web says about a claim; only the cited page itself can tell
+      // whether the article's sourcing holds up, and the article can cite a
+      // page that says the opposite, a page that never addresses the claim,
+      // or a page from a source that cannot be trusted. This runs AFTER
+      // research so the judge sees the full claim set, including claims the
+      // search could not adjudicate either way.
+      // The research stage ends its own count at 100, which lands on 95 in the shared
+      // bar; source verification reports the same 95 so the bar never retreats.
+      this.reportProgress('researching', 'Lecture et inspection des sources citées...', placeInWindow(100, RESEARCH_WINDOW));
+      const sourceVerification = await verifyCitedSources({
+        client: this.client,
+        claims,
+        citedSources,
+        now,
+        abortSignal: this.abortController?.signal,
+      });
+      const resolvedClaims = sourceVerification.claims;
+
+      const { findings, withdrawn } = reconcileResearchedFindings(auditedReport.findings, resolvedClaims);
 
       const report: AnalysisReport = {
         ...auditedReport,
         findings,
-        claims,
-        research: { ...research, withdrawn },
+        claims: resolvedClaims,
+        research: { ...research, withdrawn, sourceChecks: sourceVerification.checks },
       };
 
       this.reportProgress('success', 'Analyse terminée avec succès', 100);

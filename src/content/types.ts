@@ -52,7 +52,12 @@ export interface ExtractedArticle {
   cleanText: string;
   wordCount: number;
   blocks: TextBlock[];
-  detectionMethod: 'json-ld' | 'semantic-article' | 'text-density' | 'readability-fallback';
+  detectionMethod:
+    | 'json-ld'
+    | 'semantic-article'
+    | 'text-density'
+    | 'readability-fallback'
+    | 'social-thread';
   extractionConfidence: number; // 0.0 - 1.0
   rootContainerSelector: string;
   citedSources: CitedSource[];

@@ -62,12 +62,16 @@ Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.
 /**
  * Generates the user prompt for the per-claim judgement stage, embedding
  * the search results and the article's own cited sources for that block.
+ * `counterfactualProbes` names the contradiction-hunting queries whose
+ * results are mixed into `searchResults`, so the judge weighs the negating
+ * evidence explicitly instead of skimming it past as noise.
  */
 export function buildClaimJudgementUserPrompt(
   claim: { quote: string; claim: string },
   searchResults: { title: string; url: string; snippet: string }[],
   articleSources: { href: string; domain: string; text: string }[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  counterfactualProbes: string[] = []
 ): string {
   const searchFormatted = searchResults.length
     ? searchResults.map((r) => `- ${r.title} (${r.url})\n  ${r.snippet}`).join('\n')
@@ -75,14 +79,17 @@ export function buildClaimJudgementUserPrompt(
   const articleFormatted = articleSources.length
     ? articleSources.map((s) => `- ${s.text} -> ${s.href} (${s.domain})`).join('\n')
     : '(aucune source citée par l\'article pour ce passage)';
+  const counterfactualSection = counterfactualProbes.length
+    ? `\nRECHERCHES CONTREFACTUELLES AUSSI EFFECTUÉES (conçues pour trouver une contradiction) :\n${counterfactualProbes.map((q) => `- ${q}`).join('\n')}
+Les résultats ci-dessus incluent ces recherches. Une page qui répète simplement l'affirmation ne la confirme pas : cherche une confirmation indépendante, et pèse explicitement toute page qui contredit l'affirmation.\n`
+    : '';
 
   return `AFFIRMATION À VÉRIFIER : ${claim.claim}
 CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
 ${formatTemporalContextSection(now)}
 
 RÉSULTATS DE RECHERCHE (ce sont les seuls extraits que tu peux lire ; tu peux t'appuyer uniquement sur le texte affiché ci-dessous, jamais sur un titre ou une URL seuls) :
-${searchFormatted}
-
+${searchFormatted}${counterfactualSection}
 SOURCES CITÉES PAR L'ARTICLE POUR CE PASSAGE :
 ${articleFormatted}
 
@@ -94,6 +101,30 @@ FORMAT JSON STRICT ATTENDU :
   ],
   "rationale": "justification courte du verdict, y compris si tu n'as pas pu vérifier"
 }`;
+}
+
+/**
+ * Counterfactual probing: before a claim is accepted as verified, the research
+ * stage deliberately searches FOR a contradiction, not just for confirmation.
+ * These queries are generated per claim - the claim restated, a variant aimed
+ * at the most checkable element, and a refutation-targeted query - and their
+ * results are handed to the judge alongside the straightforward ones, with the
+ * judge told that echoing pages confirm nothing and the negating evidence must
+ * be weighed explicitly.
+ */
+export const COUNTERFACTUAL_PROBE_SYSTEM_PROMPT = `Tu prépares la vérification factuelle d'une affirmation de presse.
+Ton travail : produire 3 requêtes de recherche web en langage naturel qui permettent de VÉRIFIER l'affirmation, dont au moins une conçue explicitement pour trouver une CONTRADICTION.
+- Requête 1 : l'affirmation elle-même, reformulée simplement (entités clés, chiffres, noms, dates).
+- Requête 2 : une variante ciblant l'élément factuel le plus vérifiable (chiffre, date, nom, lieu).
+- Requête 3 : une requête contrefactuelle visant à débusquer une contradiction : l'élément clé accompagné d'un mot de réfutation (« contredit », « démenti », « faux », « erreur »).
+Pas de guillemets ni d'opérateurs de recherche, uniquement du langage naturel.
+Tu produis UNIQUEMENT du JSON valide : { "probes": ["requête 1", "requête 2", "requête 3"] }`;
+
+export function buildCounterfactualProbePrompt(claim: { quote: string; claim: string }): string {
+  return `AFFIRMATION À VÉRIFIER : ${claim.claim}
+CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
+
+Produis les 3 requêtes de recherche au format JSON strict : { "probes": ["requête 1", "requête 2", "requête 3"] }`;
 }
 
 export const FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines », en mode recherche intégrée.
@@ -133,6 +164,63 @@ FORMAT JSON STRICT ATTENDU :
     { "title": "titre de la source", "url": "https://...", "quote": "extrait pertinent", "origin": "article" | "search" }
   ],
   "rationale": "justification courte du verdict, y compris si tu n'as pas pu vérifier"
+}`;
+}
+
+/** Truncation budget for a fetched source page embedded in a judgement prompt. */
+export const MAX_SOURCE_EXCERPT_CHARS = 12000;
+
+/**
+ * Judges a cited page that was actually fetched and read, on two separate
+ * axes that must never bleed into one another: what the page *says* about the
+ * claim (`relation`), and how trustworthy the page *is* (`fiabilite`). An
+ * article citing a page proves nothing about either - the article may cite a
+ * page that says the opposite, or a page that says the right thing from a
+ * source that cannot be believed - so the reading alone decides both.
+ */
+export const FOURCHES_CAUDINES_SOURCE_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape d'inspection des sources citées du moteur « Fourches Caudines ».
+On te donne une affirmation tirée d'un article de presse, et le contenu réellement lu sur une page que l'article cite en lien hypertexte pour l'étayer.
+Ton travail est de juger la PAGE, pas l'affirmation, sur deux axes indépendants :
+1. 'relation' : que dit réellement le contenu lu au sujet de l'affirmation ? 'supporte' si un passage confirme explicitement l'affirmation, 'contredit' s'il la contredit, 'sans-rapport' s'il ne l'aborde pas.
+   Le fait que l'article cite la page ne prouve RIEN sur ce qu'elle dit : seule la lecture du contenu compte, et tu ne peux attribuer 'supporte' ou 'contredit' QUE si le texte fourni contient un passage qui l'établit explicitement.
+2. 'fiabilite' : la page est-elle une source digne de confiance ? 'fiable' pour une institution officielle, une source primaire, une publication établie ; 'partielle' pour une source sérieuse mais orientée ou incomplète ; 'douteuse' pour une source anonyme, non datée, militante ou connue pour ses erreurs ; 'indeterminee' si le contenu ne permet pas de juger.
+   Une page qui contredit l'article n'est pas 'douteuse' pour cette raison, et une page qui le confirme n'est pas 'fiable' pour cette raison.
+Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.`;
+
+/**
+ * Builds the user prompt for one cited-page judgement: the article's claim,
+ * the citation's identity, and the raw text actually read on the page - the
+ * only basis the judge may use, which is why the page is quoted and truncated
+ * here rather than linked.
+ */
+export function buildSourceJudgementUserPrompt(
+  claim: { quote: string; claim: string },
+  source: { title: string; url: string },
+  pageText: string,
+  now: Date = new Date()
+): string {
+  const excerpt =
+    pageText.length > MAX_SOURCE_EXCERPT_CHARS
+      ? `${pageText.slice(0, MAX_SOURCE_EXCERPT_CHARS)}…[contenu tronqué ici]`
+      : pageText;
+
+  return `AFFIRMATION DE L'ARTICLE À CONFRONTER À SA SOURCE : ${claim.claim}
+CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
+${formatTemporalContextSection(now)}
+
+PAGE CITÉE PAR L'ARTICLE : ${source.title}
+URL : ${source.url}
+
+CONTENU RÉELLEMENT LU SUR LA PAGE CITÉE (texte brut extrait de la page, tronqué) :
+${excerpt}
+
+FORMAT JSON STRICT ATTENDU :
+{
+  "relation": "supporte" | "contredit" | "sans-rapport",
+  "fiabilite": "fiable" | "partielle" | "douteuse" | "indeterminee",
+  "passage": "passage exact du contenu lu qui fonde le jugement de relation, ou chaîne vide",
+  "discordance": "si contredit : ce que la page dit réellement, face à ce que l'article prétend qu'elle dit",
+  "raison": "justification courte de la fiabilite"
 }`;
 }
 
