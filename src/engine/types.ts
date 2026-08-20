@@ -294,6 +294,13 @@ export interface AnalysisReport {
     durationMs: number;
     textLengthChars?: number;
     blocksCount?: number;
+    /**
+     * The model's raw per-domain marks before any defect reduction. The
+     * pipeline recomputes the composite score against the reconciled findings
+     * (research may withdraw objectives) and needs the unreduced marks to do
+     * so. Engine plumbing read by the panel only to pass it through.
+     */
+    rawScores?: Array<{ domain: ScoreDomainKey; score: number }>;
   };
 }
 

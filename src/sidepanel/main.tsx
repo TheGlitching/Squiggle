@@ -29,9 +29,11 @@ interface ProgressState {
   status: Status;
   message: string;
   progress: number;
+  /** Cumulative human-readable steps of the run, for the live activity feed. */
+  notes: string[];
 }
 
-const IDLE_PROGRESS: ProgressState = { status: 'idle', message: '', progress: 0 };
+const IDLE_PROGRESS: ProgressState = { status: 'idle', message: '', progress: 0, notes: [] };
 
 function SidepanelApp() {
   // One bus for the lifetime of the panel. Creating it per render would install
@@ -130,6 +132,7 @@ function SidepanelApp() {
             status: state.status,
             message: state.currentStep ?? '',
             progress: state.progress ?? 0,
+            notes: [],
           });
         }
       } catch {
@@ -233,7 +236,7 @@ function SidepanelApp() {
   useEffect(() => {
     const isTrackedTab = (payloadTabId: number) => payloadTabId === currentTabIdRef.current;
 
-    const offProgress = bus.on<{ tabId: number; status: string; message: string; progress: number }>(
+    const offProgress = bus.on<{ tabId: number; status: string; message: string; progress: number; notes?: string[] }>(
       'ANALYSIS_PROGRESS',
       (payload) => {
         if (!isTrackedTab(payload.tabId)) return;
@@ -241,6 +244,7 @@ function SidepanelApp() {
           status: (payload.status === 'completed' ? 'complete' : payload.status) as Status,
           message: payload.message ?? '',
           progress: payload.progress ?? 0,
+          notes: payload.notes ?? [],
         });
       }
     );
@@ -249,13 +253,13 @@ function SidepanelApp() {
       if (!isTrackedTab(payload.tabId)) return;
       setReport(payload.result);
       setError(null);
-      setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100 });
+      setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100, notes: [] });
     });
 
     const offError = bus.on<{ tabId: number; error: string }>('ANALYSIS_ERROR', (payload) => {
       if (!isTrackedTab(payload.tabId)) return;
       setError(payload.error);
-      setProgress({ status: 'error', message: payload.error, progress: 0 });
+      setProgress({ status: 'error', message: payload.error, progress: 0, notes: [] });
     });
 
     const offSelected = bus.on<{ findingId: string }>('FC_SIDEBAR_FINDING_SELECTED', (payload) => {
@@ -278,35 +282,40 @@ function SidepanelApp() {
   useEffect(() => () => bus.destroy(), [bus]);
 
   const runAnalysis = useCallback(async () => {
+    // The panel is driven by live events (`ANALYSIS_PROGRESS` / `ANALYSIS_COMPLETE`
+    // / `ANALYSIS_ERROR`) - the background streams progress and dispatches the
+    // terminal outcome the moment it lands. The RPC here only *triggers* the run:
+    // we deliberately do not await it to completion, because a research agent
+    // that legitimately needs several minutes would outlive any fixed RPC
+    // ceiling and die with a misleading "RPC timeout" even though the run is
+    // still healthy in the background. Early "cannot start" failures (no key,
+    // no article read) reject/resolve fast and are surfaced via their own
+    // error events; the promise is settled only to keep the trigger honest.
     const epoch = analysisEpochRef.current;
     setError(null);
     setReport(null);
-    setProgress({ status: 'extracting', message: 'Extraction de l’article…', progress: 5 });
-    try {
-      const response = (await bus.callRPC(
-        'TRIGGER_ANALYSIS',
-        { tabId: tabId ?? undefined },
-        { timeoutMs: 180000 }
-      )) as { success: boolean; result?: AnalysisResult; error?: string };
+    setProgress({ status: 'extracting', message: 'Extraction de l’article…', progress: 5, notes: [] });
 
-      // The reader may have navigated away while this call was in flight; a
-      // response arriving after that point describes a page that is no
-      // longer on screen and must be dropped rather than displayed.
+    try {
+      const response = (await bus.callRPC('TRIGGER_ANALYSIS', { tabId: tabId ?? undefined })) as {
+        success: boolean;
+        result?: AnalysisResult;
+        error?: string;
+      };
+      // No longer on screen: drop whatever the trigger resolved with.
       if (analysisEpochRef.current !== epoch) return;
 
-      if (response?.success && response.result) {
-        setReport(response.result);
-        setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100 });
-      } else {
-        const message = response?.error ?? 'L’analyse a échoué.';
-        setError(message);
-        setProgress({ status: 'error', message, progress: 0 });
+      // A synchronous "could not start" (no key, page unreadable) surfaces as
+      // an error event; only mirror it if no event has painted the panel yet.
+      if (!response?.success && !response?.result) {
+        setError(response?.error ?? 'L’analyse a échoué.');
+        setProgress({ status: 'error', message: response?.error ?? 'L’analyse a échoué.', progress: 0, notes: [] });
       }
     } catch (err: unknown) {
       if (analysisEpochRef.current !== epoch) return;
       const message = err instanceof Error ? err.message : 'L’analyse a échoué.';
       setError(message);
-      setProgress({ status: 'error', message, progress: 0 });
+      setProgress({ status: 'error', message, progress: 0, notes: [] });
     }
   }, [bus, tabId]);
 
@@ -398,14 +407,39 @@ function SidepanelApp() {
         </button>
 
         {busy && (
-          <div className="space-y-1.5" role="status" aria-live="polite">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E7E5E4] dark:bg-[#27272A]">
-              <div
-                className="h-full rounded-full bg-[#1C1917] dark:bg-[#FAFAFA] transition-all duration-300"
-                style={{ width: `${Math.max(progress.progress, 4)}%` }}
-              />
+          <div className="space-y-2" role="status" aria-live="polite">
+            <div className="space-y-1.5">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E7E5E4] dark:bg-[#27272A]">
+                <div
+                  className="h-full rounded-full bg-[#1C1917] dark:bg-[#FAFAFA] transition-all duration-300"
+                  style={{ width: `${Math.max(progress.progress, 4)}%` }}
+                />
+              </div>
+              <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">{progress.message}</p>
             </div>
-            <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">{progress.message}</p>
+
+            {/* Live feed: what the research agent is doing right now, so a long
+                run never looks stuck. Each line is one step the engine already
+                took; the most recent sits at the bottom, newest-last. */}
+            {progress.notes.length > 0 && (
+              <ol className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-[#E7E5E4] dark:border-[#27272A] bg-white dark:bg-[#18181B] p-3">
+                {progress.notes.map((note, idx) => (
+                  <li
+                    key={`${idx}-${note}`}
+                    className={
+                      idx === progress.notes.length - 1
+                        ? 'flex gap-1.5 items-start text-xs font-medium text-[#57534E] dark:text-[#D4D4D8]'
+                        : 'flex gap-1.5 items-start text-xs text-[#A8A29E] dark:text-[#71717A]'
+                    }
+                  >
+                    <span className="mt-0.5 shrink-0 text-[#A8A29E] dark:text-[#71717A]" aria-hidden>
+                      •
+                    </span>
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
         )}
 

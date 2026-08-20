@@ -35,10 +35,10 @@ export interface ResearchDisclosureProps {
  * refuted. Those are not shown in the findings list, because publishing a
  * refuted accusation is the defect this stage exists to prevent, but dropping
  * them without a word would hide a disagreement the reader is entitled to see.
- * They matter for a second reason: the score comes from the model's own domain
- * marks, given while it still believed the objection, so a withdrawal does not
- * lower the marks it caused. Saying how many were withdrawn is what keeps the
- * score readable.
+ * They matter for a second reason: the score is recomputed after this refutation
+ * so a withdrawn objection no longer lowers the marks it caused. Saying how many
+ * were withdrawn is what lets the reader see that the note only counts what
+ * still stands.
  */
 export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research, claims = [] }) => {
   if (!research) return null;
@@ -211,8 +211,8 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
           <p className="mt-1.5 text-[11px] leading-relaxed text-stone-600 dark:text-stone-400">
             L’analyse mettait ce{withdrawn.length > 1 ? 's' : ''} passage
             {withdrawn.length > 1 ? 's' : ''} en doute, mais les sources consultées confirment
-            l’article. Le doute n’est donc pas retenu contre lui. La note, elle, a été attribuée
-            avant cette vérification.
+            l’article. Le doute n’est donc pas retenu contre lui, et la note l’ignore : elle ne
+            retient que les constats qui survivent à cette vérification.
           </p>
           <ul className="mt-2 space-y-2.5">
             {withdrawn.map((objection, i) => (

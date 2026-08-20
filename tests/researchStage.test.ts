@@ -3,17 +3,20 @@ import { BaseLLMClient, GroundedAnswer, SearchResult } from '../src/client/base'
 import { AnalysisInput, Finding } from '../src/engine/types';
 import {
   buildClaimGroundedJudgementUserPrompt,
-  buildClaimJudgementUserPrompt,
   buildFourchesCaudinesUserPrompt,
-  COUNTERFACTUAL_PROBE_SYSTEM_PROMPT
+  buildResearchAgentStepPrompt,
+  RESEARCH_AGENT_SYSTEM_PROMPT
 } from '../src/engine/prompts';
 import { CitedSource, researchFindings } from '../src/engine/research';
 import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '../src/types/byok';
 
 /**
- * Minimal BaseLLMClient double: a fixed queue of `complete` responses (one
- * per expected call, in order) plus an injectable `webSearch` so each test
- * controls exactly what the research stage sees, with no network involved.
+ * Minimal BaseLLMClient double for the agentic search route: `complete` serves
+ * a scripted queue of agent-action JSON (one per expected agent step, in
+ * order) and records every call plus every issued web search; `webSearch` is
+ * injectable so each test controls exactly what the research stage sees, with
+ * no network involved. `fetchImpl` is forwarded to `researchFindings` so a
+ * test (and its own fetch double) drives `read_source` decisions end to end.
  */
 class StubClient extends BaseLLMClient {
   private readonly completionQueue: string[];
@@ -24,6 +27,7 @@ class StubClient extends BaseLLMClient {
   readonly completeCalls: CompletionOptions[] = [];
   readonly probeCalls: CompletionOptions[] = [];
   readonly groundedCalls: (CompletionOptions & { maxSearches?: number })[] = [];
+  readonly searches: { query: string; maxResults?: number }[] = [];
 
   constructor(opts: {
     completions: string[];
@@ -46,26 +50,6 @@ class StubClient extends BaseLLMClient {
 
   async complete(options: CompletionOptions): Promise<CompletionResponse> {
     this.completeCalls.push(options);
-    // The counterfactual probe generator asks for 3 contradiction-hunting
-    // queries. Existing tests were written when research issued one completion
-    // per claim, so answering from the queue here would shift the judge's
-    // verdict into the generator. Answer deterministically instead, with probes
-    // derived from the claim actually being verified (the CITATION line), so
-    // every test's queued completions stay exactly the judge's, the widened
-    // search still runs, and one finding's probes never collide with another's.
-    if (options.systemPrompt === COUNTERFACTUAL_PROBE_SYSTEM_PROMPT) {
-      this.probeCalls.push(options);
-      const user = (options.messages?.find((m) => m.role === 'user')?.content as string) ?? '';
-      const match = user.match(/CITATION EXACTE DANS L'ARTICLE : ([^\n]+)/);
-      const quote = match?.[1]?.trim() || "L'usine a licencié 200 salariés en 2023.";
-      return {
-        content: JSON.stringify({
-          probes: [quote, `${quote} démenti`, `${quote} contexte`]
-        }),
-        model: this.getModel(),
-        provider: this.getProvider()
-      };
-    }
     const content = this.completionQueue.shift();
     if (content === undefined) {
       throw new Error('StubClient: no more queued completions');
@@ -81,7 +65,8 @@ class StubClient extends BaseLLMClient {
     return this.canSearch;
   }
 
-  override async webSearch(query: string): Promise<SearchResult[]> {
+  override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
+    this.searches.push({ query, maxResults: opts?.maxResults });
     return this.searchImpl(query);
   }
 
@@ -127,8 +112,11 @@ describe('researchFindings', () => {
       // enforceEvidenceHonesty, not a truth claim a web search could settle.
       makeFinding({ category: 'source-absente', quote: 'a' }),
       makeFinding({ category: 'affirmation-non-etayee', quote: 'b' }),
+      // Editorial categories are never researched, even when present. This
+      // includes surinterpretation: an over-reach from the evidence is a
+      // cadrage judgment about the prose, not a world claim a web search
+      // could adjudicate.
       makeFinding({ category: 'surinterpretation', quote: 'c' }),
-      // Editorial categories are never researched, even when present.
       makeFinding({ category: 'sophisme', quote: 'd' }),
       makeFinding({ category: 'cadrage', quote: 'e' }),
       makeFinding({ category: 'point-fort', quote: 'f' })
@@ -137,8 +125,8 @@ describe('researchFindings', () => {
 
     const result = await researchFindings({ client, input: sampleInput, findings, citedSources: [] });
 
-    expect(result.claims).toHaveLength(2);
-    expect(result.claims.map((c) => c.quote)).toEqual(['b', 'c']);
+    expect(result.claims).toHaveLength(1);
+    expect(result.claims.map((c) => c.quote)).toEqual(['b']);
     expect(result.research.performed).toBe(false);
     expect(result.research.skippedReason).toMatch(/recherche web/i);
     expect(result.research.queries).toEqual([]);
@@ -162,12 +150,14 @@ describe('researchFindings', () => {
 
   it.each(['verifiee', 'douteuse'] as const)('forces a %s verdict with no sources down to non-verifiable', async (verdict) => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
-    const judgement = JSON.stringify({ verification: verdict, sources: [], rationale: 'Ça semble correct.' });
-
+    // The agent renders a verdict naming no source, so there is nothing it
+    // actually read to back it - the honesty invariant must reject it even
+    // though the model was confident.
     const client = new StubClient({
-      completions: [judgement],
-      canSearch: true,
-      searchImpl: async () => [{ title: 'Un article', url: 'https://news.example/a', snippet: 'contenu' }]
+      completions: [
+        JSON.stringify({ action: 'verdict', verification: verdict, sources: [], rationale: 'Ça semble correct.' })
+      ],
+      canSearch: true
     });
 
     const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
@@ -179,16 +169,18 @@ describe('researchFindings', () => {
     expect(result.claims[0].findingId).toBe(finding.id);
   });
 
-  it('keeps a verifiee verdict with its sources when backed by search results, and records the finding\'s quote as the query', async () => {
+  it('keeps a verifiee verdict the agent backs with a real-snippet search result it actually issued', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
-    const judgement = JSON.stringify({
-      verification: 'verifiee',
-      sources: [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }],
-      rationale: 'Corroboré par un communiqué officiel.'
-    });
-
     const client = new StubClient({
-      completions: [judgement],
+      completions: [
+        JSON.stringify({ action: 'search', query: finding.quote, note: 'cherche une confirmation' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'verifiee',
+          sources: [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }],
+          rationale: 'Corroboré par un communiqué officiel.'
+        })
+      ],
       canSearch: true,
       searchImpl: async () => [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', snippet: '200 postes supprimés' }]
     });
@@ -201,23 +193,25 @@ describe('researchFindings', () => {
       { title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }
     ]);
     expect(result.research.performed).toBe(true);
-    // The query record names the claim and every counterfactual probe issued
-    // for it, so the disclosure reflects the widened hunt rather than hiding it.
-    expect(result.research.queries.length).toBeGreaterThan(1);
-    expect(result.research.queries[0]).toBe(finding.quote);
+    // The query record is the search the agent actually issued.
+    expect(result.research.queries).toEqual([finding.quote]);
   });
 
-  it('degrades only the finding whose web search throws, leaving the run and its other findings intact, and still records every query', async () => {
+  it('absorbs a thrown web search on one finding so the run and the other findings stay intact', async () => {
     const findingA = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
-    const findingB = makeFinding({ category: 'surinterpretation', quote: 'autre extrait' });
-    const judgementForB = JSON.stringify({
-      verification: 'verifiee',
-      sources: [{ title: 'Source B', url: 'https://news.example/b', origin: 'search' }],
-      rationale: 'ok'
-    });
-
+    const findingB = makeFinding({ category: 'affirmation-non-etayee', quote: 'autre extrait' });
     const client = new StubClient({
-      completions: [judgementForB],
+      completions: [
+        JSON.stringify({ action: 'search', query: findingA.quote, note: 'essai' }),
+        JSON.stringify({ action: 'verdict', verification: 'non-verifiable', sources: [], rationale: 'recherche indisponible' }),
+        JSON.stringify({ action: 'search', query: findingB.quote, note: 'essai' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'verifiee',
+          sources: [{ title: 'Source B', url: 'https://news.example/b', origin: 'search' }],
+          rationale: 'ok'
+        })
+      ],
       canSearch: true,
       searchImpl: async (query: string) => {
         if (query === findingA.quote) throw new Error('network down');
@@ -230,13 +224,10 @@ describe('researchFindings', () => {
     expect(result.claims).toHaveLength(2);
     const [claimA, claimB] = result.claims;
     expect(claimA.verification).toBe('non-verifiable');
-    expect(claimA.sources).toEqual([]);
-    expect(claimA.rationale).toMatch(/network down/);
     expect(claimB.verification).toBe('verifiee');
     expect(claimB.sources).toHaveLength(1);
-    expect(result.research.queries.length).toBeGreaterThan(2);
-    expect(result.research.queries[0]).toBe(findingA.quote);
-    expect(result.research.queries.find((q) => q === findingB.quote)).toBeDefined();
+    expect(result.research.queries).toContain(findingA.quote);
+    expect(result.research.queries).toContain(findingB.quote);
   });
 
   it('propagates an aborted search instead of silently degrading the finding to non-verifiable', async () => {
@@ -244,7 +235,7 @@ describe('researchFindings', () => {
     const controller = new AbortController();
 
     const client = new StubClient({
-      completions: [],
+      completions: [JSON.stringify({ action: 'search', query: finding.quote, note: 'essai' })],
       canSearch: true,
       searchImpl: async () => {
         controller.abort();
@@ -372,16 +363,18 @@ describe('researchFindings', () => {
     ).rejects.toThrow(/aborted/i);
   });
 
-  it('yields non-verifiable when every search result has a blank snippet, no matter what verdict the judge returned - the regression this stage exists to close', async () => {
+  it('yields non-verifiable when every search result has a blank snippet, no matter what verdict the agent returned - the regression this stage exists to close', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
-    const judgement = JSON.stringify({
-      verification: 'verifiee',
-      sources: [{ title: 'Un article', url: 'https://news.example/blank', origin: 'search' }],
-      rationale: "Ça a l'air vrai."
-    });
-
     const client = new StubClient({
-      completions: [judgement],
+      completions: [
+        JSON.stringify({ action: 'search', query: finding.quote, note: 'cherche' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'verifiee',
+          sources: [{ title: 'Un article', url: 'https://news.example/blank', origin: 'search' }],
+          rationale: "Ça a l'air vrai."
+        })
+      ],
       canSearch: true,
       searchImpl: async () => [{ title: 'Un article', url: 'https://news.example/blank', snippet: '' }]
     });
@@ -393,38 +386,37 @@ describe('researchFindings', () => {
     expect(result.claims[0].rationale).toMatch(/texte source lisible/i);
   });
 
-  it('never hands the ungrounded judge a blank-snippet search result, while a real-snippet result still reaches it', async () => {
+  it('never lets a blank-snippet search result back a verdict, while a real-snippet result can', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
-    const judgement = JSON.stringify({ verification: 'non-verifiable', sources: [], rationale: 'rien à signaler' });
-
     const client = new StubClient({
-      completions: [judgement],
+      completions: [
+        // One search returns only blank-snippet results: nothing readable.
+        JSON.stringify({ action: 'search', query: 'vide', note: 'cherche' }),
+        JSON.stringify({ action: 'verdict', verification: 'non-verifiable', sources: [], rationale: 'rien à signaler' })
+      ],
       canSearch: true,
-      searchImpl: async () => [
-        { title: 'Résultat sans texte', url: 'https://news.example/empty', snippet: '' },
-        { title: 'Résultat avec texte', url: 'https://news.example/real', snippet: 'preuve concrète' }
-      ]
+      searchImpl: async () => [{ title: 'Résultat sans texte', url: 'https://news.example/empty', snippet: '' }]
     });
 
-    await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
 
-    // The last completion is the judgement; the earlier probe-generation call
-    // carries the claim but must not be mistaken for it.
-    const judgePrompt = client.completeCalls.at(-1)!.messages[0].content;
-    expect(judgePrompt).not.toContain('https://news.example/empty');
-    expect(judgePrompt).toContain('https://news.example/real');
+    expect(result.claims[0].verification).toBe('non-verifiable');
+    // The blank snippet never counted as evidence anywhere in the run.
+    expect(result.claims[0].sources).toEqual([]);
   });
 
-  it('reaches a verifiee verdict on the ungrounded route when the search results carry real snippets', async () => {
+  it('reaches a verifiee verdict when a real-snippet search result backs it', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
-    const judgement = JSON.stringify({
-      verification: 'verifiee',
-      sources: [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }],
-      rationale: 'Corroboré.'
-    });
-
     const client = new StubClient({
-      completions: [judgement],
+      completions: [
+        JSON.stringify({ action: 'search', query: finding.quote, note: 'cherche' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'verifiee',
+          sources: [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }],
+          rationale: 'Corroboré.'
+        })
+      ],
       canSearch: true,
       searchImpl: async () => [{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', snippet: '200 postes supprimés' }]
     });
@@ -435,16 +427,59 @@ describe('researchFindings', () => {
     expect(result.claims[0].sources).toEqual([{ title: 'Communiqué officiel', url: 'https://news.example/plan-social', origin: 'search' }]);
   });
 
-  it('forces non-verifiable when a search-route judge names only the article\'s own cited source, with every search result blank - anchor text is not read page content', async () => {
+  it("reads a cited source the agent decides to read, and a verdict backed by that read page holds", async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee' });
-    const judgement = JSON.stringify({
-      verification: 'verifiee',
-      sources: [{ title: 'cette étude', url: 'https://src.example/p', origin: 'article' }],
-      rationale: "Confirmé par la source de l'article."
+    const client = new StubClient({
+      completions: [
+        // The agent reads the article's own citation, then verdicts on it.
+        JSON.stringify({ action: 'read_source', url: 'https://src.example/p', note: 'lit la source de l\'article' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'verifiee',
+          sources: [{ title: 'cette étude', url: 'https://src.example/p', origin: 'article' }],
+          rationale: "La page lue confirme l'affirmation."
+        })
+      ],
+      // The agent route needs a search-capable client to run at all, but this
+      // agent chooses only read_source; searchImpl proves it was never used.
+      canSearch: true,
+      searchImpl: async () => {
+        throw new Error('agent chose read_source, never searched');
+      }
     });
 
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [{ href: 'https://src.example/p', domain: 'src.example', text: 'cette étude', blockId: 'b1' }],
+      fetchImpl: async () =>
+        new Response('<html><body><p>Les données confirment X.</p></body></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' }
+        })
+    });
+
+    expect(result.claims[0].verification).toBe('verifiee');
+    expect(result.claims[0].sources[0].url).toBe('https://src.example/p');
+    // The cited source was actually read, so its URL is evidenced.
+    expect(result.claims[0].sources[0].origin).toBe('article');
+  });
+
+  it('forces non-verifiable when a verdict names a cited source that was never read or searched', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    // The agent claims a verdict backed by the article's citation, but only
+    // ever ran a search that returned a blank snippet - it never read the page.
     const client = new StubClient({
-      completions: [judgement],
+      completions: [
+        JSON.stringify({ action: 'search', query: finding.quote, note: 'cherche' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'verifiee',
+          sources: [{ title: 'cette étude', url: 'https://src.example/p', origin: 'article' }],
+          rationale: "Confirmé par la source de l'article."
+        })
+      ],
       canSearch: true,
       searchImpl: async () => [{ title: 'x', url: 'https://n.example/a', snippet: '' }]
     });
@@ -453,12 +488,39 @@ describe('researchFindings', () => {
       client,
       input: sampleInput,
       findings: [finding],
-      citedSources: [{ href: 'https://src.example/p', domain: 'src.example', text: 'cette étude', blockId: 'b1' }]
+      citedSources: [{ href: 'https://src.example/p', domain: 'src.example', text: 'cette étude', blockId: 'b1' }],
+      fetchImpl: async () => {
+        throw new Error('should not fetch: agent never chose read_source');
+      }
     });
 
     expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
     expect(result.claims[0].rationale).toMatch(/texte source lisible/i);
+  });
+
+  it('respects the agent step cap by forcing conclusion before a runaway loop can continue', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    // A pathological agent answers every step with another search request,
+    // never a verdict. The step ceiling must force it to conclude instead of
+    // issuing unbounded searches against the provider.
+    const searches = Array.from({ length: 8 }, (_, i) =>
+      JSON.stringify({ action: 'search', query: `q${i + 1}`, note: 'encore' })
+    );
+    const client = new StubClient({
+      completions: searches,
+      canSearch: true,
+      searchImpl: async () => [{ title: 'r', url: 'https://n.example/r', snippet: 'preuve' }]
+    });
+
+    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+
+    // The agent was forced to conclude when it hit the step ceiling; it never
+    // returned a verdict, so the run degrades to non-verifiable rather than
+    // looping forever.
+    expect(result.claims[0].verification).toBe('non-verifiable');
+    expect(result.claims[0].rationale).toMatch(/étapes/i);
+    expect(client.searches.length).toBeLessThan(8);
   });
 });
 
@@ -490,15 +552,24 @@ describe('buildFourchesCaudinesUserPrompt', () => {
   });
 });
 
-describe('temporal context in the claim-judgement prompts', () => {
+describe('temporal context in the judgement prompts', () => {
   const claim = { quote: "L'usine a licencié 200 salariés en 2023.", claim: "L'usine a licencié 200 salariés en 2023." };
 
-  it('carries the pinned date and the near-future-is-not-an-error rule in the search-route judgement prompt', () => {
-    const prompt = buildClaimJudgementUserPrompt(claim, [], [], pinnedNow);
+  it('carries the pinned date and the near-future-is-not-an-error rule in the research agent step prompt', () => {
+    const prompt = buildResearchAgentStepPrompt({
+      claim,
+      searchEvidence: [],
+      readEvidence: [],
+      remainingArticleSources: [],
+      now: pinnedNow,
+      searchesLeft: 4,
+      readsLeft: 0
+    });
 
     expect(prompt).toContain('CONTEXTE TEMPOREL');
     expect(prompt).toContain('2026-08-19');
     expect(prompt).toContain("n'est PAS en soi une erreur");
+    expect(prompt).toContain('RÉSULTATS DE RECHERCHE DÉJÀ OBTENUS');
   });
 
   it('carries the pinned date and the near-future-is-not-an-error rule in the grounded judgement prompt', () => {
@@ -507,5 +578,13 @@ describe('temporal context in the claim-judgement prompts', () => {
     expect(prompt).toContain('CONTEXTE TEMPOREL');
     expect(prompt).toContain('2026-08-19');
     expect(prompt).toContain("n'est PAS en soi une erreur");
+  });
+});
+
+describe('RESEARCH_AGENT_SYSTEM_PROMPT', () => {
+  it('demands contradiction-hunting and evidential honesty in its operative directive', () => {
+    expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain('CONTRADICTION');
+    expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain('read_source');
+    expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain("Une URL que tu n'as pas réellement lue ne prouve rien");
   });
 });
