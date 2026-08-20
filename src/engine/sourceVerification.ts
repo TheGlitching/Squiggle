@@ -7,6 +7,7 @@ import {
   buildSourceJudgementUserPrompt
 } from './prompts';
 import type { CitedSource } from './research';
+import { fetchPageText, fetchableUrl } from './sourceFetch';
 
 /**
  * Inspection of the pages an article actually cites - the half of factual
@@ -53,7 +54,6 @@ const SourceJudgementSchema = z.object({
 
 /** Hard ceilings on a single page fetch, so one pathological site cannot stall the report. */
 const FETCH_TIMEOUT_MS = 10_000;
-const MAX_PAGE_BYTES = 1_000_000;
 /** Upper bound on distinct pages fetched per analysis. */
 const DEFAULT_MAX_PAGES = 8;
 
@@ -69,6 +69,8 @@ export interface VerifyCitedSourcesArgs {
   fetchTimeoutMs?: number;
   /** Injectable fetcher; defaults to the global, which host_permissions already authorises. */
   fetchImpl?: typeof fetch;
+  /** Emits a human-readable line each time a cited page is fetched, for the live activity feed. */
+  onActivity?: (note: string) => void;
 }
 
 export interface VerifyCitedSourcesResult {
@@ -86,75 +88,6 @@ function rethrowIfAborted(err: unknown, abortSignal?: AbortSignal): void {
 function rethrowIfAbortedElsewhere(abortSignal?: AbortSignal): void {
   if (abortSignal?.aborted) {
     throw new DOMException('Source verification aborted', 'AbortError');
-  }
-}
-
-/** Only http(s) citations can be fetched; anything else is a non-source. */
-function fetchableUrl(raw: string): string | null {
-  try {
-    const parsed = new URL(raw);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Lightweight HTML-to-text for pages fetched in the service worker, where no
- * DOM exists. The output is raw reading material for the judge, never
- * presented to the reader as structured content, so a deliberately simple
- * pass - drop script/style/svg blocks, turn tags into line breaks, decode
- * entities, collapse whitespace, cap the length - is honest enough as long as
- * everything handed to the judge is labelled as raw extracted text.
- */
-export function extractPageText(html: string): string {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<(script|style|noscript|template|svg|iframe|canvas)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<[^>]+>/g, '\n')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0*39;/g, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/\u00a0/g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-async function fetchPageText(
-  url: string,
-  fetchTimeoutMs: number,
-  fetchImpl: typeof fetch
-): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), fetchTimeoutMs);
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { accept: 'text/html,application/xhtml+xml' }
-    });
-
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);
-    }
-    if (!contentType.includes('text/html') && !contentType.includes('xhtml')) {
-      throw new Error(`type de contenu non exploitable : ${contentType || 'inconnu'}`);
-    }
-
-    const buffer = await response.arrayBuffer();
-    if (buffer.byteLength > MAX_PAGE_BYTES) {
-      throw new Error(`page trop volumineuse (${buffer.byteLength} octets)`);
-    }
-    return extractPageText(new TextDecoder().decode(buffer));
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -220,7 +153,8 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
     abortSignal,
     maxPages = DEFAULT_MAX_PAGES,
     fetchTimeoutMs = FETCH_TIMEOUT_MS,
-    fetchImpl = fetch
+    fetchImpl = fetch,
+    onActivity
   } = args;
 
   const sourcesByBlock = new Map<string, CitedSource[]>();
@@ -262,6 +196,8 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
         continue;
       }
       pagesFetched += 1;
+      const fetchTitle = candidate.text || candidate.domain || url;
+      onActivity?.(`Lecture de la source citée : ${fetchTitle}`);
 
       let pageText = '';
       try {

@@ -52,8 +52,21 @@ describe('enforceEvidenceHonesty', () => {
   });
 
   it('defaults a factual finding with no verification at all to non-verifiable', () => {
-    const [result] = enforceEvidenceHonesty([makeFinding({ category: 'surinterpretation' })], {});
+    const [result] = enforceEvidenceHonesty([makeFinding({ category: 'affirmation-non-etayee' })], {});
     expect(result.verification).toBe('non-verifiable');
+  });
+
+  it('treats a surinterpretation as an editorial finding, never researched and carrying no verification', () => {
+    // An over-reach from the evidence ("L'été 2026 rime avec une France à
+    // sec" drawn from a local report) judges the prose's scope, not whether
+    // the general statement is true elsewhere. It must stay visible in the
+    // finding grid and never be withdrawn by research that answers a
+    // different question.
+    const [result] = enforceEvidenceHonesty(
+      [makeFinding({ category: 'surinterpretation', verification: 'douteuse' })],
+      {}
+    );
+    expect(result.verification).toBeUndefined();
   });
 
   it('keeps verification undefined for editorial categories, even if the model set one', () => {

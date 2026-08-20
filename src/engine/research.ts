@@ -11,12 +11,12 @@ import {
 } from './types';
 import {
   buildClaimGroundedJudgementUserPrompt,
-  buildClaimJudgementUserPrompt,
-  buildCounterfactualProbePrompt,
-  COUNTERFACTUAL_PROBE_SYSTEM_PROMPT,
+  buildResearchAgentStepPrompt,
+  MAX_SOURCE_EXCERPT_CHARS,
   FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT,
-  FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT
+  RESEARCH_AGENT_SYSTEM_PROMPT
 } from './prompts';
+import { fetchPageText, fetchableUrl } from './sourceFetch';
 
 /** A source the article itself links to, as the extractor recovers it. */
 export interface CitedSource {
@@ -43,6 +43,15 @@ export interface ResearchFindingsArgs {
   /** Pins "today" into every judgement prompt; defaults to the real clock. */
   now?: Date;
   onProgress?: (msg: string, pct: number) => void;
+  /**
+   * Emits a human-readable line for each step the research agent takes
+   * (query issued, cited source read, verdict reached), for the live feed.
+   */
+  onActivity?: (note: string) => void;
+  /** Injectable fetcher for reading a cited source the agent decides to read. */
+  fetchImpl?: typeof fetch;
+  /** Per-cited-source fetch timeout; overridable in tests. */
+  fetchTimeoutMs?: number;
   abortSignal?: AbortSignal;
 }
 
@@ -96,45 +105,13 @@ function parseLooseJson(rawText: string): unknown {
 type JudgementRoute = 'grounded' | 'search';
 
 /**
- * Counterfactual probing, the complement of judging: before a claim is
- * accepted, the research stage deliberately searches FOR a contradiction.
- * Probes are generated per claim - the claim restated, a variant aimed at the
- * most checkable element, and a refutation-targeted query - and their results
- * are handed to the judge together with the straightforward ones.
- *
- * Every failure path degrades to the claim alone rather than throwing: a
- * malformed generation or an empty result restores the historical
- * single-query behaviour, which is the guaranteed floor, and the hunt itself
- * is an enrichment, never a hard requirement.
+ * Stage-wide ceiling on the total number of web searches the search route may
+ * issue across all claims, so a long article with many findings cannot run up
+ * an unbounded bill. Each claim is handed a fair share of whatever remains.
  */
-const ProbeQueriesSchema = z.object({
-  probes: z.array(z.string()).max(4).default([])
-});
-
-/** Cap on distinct searches issued per claim, the claim itself included. */
-const MAX_PROBES_PER_CLAIM = 4;
-
-async function generateProbeQueries(
-  client: BaseLLMClient,
-  claim: { quote: string; claim: string },
-  abortSignal?: AbortSignal
-): Promise<string[]> {
-  try {
-    const completion = await client.complete({
-      systemPrompt: COUNTERFACTUAL_PROBE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildCounterfactualProbePrompt(claim) }],
-      abortSignal,
-      temperature: 0.1,
-      maxTokens: 500
-    });
-    const parsed = ProbeQueriesSchema.parse(parseLooseJson(completion.content));
-    const variants = parsed.probes.map((p) => p.trim()).filter((p) => p.length > 0);
-    return [claim.claim, ...variants].slice(0, MAX_PROBES_PER_CLAIM);
-  } catch (err) {
-    rethrowIfAborted(err, abortSignal);
-    return [claim.claim];
-  }
-}
+const STAGE_MAX_SEARCHES = 14;
+/** Floor on how many searches a single claim is guaranteed when several share. */
+const MIN_FAIR_SHARE = 1;
 
 /**
  * Forces the honesty invariant in code: a `verifiee`/`douteuse` verdict with
@@ -150,12 +127,11 @@ async function generateProbeQueries(
  *   whose `snippet`/`quote` is empty. Only a bare zero forces `non-verifiable`.
  * - `search`: the judge saw nothing but what this module put in its prompt.
  *   `evidencedUrls` is exactly the search results that carried real excerpt
- *   text - the article's own cited sources are shown as context but never
- *   count on their own, since the article citing itself proves nothing about
- *   what the judge actually read - so any source the model names that is NOT
- *   in `evidencedUrls` was never actually shown, and is dropped before the
- *   honesty check runs. A bare title/url pair the model invents or
- *   half-remembers can never survive this filter.
+ *   text plus the article's own cited sources that were actually fetched and
+ *   read - a cited URL the agent merely named but never read proves nothing,
+ *   so any source the model names that is NOT in `evidencedUrls` was never
+ *   actually shown and is dropped before the honesty check runs. A bare
+ *   title/url pair the model invents or half-remembers can never survive.
  */
 function enforceSourcedVerdict(
   judgement: z.infer<typeof JudgementSchema>,
@@ -184,36 +160,255 @@ function enforceSourcedVerdict(
 }
 
 /**
- * Ungrounded judgement: the judge only ever sees what this module hands it,
- * so blank-snippet search results are stripped before the prompt is built -
- * a bare title/url is not evidence anyone read the page - and whatever the
- * model claims afterward is still checked against that same evidenced set.
+ * The search-route investigation, rewritten as a bounded agent. The old judge
+ * saw one bullet list of search excerpts and answered once. The agent instead
+ * iterates: each step it decides - issue another search, read a page the
+ * article itself cited (which the old route only ever showed as an inert
+ * context line, never fetched), or render a verdict. Evidence accumulates
+ * across steps and is re-fed into the next decision, so a claim that needs
+ * several searches, or that is best settled by reading the article's own
+ * citation, gets exactly that - the model drives its own investigation.
+ *
+ * Budgets bound the loop so a pathological claim cannot pay forever:
+ * `searchesBudget` is the per-claim share of the stage-wide search budget,
+ * and `maxSteps` caps agent steps. Both feed the agent's context; once either
+ * runs out, the agent is told to conclude with what it has.
+ *
+ * Honesty is still enforced in code, not by the prompt: `evidencedUrls` is
+ * exactly the set of search results that carry real excerpt text plus the
+ * cited pages that were actually fetched and read, and `enforceSourcedVerdict`
+ * drops any source the agent names that is not in that set - the article
+ * citing a URL proves nothing about whether anyone read it.
  */
-async function judgeClaimViaSearch(
+const AgentActionSchema = z.object({
+  action: z.enum(['search', 'read_source', 'verdict' as const]),
+  query: z.string().optional().default(''),
+  url: z.string().optional().default(''),
+  note: z.string().optional().default(''),
+  verification: z.enum(['verifiee', 'douteuse', 'non-verifiable']).optional(),
+  sources: z
+    .array(
+      z.object({
+        title: z.string().default(''),
+        url: z.string().default(''),
+        quote: z.string().optional(),
+        origin: z.enum(['article', 'search']).default('search')
+      })
+    )
+    .default([]),
+  rationale: z.string().optional().default('')
+});
+
+/** Ceiling on agent steps per claim; safety net beneath the search budget. */
+const MAX_AGENT_STEPS = 8;
+/** Timeout for reading one cited source page the agent chooses to read. */
+const AGENT_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * The agent's step decision, expressed as a JSON Schema the clients enforce
+ * via their structured-output path (`response_format: json_schema, strict`
+ * on OpenAI/OpenRouter, `responseSchema` on Gemini). Demanding strict JSON in
+ * prose and repairing the reply is fragile - most models will not honour it
+ * when they can sidestep it - so the shape is handed to the provider itself,
+ * exactly the way the audit and grounded routes already reach their clients.
+ */
+const AGENT_ACTION_JSON_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    action: { type: 'string' as const, enum: ['search', 'read_source', 'verdict'] },
+    query: { type: 'string' as const },
+    url: { type: 'string' as const },
+    note: { type: 'string' as const },
+    verification: { type: 'string' as const, enum: ['verifiee', 'douteuse', 'non-verifiable'] },
+    sources: {
+      type: 'array' as const,
+      items: {
+        type: 'object' as const,
+        properties: {
+          title: { type: 'string' as const },
+          url: { type: 'string' as const },
+          quote: { type: 'string' as const },
+          origin: { type: 'string' as const, enum: ['article', 'search'] }
+        },
+        required: ['title', 'url', 'origin'],
+        additionalProperties: false
+      }
+    },
+    rationale: { type: 'string' as const }
+  },
+  required: ['action'],
+  additionalProperties: false
+} as const;
+
+interface AgentVerdict {
+  verification: FactualClaim['verification'];
+  sources: EvidenceSource[];
+  rationale?: string;
+}
+
+async function researchClaimViaAgent(
   client: BaseLLMClient,
   claim: { quote: string; claim: string },
-  searchResults: SearchResult[],
   articleSources: CitedSource[],
   now: Date,
-  abortSignal?: AbortSignal,
-  counterfactualProbes: string[] = []
-): Promise<{ verification: FactualClaim['verification']; sources: EvidenceSource[]; rationale?: string }> {
-  const evidencedResults = searchResults.filter((r) => r.snippet.trim().length > 0);
+  opts: {
+    searchesBudget: number;
+    onActivity?: (note: string) => void;
+    fetchImpl?: typeof fetch;
+    fetchTimeoutMs?: number;
+    abortSignal?: AbortSignal;
+  }
+): Promise<{ verdict: AgentVerdict; queries: string[] }> {
+  const { searchesBudget, onActivity, fetchImpl = fetch, fetchTimeoutMs = AGENT_FETCH_TIMEOUT_MS, abortSignal } = opts;
 
-  const completion = await client.complete({
-    systemPrompt: FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: buildClaimJudgementUserPrompt(claim, evidencedResults, articleSources, now, counterfactualProbes)
+  const seenUrls = new Set<string>();
+  const searchEvidence: { title: string; url: string; snippet: string }[] = [];
+  const readEvidence: { title: string; url: string; text: string }[] = [];
+  const remainingSources = [...articleSources];
+  const queries: string[] = [];
+  let searchesLeft = searchesBudget;
+
+  const addSearchResults = (results: SearchResult[]): void => {
+    for (const r of results) {
+      if (seenUrls.has(r.url)) continue;
+      seenUrls.add(r.url);
+      searchEvidence.push({ title: r.title, url: r.url, snippet: r.snippet });
+    }
+  };
+
+  for (let step = 0; step < MAX_AGENT_STEPS; step++) {
+    if (abortSignal?.aborted) {
+      throw new DOMException('Research aborted', 'AbortError');
+    }
+
+    const mustConclude = searchesLeft <= 0 || step === MAX_AGENT_STEPS - 1;
+
+    let action: z.infer<typeof AgentActionSchema>;
+    try {
+      const completion = await client.complete({
+        systemPrompt: RESEARCH_AGENT_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content: buildResearchAgentStepPrompt({
+              claim,
+              searchEvidence,
+              readEvidence,
+              remainingArticleSources: remainingSources,
+              now,
+              searchesLeft,
+              readsLeft: remainingSources.length,
+              mustConclude
+            })
+          }
+        ],
+        abortSignal,
+        temperature: 0.1,
+        maxTokens: 700,
+        // The step shape is enforced by the provider (structured output), not
+        // asked for in prose and repaired - many models will not honour a
+        // strict-JSON instruction they can sidestep, and a parse-repair fallback
+        // silently swallows that drift.
+        jsonSchema: AGENT_ACTION_JSON_SCHEMA
+      });
+      action = AgentActionSchema.parse(parseLooseJson(completion.content));
+    } catch (err) {
+      rethrowIfAborted(err, abortSignal);
+      if (searchEvidence.length === 0 && readEvidence.length === 0) {
+        // Nothing was ever gathered and no step can be parsed: this is not a
+        // claim to adjudicate, it is a broker failure. Degrade to non-verifiable
+        // and stop rather than loop against a broken completion.
+        return {
+          verdict: { verification: 'non-verifiable', sources: [], rationale: `Vérification impossible : ${(err as Error).message}` },
+          queries
+        };
       }
-    ],
-    abortSignal
-  });
+      // A single malformed step is not fatal if we already have evidence: force
+      // a concluding look with what we have (searchesLeft <= 0 path below).
+      action = { action: 'verdict' as const, verification: 'non-verifiable' as const, sources: [], rationale: '', query: '', url: '', note: '' };
+    }
 
-  const parsed = JudgementSchema.parse(parseLooseJson(completion.content));
-  const evidencedUrls = new Set<string>(evidencedResults.map((r) => r.url));
-  return enforceSourcedVerdict(parsed, 'search', evidencedUrls);
+    if (action.action === 'verdict') {
+      const evidencedUrls = new Set<string>([
+        ...searchEvidence.filter((r) => r.snippet.trim().length > 0).map((r) => r.url),
+        ...readEvidence.map((r) => r.url)
+      ]);
+      const parsed = JudgementSchema.parse({
+        verification: action.verification ?? 'non-verifiable',
+        sources: action.sources ?? [],
+        rationale: action.rationale
+      });
+      return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls), queries };
+    }
+
+    if (mustConclude) {
+      // Budget spent but the agent asked for yet another investigation step.
+      // Render the honest conclusion rather than looping.
+      const evidencedUrls = new Set<string>([
+        ...searchEvidence.filter((r) => r.snippet.trim().length > 0).map((r) => r.url),
+        ...readEvidence.map((r) => r.url)
+      ]);
+      const parsed = JudgementSchema.parse({
+        verification: 'non-verifiable',
+        sources: [],
+        rationale: searchesLeft <= 0 ? 'Budget de recherche épuisé sans preuve suffisante.' : 'Nombre maximal d’étapes atteint sans preuve suffisante.'
+      });
+      return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls), queries };
+    }
+
+    if (action.action === 'search') {
+      const query = action.query.trim();
+      if (!query) continue; // malformed empty query; step wastage only
+      if (searchesLeft <= 0) continue;
+      searchesLeft -= 1;
+      queries.push(query);
+      onActivity?.(`Recherche : ${query}`);
+      let results: SearchResult[] = [];
+      try {
+        results = await client.webSearch(query, { maxResults: 5 });
+      } catch (err) {
+        rethrowIfAborted(err, abortSignal);
+        onActivity?.(`Recherche échouée : ${query}`);
+      }
+      addSearchResults(results);
+      continue;
+    }
+
+    if (action.action === 'read_source') {
+      const url = action.url.trim();
+      const candidate = remainingSources.find((s) => s.href === url || s.domain === url);
+      const fetchUrl = candidate ? fetchableUrl(candidate.href) : url ? fetchableUrl(url) : null;
+      if (!fetchUrl || !candidate) {
+        // The agent named a URL that is not one of the article's cited sources.
+        // That is not evidence anyone read anything; ignore it and continue.
+        continue;
+      }
+      remainingSources.splice(remainingSources.indexOf(candidate), 1);
+      onActivity?.(`Lecture de la source citée : ${candidate.text || candidate.domain}`);
+      let pageText = '';
+      try {
+        pageText = await fetchPageText(fetchUrl, fetchTimeoutMs, fetchImpl);
+      } catch (err) {
+        rethrowIfAborted(err, abortSignal);
+        continue;
+      }
+      if (!pageText.trim()) continue;
+      readEvidence.push({ title: candidate.text || candidate.domain || fetchUrl, url: fetchUrl, text: pageText.slice(0, MAX_SOURCE_EXCERPT_CHARS) });
+      continue;
+    }
+  }
+
+  // Loop exhausted without an explicit verdict.
+  const evidencedUrls = new Set<string>([
+    ...searchEvidence.filter((r) => r.snippet.trim().length > 0).map((r) => r.url),
+    ...readEvidence.map((r) => r.url)
+  ]);
+  const parsed = JudgementSchema.parse({
+    verification: 'non-verifiable',
+    sources: [],
+    rationale: 'Investigation terminée sans verdict explicite.'
+  });
+  return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls), queries };
 }
 
 /**
@@ -303,7 +498,7 @@ async function judgeClaimGrounded(
  * all of them.
  */
 export async function researchFindings(args: ResearchFindingsArgs): Promise<ResearchFindingsResult> {
-  const { client, input, findings, citedSources, maxSearches, onProgress, abortSignal } = args;
+  const { client, input, findings, citedSources, maxSearches, onProgress, onActivity, fetchImpl, fetchTimeoutMs, abortSignal } = args;
   const now = args.now ?? new Date();
   void input; // kept in the signature for parity with the prompt builders and future per-article context
 
@@ -350,6 +545,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
 
   const queries: string[] = [];
   const claims: FactualClaim[] = [];
+  let totalSearchesLeft = STAGE_MAX_SEARCHES;
 
   for (let i = 0; i < factual.length; i++) {
     if (abortSignal?.aborted) {
@@ -359,6 +555,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     const finding = factual[i];
     const claimUnderTest = { quote: finding.quote, claim: finding.quote };
     onProgress?.(`Vérification : ${finding.quote}`, 10 + Math.round((i / factual.length) * 80));
+    onActivity?.(`Vérification du constat : ${finding.quote.slice(0, 80)}`);
 
     const articleSourcesForBlock = citedSources.filter((s) => !s.blockId || s.blockId === finding.blockId);
 
@@ -394,64 +591,29 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
       continue;
     }
 
-    let searchResults: SearchResult[] = [];
-    let searchFailed = false;
-    let searchError = '';
-    const searchedQueries: string[] = [];
+    // The article's own citations participate in the investigation: they are
+    // handed to the agent as readable sources, exactly as the user asked -
+    // always in the search process, not merely listed beside it.
+    const fairShare = Math.max(MIN_FAIR_SHARE, Math.floor(totalSearchesLeft / Math.max(1, factual.length - i)));
     try {
-      // Counterfactual hunt: generate the probe set (claim restated, targeted
-      // variant, contradiction-seeking query), then search each. Results are
-      // merged de-duplicated by url, so the judge sees both the confirming and
-      // the negating evidence and must weigh the contradiction explicitly.
-      const probes = await generateProbeQueries(client, claimUnderTest, abortSignal);
-      const seenUrls = new Set<string>();
-      for (const probe of probes) {
-        if (abortSignal?.aborted) {
-          throw new DOMException('Research aborted', 'AbortError');
-        }
-        const results = await client.webSearch(probe, { maxResults: 5 });
-        for (const r of results) {
-          if (seenUrls.has(r.url)) continue;
-          seenUrls.add(r.url);
-          searchResults.push(r);
-        }
-        searchedQueries.push(probe);
-      }
-    } catch (err) {
-      rethrowIfAborted(err, abortSignal);
-      searchFailed = true;
-      searchError = (err as Error).message;
-    }
-
-    if (searchFailed) {
-      queries.push(finding.quote);
-      claims.push(
-        FactualClaimSchema.parse({
-          findingId: finding.id,
-          blockId: finding.blockId,
-          quote: finding.quote,
-          claim: finding.quote,
-          verification: 'non-verifiable',
-          sources: [],
-          rationale: `Recherche web indisponible pour ce constat : ${searchError}`
-        })
+      const { verdict, queries: claimQueries } = await researchClaimViaAgent(
+        client,
+        claimUnderTest,
+        articleSourcesForBlock,
+        now,
+        { searchesBudget: fairShare, onActivity, fetchImpl, fetchTimeoutMs, abortSignal }
       );
-      continue;
-    }
-
-    queries.push(...searchedQueries);
-
-    try {
-      const judgement = await judgeClaimViaSearch(client, claimUnderTest, searchResults, articleSourcesForBlock, now, abortSignal, searchedQueries);
+      totalSearchesLeft = Math.max(0, totalSearchesLeft - claimQueries.length);
+      queries.push(...claimQueries);
       claims.push(
         FactualClaimSchema.parse({
           findingId: finding.id,
           blockId: finding.blockId,
           quote: finding.quote,
           claim: finding.quote,
-          verification: judgement.verification,
-          sources: judgement.sources,
-          rationale: judgement.rationale
+          verification: verdict.verification,
+          sources: verdict.sources,
+          rationale: verdict.rationale
         })
       );
     } catch (err) {
