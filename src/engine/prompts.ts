@@ -53,78 +53,95 @@ function formatTemporalContextSection(now: Date): string {
   return `\n\nCONTEXTE TEMPOREL :\nNous sommes aujourd'hui le ${long} (${iso}).\nUne date récente ou proche dans le futur par rapport à cette date n'est PAS en soi une erreur : tu ne dois JAMAIS la signaler comme fautive au seul motif qu'elle est postérieure à tes connaissances internes ou proche de la limite de celles-ci. Tu ne peux contester une date que si une source que tu as réellement consultée la contredit explicitement.\nLa même prudence vaut pour tout fait qui a pu CHANGER depuis la limite de tes connaissances : titulaire d'une fonction ou d'un mandat, dirigeant, nom d'une organisation, résultat d'une élection, état d'une loi, bilan chiffré. Tes connaissances internes sont peut-être périmées, pas l'article. Si l'article contredit ce que tu crois savoir sur un tel fait, tu ne dois JAMAIS écrire qu'il se trompe ni proposer la valeur que tu crois correcte : tu formules une réserve à vérifier, et c'est une source réellement consultée qui tranchera.`;
 }
 
-export const FOURCHES_CAUDINES_CLAIM_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines ».
-On te donne une affirmation, les résultats de recherche web obtenus pour elle, et les sources que l'article lui-même cite en lien hypertexte.
-Tu ne peux répondre 'verifiee' ou 'douteuse' QUE si au moins une source fournie (recherche ou article) étaye explicitement ce verdict ; toute source utilisée DOIT figurer dans 'sources'.
-Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'non-verifiable' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
-Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.`;
+/**
+ * The agent stage of factual research. Unlike the one-shot judge, the agent
+ * is allowed to decide its own investigation: it can issue another search, it
+ * can read a source the article itself cites, and it can keep going until it
+ * has enough - or until the run hands it a budget ceiling it must respect.
+ * Each step returns one decision; aborting-less search/read actions feed back
+ * into the next step's context, and a `verdict` ends the claim.
+ *
+ * Honesty is still enforced in code downstream, never left to the model:
+ * whatever it names in `sources` is later filtered to the URLs the evidence
+ * actually contains, so a verdict has to rest on something that was really
+ * searched or really read.
+ */
+export const RESEARCH_AGENT_SYSTEM_PROMPT = `Tu es un agent de vérification factuelle du moteur « Fourches Caudines ».
+On te confie une affirmation, les résultats de recherche web déjà obtenus, les pages de sources citées par l'article qui ont déjà été lues, et la liste des autres sources que l'article cite pour ce passage (pas encore lues).
+À CHAQUE ÉTAPE tu décides de la suite : il n'y a pas de limite de fond aux étapes, seulement les budgets que la recherche te donne (recherches restantes, pages lisibles).
+- Si les preuves actuelles ne te suffisent pas, tu peux :
+  * 'search' : lancer une nouvelle recherche web (fournis 'query').
+  * 'read_source' : lire une source citée par l'article (fournis 'url', pris dans la liste des sources NON ENCORE LUES ; n'en invente pas).
+- Si tu as assez pour te prononcer, tu rends 'verdict' (avec verification, sources, rationale).
+Règles d'honnêteté absolues :
+- 'verifiee' ou 'douteuse' exigent au moins une source réellement consultée (résultat de recherche avec extrait lisible, ou page de l'article effectivement lue) qui étaye explicitement le verdict, et toute source utilisée DOIT figurer dans 'sources' avec son URL exacte et son origine ('search' pour un résultat de recherche, 'article' pour une page de l'article lue).
+- Une URL que tu n'as pas réellement lue ne prouve rien : tu ne cites que ce que tu as vu dans le contexte fourni.
+- Si les preuves manquent, sont insuffisantes ou ambiguës, rends 'verdict' avec 'non-verifiable' et explique dans 'rationale'.
+- La recherche doit aussi traquer la CONTRADICTION : si tu soupçonnes qu'une affirmation est fausse, recherche activement ce qui la contredit plutôt que de te contenter de ce qui la répète.
+Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.
+
+FORMAT JSON STRICT ATTENDU (une SEULE action) :
+{ "action": "search", "query": "nouvelle requête", "note": "phrase brève expliquant ce que tu cherches" }
+ou
+{ "action": "read_source", "url": "https://...", "note": "source que tu lis et pourquoi" }
+ou
+{ "action": "verdict", "verification": "verifiee" | "douteuse" | "non-verifiable", "sources": [ { "title": "...", "url": "https://...", "quote": "extrait", "origin": "search" | "article" } ], "rationale": "..." }`;
 
 /**
- * Generates the user prompt for the per-claim judgement stage, embedding
- * the search results and the article's own cited sources for that block.
- * `counterfactualProbes` names the contradiction-hunting queries whose
- * results are mixed into `searchResults`, so the judge weighs the negating
- * evidence explicitly instead of skimming it past as noise.
+ * Builds the per-step prompt for the research agent: the claim, the evidence
+ * gathered so far (searches + read cited sources), the article's remaining
+ * citable sources, and the budgets left. When `mustConclude` is true the agent
+ * is told its investigation is over and it has to render a verdict with what
+ * it has - the bounded fallback that keeps a pathological claim from looping.
  */
-export function buildClaimJudgementUserPrompt(
-  claim: { quote: string; claim: string },
-  searchResults: { title: string; url: string; snippet: string }[],
-  articleSources: { href: string; domain: string; text: string }[],
-  now: Date = new Date(),
-  counterfactualProbes: string[] = []
-): string {
-  const searchFormatted = searchResults.length
-    ? searchResults.map((r) => `- ${r.title} (${r.url})\n  ${r.snippet}`).join('\n')
-    : '(aucun résultat de recherche)';
-  const articleFormatted = articleSources.length
-    ? articleSources.map((s) => `- ${s.text} -> ${s.href} (${s.domain})`).join('\n')
-    : '(aucune source citée par l\'article pour ce passage)';
-  const counterfactualSection = counterfactualProbes.length
-    ? `\nRECHERCHES CONTREFACTUELLES AUSSI EFFECTUÉES (conçues pour trouver une contradiction) :\n${counterfactualProbes.map((q) => `- ${q}`).join('\n')}
-Les résultats ci-dessus incluent ces recherches. Une page qui répète simplement l'affirmation ne la confirme pas : cherche une confirmation indépendante, et pèse explicitement toute page qui contredit l'affirmation.\n`
-    : '';
+export function buildResearchAgentStepPrompt(params: {
+  claim: { quote: string; claim: string };
+  searchEvidence: { title: string; url: string; snippet: string }[];
+  readEvidence: { title: string; url: string; text: string }[];
+  remainingArticleSources: { href: string; domain: string; text: string }[];
+  now?: Date;
+  searchesLeft: number;
+  readsLeft: number;
+  mustConclude?: boolean;
+}): string {
+  const {
+    claim,
+    searchEvidence,
+    readEvidence,
+    remainingArticleSources,
+    now = new Date(),
+    searchesLeft,
+    readsLeft,
+    mustConclude = false
+  } = params;
+
+  const searchFormatted = searchEvidence.length
+    ? searchEvidence.map((r) => `- ${r.title} (${r.url})\n  ${r.snippet}`).join('\n')
+    : '(aucun résultat de recherche pour l\'instant)';
+  const readFormatted = readEvidence.length
+    ? readEvidence.map((r) => `- ${r.title} (${r.url})\n  ${r.text}`).join('\n')
+    : '(aucune source de l\'article lue pour l\'instant)';
+  const remainingFormatted = remainingArticleSources.length
+    ? remainingArticleSources.map((s) => `- ${s.text} -> ${s.href} (${s.domain})`).join('\n')
+    : '(aucune autre source citée par l\'article à lire)';
+
+  const concludeNote = mustConclude
+    ? `\nCONSIGNE FINALE : tes budgets d'investigation sont épuisés. Rend ton verdict MAINTENANT, avec ce que tu as : si tu n'as pas assez pour vérifier, rends 'non-verifiable'.`
+    : `\nBudgets restants : ${searchesLeft} recherche(s), ${readsLeft} lecture(s) de source citée.`;
 
   return `AFFIRMATION À VÉRIFIER : ${claim.claim}
 CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
 ${formatTemporalContextSection(now)}
 
-RÉSULTATS DE RECHERCHE (ce sont les seuls extraits que tu peux lire ; tu peux t'appuyer uniquement sur le texte affiché ci-dessous, jamais sur un titre ou une URL seuls) :
-${searchFormatted}${counterfactualSection}
-SOURCES CITÉES PAR L'ARTICLE POUR CE PASSAGE :
-${articleFormatted}
+RÉSULTATS DE RECHERCHE DÉJÀ OBTENUS (extraits lisibles uniquement) :
+${searchFormatted}
 
-FORMAT JSON STRICT ATTENDU :
-{
-  "verification": "verifiee" | "douteuse" | "non-verifiable",
-  "sources": [
-    { "title": "titre de la source", "url": "https://...", "quote": "extrait pertinent", "origin": "article" | "search" }
-  ],
-  "rationale": "justification courte du verdict, y compris si tu n'as pas pu vérifier"
-}`;
-}
+PAGES DE SOURCES CITÉES DÉJÀ LUES (texte extrait de la page réellement consultée) :
+${readFormatted}
 
-/**
- * Counterfactual probing: before a claim is accepted as verified, the research
- * stage deliberately searches FOR a contradiction, not just for confirmation.
- * These queries are generated per claim - the claim restated, a variant aimed
- * at the most checkable element, and a refutation-targeted query - and their
- * results are handed to the judge alongside the straightforward ones, with the
- * judge told that echoing pages confirm nothing and the negating evidence must
- * be weighed explicitly.
- */
-export const COUNTERFACTUAL_PROBE_SYSTEM_PROMPT = `Tu prépares la vérification factuelle d'une affirmation de presse.
-Ton travail : produire 3 requêtes de recherche web en langage naturel qui permettent de VÉRIFIER l'affirmation, dont au moins une conçue explicitement pour trouver une CONTRADICTION.
-- Requête 1 : l'affirmation elle-même, reformulée simplement (entités clés, chiffres, noms, dates).
-- Requête 2 : une variante ciblant l'élément factuel le plus vérifiable (chiffre, date, nom, lieu).
-- Requête 3 : une requête contrefactuelle visant à débusquer une contradiction : l'élément clé accompagné d'un mot de réfutation (« contredit », « démenti », « faux », « erreur »).
-Pas de guillemets ni d'opérateurs de recherche, uniquement du langage naturel.
-Tu produis UNIQUEMENT du JSON valide : { "probes": ["requête 1", "requête 2", "requête 3"] }`;
-
-export function buildCounterfactualProbePrompt(claim: { quote: string; claim: string }): string {
-  return `AFFIRMATION À VÉRIFIER : ${claim.claim}
-CITATION EXACTE DANS L'ARTICLE : ${claim.quote}
-
-Produis les 3 requêtes de recherche au format JSON strict : { "probes": ["requête 1", "requête 2", "requête 3"] }`;
+AUTRES SOURCES CITÉES PAR L'ARTICLE (non encore lues, lisibles via read_source) :
+${remainingFormatted}
+${concludeNote}`;
 }
 
 export const FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines », en mode recherche intégrée.

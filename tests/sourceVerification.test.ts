@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BaseLLMClient } from '../src/client/base';
+import { extractPageText } from '../src/engine/sourceFetch';
 import { FactualClaim, SourceCheck } from '../src/engine/types';
 import {
-  extractPageText,
   reconcileSourceChecks,
   VerifyCitedSourcesArgs,
   verifyCitedSources

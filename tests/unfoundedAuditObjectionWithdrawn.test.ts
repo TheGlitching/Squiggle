@@ -166,5 +166,20 @@ describe('an audit objection the evidence confirms is withdrawn, not published a
     expect(report.claims).toHaveLength(1);
     expect(report.claims[0].verification).toBe('verifiee');
     expect(report.claims[0].sources[0].url).toBe(CONFIRMING_SOURCE_URL);
+
+    // The withdrawn objection must not keep costing the article. The audit-time
+    // score used to penalize every objection the model raised, then research
+    // refuted some and removed them from the findings - but the number was
+    // frozen at parse time, so a report could show a weak score with all its
+    // objections dismissed. The pipeline now recomputes the composite score
+    // from the model's raw marks against the findings that actually reach the
+    // reader: a refuted objection no longer reduces its domain. The domain
+    // that carried the objection therefore holds its full awarded mark, and
+    // the report can never again show a note that contradicts the constats it
+    // publishes.
+    expect(report.findings).toHaveLength(0);
+    const robustesse = report.categories.find((c) => c.domain === 'robustesse_factuelle');
+    // 10 was the model's raw mark, and nothing survived to reduce it.
+    expect(robustesse?.score).toBe(10);
   });
 });

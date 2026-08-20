@@ -106,11 +106,19 @@ export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]):
  * below): whether the article sourced a statement is a fact about the text
  * itself, settled once by `enforceEvidenceHonesty` against the article's own
  * citations, not something a web search could confirm or refute.
+ *
+ * `surinterpretation` is deliberately NOT here. It judges how far the article
+ * over-reaches from its evidence ("L'été 2026 rime avec une France à sec"
+ * drawn from a local report), which is a cadrage judgment about the prose's
+ * scope, not a claim about the world. Asking whether the general statement
+ * happens to be true elsewhere would answer a different question than whether
+ * the article over-generalized - so it is treated like `cadrage`: editorial,
+ * never researched, never withdrawn, always visible and always carrying its
+ * full weight in the score.
  */
 export const FACTUAL_FINDING_CATEGORIES: Record<string, true> = {
   'source-absente': true,
-  'affirmation-non-etayee': true,
-  surinterpretation: true
+  'affirmation-non-etayee': true
 };
 
 /**
@@ -125,8 +133,7 @@ export const FACTUAL_FINDING_CATEGORIES: Record<string, true> = {
  * the findings worth researching after the audit runs.
  */
 export const RESEARCHABLE_FINDING_CATEGORIES: Record<string, true> = {
-  'affirmation-non-etayee': true,
-  surinterpretation: true
+  'affirmation-non-etayee': true
 };
 
 /**
@@ -327,7 +334,13 @@ export function parseAndValidateLlmOutput(
       analyzedAt: new Date().toISOString(),
       durationMs: options.durationMs || 0,
       textLengthChars: input.blocks.reduce((acc, b) => acc + b.text.length, 0),
-      blocksCount: input.blocks.length
+      blocksCount: input.blocks.length,
+      // The model's raw per-domain marks, before any defect reduction. The
+      // pipeline recomputes the composite score against the reconciled findings
+      // (research may withdraw objectives), and can only do so from the
+      // unreduced marks - a reduced category score cannot be un-reduced. This
+      // field is engine plumbing, not reader-facing.
+      rawScores: rawData.scores
     }
   };
 
