@@ -9,6 +9,8 @@
  */
 
 import { ArticleExtractor } from './extractor';
+import { detectSocialPlatform } from './socialPlatform';
+import { SocialExtractor } from './socialExtractor';
 import { RangeTracker } from './rangeTracker';
 import { ShadowHighlightOverlay } from './shadowOverlay';
 import {
@@ -25,11 +27,23 @@ export class ContentScriptController {
   private overlay: ShadowHighlightOverlay | null = null;
   private currentArticle: ExtractedArticle | null = null;
   private currentAnchoredHighlights: AnchoredHighlight[] = [];
+  private doc: Document;
+  private url: string;
+  private socialExtractor: SocialExtractor | null = null;
 
-  constructor(doc?: Document) {
-    const targetDoc = doc || (typeof document !== 'undefined' ? document : ({} as Document));
-    this.extractor = new ArticleExtractor(targetDoc);
-    this.rangeTracker = new RangeTracker(targetDoc);
+  /**
+   * `url` is injectable so tests can classify a page without a live browser;
+   * when omitted it falls back to the hosting window, matching production.
+   */
+  constructor(doc?: Document, url?: string) {
+    this.doc = doc || (typeof document !== 'undefined' ? document : ({} as Document));
+    this.url =
+      url ??
+      (typeof window !== 'undefined' && typeof window.location?.href === 'string'
+        ? window.location.href
+        : '');
+    this.extractor = new ArticleExtractor(this.doc);
+    this.rangeTracker = new RangeTracker(this.doc);
   }
 
   /**
@@ -43,11 +57,41 @@ export class ContentScriptController {
   }
 
   /**
-   * Detect and extract article from the current page
+   * Detect and extract the article from the current page. A classified social
+   * thread (an X status page) is assembled by the platform thread extractor,
+   * which reads the same article shape the rest of the pipeline expects;
+   * anything else falls back to the semantic article extractor, or to it when
+   * the thread rendered no readable posts.
    */
   public detectAndExtract(): ExtractedArticle {
-    this.currentArticle = this.extractor.extract();
+    let article: ExtractedArticle | null = null;
+    if (this.url) {
+      const match = detectSocialPlatform(this.hostOf(this.url), this.pathOf(this.url));
+      if (match) {
+        if (!this.socialExtractor) {
+          this.socialExtractor = new SocialExtractor(this.doc, match.platform, this.url);
+        }
+        article = this.socialExtractor.extract();
+      }
+    }
+    this.currentArticle = article ?? this.extractor.extract();
     return this.currentArticle;
+  }
+
+  private hostOf(urlStr: string): string {
+    try {
+      return new URL(urlStr).host;
+    } catch {
+      return '';
+    }
+  }
+
+  private pathOf(urlStr: string): string {
+    try {
+      return new URL(urlStr).pathname;
+    } catch {
+      return '';
+    }
   }
 
   /**
