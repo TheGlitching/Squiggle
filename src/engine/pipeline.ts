@@ -3,6 +3,7 @@ import {
   buildFourchesCaudinesUserPrompt,
 } from './prompts';
 import { parseAndValidateLlmOutput, reconcileResearchedFindings } from './validator';
+import { computeFourchesCaudinesScore } from './scoring';
 import { researchFindings, CitedSource } from './research';
 import { verifyCitedSources } from './sourceVerification';
 import { AnalysisInput, AnalysisReport, EvidenceSource, TextBlock } from './types';
@@ -28,6 +29,12 @@ export interface PipelineProgressEvent {
   progress: number;
   partialText?: string;
   error?: string;
+  /**
+   * Human-readable steps the run has taken so far (queries issued, cited
+   * sources read, verdicts reached), in order - the live activity feed. The
+   * array is cumulative within a run so a re-render shows the full trail.
+   */
+  notes?: string[];
 }
 
 /**
@@ -73,6 +80,10 @@ export class AnalysisPipeline {
   private demoMode: boolean;
   private onProgress?: (event: PipelineProgressEvent) => void;
   private abortController: AbortController | null = null;
+  /** Cumulative human-readable steps for the live feed, reset each run. */
+  private notes: string[] = [];
+  /** Last emitted progress, reused by live activity notes so the bar holds. */
+  private lastProgress = 0;
 
   constructor(options: AnalysisPipelineOptions = {}) {
     this.client = options.client;
@@ -85,6 +96,26 @@ export class AnalysisPipeline {
       this.abortController.abort();
       this.abortController = null;
     }
+  }
+
+  /**
+   * Records a human-readable step and re-emits progress so the live feed is
+   * fresh even when no stage boundary moved. Each note is appended once to the
+   * cumulative trail; a duplicate note id (used by callers to avoid re-emitting
+   * the same line) stays off the trail.
+   */
+  private noteActivity(note: string): void {
+    if (!this.onProgress) return;
+    const known = new Set(this.notes);
+    if (known.has(note)) return;
+    this.notes.push(note);
+    this.onProgress({
+      status: 'analyzing',
+      stage: 'researching',
+      message: note,
+      progress: this.lastProgress,
+      notes: [...this.notes],
+    });
   }
 
   private reportProgress(stage: PipelineStage, message: string, progress: number, extra?: Partial<PipelineProgressEvent>): void {
@@ -100,11 +131,13 @@ export class AnalysisPipeline {
         ? 'error'
         : 'analyzing';
 
+    this.lastProgress = progress;
     this.onProgress({
       status,
       stage,
       message,
       progress,
+      notes: [...this.notes],
       ...extra,
     });
   }
@@ -135,6 +168,9 @@ export class AnalysisPipeline {
     if (!this.client) {
       throw new MissingProviderError();
     }
+
+    this.notes = [];
+    this.lastProgress = 0;
 
     try {
       this.reportProgress('preparing_prompt', 'Application de la grille des Fourches Caudines...', 10);
@@ -221,6 +257,7 @@ export class AnalysisPipeline {
         // longer run, so its count belongs inside the share of the bar it owns.
         onProgress: (message, pct) =>
           this.reportProgress('researching', message, placeInWindow(pct, RESEARCH_WINDOW)),
+        onActivity: (note) => this.noteActivity(note),
         abortSignal: this.abortController?.signal,
       });
 
@@ -240,14 +277,28 @@ export class AnalysisPipeline {
         claims,
         citedSources,
         now,
+        onActivity: (note) => this.noteActivity(note),
         abortSignal: this.abortController?.signal,
       });
       const resolvedClaims = sourceVerification.claims;
 
       const { findings, withdrawn } = reconcileResearchedFindings(auditedReport.findings, resolvedClaims);
 
+      // Recompute the composite score against the findings the reader will
+      // actually see. The audit-time snapshot scored every objection the
+      // model raised; research has since refuted some and withdrawn them, but
+      // the number was frozen at parse time and kept penalizing the article
+      // for doubts the same report now admits were cleared - a weak score
+      // with all its objections dismissed. Rescoring from the raw model marks
+      // against the reconciled findings makes the note and the grid agree:
+      // only what still stands costs anything.
+      const finalScore = computeFourchesCaudinesScore(auditedReport.meta.rawScores ?? [], findings);
+
       const report: AnalysisReport = {
         ...auditedReport,
+        score: finalScore.totalScore,
+        scoreBand: finalScore.scoreBand,
+        categories: finalScore.normalizedCategories,
         findings,
         claims: resolvedClaims,
         research: { ...research, withdrawn, sourceChecks: sourceVerification.checks },

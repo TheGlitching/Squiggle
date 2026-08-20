@@ -294,7 +294,7 @@ describe('Research disclosure', () => {
     expect(markup).not.toContain('2 douteuses');
   });
 
-  it('shows the objections evidence refuted, and says the score predates that check', () => {
+  it('shows the objections evidence refuted, and that the note only counts what survives', () => {
     const research: ResearchRecord = {
       performed: true,
       provider: 'anthropic',
@@ -323,9 +323,11 @@ describe('Research disclosure', () => {
     expect(markup).toContain('Éric Ciotti est maire de Nice depuis juin 2024');
     expect(markup).toContain('href="https://nice.fr/actualites/maire"');
 
-    // The score came from marks the model gave while it still believed the
-    // objection, so the disclosure has to say so rather than imply a rescoring.
-    expect(markup).toContain('avant cette vérification');
+    // The score is recomputed after this refutation, so only the constats that
+    // survive cost anything - never an admission that the note predates the
+    // verification that disputes it.
+    expect(markup).toContain('ne retient que les constats qui survivent');
+    expect(markup).not.toContain('avant cette vérification');
   });
 
   it('shows no withdrawal block when every objection survived research', () => {

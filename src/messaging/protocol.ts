@@ -66,6 +66,8 @@ export interface FcEventMap {
     progress: number;
     partialText?: string;
     error?: string;
+    /** Cumulative human-readable steps of the run; drives the live activity feed. */
+    notes?: string[];
   };
   ANALYSIS_COMPLETE: { tabId: number; result: AnalysisResult };
   ANALYSIS_ERROR: { tabId: number; error: string };

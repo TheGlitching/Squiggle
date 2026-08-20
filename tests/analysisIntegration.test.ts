@@ -35,16 +35,27 @@ describe('analysis pipeline -> UI/content adapters', () => {
     }
   });
 
-  it('reports progress and reaches a terminal success state', async () => {
+  it('reports progress and reaches a terminal success state, carrying the notes feed on every event', async () => {
     const seen: string[] = [];
+    const notesSeen: string[][] = [];
     const pipeline = new AnalysisPipeline({
       demoMode: true,
-      onProgress: (evt) => seen.push(evt.status),
+      onProgress: (evt) => {
+        seen.push(evt.status);
+        // Every progress event carries the cumulative live notes trail so the
+        // panel's activity feed can render it without guessing.
+        expect(Array.isArray(evt.notes)).toBe(true);
+        notesSeen.push(evt.notes ?? []);
+      },
     });
     await pipeline.analyze({ text: 'Un article de test.', title: 'Test' });
 
     expect(seen.length).toBeGreaterThan(0);
     expect(seen[seen.length - 1]).toBe('completed');
+    // The notes trail is cumulative: each event's list never shrinks.
+    for (let i = 1; i < notesSeen.length; i++) {
+      expect(notesSeen[i].length).toBeGreaterThanOrEqual(notesSeen[i - 1].length);
+    }
   });
 
   it('maps every finding into a fully populated highlight target', async () => {
