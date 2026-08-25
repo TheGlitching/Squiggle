@@ -26,6 +26,31 @@ import type { FcRpcMap } from '../messaging/protocol';
  */
 const MIN_ANALYSABLE_WORDS = 200;
 
+/** Firefox-only action API: MV3 replaced `browser.browserAction` with `browser.action`. */
+interface FirefoxActionApi {
+  onClicked: { addListener(callback: (tab: { id?: number }) => void): void };
+}
+
+/** Firefox sidebar toggle API (`open` available from Firefox 136 for MV3). */
+interface FirefoxSidebarApi {
+  open(): Promise<void>;
+}
+
+/** Firefox-only surface not present on the Chrome-shaped `browser` type. */
+interface FirefoxNamespace {
+  action?: FirefoxActionApi;
+  sidebarAction?: FirefoxSidebarApi;
+}
+
+/**
+ * Narrow the polyfill global to the Firefox-only namespace. One unchecked cast,
+ * hoisted here so callers never inline-cast; the guest runtime decides which
+ * surface exists, so the methods are still null-checked at each call site.
+ */
+function firefoxNamespace(browserLike: typeof chrome | undefined): FirefoxNamespace | undefined {
+  return browserLike as unknown as FirefoxNamespace | undefined;
+}
+
 export interface BackgroundServiceWorkerOptions {
   bus?: TypedMessageBus;
   stateManager?: TabStateManager;
@@ -57,43 +82,55 @@ export class BackgroundServiceWorker {
    * Configure browser action & sidepanel behavior for Chrome and Firefox MV3
    */
   public setupSidepanelAction(): void {
-    // Chrome sidePanel setup
-    if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
-      chrome.sidePanel
-        .setPanelBehavior({ openPanelOnActionClick: true })
-        .catch((err) => console.warn('Failed to setPanelBehavior on chrome.sidePanel:', err));
-    }
-
-    // Fallback or Firefox action click handler
-    if (typeof chrome !== 'undefined' && chrome.action && chrome.action.onClicked) {
-      chrome.action.onClicked.addListener(async (tab) => {
-        if (!tab.id) return;
-        await this.openSidepanel(tab.id);
-      });
-    } else if (typeof browser !== 'undefined' && (browser as any).browserAction?.onClicked) {
-      (browser as any).browserAction.onClicked.addListener(async (tab: any) => {
-        if (!tab.id) return;
-        await this.openSidepanel(tab.id);
-      });
+    if (__TARGET__ === 'chrome') {
+      // Chrome sidePanel opens the whole side panel on toolbar click; the
+      // programmatic open is the fallback when setPanelBehavior is absent.
+      if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+        chrome.sidePanel
+          .setPanelBehavior({ openPanelOnActionClick: true })
+          .catch((err) => console.warn('Failed to setPanelBehavior on chrome.sidePanel:', err));
+      }
+      if (typeof chrome !== 'undefined' && chrome.action && chrome.action.onClicked) {
+        chrome.action.onClicked.addListener(async (tab) => {
+          if (!tab.id) return;
+          await this.openSidepanel(tab.id);
+        });
+      }
+    } else {
+      // Firefox MV3: `browser.browserAction` was removed in Manifest V3 (the
+      // action API is `browser.action`), so the MV2-flavoured listener is
+      // dropped and the sidebar is toggled by its own action.
+      const actionApi = firefoxNamespace(browser)?.action;
+      if (actionApi?.onClicked) {
+        actionApi.onClicked.addListener(async (tab) => {
+          if (!tab.id) return;
+          await this.openSidepanel(tab.id);
+        });
+      }
     }
   }
 
   public async openSidepanel(tabId: number): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.open) {
-      try {
-        await chrome.sidePanel.open({ tabId });
-      } catch {
+    if (__TARGET__ === 'chrome') {
+      if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.open) {
         try {
-          await chrome.sidePanel.open({ windowId: (await chrome.tabs.get(tabId)).windowId });
-        } catch (e) {
-          console.warn('Unable to open chrome.sidePanel:', e);
+          await chrome.sidePanel.open({ tabId });
+        } catch {
+          try {
+            await chrome.sidePanel.open({ windowId: (await chrome.tabs.get(tabId)).windowId });
+          } catch (e) {
+            console.warn('Unable to open chrome.sidePanel:', e);
+          }
         }
       }
-    } else if (typeof browser !== 'undefined' && (browser as any).sidebarAction?.open) {
-      try {
-        await (browser as any).sidebarAction.open();
-      } catch (e) {
-        console.warn('Unable to open browser.sidebarAction:', e);
+    } else {
+      const sidebar = firefoxNamespace(browser)?.sidebarAction;
+      if (sidebar?.open) {
+        try {
+          await sidebar.open();
+        } catch (e) {
+          console.warn('Unable to open browser.sidebarAction:', e);
+        }
       }
     }
   }
