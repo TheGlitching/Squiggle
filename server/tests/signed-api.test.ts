@@ -33,7 +33,8 @@ describe('signed /v1 requests', () => {
     const body = (await res.json()) as { ok: boolean; id: string; email: string; plan: string };
     expect(body.ok).toBe(true);
     expect(body.email).toBe('marie@example.com');
-    expect(body.plan).toBe('none');
+    // A fresh account is on the trial (3 analyses); see billing/quota.ts.
+    expect(body.plan).toBe('trial');
     // CORS is pinned, not wildcarded.
     expect(res.headers.get('access-control-allow-origin')).toBe(CHROME_ORIGIN);
   });

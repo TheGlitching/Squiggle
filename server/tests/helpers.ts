@@ -256,6 +256,82 @@ export class StubLlm extends BaseLLMClient {
 }
 
 // ---------------------------------------------------------------------------
+// Fake Stripe
+// ---------------------------------------------------------------------------
+
+export const STRIPE_SECRET_KEY = 'sk_test_not_a_real_key';
+export const STRIPE_PRICE_ID = 'price_test_placeholder';
+export const STRIPE_WEBHOOK_SECRET = 'whsec_test_placeholder';
+
+export interface FakeStripe {
+  fetchImpl: FetchLike;
+  /** Every request the server made, as (path, form) pairs. */
+  calls: Array<{ path: string; form: Record<string, string> }>;
+  /** Fail the next API call, to exercise the degraded path. */
+  failNext: boolean;
+}
+
+export function makeFakeStripe(): FakeStripe {
+  const state: FakeStripe = {
+    calls: [],
+    failNext: false,
+    fetchImpl: async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const path = url.replace('https://api.stripe.com/v1', '');
+      const form = Object.fromEntries(new URLSearchParams(typeof init?.body === 'string' ? init.body : ''));
+      state.calls.push({ path, form });
+      if (state.failNext) {
+        state.failNext = false;
+        return Response.json({ error: { message: 'boom' } }, { status: 400 });
+      }
+      if (path === '/checkout/sessions') {
+        return Response.json({ id: 'cs_test_1', url: 'https://checkout.stripe.example/cs_test_1' });
+      }
+      if (path === '/billing_portal/sessions') {
+        return Response.json({ id: 'bps_test_1', url: 'https://billing.stripe.example/bps_test_1' });
+      }
+      return new Response('not found', { status: 404 });
+    },
+  };
+  return state;
+}
+
+/**
+ * Sign a webhook body exactly as Stripe does: HMAC-SHA256 over
+ * `${t}.${rawBody}` with the endpoint secret, rendered as `t=…,v1=…`.
+ */
+export async function stripeSignature(rawBody: string, timestampSec: number, secret = STRIPE_WEBHOOK_SECRET): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${timestampSec}.${rawBody}`));
+  const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `t=${timestampSec},v1=${hex}`;
+}
+
+/** Post a correctly signed Stripe event at the webhook endpoint. */
+export async function postStripeEvent(
+  env: TestEnv,
+  event: Record<string, unknown>,
+  opts: { secret?: string; timestampSec?: number; tamperBody?: boolean } = {},
+): Promise<Response> {
+  const rawBody = JSON.stringify(event);
+  const timestampSec = opts.timestampSec ?? Math.floor(env.clock.now() / 1000);
+  const signature = await stripeSignature(rawBody, timestampSec, opts.secret);
+  return env.handler(
+    new Request(`${env.webAppOrigin}/webhooks/stripe`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'stripe-signature': signature },
+      body: opts.tamperBody ? `${rawBody} ` : rawBody,
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
 
@@ -266,16 +342,18 @@ export interface TestEnv {
   clock: ManualClock;
   email: FakeEmail;
   llm: StubLlm;
+  stripe: FakeStripe;
   webAppOrigin: string;
 }
 
 export function makeTestEnv(
-  opts: { fetchImpl?: FetchLike; adminToken?: string; llm?: StubLlm; db?: MemoryDb } = {},
+  opts: { fetchImpl?: FetchLike; adminToken?: string; llm?: StubLlm; db?: MemoryDb; stripe?: FakeStripe } = {},
 ): TestEnv {
   const db = opts.db ?? new MemoryDb();
   const clock = new ManualClock(T0);
   const email = new FakeEmail();
   const llm = opts.llm ?? new StubLlm();
+  const stripe = opts.stripe ?? makeFakeStripe();
   const webAppOrigin = WEB_APP_ORIGIN;
   const services: Services = {
     db,
@@ -287,9 +365,15 @@ export function makeTestEnv(
     fetchImpl: opts.fetchImpl,
     adminToken: opts.adminToken,
     llm: () => llm,
+    stripe: {
+      secretKey: STRIPE_SECRET_KEY,
+      priceId: STRIPE_PRICE_ID,
+      webhookSecret: STRIPE_WEBHOOK_SECRET,
+      fetchImpl: stripe.fetchImpl as unknown as typeof fetch,
+    },
   };
   const worker = createWorker(services);
-  return { services, handler: (req) => worker.fetch(req), db, clock, email, llm, webAppOrigin };
+  return { services, handler: (req) => worker.fetch(req), db, clock, email, llm, stripe, webAppOrigin };
 }
 
 // ---------------------------------------------------------------------------

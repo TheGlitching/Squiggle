@@ -18,6 +18,7 @@ import { randomToken } from '@squiggle/shared';
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   AnalysisRunRow,
+  Plan,
   CreateAnalysisRunArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
@@ -108,14 +109,14 @@ export class NeonDb implements Db {
     const id = randomToken(16);
     await this.q`
       INSERT INTO users (id, email, email_verified, google_sub, plan, plan_expires_at, created_at, updated_at)
-      VALUES (${id}, ${args.email ?? null}, ${args.emailVerified ?? false}, ${args.googleSub ?? null}, 'none', NULL, ${now}, ${now})
+      VALUES (${id}, ${args.email ?? null}, ${args.emailVerified ?? false}, ${args.googleSub ?? null}, 'trial', NULL, ${now}, ${now})
     `;
     return {
       id,
       email: args.email ?? null,
       emailVerified: args.emailVerified ?? false,
       googleSub: args.googleSub ?? null,
-      plan: 'none',
+      plan: 'trial',
       planExpiresAt: null,
       stripeCustomerId: null,
       stripeSubId: null,
@@ -133,6 +134,46 @@ export class NeonDb implements Db {
   }
 
   // ---- extension signing keys ----------------------------------------------
+
+  async getUserByStripeCustomerId(customerId: string): Promise<UserRow | null> {
+    const rows = await this.q`SELECT * FROM users WHERE stripe_customer_id = ${customerId}`;
+    return rows[0] ? mapUser(rows[0]) : null;
+  }
+
+  async setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void> {
+    await this.q`
+      UPDATE users SET plan = ${plan}, plan_expires_at = ${planExpiresAt}, updated_at = ${now}
+      WHERE id = ${userId}
+    `;
+  }
+
+  async setStripeIds(
+    userId: string,
+    ids: { customerId?: string | null; subId?: string | null },
+    now: number,
+  ): Promise<void> {
+    // COALESCE on the parameter, so `undefined` (sent as NULL) leaves the
+    // column alone and an explicit null is expressed by passing the current
+    // value — a webhook that carries only a subscription id must not wipe the
+    // customer id.
+    if (ids.customerId !== undefined) {
+      await this.q`UPDATE users SET stripe_customer_id = ${ids.customerId}, updated_at = ${now} WHERE id = ${userId}`;
+    }
+    if (ids.subId !== undefined) {
+      await this.q`UPDATE users SET stripe_sub_id = ${ids.subId}, updated_at = ${now} WHERE id = ${userId}`;
+    }
+  }
+
+  async recordStripeEvent(id: string, type: string, now: number): Promise<boolean> {
+    // The primary key is the deduplication: a redelivery collides here rather
+    // than being applied twice.
+    const rows = await this.q`
+      INSERT INTO stripe_events (id, type, received_at) VALUES (${id}, ${type}, ${now})
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
 
   async createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow> {
     const id = randomToken(16);

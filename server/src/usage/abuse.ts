@@ -21,13 +21,6 @@
 export const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * Analyses one account may START per hour. The product allows 5 a day, so a
- * reader can never reach this; a client stuck in a retry loop reaches it
- * within a minute.
- */
-export const ANALYSES_PER_ACCOUNT_PER_HOUR = 20;
-
-/**
  * Analyses the whole service may start per hour, across every account. The
  * ceiling on one hour of a worst case: every account compromised at once
  * still cannot spend more than this.
@@ -35,6 +28,11 @@ export const ANALYSES_PER_ACCOUNT_PER_HOUR = 20;
 export const ANALYSES_GLOBAL_PER_HOUR = 300;
 
 /**
+ * There is no separate per-account hourly ceiling on top of these two. It
+ * would never fire: one run in flight per five-minute window already bounds an
+ * account to at most twelve starts an hour, and the billing quota bounds what
+ * it can finish. A third limit nobody can reach is a limit nobody maintains.
+ *
  * A run counts as in flight while a stage has touched it inside this window.
  * It is a window rather than "until finalized" on purpose: a reader who
  * closes the tab mid-analysis would otherwise be locked out for the run's

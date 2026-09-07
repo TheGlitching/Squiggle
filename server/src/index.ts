@@ -20,7 +20,10 @@
  *   GET    /auth/google/callback       finish Google OAuth, open a session
  *   GET|POST /auth/claim               exchange a session for an extension token
  *   POST   /auth/logout                end the current web session
- *   GET    /v1/account                 (signed) who am I
+ *   GET    /v1/account                 (signed) who am I, plan and usage
+ *   POST   /v1/account/checkout        (signed) open a Stripe Checkout session
+ *   POST   /v1/account/portal          (signed) open the Stripe customer portal
+ *   POST   /webhooks/stripe            (Stripe-signed) the only writer of a plan
  *   GET    /v1/analyze/check           (signed) shared-cache preflight, 0 credits
  *   POST   /v1/analyze/audit           (signed) audit the article, opens a run
  *   POST   /v1/analyze/research        (signed) check one factual finding
@@ -57,6 +60,9 @@ import {
   sessionSetCookie,
   sessionUser,
 } from './auth/session';
+import { entitlementOf } from './billing/quota';
+import { createCheckoutSession, createPortalSession, type StripeConfig } from './billing/stripe';
+import { handleStripeWebhook } from './billing/webhook';
 import { corsHeaders, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
 import { NeonDb } from './db/neon';
@@ -81,6 +87,10 @@ export interface Env {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
+  STRIPE_SECRET_KEY: string;
+  STRIPE_WEBHOOK_SECRET: string;
+  /** Non-secret: the `price_…` the subscription is sold at (wrangler.jsonc var). */
+  STRIPE_PRICE_ID: string;
   /** Our own Gemini key. Hosted mode runs on it; BYOK never touches it. */
   GEMINI_API_KEY: string;
   /** Non-secret: the exact model id analyses run on (wrangler.jsonc var). */
@@ -105,6 +115,8 @@ export interface Services {
   llm?: () => BaseLLMClient;
   /** Prompt set version; part of the shared cache key. */
   promptVersion?: string;
+  /** Billing configuration. Absent on a server built without payments. */
+  stripe?: StripeConfig;
   /** Apply pending migrations; only present in the live (Neon) deployment. */
   runMigrations?: (now: number) => Promise<string[]>;
 }
@@ -283,17 +295,21 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     return res;
   }
 
-  if (path === '/v1/account' && method === 'GET') {
-    const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, await req.text());
-    if (!auth.ok) return finish(auth);
-    const { user } = auth;
-    return finish({
-      ok: true,
-      id: user.id,
-      email: user.email,
-      plan: user.plan,
-      planExpiresAt: user.planExpiresAt,
-    });
+  if (path === '/webhooks/stripe' && method === 'POST') {
+    if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    // Stripe is not a browser: it sends no Origin, and its signature is the
+    // authentication. The raw bytes are what was signed, so they are what is
+    // verified — never a re-serialization of the parsed JSON.
+    const outcome = await handleStripeWebhook(
+      { db: s.db, clock: s.clock, webhookSecret: s.stripe.webhookSecret, requestId },
+      await req.text(),
+      req.headers.get('stripe-signature'),
+    );
+    return finish(outcome);
+  }
+
+  if (path.startsWith('/v1/account')) {
+    return accountRoute(req, s, path, method);
   }
 
   if (path.startsWith('/v1/analyze/')) {
@@ -314,6 +330,63 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
 
   if (path.startsWith('/v1/')) {
     return finish(apiError('not_found', 'No such endpoint.'));
+  }
+
+  return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/** The account and billing endpoints, all behind the signed-request gate. */
+async function accountRoute(
+  req: Request,
+  s: Services,
+  path: string,
+  method: string,
+): Promise<Response> {
+  const rawBody = method === 'GET' ? '' : await req.text();
+  const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
+  if (!auth.ok) return finish(auth);
+  const { user } = auth;
+  const now = s.clock.now();
+
+  if (path === '/v1/account' && method === 'GET') {
+    // The panel renders its quota states from this, so it carries the
+    // entitlement, not just the stored plan: an `active` row whose period has
+    // ended is reported as `none`, which is what is actually true.
+    const entitlement = await entitlementOf(s.db, user, now);
+    return finish({
+      ok: true,
+      id: user.id,
+      email: user.email,
+      plan: entitlement.plan,
+      planExpiresAt: user.planExpiresAt,
+      usage: {
+        used: entitlement.used,
+        limit: entitlement.limit,
+        remaining: entitlement.remaining,
+        resetsAt: entitlement.resetsAt,
+      },
+    });
+  }
+
+  if (path === '/v1/account/checkout' && method === 'POST') {
+    if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    const outcome = await createCheckoutSession({
+      config: s.stripe,
+      userId: user.id,
+      email: user.email,
+      customerId: user.stripeCustomerId,
+      successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
+      cancelUrl: `${s.webAppOrigin}/tarifs?paiement=annule`,
+    });
+    return finish(outcome);
+  }
+
+  if (path === '/v1/account/portal' && method === 'POST') {
+    if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    if (!user.stripeCustomerId) {
+      return finish(apiError('not_found', 'Aucun abonnement à gérer pour ce compte.'));
+    }
+    return finish(await createPortalSession(s.stripe, user.stripeCustomerId, `${s.webAppOrigin}/compte`));
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
@@ -450,6 +523,11 @@ function servicesFromEnv(env: Env): Services {
         model: env.GEMINI_MODEL,
       }),
     promptVersion: PROMPT_VERSION,
+    stripe: {
+      secretKey: env.STRIPE_SECRET_KEY,
+      priceId: env.STRIPE_PRICE_ID,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    },
     runMigrations: (now) => {
       const q: SqlQuery = {
         query: (text, params) =>

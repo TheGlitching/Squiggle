@@ -12,6 +12,7 @@ import { randomToken } from '@squiggle/shared';
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   AnalysisRunRow,
+  Plan,
   CreateAnalysisRunArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
@@ -50,8 +51,10 @@ export class MemoryDb implements Db {
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
   private readonly runs = new Map<string, AnalysisRunRow>();
+  private readonly stripeEvents = new Set<string>();
 
   // ---- users ---------------------------------------------------------------
+
 
   async getUserById(id: string): Promise<UserRow | null> {
     return this.users.get(id) ?? null;
@@ -77,7 +80,10 @@ export class MemoryDb implements Db {
       email: args.email ?? null,
       emailVerified: args.emailVerified ?? false,
       googleSub: args.googleSub ?? null,
-      plan: 'none',
+      // A new account starts on the trial: 3 analyses, ever. Set here so
+      // there is one answer to "what does a fresh account get" (see
+      // billing/quota.ts for what the plans mean).
+      plan: 'trial',
       planExpiresAt: null,
       stripeCustomerId: null,
       stripeSubId: null,
@@ -105,6 +111,39 @@ export class MemoryDb implements Db {
   }
 
   // ---- extension signing keys ----------------------------------------------
+
+  async getUserByStripeCustomerId(customerId: string): Promise<UserRow | null> {
+    for (const user of this.users.values()) {
+      if (user.stripeCustomerId === customerId) return user;
+    }
+    return null;
+  }
+
+  async setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    user.plan = plan;
+    user.planExpiresAt = planExpiresAt;
+    user.updatedAt = now;
+  }
+
+  async setStripeIds(
+    userId: string,
+    ids: { customerId?: string | null; subId?: string | null },
+    now: number,
+  ): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    if (ids.customerId !== undefined) user.stripeCustomerId = ids.customerId;
+    if (ids.subId !== undefined) user.stripeSubId = ids.subId;
+    user.updatedAt = now;
+  }
+
+  async recordStripeEvent(id: string, _type: string, _now: number): Promise<boolean> {
+    if (this.stripeEvents.has(id)) return false;
+    this.stripeEvents.add(id);
+    return true;
+  }
 
   async createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow> {
     const row: ExtensionKeyRow = { id: randomToken(16), userId, publicKeyJwk, createdAt: now };

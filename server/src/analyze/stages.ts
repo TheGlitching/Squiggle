@@ -47,13 +47,13 @@ import {
 
 import type { Clock } from '../lib/clock';
 import type { Db, UserRow } from '../db/types';
+import { entitlementOf, refusalFor } from '../billing/quota';
 import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
 import { sanitizeReport } from '../lib/sanitize';
 import { REPORT_MAX_BYTES, REPORT_TTL_MS } from '../usage/limits';
 import {
   ANALYSES_GLOBAL_PER_HOUR,
-  ANALYSES_PER_ACCOUNT_PER_HOUR,
   CONCURRENT_RUN_WINDOW_MS,
   HOUR_MS,
   MAX_CONCURRENT_RUNS,
@@ -260,32 +260,27 @@ export async function analyzeAudit(
 }
 
 /**
- * The three ceilings a run has to clear to start: one analysis in flight per
- * account, an hourly per-account ceiling, and an hourly ceiling for the whole
- * service. The last one is the only thing standing between a mass account
- * compromise and an unbounded Gemini invoice.
+ * What a run has to clear to start: the reader's own entitlement, one analysis
+ * in flight per account, and an hourly ceiling for the whole service. That
+ * last one is the only thing standing between a mass account compromise and an
+ * unbounded Gemini invoice.
  */
 async function enforceStartCeilings(
   s: AnalyzeServices,
   user: UserRow,
   now: number,
 ): Promise<Outcome<Record<never, never>>> {
+  // What the reader is entitled to comes first: it is the only refusal they
+  // can act on, and checking it here means a reader out of credits never pays
+  // for a token. The credit itself is consumed at a successful finalize, so a
+  // run that dies on a provider timeout costs them nothing.
+  const refusal = refusalFor(await entitlementOf(s.db, user, now));
+  if (refusal) return refusal;
+
   const active = await s.db.countActiveAnalysisRuns(user.id, now - CONCURRENT_RUN_WINDOW_MS);
   if (active >= MAX_CONCURRENT_RUNS) {
     logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:concurrent', count: active });
     return apiError('rate_limited', 'Une analyse est déjà en cours. Attendez qu’elle se termine.');
-  }
-
-  const perAccount = await s.db.recordAndCheckRate({
-    scope: 'analyze:account',
-    key: user.id,
-    limit: ANALYSES_PER_ACCOUNT_PER_HOUR,
-    windowMs: HOUR_MS,
-    now,
-  });
-  if (!perAccount.allowed) {
-    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:account', count: perAccount.count });
-    return apiError('rate_limited', 'Trop d’analyses lancées récemment. Réessayez dans un moment.');
   }
 
   const global = await s.db.recordAndCheckRate({

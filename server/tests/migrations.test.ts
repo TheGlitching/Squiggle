@@ -4,6 +4,7 @@ import { MIGRATIONS, migrate, type SqlQuery } from '../src/migrations';
 import { sql as authSql } from '../src/migrations/001_auth';
 import { sql as usageSql } from '../src/migrations/002_usage_reports';
 import { sql as runsSql } from '../src/migrations/003_analysis_runs';
+import { sql as billingSql } from '../src/migrations/004_billing';
 import { T0 } from './helpers';
 
 /** A recording fake that answers the schema_migrations bookkeeping. */
@@ -104,5 +105,13 @@ describe('migration runner', () => {
     expect(runsSql).toContain('expires_at BIGINT NOT NULL');
     // Nullable: the conditional UPDATE on it is what makes finalize once-only.
     expect(runsSql).toContain('finalized_at BIGINT');
+  });
+
+  it('the billing schema deduplicates webhook deliveries on Stripe\'s own event id', () => {
+    expect(billingSql).toMatch(/CREATE TABLE IF NOT EXISTS stripe_events \(/);
+    // The primary key IS the deduplication: a redelivery collides here.
+    expect(billingSql).toContain('id TEXT PRIMARY KEY');
+    // Webhook routing looks an account up by its Stripe customer.
+    expect(billingSql).toContain('users_stripe_customer_idx');
   });
 });

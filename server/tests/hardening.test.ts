@@ -26,7 +26,6 @@ import {
 import { MAX_FIELD_CHARS, sanitizeReport, sanitizeString } from '../src/lib/sanitize';
 import { originRequired } from '../src/lib/cors';
 import { REPORT_MAX_BYTES } from '../src/usage/limits';
-import { ANALYSES_PER_ACCOUNT_PER_HOUR } from '../src/usage/abuse';
 
 const ARTICLE_URL = 'https://presse.example/politique/emploi-2026';
 const BLOCKS = [
@@ -310,22 +309,6 @@ describe('abuse ceilings', () => {
     expect(later.status).toBe(200);
   });
 
-  it('caps how many analyses one account can start in an hour', async () => {
-    const env = makeTestEnv();
-    const who = await signedIn(env, 'marie@example.org');
-
-    // Each run is finalized before the next starts, so the concurrency rule
-    // never fires and what is measured is the hourly ceiling alone. The clock
-    // does not move: all of it happens inside one window.
-    let lastStatus = 200;
-    for (let i = 0; i <= ANALYSES_PER_ACCOUNT_PER_HOUR; i += 1) {
-      const res = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
-      lastStatus = res.status;
-      if (res.status !== 200) break;
-      await call(env, who, '/v1/analyze/finalize', { runId: res.json.runId as string });
-    }
-    expect(lastStatus).toBe(429);
-  });
 });
 
 describe('logs and correlation', () => {

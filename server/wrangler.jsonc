@@ -26,6 +26,11 @@
     // key, so changing it invalidates every cached report — which is the
     // intent: the same article judged by a different model is a different
     // report. The real id is filled in from the GCP console (issue #5).
-    "GEMINI_MODEL": "PENDING_MODEL_ID"
+    "GEMINI_MODEL": "PENDING_MODEL_ID",
+    // The recurring price the subscription is sold at. A `price_…` id is not
+    // a secret (it is visible in any Checkout URL), but it is environment
+    // specific, so it lives here rather than in code. Filled in from the
+    // Stripe dashboard (issue #5).
+    "STRIPE_PRICE_ID": "PENDING_PRICE_ID"
   }
 }

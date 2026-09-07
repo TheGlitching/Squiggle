@@ -28,6 +28,10 @@ export const ErrorCodes = {
   origin_not_allowed: 'origin_not_allowed',
   rate_limited: 'rate_limited',
   quota_exceeded: 'quota_exceeded',
+  trial_exhausted: 'trial_exhausted',
+  subscription_required: 'subscription_required',
+  quota_exhausted: 'quota_exhausted',
+  billing_unavailable: 'billing_unavailable',
   not_found: 'not_found',
   method_not_allowed: 'method_not_allowed',
   internal: 'internal',
@@ -64,6 +68,12 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   origin_not_allowed: 403,
   rate_limited: 429,
   quota_exceeded: 429,
+  // 402: the request was understood and refused for a billing reason, which
+  // is exactly what the panel needs to tell apart from a rate limit.
+  trial_exhausted: 402,
+  subscription_required: 402,
+  quota_exhausted: 429,
+  billing_unavailable: 502,
   not_found: 404,
   method_not_allowed: 405,
   internal: 500,

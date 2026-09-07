@@ -14,6 +14,7 @@
 import { name as authName, sql as authSql } from './001_auth';
 import { name as usageName, sql as usageSql } from './002_usage_reports';
 import { name as runsName, sql as runsSql } from './003_analysis_runs';
+import { name as billingName, sql as billingSql } from './004_billing';
 
 export interface Migration {
   name: string;
@@ -29,6 +30,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { name: authName, sql: authSql },
   { name: usageName, sql: usageSql },
   { name: runsName, sql: runsSql },
+  { name: billingName, sql: billingSql },
 ];
 
 function splitStatements(sql: string): string[] {

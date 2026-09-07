@@ -249,6 +249,29 @@ export interface Db {
   markEmailVerified(userId: string, now: number): Promise<void>;
   attachGoogleSub(userId: string, googleSub: string, now: number): Promise<void>;
 
+  /** The account a Stripe customer belongs to, or null. Webhook routing. */
+  getUserByStripeCustomerId(customerId: string): Promise<UserRow | null>;
+
+  /**
+   * Set the plan and its expiry. Called ONLY from the webhook handler: the
+   * client never declares itself subscribed, so this must never be reachable
+   * from a request a client controls.
+   */
+  setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void>;
+
+  /** Attach (or update) the Stripe customer and subscription identifiers. */
+  setStripeIds(
+    userId: string,
+    ids: { customerId?: string | null; subId?: string | null },
+    now: number,
+  ): Promise<void>;
+
+  /**
+   * Record a Stripe event id. Returns false when it was already recorded,
+   * i.e. this is a redelivery and must not be applied a second time.
+   */
+  recordStripeEvent(id: string, type: string, now: number): Promise<boolean>;
+
   createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow>;
   getExtensionKey(id: string): Promise<ExtensionKeyRow | null>;
 
