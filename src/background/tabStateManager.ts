@@ -15,7 +15,7 @@
  * declared, and Firefox has it from 115, which is the manifest's floor.
  */
 
-import { AnalysisResult, Finding, PipelineStatus } from '../engine/types';
+import { AnalysisResult, Finding, PipelineStatus } from '@squiggle/shared';
 import type { ExtractedArticle } from '../content/types';
 
 export interface TabAnalysisState {

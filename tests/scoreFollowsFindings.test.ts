@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeFourchesCaudinesScore } from '../src/engine/scoring';
-import { SCORE_DOMAINS } from '../src/engine/types';
+import { computeFourchesCaudinesScore } from '@squiggle/shared';
+import { SCORE_DOMAINS } from '@squiggle/shared';
 
 /**
  * The reported defect: a hit piece quoting an invented poll - no institute, no

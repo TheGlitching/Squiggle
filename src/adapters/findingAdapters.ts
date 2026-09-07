@@ -21,7 +21,7 @@ import type {
   SeverityLevel,
   VerificationState,
   TextBlock as EngineTextBlock,
-} from '../engine/types';
+} from '@squiggle/shared';
 import type { FindingHighlightTarget } from '../content/types';
 import type { FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { enforceEvidenceHonesty, parseAndValidateLlmOutput, reconcileResearchedFindings } from '../src/engine/validator';
-import { AnalysisInput, EvidenceSource, FactualClaim, Finding } from '../src/engine/types';
+import { enforceEvidenceHonesty, parseAndValidateLlmOutput, reconcileResearchedFindings } from '@squiggle/shared';
+import { AnalysisInput, EvidenceSource, FactualClaim, Finding } from '@squiggle/shared';
 
 function makeFinding(overrides: Partial<Finding> & Pick<Finding, 'category'>): Finding {
   return {

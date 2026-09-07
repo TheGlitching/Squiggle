@@ -28,8 +28,8 @@ import { TypedMessageBus } from '../src/messaging/messageBus';
 import { SecureKeyStorage } from '../src/crypto/storage';
 import { SidepanelApp } from '../src/sidepanel/main';
 import type { FcRpcMap, AnalysisOutcome } from '../src/messaging/protocol';
-import type { AnalysisResult } from '../src/engine/types';
-import type { PipelineProgressEvent } from '../src/engine/pipeline';
+import type { AnalysisResult } from '@squiggle/shared';
+import type { PipelineProgressEvent } from '@squiggle/shared';
 
 declare global {
   /** React reads this to accept act() as a genuine test boundary. */
@@ -51,8 +51,8 @@ const pipelineState = vi.hoisted(() => ({
   aborted: [] as string[],
 }));
 
-vi.mock('../src/engine', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/engine')>();
+vi.mock('@squiggle/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@squiggle/shared')>();
   class FakeAnalysisPipeline {
     private lastText = '';
     constructor(private options: { onProgress?: (evt: PipelineProgressEvent) => void } = {}) {}

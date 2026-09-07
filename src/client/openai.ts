@@ -1,11 +1,11 @@
-import { BYOKError } from '../types/byok';
+import { BYOKError } from '@squiggle/shared';
 import type {
   CompletionOptions,
   CompletionResponse,
   StreamCallbacks,
-} from '../types/byok';
-import type { GroundedAnswer, SearchResult } from './base';
-import { BaseLLMClient } from './base';
+} from '@squiggle/shared';
+import type { GroundedAnswer, SearchResult } from '@squiggle/shared';
+import { BaseLLMClient } from '@squiggle/shared';
 
 export class OpenAIClient extends BaseLLMClient {
   protected get defaultBaseUrl(): string {

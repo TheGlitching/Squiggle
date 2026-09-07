@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { lightTheme, darkTheme } from '../src/ui/tokens/colors';
 import { TYPOGRAPHY, GOOGLE_FONTS_URL, typographyTokens } from '../src/ui/tokens/typography';
 import { formatPoints, getScoreBandColor } from '../src/ui/components/ScoreGauges';
-import { determineScoreBand } from '../src/engine/scoring';
-import { SCORE_DOMAINS, ScoreDomainKey } from '../src/engine/types';
+import { determineScoreBand } from '@squiggle/shared';
+import { SCORE_DOMAINS, ScoreDomainKey } from '@squiggle/shared';
 import { VERIFICATION_STYLES } from '../src/ui/components/VerificationBadge';
 
 describe('Editorial Design System & Tokens', () => {

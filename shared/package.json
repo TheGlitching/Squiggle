@@ -1,0 +1,13 @@
+{
+  "name": "@squiggle/shared",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Squiggle shared analysis engine: prompts, validator, scoring, research, source fetch, and the LLM client contracts. Executed both in the extension (BYOK) and on the hosted server.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "zod": "^3.24.2"
+  }
+}

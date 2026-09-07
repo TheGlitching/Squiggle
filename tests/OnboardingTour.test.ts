@@ -9,8 +9,8 @@ import {
   computeTourPosition,
   selectAvailableSteps,
 } from '../src/ui/components/OnboardingTour';
-import { SCORE_DOMAINS } from '../src/engine/types';
-import { determineScoreBand } from '../src/engine/scoring';
+import { SCORE_DOMAINS } from '@squiggle/shared';
+import { determineScoreBand } from '@squiggle/shared';
 
 /** Everything the panel renders before an analysis has ever been run. */
 const FIRST_RUN_ANCHORS = ['[data-tour="settings"]', '[data-tour="run-analysis"]'];

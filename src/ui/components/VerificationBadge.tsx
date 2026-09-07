@@ -1,5 +1,5 @@
 import React from 'react';
-import { VerificationState } from '../../engine/types';
+import { VerificationState } from '@squiggle/shared';
 
 export interface VerificationStyle {
   label: string;

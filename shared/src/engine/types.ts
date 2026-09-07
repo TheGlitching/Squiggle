@@ -306,11 +306,6 @@ export interface AnalysisReport {
 
 export type AnalysisResult = AnalysisReport;
 export type PipelineStatus = 'idle' | 'extracting' | 'analyzing' | 'complete' | 'error';
-export interface PipelineProgressEvent {
-  step: string;
-  progress: number;
-  message?: string;
-}
 
 /**
  * Zod Schemas for LLM Output Validation & Parsing

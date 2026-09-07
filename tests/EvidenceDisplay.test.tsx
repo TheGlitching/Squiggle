@@ -6,7 +6,7 @@ import { act } from 'react';
 import { FindingCard } from '../src/ui/components/FindingCard';
 import { ResearchDisclosure } from '../src/ui/components/ResearchDisclosure';
 import { VERIFICATION_STYLES } from '../src/ui/components/VerificationBadge';
-import type { EvidenceSource, FactualClaim, Finding, ResearchRecord } from '../src/engine/types';
+import type { EvidenceSource, FactualClaim, Finding, ResearchRecord } from '@squiggle/shared';
 
 declare global {
   /** React reads this to accept act() as a genuine test boundary. */

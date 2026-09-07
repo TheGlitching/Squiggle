@@ -8,13 +8,13 @@ import { TypedMessageBus } from '../messaging/messageBus';
 import { TabStateManager } from './tabStateManager';
 import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 import { LLMClientFactory } from '../client/factory';
-import { AnalysisPipeline } from '../engine';
+import { AnalysisPipeline } from '@squiggle/shared';
 // `PipelineProgressEvent` is exported by BOTH engine/types.ts ({step,progress})
 // and engine/pipeline.ts ({status,stage,message,progress}). The star barrel makes
 // the bare name ambiguous, and the types.ts variant (which this file used to
 // import) has no `status` field at all. Import the real runtime shape directly.
-import type { PipelineProgressEvent } from '../engine/pipeline';
-import type { AnalysisResult } from '../engine/types';
+import type { PipelineProgressEvent } from '@squiggle/shared';
+import type { AnalysisResult } from '@squiggle/shared';
 import { findingsToHighlightTargets, textBlockToEngineBlock } from '../adapters/findingAdapters';
 import type { ExtractedArticle } from '../content/types';
 import type { FcRpcMap } from '../messaging/protocol';

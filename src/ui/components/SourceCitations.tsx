@@ -1,5 +1,5 @@
 import React from 'react';
-import { EvidenceSource } from '../../engine/types';
+import { EvidenceSource } from '@squiggle/shared';
 
 /**
  * The reader weighs a source the article itself hyperlinked differently from one

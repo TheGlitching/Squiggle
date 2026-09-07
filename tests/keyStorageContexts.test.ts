@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SecureKeyStorage, UnreadableKeyError } from '../src/crypto/storage';
-import { AnalysisPipeline, MissingProviderError } from '../src/engine/pipeline';
+import { AnalysisPipeline, MissingProviderError } from '@squiggle/shared';
 
 /**
  * The key is entered in the panel (a document, which has `localStorage`) and read

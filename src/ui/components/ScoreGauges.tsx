@@ -1,6 +1,6 @@
 import React from 'react';
-import { ScoreBand, ScoreDomainKey, SCORE_DOMAINS } from '../../engine/types';
-import { determineScoreBand, getScoreBandLabel } from '../../engine/scoring';
+import { ScoreBand, ScoreDomainKey, SCORE_DOMAINS } from '@squiggle/shared';
+import { determineScoreBand, getScoreBandLabel } from '@squiggle/shared';
 
 export interface ScoreGaugeProps {
   score: number; // 0 to 100

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FactualClaim, ResearchRecord, SourceCheck, VerificationState } from '../../engine/types';
+import { FactualClaim, ResearchRecord, SourceCheck, VerificationState } from '@squiggle/shared';
 import { VerificationBadge, VERIFICATION_COUNT_LABELS_FR } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
 

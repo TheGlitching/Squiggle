@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { BaseLLMClient, GroundedAnswer, SearchResult } from '../src/client/base';
-import { AnalysisInput, Finding } from '../src/engine/types';
+import { BaseLLMClient, GroundedAnswer, SearchResult } from '@squiggle/shared';
+import { AnalysisInput, Finding } from '@squiggle/shared';
 import {
   buildClaimGroundedJudgementUserPrompt,
   buildFourchesCaudinesUserPrompt,
   buildResearchAgentStepPrompt,
   RESEARCH_AGENT_SYSTEM_PROMPT
-} from '../src/engine/prompts';
-import { CitedSource, researchFindings } from '../src/engine/research';
-import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '../src/types/byok';
+} from '@squiggle/shared';
+import { CitedSource, researchFindings } from '@squiggle/shared';
+import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '@squiggle/shared';
 
 /**
  * Minimal BaseLLMClient double for the agentic search route: `complete` serves

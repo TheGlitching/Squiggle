@@ -18,8 +18,9 @@
     "types": ["chrome", "vite/client", "webextension-polyfill"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@squiggle/shared": ["shared/src/index.ts"]
     }
   },
-  "include": ["src", "tests", "vite.config.ts"]
+  "include": ["src", "tests", "shared/src", "shared/tests", "vite.config.ts"]
 }

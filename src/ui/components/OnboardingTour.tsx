@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 
-import { SCORE_DOMAINS, type ScoreBand } from '../../engine/types';
-import { determineScoreBand, getScoreBandLabel } from '../../engine/scoring';
+import { SCORE_DOMAINS, type ScoreBand } from '@squiggle/shared';
+import { determineScoreBand, getScoreBandLabel } from '@squiggle/shared';
 import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
 
 export interface TourStep {

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseLLMClient } from '../src/client/base';
+import { BaseLLMClient } from '@squiggle/shared';
 import { AnthropicClient } from '../src/client/anthropic';
 import { OpenAIClient } from '../src/client/openai';
-import { GeminiClient } from '../src/client/gemini';
+import { GeminiClient } from '@squiggle/shared';
 import { OpenRouterClient } from '../src/client/openrouter';
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {

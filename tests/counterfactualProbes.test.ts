@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BaseLLMClient, GroundedAnswer, SearchResult } from '../src/client/base';
-import { AnalysisInput, Finding } from '../src/engine/types';
-import { researchFindings } from '../src/engine/research';
-import { RESEARCH_AGENT_SYSTEM_PROMPT } from '../src/engine/prompts';
-import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '../src/types/byok';
+import { BaseLLMClient, GroundedAnswer, SearchResult } from '@squiggle/shared';
+import { AnalysisInput, Finding } from '@squiggle/shared';
+import { researchFindings } from '@squiggle/shared';
+import { RESEARCH_AGENT_SYSTEM_PROMPT } from '@squiggle/shared';
+import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '@squiggle/shared';
 
 /**
  * The agentic counterfactual hunt: before a claim is accepted, the research

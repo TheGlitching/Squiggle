@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { BaseLLMClient } from '../src/client/base';
-import { extractPageText } from '../src/engine/sourceFetch';
-import { FactualClaim, SourceCheck } from '../src/engine/types';
+import { BaseLLMClient } from '@squiggle/shared';
+import { extractPageText } from '@squiggle/shared';
+import { FactualClaim, SourceCheck } from '@squiggle/shared';
 import {
   reconcileSourceChecks,
   VerifyCitedSourcesArgs,
   verifyCitedSources
-} from '../src/engine/sourceVerification';
-import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '../src/types/byok';
+} from '@squiggle/shared';
+import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '@squiggle/shared';
 
 /**
  * The article's own citations are the half of sourcing no search can cover:

@@ -13,8 +13,8 @@ import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { OnboardingTour, getTourCompletionStatus } from '../ui/components/OnboardingTour';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
-import { SCORE_DOMAINS } from '../engine/types';
-import type { AnalysisResult, Finding, ScoreDomainKey } from '../engine/types';
+import { SCORE_DOMAINS } from '@squiggle/shared';
+import type { AnalysisResult, Finding, ScoreDomainKey } from '@squiggle/shared';
 
 /**
  * The sidepanel is the integration point of the whole extension. It previously

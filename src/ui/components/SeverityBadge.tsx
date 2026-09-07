@@ -1,5 +1,5 @@
 import React from 'react';
-import { SeverityLevel } from '../../engine/types';
+import { SeverityLevel } from '@squiggle/shared';
 
 export interface SeverityBadgeProps {
   severity: SeverityLevel;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SecureKeyStorage } from '../src/crypto/storage';
 import { BackgroundServiceWorker } from '../src/background';
-import { DEMO_FOURCHES_CAUDINES_REPORT } from '../src/engine/demoFixture';
+import { DEMO_FOURCHES_CAUDINES_REPORT } from '@squiggle/shared';
 
 /**
  * The question this answers: when a key is configured, does clicking analyse
