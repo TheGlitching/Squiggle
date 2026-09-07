@@ -9,21 +9,28 @@
  */
 import { randomToken } from '@squiggle/shared';
 
+import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
+  CreateReportArgs,
   CreateSessionArgs,
   CreateTokenArgs,
   CreateUserArgs,
+  CreateUsageLogArgs,
   Db,
   ExtensionKeyRow,
   MagicLinkRow,
   NonceArgs,
   NonceRow,
   OAuthPendingRow,
+  PurgeReportsResult,
   RateCheckArgs,
   RateCheckResult,
+  ReportRow,
   TokenRow,
+  UsageDailyRow,
+  UsageLogRow,
   UserRow,
   WebSessionRow,
 } from './types';
@@ -37,6 +44,9 @@ export class MemoryDb implements Db {
   private readonly nonces = new Map<string, NonceRow>();
   private readonly oauth = new Map<string, OAuthPendingRow>();
   private readonly rates = new Map<string, { count: number; windowStart: number }>();
+  private readonly usageDaily = new Map<string, UsageDailyRow>();
+  private readonly usageLog = new Map<string, UsageLogRow>();
+  private readonly reports = new Map<string, ReportRow>();
 
   // ---- users ---------------------------------------------------------------
 
@@ -66,6 +76,8 @@ export class MemoryDb implements Db {
       googleSub: args.googleSub ?? null,
       plan: 'none',
       planExpiresAt: null,
+      stripeCustomerId: null,
+      stripeSubId: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -220,5 +232,104 @@ export class MemoryDb implements Db {
     }
     entry.count += 1;
     return { allowed: entry.count <= args.limit, count: entry.count, windowStart };
+  }
+
+  // ---- usage (ledger + daily counter) -------------------------------------
+
+  async recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow> {
+    const day = utcDayOf(args.now);
+    const k = `${args.userId}\u0000${day}`;
+    let daily = this.usageDaily.get(k);
+    if (!daily) {
+      daily = { userId: args.userId, day, analyses: 0 };
+      this.usageDaily.set(k, daily);
+    }
+    daily.analyses += 1;
+    const row: UsageLogRow = {
+      id: randomToken(16),
+      userId: args.userId,
+      reportId: args.reportId,
+      createdAt: args.now,
+    };
+    this.usageLog.set(row.id, row);
+    return row;
+  }
+
+  async getDailyUsage(userId: string, day: number): Promise<number> {
+    return this.usageDaily.get(`${userId}\u0000${day}`)?.analyses ?? 0;
+  }
+
+  async sumUsage(userId: string): Promise<number> {
+    let total = 0;
+    for (const daily of this.usageDaily.values()) {
+      if (daily.userId === userId) total += daily.analyses;
+    }
+    return total;
+  }
+
+  async countUsageLog(userId: string): Promise<number> {
+    let count = 0;
+    for (const row of this.usageLog.values()) {
+      if (row.userId === userId) count += 1;
+    }
+    return count;
+  }
+
+  // ---- shared report cache ---------------------------------------------------
+
+  async findReport(urlHash: string, model: string, promptVersion: string): Promise<ReportRow | null> {
+    for (const report of this.reports.values()) {
+      if (report.urlHash === urlHash && report.model === model && report.promptVersion === promptVersion) {
+        return report;
+      }
+    }
+    return null;
+  }
+
+  async createReport(args: CreateReportArgs): Promise<ReportRow> {
+    if (args.sizeBytes > REPORT_MAX_BYTES) throw new Error('report exceeds the size cap');
+    if (await this.findReport(args.urlHash, args.model, args.promptVersion)) {
+      throw new Error('a report is already cached for this key');
+    }
+    const row: ReportRow = {
+      id: randomToken(16),
+      urlHash: args.urlHash,
+      model: args.model,
+      promptVersion: args.promptVersion,
+      report: args.report,
+      sizeBytes: args.sizeBytes,
+      createdAt: args.now,
+      expiresAt: args.now + args.ttlMs,
+    };
+    this.reports.set(row.id, row);
+    return row;
+  }
+
+  async purgeReports(now: number, maxCount: number): Promise<PurgeReportsResult> {
+    let expired = 0;
+    for (const [id, report] of this.reports) {
+      if (report.expiresAt <= now) {
+        this.reports.delete(id);
+        expired += 1;
+      }
+    }
+    let overCap = 0;
+    if (this.reports.size > maxCount) {
+      const oldestFirst = [...this.reports.values()].sort((a, b) => a.createdAt - b.createdAt);
+      for (const report of oldestFirst.slice(0, this.reports.size - maxCount)) {
+        this.reports.delete(report.id);
+        overCap += 1;
+      }
+    }
+    return { expired, overCap };
+  }
+
+  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
+    for (const [nonce, row] of this.nonces) if (row.expiresAt <= now) this.nonces.delete(nonce);
+    for (const [hash, row] of this.sessions) if (row.expiresAt <= now) this.sessions.delete(hash);
+    for (const [hash, row] of this.magicLinks) if (row.expiresAt <= now) this.magicLinks.delete(hash);
+    for (const [state, row] of this.oauth) if (row.expiresAt <= now) this.oauth.delete(state);
+    const cutoff = now - usageLogRetentionMs;
+    for (const [id, row] of this.usageLog) if (row.createdAt <= cutoff) this.usageLog.delete(id);
   }
 }

@@ -12,6 +12,7 @@
  * recording fake, so the runner itself is testable without a database.
  */
 import { name as authName, sql as authSql } from './001_auth';
+import { name as usageName, sql as usageSql } from './002_usage_reports';
 
 export interface Migration {
   name: string;
@@ -25,6 +26,7 @@ export interface SqlQuery {
 /** Every migration, in order. Append new ones here; never edit an applied one. */
 export const MIGRATIONS: readonly Migration[] = [
   { name: authName, sql: authSql },
+  { name: usageName, sql: usageSql },
 ];
 
 function splitStatements(sql: string): string[] {
