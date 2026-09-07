@@ -11,6 +11,8 @@ import { randomToken } from '@squiggle/shared';
 
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
+  AnalysisRunRow,
+  CreateAnalysisRunArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
   CreateReportArgs,
@@ -47,6 +49,7 @@ export class MemoryDb implements Db {
   private readonly usageDaily = new Map<string, UsageDailyRow>();
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
+  private readonly runs = new Map<string, AnalysisRunRow>();
 
   // ---- users ---------------------------------------------------------------
 
@@ -324,11 +327,48 @@ export class MemoryDb implements Db {
     return { expired, overCap };
   }
 
+  // ---- analysis runs -------------------------------------------------------
+
+  async createAnalysisRun(args: CreateAnalysisRunArgs): Promise<AnalysisRunRow> {
+    const row: AnalysisRunRow = {
+      id: randomToken(16),
+      userId: args.userId,
+      urlHash: args.urlHash,
+      state: args.state,
+      createdAt: args.now,
+      updatedAt: args.now,
+      expiresAt: args.now + args.ttlMs,
+      finalizedAt: null,
+    };
+    this.runs.set(row.id, row);
+    return row;
+  }
+
+  async getAnalysisRun(id: string): Promise<AnalysisRunRow | null> {
+    return this.runs.get(id) ?? null;
+  }
+
+  async updateAnalysisRunState(id: string, state: string, now: number): Promise<void> {
+    const row = this.runs.get(id);
+    if (!row) return;
+    row.state = state;
+    row.updatedAt = now;
+  }
+
+  async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
+    const row = this.runs.get(id);
+    if (!row || row.finalizedAt !== null) return false;
+    row.finalizedAt = now;
+    row.updatedAt = now;
+    return true;
+  }
+
   async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
     for (const [nonce, row] of this.nonces) if (row.expiresAt <= now) this.nonces.delete(nonce);
     for (const [hash, row] of this.sessions) if (row.expiresAt <= now) this.sessions.delete(hash);
     for (const [hash, row] of this.magicLinks) if (row.expiresAt <= now) this.magicLinks.delete(hash);
     for (const [state, row] of this.oauth) if (row.expiresAt <= now) this.oauth.delete(state);
+    for (const [id, row] of this.runs) if (row.expiresAt <= now) this.runs.delete(id);
     const cutoff = now - usageLogRetentionMs;
     for (const [id, row] of this.usageLog) if (row.createdAt <= cutoff) this.usageLog.delete(id);
   }

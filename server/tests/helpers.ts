@@ -15,6 +15,8 @@ import {
   signRequest,
 } from '@squiggle/shared';
 
+import { BaseLLMClient, type CompletionOptions, type CompletionResponse, type GroundedAnswer, type StreamCallbacks } from '@squiggle/shared';
+
 import { GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL } from '../src/auth/google';
 import type { EmailMessage, EmailSender, FetchLike } from '../src/lib/brevo';
 import { ManualClock } from '../src/lib/clock';
@@ -148,6 +150,112 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
 }
 
 // ---------------------------------------------------------------------------
+// Stub LLM
+// ---------------------------------------------------------------------------
+
+/**
+ * The provider the analysis tests run against. It answers each of the three
+ * kinds of call the engine makes (audit, grounded claim judgement, cited-page
+ * judgement) with a canned strict-JSON reply, counts every call, and can be
+ * told to fail the next one — which is how "a failed finding degrades only
+ * that finding" is exercised without a network.
+ *
+ * `calls` is what the cache tests assert on: a cache hit must cost zero.
+ */
+export class StubLlm extends BaseLLMClient {
+  calls = { complete: 0, grounded: 0 };
+  /** Fail the next `complete` call (the audit or a source judgement). */
+  failNextComplete = false;
+  /** Fail the next grounded call (a research judgement). */
+  failNextGrounded = false;
+  /** Audit reply, overridable per test. */
+  auditJson: string = JSON.stringify({
+    summary: "L'article avance un chiffre sans le sourcer.",
+    scores: [
+      { domain: 'robustesse_factuelle', score: 20, strengths: [], weaknesses: ['chiffre non sourcé'] },
+      { domain: 'solidite_logique', score: 20, strengths: [], weaknesses: [] },
+      { domain: 'cadrage_manipulation', score: 20, strengths: [], weaknesses: [] },
+      { domain: 'deontologie', score: 8, strengths: [], weaknesses: [] },
+      { domain: 'orthographe_grammaire', score: 4, strengths: [], weaknesses: [] },
+    ],
+    findings: [
+      {
+        id: 'f1',
+        blockId: 'b1',
+        quote: 'Le chômage a baissé de 12 % en un an.',
+        category: 'affirmation-non-etayee',
+        severity: 2,
+        label: 'Chiffre non étayé',
+        explanation: "Aucune source n'est citée pour ce chiffre.",
+        confidence: 0.9,
+      },
+      {
+        id: 'f2',
+        blockId: 'b2',
+        quote: 'Tout le monde le sait.',
+        category: 'cadrage',
+        severity: 1,
+        label: 'Appel au sens commun',
+        explanation: 'Le texte substitue une évidence supposée à une démonstration.',
+        confidence: 0.8,
+      },
+    ],
+    claims: [],
+  });
+
+  constructor(model = 'stub-model') {
+    super({ provider: 'gemini', apiKey: 'test-key-not-a-secret', model });
+  }
+
+  override supportsGroundedAnswer(): boolean {
+    return true;
+  }
+
+  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+    this.calls.complete += 1;
+    if (this.failNextComplete) {
+      this.failNextComplete = false;
+      throw new Error('stub provider failure');
+    }
+    const system = options.systemPrompt ?? '';
+    // The source-judgement prompt is the only `complete` the engine makes
+    // besides the audit; telling them apart by their system prompt keeps the
+    // stub honest about which call it is answering.
+    const content = system.includes('inspection des sources')
+      ? JSON.stringify({
+          relation: 'supporte',
+          fiabilite: 'fiable',
+          passage: 'La page citée donne bien ce chiffre.',
+          raison: 'concordance',
+        })
+      : this.auditJson;
+    return { content, model: this.getModel(), provider: 'gemini' };
+  }
+
+  async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {
+    const res = await this.complete(options);
+    callbacks.onChunk(res.content);
+    return res;
+  }
+
+  override async groundedAnswer(): Promise<GroundedAnswer> {
+    this.calls.grounded += 1;
+    if (this.failNextGrounded) {
+      this.failNextGrounded = false;
+      throw new Error('stub grounded failure');
+    }
+    return {
+      content: JSON.stringify({
+        verification: 'verifiee',
+        sources: [{ title: 'Insee', url: 'https://insee.example/chomage', origin: 'search' }],
+        rationale: "La statistique publique confirme l'ordre de grandeur.",
+      }),
+      citations: [{ title: 'Insee', url: 'https://insee.example/chomage', snippet: 'baisse de 12 %' }],
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
 
@@ -157,13 +265,17 @@ export interface TestEnv {
   db: MemoryDb;
   clock: ManualClock;
   email: FakeEmail;
+  llm: StubLlm;
   webAppOrigin: string;
 }
 
-export function makeTestEnv(opts: { fetchImpl?: FetchLike; adminToken?: string } = {}): TestEnv {
-  const db = new MemoryDb();
+export function makeTestEnv(
+  opts: { fetchImpl?: FetchLike; adminToken?: string; llm?: StubLlm; db?: MemoryDb } = {},
+): TestEnv {
+  const db = opts.db ?? new MemoryDb();
   const clock = new ManualClock(T0);
   const email = new FakeEmail();
+  const llm = opts.llm ?? new StubLlm();
   const webAppOrigin = WEB_APP_ORIGIN;
   const services: Services = {
     db,
@@ -174,9 +286,10 @@ export function makeTestEnv(opts: { fetchImpl?: FetchLike; adminToken?: string }
     googleClientId: 'test-google-client-id',
     fetchImpl: opts.fetchImpl,
     adminToken: opts.adminToken,
+    llm: () => llm,
   };
   const worker = createWorker(services);
-  return { services, handler: (req) => worker.fetch(req), db, clock, email, webAppOrigin };
+  return { services, handler: (req) => worker.fetch(req), db, clock, email, llm, webAppOrigin };
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,16 @@
 /** Cap on a single fetched page, so one pathological site cannot blow the memory budget. */
 export const MAX_PAGE_BYTES = 1_000_000;
 
+/**
+ * How a stage reads one cited page. The two implementations below differ only
+ * in their threat model — {@link fetchPageText} for the extension, where the
+ * browser already refuses private addresses, and {@link safeFetchPageText} for
+ * the server, where nothing does — so every stage that reads a page takes this
+ * seam rather than a bare `fetch`, and the caller picks the one that matches
+ * where the code is running.
+ */
+export type PageFetcher = (url: string, timeoutMs: number) => Promise<string>;
+
 /** Only http(s) URLs can be fetched by the service worker; anything else is a non-source. */
 export function fetchableUrl(raw: string): string | null {
   try {

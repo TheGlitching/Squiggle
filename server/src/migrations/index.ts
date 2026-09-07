@@ -13,6 +13,7 @@
  */
 import { name as authName, sql as authSql } from './001_auth';
 import { name as usageName, sql as usageSql } from './002_usage_reports';
+import { name as runsName, sql as runsSql } from './003_analysis_runs';
 
 export interface Migration {
   name: string;
@@ -27,6 +28,7 @@ export interface SqlQuery {
 export const MIGRATIONS: readonly Migration[] = [
   { name: authName, sql: authSql },
   { name: usageName, sql: usageSql },
+  { name: runsName, sql: runsSql },
 ];
 
 function splitStatements(sql: string): string[] {

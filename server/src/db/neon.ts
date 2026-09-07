@@ -17,6 +17,8 @@ import { randomToken } from '@squiggle/shared';
 
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
+  AnalysisRunRow,
+  CreateAnalysisRunArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
   CreateReportArgs,
@@ -412,11 +414,67 @@ export class NeonDb implements Db {
     return { expired, overCap };
   }
 
+  // ---- analysis runs -------------------------------------------------------
+
+  async createAnalysisRun(args: CreateAnalysisRunArgs): Promise<AnalysisRunRow> {
+    const id = randomToken(16);
+    const expiresAt = args.now + args.ttlMs;
+    await this.q`
+      INSERT INTO analysis_runs (id, user_id, url_hash, state, created_at, updated_at, expires_at)
+      VALUES (${id}, ${args.userId}, ${args.urlHash}, ${args.state}::jsonb, ${args.now}, ${args.now}, ${expiresAt})
+    `;
+    return {
+      id,
+      userId: args.userId,
+      urlHash: args.urlHash,
+      state: args.state,
+      createdAt: args.now,
+      updatedAt: args.now,
+      expiresAt,
+      finalizedAt: null,
+    };
+  }
+
+  async getAnalysisRun(id: string): Promise<AnalysisRunRow | null> {
+    const rows = await this.q`SELECT * FROM analysis_runs WHERE id = ${id}`;
+    if (!rows[0]) return null;
+    const r = rows[0];
+    return {
+      id: r.id as string,
+      userId: r.user_id as string,
+      urlHash: r.url_hash as string,
+      // JSONB comes back parsed; the rest of the server treats state as text.
+      state: typeof r.state === 'string' ? r.state : JSON.stringify(r.state),
+      createdAt: num(r.created_at),
+      updatedAt: num(r.updated_at),
+      expiresAt: num(r.expires_at),
+      finalizedAt: r.finalized_at === null ? null : num(r.finalized_at),
+    };
+  }
+
+  async updateAnalysisRunState(id: string, state: string, now: number): Promise<void> {
+    await this.q`
+      UPDATE analysis_runs SET state = ${state}::jsonb, updated_at = ${now} WHERE id = ${id}
+    `;
+  }
+
+  async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
+    // Conditional on finalized_at still being NULL, so a replayed finalize
+    // updates zero rows instead of consuming a second credit.
+    const rows = await this.q`
+      UPDATE analysis_runs SET finalized_at = ${now}, updated_at = ${now}
+      WHERE id = ${id} AND finalized_at IS NULL
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
+
   async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
     await this.q`DELETE FROM nonces WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM web_sessions WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM magic_links WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs}`;
   }
 }

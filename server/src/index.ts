@@ -21,9 +21,30 @@
  *   GET|POST /auth/claim               exchange a session for an extension token
  *   POST   /auth/logout                end the current web session
  *   GET    /v1/account                 (signed) who am I
+ *   GET    /v1/analyze/check           (signed) shared-cache preflight, 0 credits
+ *   POST   /v1/analyze/audit           (signed) audit the article, opens a run
+ *   POST   /v1/analyze/research        (signed) check one factual finding
+ *   POST   /v1/analyze/source-check    (signed) read one link the article cites
+ *   POST   /v1/analyze/finalize        (signed) reconcile, cache, consume 1 credit
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
 import { neon } from '@neondatabase/serverless';
+import { GeminiClient, PROMPT_VERSION, type BaseLLMClient } from '@squiggle/shared';
+
+import {
+  analyzeAudit,
+  analyzeCheck,
+  analyzeFinalize,
+  analyzeResearch,
+  analyzeSourceCheck,
+  type AnalyzeServices,
+} from './analyze/stages';
+import {
+  AuditRequestSchema,
+  FinalizeRequestSchema,
+  ResearchRequestSchema,
+  SourceCheckRequestSchema,
+} from './analyze/schemas';
 
 import { claimExtensionToken } from './auth/claim';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
@@ -58,6 +79,10 @@ export interface Env {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
+  /** Our own Gemini key. Hosted mode runs on it; BYOK never touches it. */
+  GEMINI_API_KEY: string;
+  /** Non-secret: the exact model id analyses run on (wrangler.jsonc var). */
+  GEMINI_MODEL: string;
 }
 
 export interface Services {
@@ -70,6 +95,14 @@ export interface Services {
   googleClientSecret?: string;
   fetchImpl?: FetchLike;
   adminToken?: string;
+  /**
+   * Builds the LLM client hosted analyses run on. A factory, not an instance,
+   * so a test can supply a stub and no code path can reach a real provider
+   * without one being configured.
+   */
+  llm?: () => BaseLLMClient;
+  /** Prompt set version; part of the shared cache key. */
+  promptVersion?: string;
   /** Apply pending migrations; only present in the live (Neon) deployment. */
   runMigrations?: (now: number) => Promise<string[]>;
 }
@@ -123,7 +156,7 @@ function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
-function finish(outcome: Outcome<Record<string, unknown>>, setCookie?: string | null): Response {
+function finish<T extends object>(outcome: Outcome<T>, setCookie?: string | null): Response {
   const base = outcome.ok ? Response.json(outcome, { status: 200 }) : errorResponse(outcome);
   const res = new Response(base.body, { status: base.status, statusText: base.statusText, headers: base.headers });
   if (setCookie) res.headers.set('set-cookie', setCookie);
@@ -237,6 +270,10 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
     });
   }
 
+  if (path.startsWith('/v1/analyze/')) {
+    return analyzeRoute(req, url, s, path, method);
+  }
+
   if (path === '/admin/migrate' && method === 'POST') {
     const header = req.headers.get('authorization');
     if (!s.adminToken || header !== `Bearer ${s.adminToken}`) {
@@ -254,6 +291,87 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/**
+ * The analysis stages. Every one of them is behind the same signed-request
+ * gate as the rest of `/v1/`, and every body is parsed by its zod schema
+ * before a handler sees it — so a handler only ever receives a value of the
+ * shape it declares, and an oversized or malformed payload costs no tokens.
+ */
+async function analyzeRoute(
+  req: Request,
+  url: URL,
+  s: Services,
+  path: string,
+  method: string,
+): Promise<Response> {
+  if (!s.llm) {
+    return finish(apiError('internal', "Le mode hébergé n'est pas configuré sur ce serveur."));
+  }
+  const analyze: AnalyzeServices = {
+    db: s.db,
+    clock: s.clock,
+    llm: s.llm,
+    promptVersion: s.promptVersion ?? PROMPT_VERSION,
+    fetchImpl: s.fetchImpl as typeof fetch | undefined,
+  };
+
+  // The signature covers the body byte-for-byte, so the raw text has to be
+  // read once and reused: re-reading a consumed body would verify one string
+  // and parse another.
+  const rawBody = method === 'GET' ? '' : await req.text();
+  const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
+  if (!auth.ok) return finish(auth);
+
+  if (path === '/v1/analyze/check' && method === 'GET') {
+    const target = url.searchParams.get('url') ?? '';
+    return finish(await analyzeCheck(analyze, target));
+  }
+
+  if (path === '/v1/analyze/audit' && method === 'POST') {
+    const parsed = AuditRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    return finish(await analyzeAudit(analyze, auth.user, parsed.data));
+  }
+
+  if (path === '/v1/analyze/research' && method === 'POST') {
+    const parsed = ResearchRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    return finish(await analyzeResearch(analyze, auth.user, parsed.data));
+  }
+
+  if (path === '/v1/analyze/source-check' && method === 'POST') {
+    const parsed = SourceCheckRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    return finish(await analyzeSourceCheck(analyze, auth.user, parsed.data));
+  }
+
+  if (path === '/v1/analyze/finalize' && method === 'POST') {
+    const parsed = FinalizeRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    return finish(await analyzeFinalize(analyze, auth.user, parsed.data));
+  }
+
+  return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/**
+ * A rejected payload is named by its FIELD, never echoed back: the value that
+ * failed validation is attacker-supplied article text, and it belongs neither
+ * in a response nor in a log line.
+ */
+function invalidPayload(error: { issues: Array<{ path: PropertyKey[] }> }) {
+  const fields = [...new Set(error.issues.map((issue) => issue.path.join('.') || '(racine)'))];
+  return apiError('invalid_payload', `Requête invalide : ${fields.slice(0, 5).join(', ')}.`);
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 async function readJson(req: Request): Promise<Record<string, unknown>> {
@@ -288,6 +406,16 @@ function servicesFromEnv(env: Env): Services {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,
+    // Our own key, read from the Workers secret store and never leaving this
+    // process. A BYOK user's key is a different thing entirely: it stays in
+    // their browser and never reaches this server at all.
+    llm: () =>
+      new GeminiClient({
+        provider: 'gemini',
+        apiKey: env.GEMINI_API_KEY,
+        model: env.GEMINI_MODEL,
+      }),
+    promptVersion: PROMPT_VERSION,
     runMigrations: (now) => {
       const q: SqlQuery = {
         query: (text, params) =>
