@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { enforceEvidenceHonesty, reconcileResearchedFindings } from '../src/engine/validator';
-import { computeFourchesCaudinesScore, ScoreComputationResult } from '../src/engine/scoring';
-import { EvidenceSource, FactualClaim, Finding, SCORE_DOMAINS } from '../src/engine/types';
+import { enforceEvidenceHonesty, reconcileResearchedFindings } from '@squiggle/shared';
+import { computeFourchesCaudinesScore, ScoreComputationResult } from '@squiggle/shared';
+import { EvidenceSource, FactualClaim, Finding, SCORE_DOMAINS } from '@squiggle/shared';
 
 /**
  * Method section 3.5 mandates exactly four states for a factual assertion:

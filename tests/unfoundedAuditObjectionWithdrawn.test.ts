@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SecureKeyStorage } from '../src/crypto/storage';
-import { AnalysisPipeline } from '../src/engine/pipeline';
+import { AnalysisPipeline } from '@squiggle/shared';
 import { AnthropicClient } from '../src/client/anthropic';
 
 /**

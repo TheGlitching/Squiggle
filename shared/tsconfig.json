@@ -10,17 +10,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["chrome", "vite/client", "webextension-polyfill"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@squiggle/shared": ["shared/src/index.ts"]
-    }
+    "types": []
   },
-  "include": ["src", "tests", "shared/src", "shared/tests", "vite.config.ts"]
+  "include": ["src", "tests"]
 }

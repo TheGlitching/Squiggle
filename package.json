@@ -13,6 +13,9 @@
     "url": "https://github.com/TheGlitching/Squiggle/issues"
   },
   "type": "module",
+  "workspaces": [
+    "shared"
+  ],
   "scripts": {
     "dev": "vite",
     "dev:firefox": "TARGET=firefox vite",
@@ -28,6 +31,7 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
+    "@squiggle/shared": "*",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.475.0",

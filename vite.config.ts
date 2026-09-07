@@ -34,6 +34,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // The shared engine is consumed as TS source straight from the workspace
+      // folder: the extension (this config) and the future server both compile
+      // it, so a separate build step would only create two artifacts that must
+      // stay in lockstep.
+      '@squiggle/shared': resolve(__dirname, './shared/src'),
       '@': resolve(__dirname, './src'),
     },
   },
@@ -57,7 +62,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
-    include: ['tests/**/*.test.{ts,tsx}'],
+    include: ['tests/**/*.test.{ts,tsx}', 'shared/tests/**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/tree/**'],
   },
 });

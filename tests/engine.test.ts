@@ -7,7 +7,7 @@ import {
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
   parseAndValidateLlmOutput,
   SCORE_DOMAINS
-} from '../src/engine';
+} from '@squiggle/shared';
 
 describe('Fourches Caudines Engine', () => {
   const sampleInput: AnalysisInput = {

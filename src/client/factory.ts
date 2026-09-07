@@ -1,9 +1,9 @@
-import { BaseLLMClient } from './base';
+import { BaseLLMClient } from '@squiggle/shared';
 import { AnthropicClient } from './anthropic';
 import { OpenAIClient } from './openai';
 import { OpenRouterClient } from './openrouter';
-import { GeminiClient } from './gemini';
-import type { ProviderConfig } from '../types/byok';
+import { GeminiClient } from '@squiggle/shared';
+import type { ProviderConfig } from '@squiggle/shared';
 
 export function createLLMClient(config: ProviderConfig): BaseLLMClient {
   switch (config.provider) {

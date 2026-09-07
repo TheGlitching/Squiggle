@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { SecureKeyStorage } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
 import { listOpenRouterModels, OpenRouterModel } from '../../client/openrouter';
-import type { LLMProvider, ProviderConfig } from '../../types/byok';
+import type { LLMProvider, ProviderConfig } from '@squiggle/shared';
 
 /**
  * BYOK configuration surface.

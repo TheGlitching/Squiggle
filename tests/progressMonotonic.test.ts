@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BaseLLMClient, GroundedAnswer, SearchResult } from '../src/client/base';
-import { AnalysisPipeline, PipelineProgressEvent } from '../src/engine/pipeline';
-import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '../src/types/byok';
+import { BaseLLMClient, GroundedAnswer, SearchResult } from '@squiggle/shared';
+import { AnalysisPipeline, PipelineProgressEvent } from '@squiggle/shared';
+import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '@squiggle/shared';
 
 /**
  * The bar used to fall back to the start partway through: the research stage

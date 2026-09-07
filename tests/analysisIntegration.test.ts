@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { AnalysisPipeline } from '../src/engine/pipeline';
-import { SCORE_DOMAINS } from '../src/engine/types';
+import { AnalysisPipeline } from '@squiggle/shared';
+import { SCORE_DOMAINS } from '@squiggle/shared';
 import {
   findingsToHighlightTargets,
   countFindingsByFilterCategory,

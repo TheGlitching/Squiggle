@@ -1,5 +1,5 @@
 import React from 'react';
-import { Finding } from '../../engine/types';
+import { Finding } from '@squiggle/shared';
 import { SeverityBadge } from './SeverityBadge';
 import { VerificationBadge } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';

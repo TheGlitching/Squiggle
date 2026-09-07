@@ -1,4 +1,4 @@
-import type { EncryptedPayload } from '../types/byok';
+import type { EncryptedPayload } from '@squiggle/shared';
 
 /**
  * Web Crypto API-based AES-GCM 256-bit encryption/decryption utilities.

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FourchesBlockId } from '../../engine/types';
+import type { FourchesBlockId } from '@squiggle/shared';
 
 /**
  * This file previously contained exactly one line - `export * from

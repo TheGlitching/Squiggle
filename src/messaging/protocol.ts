@@ -8,7 +8,7 @@
  * so a payload-shape drift between the two sides could not be caught.
  */
 
-import type { AnalysisResult, Finding, PipelineStatus } from '../engine/types';
+import type { AnalysisResult, Finding, PipelineStatus } from '@squiggle/shared';
 import type { ExtractedArticle } from '../content/types';
 
 export interface TabAnalysisSnapshot {

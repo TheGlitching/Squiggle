@@ -1,4 +1,4 @@
-import type { EncryptedPayload, LLMProvider, ProviderConfig } from '../types/byok';
+import type { EncryptedPayload, LLMProvider, ProviderConfig } from '@squiggle/shared';
 import { decryptSecret, encryptSecret } from './crypto';
 
 export interface StoredProviderSettings {
