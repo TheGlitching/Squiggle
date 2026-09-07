@@ -15,3 +15,4 @@ export * from './client/base';
 export * from './client/gemini';
 export * from './types/byok';
 export * from './auth/signing';
+export * from './hosted/client';

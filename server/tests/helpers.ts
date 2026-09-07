@@ -347,10 +347,23 @@ export interface TestEnv {
 }
 
 export function makeTestEnv(
-  opts: { fetchImpl?: FetchLike; adminToken?: string; llm?: StubLlm; db?: MemoryDb; stripe?: FakeStripe } = {},
+  opts: {
+    fetchImpl?: FetchLike;
+    adminToken?: string;
+    llm?: StubLlm;
+    db?: MemoryDb;
+    stripe?: FakeStripe;
+    /**
+     * Start of the manual clock. Defaults to the suite's fixed T0; a test that
+     * drives the real extension client passes the real time, because that
+     * client stamps requests from `Date.now()` and the signature window is
+     * five minutes wide.
+     */
+    now?: number;
+  } = {},
 ): TestEnv {
   const db = opts.db ?? new MemoryDb();
-  const clock = new ManualClock(T0);
+  const clock = new ManualClock(opts.now ?? T0);
   const email = new FakeEmail();
   const llm = opts.llm ?? new StubLlm();
   const stripe = opts.stripe ?? makeFakeStripe();
