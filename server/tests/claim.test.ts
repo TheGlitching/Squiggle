@@ -53,7 +53,7 @@ describe('/auth/claim', () => {
 
     const res = await env.handler(
       new Request(`${env.webAppOrigin}/auth/claim?key=${encodeURIComponent(JSON.stringify(jwk))}`, {
-        headers: { cookie: sessionCookie },
+        headers: { cookie: sessionCookie, origin: env.webAppOrigin },
       }),
     );
     expect(res.status).toBe(200);

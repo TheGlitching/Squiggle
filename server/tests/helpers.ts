@@ -302,7 +302,10 @@ export async function requestMagicLink(
   emailAddr: string,
   ip?: string,
 ): Promise<Response> {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  // The web app reaches these endpoints by `fetch`, which always sets Origin,
+  // and the server now requires it there (see src/lib/cors.ts). The helper
+  // sends it for the same reason the real caller does.
+  const headers: Record<string, string> = { 'content-type': 'application/json', origin: env.webAppOrigin };
   if (ip) headers['cf-connecting-ip'] = ip;
   return env.handler(
     new Request(`${env.webAppOrigin}/auth/magic-link`, {
@@ -326,7 +329,7 @@ export async function magicLogin(
   const verifyRes = await env.handler(
     new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
       body: JSON.stringify({ code }),
     }),
   );
@@ -350,7 +353,7 @@ export async function claim(
   return env.handler(
     new Request(`${env.webAppOrigin}/auth/claim`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: sessionCookie },
+      headers: { 'content-type': 'application/json', cookie: sessionCookie, origin: env.webAppOrigin },
       body: JSON.stringify({ publicKeyJwk: jwk }),
     }),
   );

@@ -1,0 +1,26 @@
+# Dependency updates. A lockfile only pins what was resolved once; it does
+# nothing about a dependency that becomes vulnerable afterwards, so the two
+# controls are complementary: `npm ci` in CI proves the tree still matches the
+# lockfile, and this proves the lockfile does not rot.
+#
+# Grouped on purpose: twenty separate patch PRs a week get ignored, which is
+# the same as having no updates at all.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

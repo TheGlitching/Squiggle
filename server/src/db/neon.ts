@@ -458,6 +458,14 @@ export class NeonDb implements Db {
     `;
   }
 
+  async countActiveAnalysisRuns(userId: string, since: number): Promise<number> {
+    const rows = await this.q`
+      SELECT COUNT(*) AS n FROM analysis_runs
+      WHERE user_id = ${userId} AND finalized_at IS NULL AND updated_at >= ${since}
+    `;
+    return num(rows[0].n);
+  }
+
   async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
     // Conditional on finalized_at still being NULL, so a replayed finalize
     // updates zero rows instead of consuming a second credit.

@@ -48,7 +48,16 @@ import {
 import type { Clock } from '../lib/clock';
 import type { Db, UserRow } from '../db/types';
 import { apiError, type Outcome } from '../lib/errors';
+import { logEvent } from '../lib/log';
+import { sanitizeReport } from '../lib/sanitize';
 import { REPORT_MAX_BYTES, REPORT_TTL_MS } from '../usage/limits';
+import {
+  ANALYSES_GLOBAL_PER_HOUR,
+  ANALYSES_PER_ACCOUNT_PER_HOUR,
+  CONCURRENT_RUN_WINDOW_MS,
+  HOUR_MS,
+  MAX_CONCURRENT_RUNS,
+} from '../usage/abuse';
 import { articleUrlHash, canonicalArticleUrl } from './canonicalUrl';
 import type { AuditRequest } from './schemas';
 import { parseRunState, serializeRunState, type AnalysisRunState } from './runState';
@@ -71,6 +80,8 @@ export interface AnalyzeServices {
   promptVersion: string;
   /** Injected into the cited-source fetcher (tests serve pages from memory). */
   fetchImpl?: typeof fetch;
+  /** Correlation id of the request being served; logged, never derived from content. */
+  requestId: string;
 }
 
 /**
@@ -108,7 +119,17 @@ export async function analyzeCheck(s: AnalyzeServices, rawUrl: string): Promise<
   const cached = await s.db.findReport(urlHash, model, s.promptVersion);
   if (!cached || cached.expiresAt <= s.clock.now()) return { ok: true, hit: false };
 
-  return { ok: true, hit: true, report: JSON.parse(cached.report) as AnalysisReport, cachedAt: cached.createdAt };
+  logEvent({ event: 'cache_hit', requestId: s.requestId, urlHash });
+  // Sanitized again on the way out. It was sanitized before it was stored, so
+  // this is redundant for anything this build wrote — and it is what makes
+  // "no reader is ever served unsanitized text" true of rows an older build
+  // wrote, without a migration.
+  return {
+    ok: true,
+    hit: true,
+    report: sanitizeReport(JSON.parse(cached.report) as AnalysisReport),
+    cachedAt: cached.createdAt,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -132,8 +153,14 @@ export async function analyzeAudit(
   const urlHash = await articleUrlHash(canonical);
   if (!urlHash) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
 
-  const client = s.llm();
   const now = s.clock.now();
+
+  // Every ceiling is checked BEFORE the provider is called: an abusive client
+  // must not be able to spend a single token proving it is abusive.
+  const gate = await enforceStartCeilings(s, user, now);
+  if (!gate.ok) return gate;
+
+  const client = s.llm();
 
   const input: AnalysisInput = {
     url: canonical,
@@ -222,12 +249,58 @@ export async function analyzeAudit(
     ttlMs: RUN_TTL_MS,
   });
 
+  logEvent({ event: 'analysis_started', requestId: s.requestId, userId: user.id, urlHash });
+
   return {
     ok: true,
     runId: run.id,
-    report: audited,
+    report: sanitizeReport(audited),
     researchable: researchableFindingIds(state),
   };
+}
+
+/**
+ * The three ceilings a run has to clear to start: one analysis in flight per
+ * account, an hourly per-account ceiling, and an hourly ceiling for the whole
+ * service. The last one is the only thing standing between a mass account
+ * compromise and an unbounded Gemini invoice.
+ */
+async function enforceStartCeilings(
+  s: AnalyzeServices,
+  user: UserRow,
+  now: number,
+): Promise<Outcome<Record<never, never>>> {
+  const active = await s.db.countActiveAnalysisRuns(user.id, now - CONCURRENT_RUN_WINDOW_MS);
+  if (active >= MAX_CONCURRENT_RUNS) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:concurrent', count: active });
+    return apiError('rate_limited', 'Une analyse est déjà en cours. Attendez qu’elle se termine.');
+  }
+
+  const perAccount = await s.db.recordAndCheckRate({
+    scope: 'analyze:account',
+    key: user.id,
+    limit: ANALYSES_PER_ACCOUNT_PER_HOUR,
+    windowMs: HOUR_MS,
+    now,
+  });
+  if (!perAccount.allowed) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:account', count: perAccount.count });
+    return apiError('rate_limited', 'Trop d’analyses lancées récemment. Réessayez dans un moment.');
+  }
+
+  const global = await s.db.recordAndCheckRate({
+    scope: 'analyze:global',
+    key: 'all',
+    limit: ANALYSES_GLOBAL_PER_HOUR,
+    windowMs: HOUR_MS,
+    now,
+  });
+  if (!global.allowed) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, scope: 'analyze:global', count: global.count });
+    return apiError('rate_limited', 'Le service est momentanément saturé. Réessayez dans un moment.');
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -397,7 +470,9 @@ export async function analyzeFinalize(
     return apiError('run_already_finalized', 'Cette analyse est déjà terminée.');
   }
 
-  const report = buildReport(state, now);
+  // Sanitized once, here, before it is either cached or returned: the cached
+  // bytes and the bytes this reader sees are the same sanitized report.
+  const report = sanitizeReport(buildReport(state, now));
 
   const serialized = JSON.stringify(report);
   const sizeBytes = new TextEncoder().encode(serialized).length;
@@ -422,6 +497,7 @@ export async function analyzeFinalize(
   }
 
   await s.db.recordAnalysis({ userId: user.id, reportId: urlHash, now });
+  logEvent({ event: 'analysis_finalized', requestId: s.requestId, userId: user.id, urlHash });
 
   return { ok: true, report, cached };
 }

@@ -57,6 +57,8 @@ import {
   sessionSetCookie,
   sessionUser,
 } from './auth/session';
+import { corsHeaders, originRequired } from './lib/cors';
+import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
 import { NeonDb } from './db/neon';
 import type { Db } from './db/types';
 import type { Clock } from './lib/clock';
@@ -119,11 +121,20 @@ async function handle(
   allowedOrigins: Set<string>,
 ): Promise<Response> {
   const url = new URL(req.url);
+  const requestId = newRequestId();
+  const startedAt = Date.now();
   const origin = req.headers.get('origin');
   const originAllowed = origin !== null && allowedOrigins.has(origin);
 
-  if (origin !== null && !originAllowed) {
-    return errorResponse(apiError('origin_not_allowed', 'This origin is not allowed to call this API.'));
+  // A wrong origin is refused everywhere; a MISSING one is refused on the
+  // endpoints that a page could otherwise drive with the reader's own cookie.
+  // See lib/cors.ts for why the list is a list and not "every POST".
+  if ((origin !== null && !originAllowed) || (!originAllowed && originRequired(req.method, url.pathname))) {
+    logEvent({ event: 'origin_rejected', requestId, method: req.method, path: url.pathname });
+    return withRequestId(
+      errorResponse(apiError('origin_not_allowed', 'This origin is not allowed to call this API.')),
+      requestId,
+    );
   }
 
   if (req.method === 'OPTIONS') {
@@ -133,27 +144,38 @@ async function handle(
 
   let res: Response;
   try {
-    res = await route(req, url, s);
+    res = await route(req, url, s, requestId);
   } catch {
+    // The thrown value is never logged: it can carry a fragment of whatever
+    // was being parsed, and that is article text.
+    logEvent({ event: 'unhandled_error', requestId, method: req.method, path: url.pathname });
     res = errorResponse(apiError('internal', 'Something went wrong. Please try again.'));
   }
 
+  const headers = new Headers(res.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
   if (originAllowed) {
-    const headers = new Headers(res.headers);
     for (const [k, v] of Object.entries(corsHeaders(origin as string))) headers.set(k, v);
-    res = new Response(res.body, { status: res.status, statusText: res.statusText, headers });
   }
+  res = new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+
+  // The route pattern, never the query string: on `/v1/analyze/check` the
+  // query string is the article the reader is looking at.
+  logEvent({
+    event: 'request',
+    requestId,
+    method: req.method,
+    path: url.pathname,
+    status: res.status,
+    durationMs: Date.now() - startedAt,
+  });
   return res;
 }
 
-function corsHeaders(origin: string): Record<string, string> {
-  return {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'authorization, content-type, x-squiggle-sig, x-squiggle-nonce, x-squiggle-ts',
-    'access-control-expose-headers': 'x-squiggle-request-id',
-    'access-control-max-age': '86400',
-  };
+function withRequestId(res: Response, requestId: string): Response {
+  const headers = new Headers(res.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
 function finish<T extends object>(outcome: Outcome<T>, setCookie?: string | null): Response {
@@ -163,7 +185,7 @@ function finish<T extends object>(outcome: Outcome<T>, setCookie?: string | null
   return res;
 }
 
-async function route(req: Request, url: URL, s: Services): Promise<Response> {
+async function route(req: Request, url: URL, s: Services, requestId: string): Promise<Response> {
   const path = url.pathname;
   const method = req.method;
 
@@ -176,7 +198,7 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
     const email = typeof body.email === 'string' ? body.email : '';
     const ip = req.headers.get('cf-connecting-ip');
     const outcome = await requestMagicLink(
-      { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin },
+      { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin, requestId },
       { email, ip },
     );
     return finish(outcome);
@@ -185,7 +207,11 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
   if (path === '/auth/magic-link/verify' && method === 'POST') {
     const body = await readJson(req);
     const code = typeof body.code === 'string' ? body.code : '';
-    const outcome = await verifyMagicLink({ db: s.db, clock: s.clock }, code);
+    const outcome = await verifyMagicLink(
+      { db: s.db, clock: s.clock, requestId },
+      code,
+      req.headers.get('cf-connecting-ip'),
+    );
     return finish(outcome, outcome.ok ? sessionSetCookie(outcome.sessionToken) : null);
   }
 
@@ -271,7 +297,7 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
   }
 
   if (path.startsWith('/v1/analyze/')) {
-    return analyzeRoute(req, url, s, path, method);
+    return analyzeRoute(req, url, s, path, method, requestId);
   }
 
   if (path === '/admin/migrate' && method === 'POST') {
@@ -305,6 +331,7 @@ async function analyzeRoute(
   s: Services,
   path: string,
   method: string,
+  requestId: string,
 ): Promise<Response> {
   if (!s.llm) {
     return finish(apiError('internal', "Le mode hébergé n'est pas configuré sur ce serveur."));
@@ -315,6 +342,7 @@ async function analyzeRoute(
     llm: s.llm,
     promptVersion: s.promptVersion ?? PROMPT_VERSION,
     fetchImpl: s.fetchImpl as typeof fetch | undefined,
+    requestId,
   };
 
   // The signature covers the body byte-for-byte, so the raw text has to be
@@ -331,25 +359,25 @@ async function analyzeRoute(
 
   if (path === '/v1/analyze/audit' && method === 'POST') {
     const parsed = AuditRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
     return finish(await analyzeAudit(analyze, auth.user, parsed.data));
   }
 
   if (path === '/v1/analyze/research' && method === 'POST') {
     const parsed = ResearchRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
     return finish(await analyzeResearch(analyze, auth.user, parsed.data));
   }
 
   if (path === '/v1/analyze/source-check' && method === 'POST') {
     const parsed = SourceCheckRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
     return finish(await analyzeSourceCheck(analyze, auth.user, parsed.data));
   }
 
   if (path === '/v1/analyze/finalize' && method === 'POST') {
     const parsed = FinalizeRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
     return finish(await analyzeFinalize(analyze, auth.user, parsed.data));
   }
 
@@ -359,11 +387,17 @@ async function analyzeRoute(
 /**
  * A rejected payload is named by its FIELD, never echoed back: the value that
  * failed validation is attacker-supplied article text, and it belongs neither
- * in a response nor in a log line.
+ * in a response nor in a log line. Naming the field is what keeps a real
+ * client's bug debuggable without any of that.
  */
-function invalidPayload(error: { issues: Array<{ path: PropertyKey[] }> }) {
-  const fields = [...new Set(error.issues.map((issue) => issue.path.join('.') || '(racine)'))];
-  return apiError('invalid_payload', `Requête invalide : ${fields.slice(0, 5).join(', ')}.`);
+function invalidPayload(
+  error: { issues: Array<{ path: PropertyKey[] }> },
+  requestId: string,
+  userId: string,
+) {
+  const fields = [...new Set(error.issues.map((issue) => issue.path.join('.') || '(racine)'))].slice(0, 5);
+  logEvent({ event: 'payload_rejected', requestId, userId, fields });
+  return apiError('invalid_payload', `Requête invalide : ${fields.join(', ')}.`);
 }
 
 function parseJson(raw: string): unknown {

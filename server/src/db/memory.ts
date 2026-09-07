@@ -355,6 +355,14 @@ export class MemoryDb implements Db {
     row.updatedAt = now;
   }
 
+  async countActiveAnalysisRuns(userId: string, since: number): Promise<number> {
+    let count = 0;
+    for (const row of this.runs.values()) {
+      if (row.userId === userId && row.finalizedAt === null && row.updatedAt >= since) count += 1;
+    }
+    return count;
+  }
+
   async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
     const row = this.runs.get(id);
     if (!row || row.finalizedAt !== null) return false;

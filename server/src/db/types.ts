@@ -326,6 +326,13 @@ export interface Db {
   updateAnalysisRunState(id: string, state: string, now: number): Promise<void>;
 
   /**
+   * Runs of this account that are still open and were touched since `since`.
+   * "Touched recently" rather than "not finalized" is what lets a reader who
+   * abandoned an analysis start another one without waiting out its TTL.
+   */
+  countActiveAnalysisRuns(userId: string, since: number): Promise<number>;
+
+  /**
    * Mark the run finalized, atomically and only once. Returns false when the
    * run was already finalized, which is what stops a replayed finalize from
    * writing a second report or consuming a second credit.
