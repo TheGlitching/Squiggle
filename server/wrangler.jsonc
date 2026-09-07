@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "squiggle-server",
+  "main": "src/index.ts",
+  // Bump when the runtime gains new features we start relying on.
+  "compatibility_date": "2025-01-01",
+  "observability": {
+    "enabled": true
+  },
+  // Non-secret configuration only. Everything sensitive (DATABASE_URL,
+  // BREVO_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, STRIPE_SECRET_KEY,
+  // STRIPE_WEBHOOK_SECRET) is set per-environment with `wrangler secret put`
+  // and lives in the Cloudflare secret store — never in this file, never in
+  // the repo (see AGENTS.md).
+  "vars": {
+    // Origin of the hosted web app; used to build magic-link / OAuth URLs.
+    "WEB_APP_ORIGIN": "https://squiggle.fr",
+    // Origins of our two store listings, pinned for CORS. A page on any other
+    // origin cannot read our responses, which is what keeps a malicious web
+    // page from burning our Gemini quota even if it steals a token.
+    "EXTENSION_CHROME_ORIGIN": "chrome-extension://PENDING_CHROME_ID",
+    "EXTENSION_FIREFOX_ORIGIN": "moz-extension://PENDING_FIREFOX_ID",
+    // Verified sender address in the Brevo account (not a secret).
+    "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr"
+  }
+}
