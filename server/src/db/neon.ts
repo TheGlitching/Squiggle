@@ -15,20 +15,26 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { randomToken } from '@squiggle/shared';
 
+import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
+  CreateReportArgs,
   CreateSessionArgs,
   CreateTokenArgs,
   CreateUserArgs,
+  CreateUsageLogArgs,
   Db,
   ExtensionKeyRow,
   MagicLinkRow,
   NonceArgs,
   OAuthPendingRow,
+  PurgeReportsResult,
   RateCheckArgs,
   RateCheckResult,
+  ReportRow,
   TokenRow,
+  UsageLogRow,
   UserRow,
   WebSessionRow,
 } from './types';
@@ -48,8 +54,26 @@ function mapUser(r: RawRow): UserRow {
     googleSub: (r.google_sub as string | null) ?? null,
     plan: r.plan as UserRow['plan'],
     planExpiresAt: r.plan_expires_at === null ? null : num(r.plan_expires_at),
+    stripeCustomerId: (r.stripe_customer_id as string | null) ?? null,
+    stripeSubId: (r.stripe_sub_id as string | null) ?? null,
     createdAt: num(r.created_at),
     updatedAt: num(r.updated_at),
+  };
+}
+
+function mapReport(r: RawRow): ReportRow {
+  // JSONB may arrive already parsed (object mode) or as a string, depending
+  // on the driver's mode: normalize to the canonical JSON string.
+  const reportValue: unknown = r.report;
+  return {
+    id: r.id as string,
+    urlHash: r.url_hash as string,
+    model: r.model as string,
+    promptVersion: r.prompt_version as string,
+    report: typeof reportValue === 'string' ? reportValue : JSON.stringify(reportValue),
+    sizeBytes: num(r.size_bytes),
+    createdAt: num(r.created_at),
+    expiresAt: num(r.expires_at),
   };
 }
 
@@ -91,6 +115,8 @@ export class NeonDb implements Db {
       googleSub: args.googleSub ?? null,
       plan: 'none',
       planExpiresAt: null,
+      stripeCustomerId: null,
+      stripeSubId: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -298,5 +324,99 @@ export class NeonDb implements Db {
     `;
     const count = num(rows[0].count);
     return { allowed: count <= args.limit, count, windowStart };
+  }
+
+  // ---- usage (ledger + daily counter) -------------------------------------
+
+  async recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow> {
+    const id = randomToken(16);
+    const day = utcDayOf(args.now);
+    // One transaction: the ledger row and the day's counter move together,
+    // so the quota and the ledger can never diverge on a partial failure.
+    await this.q.transaction((t) => [
+      t`
+        INSERT INTO usage_log (id, user_id, report_id, created_at)
+        VALUES (${id}, ${args.userId}, ${args.reportId}, ${args.now})
+      `,
+      t`
+        INSERT INTO usage_daily (user_id, day, analyses)
+        VALUES (${args.userId}, ${day}, 1)
+        ON CONFLICT (user_id, day) DO UPDATE SET analyses = usage_daily.analyses + 1
+      `,
+    ]);
+    return { id, userId: args.userId, reportId: args.reportId, createdAt: args.now };
+  }
+
+  async getDailyUsage(userId: string, day: number): Promise<number> {
+    const rows = await this.q`SELECT analyses FROM usage_daily WHERE user_id = ${userId} AND day = ${day}`;
+    return rows[0] ? num(rows[0].analyses) : 0;
+  }
+
+  async sumUsage(userId: string): Promise<number> {
+    const rows = await this.q`SELECT COALESCE(SUM(analyses), 0) AS total FROM usage_daily WHERE user_id = ${userId}`;
+    return num(rows[0].total);
+  }
+
+  async countUsageLog(userId: string): Promise<number> {
+    const rows = await this.q`SELECT COUNT(*) AS n FROM usage_log WHERE user_id = ${userId}`;
+    return num(rows[0].n);
+  }
+
+  // ---- shared report cache ---------------------------------------------------
+
+  async findReport(urlHash: string, model: string, promptVersion: string): Promise<ReportRow | null> {
+    const rows = await this.q`
+      SELECT * FROM reports
+      WHERE url_hash = ${urlHash} AND model = ${model} AND prompt_version = ${promptVersion}
+    `;
+    return rows[0] ? mapReport(rows[0]) : null;
+  }
+
+  async createReport(args: CreateReportArgs): Promise<ReportRow> {
+    if (args.sizeBytes > REPORT_MAX_BYTES) throw new Error('report exceeds the size cap');
+    const id = randomToken(16);
+    const expiresAt = args.now + args.ttlMs;
+    // The UNIQUE (url_hash, model, prompt_version) key makes a duplicate
+    // insert a hard error: callers must findReport first (and a cache hit
+    // must never overwrite an existing report).
+    await this.q`
+      INSERT INTO reports (id, url_hash, model, prompt_version, report, size_bytes, created_at, expires_at)
+      VALUES (${id}, ${args.urlHash}, ${args.model}, ${args.promptVersion},
+              ${args.report}::jsonb, ${args.sizeBytes}, ${args.now}, ${expiresAt})
+    `;
+    return {
+      id,
+      urlHash: args.urlHash,
+      model: args.model,
+      promptVersion: args.promptVersion,
+      report: args.report,
+      sizeBytes: args.sizeBytes,
+      createdAt: args.now,
+      expiresAt,
+    };
+  }
+
+  async purgeReports(now: number, maxCount: number): Promise<PurgeReportsResult> {
+    const expiredRows = await this.q`SELECT id FROM reports WHERE expires_at <= ${now}`;
+    const expired = expiredRows.length;
+    if (expired > 0) await this.q`DELETE FROM reports WHERE expires_at <= ${now}`;
+
+    const overCapRows = await this.q`SELECT id FROM reports ORDER BY created_at ASC OFFSET ${maxCount}`;
+    const overCap = overCapRows.length;
+    if (overCap > 0) {
+      const ids = overCapRows.map((r) => r.id as string);
+      for (let i = 0; i < ids.length; i += 500) {
+        await this.q`DELETE FROM reports WHERE id = ANY(${ids.slice(i, i + 500)})`;
+      }
+    }
+    return { expired, overCap };
+  }
+
+  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
+    await this.q`DELETE FROM nonces WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM web_sessions WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM magic_links WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs}`;
   }
 }

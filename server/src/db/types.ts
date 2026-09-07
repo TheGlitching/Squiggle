@@ -20,6 +20,10 @@ export interface UserRow {
   googleSub: string | null;
   plan: Plan;
   planExpiresAt: number | null;
+  /** Stripe Customer id (billing, Phase 2d). null until a checkout exists. */
+  stripeCustomerId: string | null;
+  /** Stripe subscription id. null unless/after a subscription is active. */
+  stripeSubId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -131,6 +135,65 @@ export interface CreateOAuthPendingArgs {
   ttlMs: number;
 }
 
+/** One UTC day, as the epoch milliseconds of its midnight. */
+export type Day = number;
+
+/** The daily quota: analyses on a single UTC day. */
+export interface UsageDailyRow {
+  userId: string;
+  day: Day;
+  analyses: number;
+}
+
+/** A ledger entry: who ran which analysis, and when. Never content. */
+export interface UsageLogRow {
+  id: string;
+  userId: string;
+  /** The report this analysis produced (the report may already be purged). */
+  reportId: string;
+  createdAt: number;
+}
+
+export interface CreateUsageLogArgs {
+  userId: string;
+  reportId: string;
+  now: number;
+}
+
+/** A shared cached report: the sanitized JSON of one article analysis. */
+export interface ReportRow {
+  id: string;
+  /** SHA-256 hex of the canonical article URL (the extension computed it). */
+  urlHash: string;
+  /** The model that produced the report (transparency: shown to readers). */
+  model: string;
+  /** The prompt version that produced it (cache invalidation key). */
+  promptVersion: string;
+  /** The sanitized report as a JSON string — never raw article text. */
+  report: string;
+  sizeBytes: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface CreateReportArgs {
+  urlHash: string;
+  model: string;
+  promptVersion: string;
+  report: string;
+  sizeBytes: number;
+  now: number;
+  ttlMs: number;
+}
+
+/** What a cache purge removed. */
+export interface PurgeReportsResult {
+  /** Reports removed because their TTL had lapsed. */
+  expired: number;
+  /** Reports removed to bring the cache back under the size cap. */
+  overCap: number;
+}
+
 export interface RateCheckArgs {
   /** What is being limited, e.g. `magic_link:email` or `magic_link:ip`. */
   scope: string;
@@ -189,4 +252,44 @@ export interface Db {
    * callers can both believe they are inside the limit.
    */
   recordAndCheckRate(args: RateCheckArgs): Promise<RateCheckResult>;
+
+  /**
+   * Record one finished analysis: appends a ledger row and bumps that UTC
+   * day's counter. The two moves must land together (a transaction in
+   * Neon), so the daily quota and the ledger can never diverge.
+   */
+  recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow>;
+
+  /** Analyses on one UTC day (0 if none). */
+  getDailyUsage(userId: string, day: Day): Promise<number>;
+
+  /** Total analyses ever recorded for the user (the trial budget is cumulative). */
+  sumUsage(userId: string): Promise<number>;
+
+  /** Ledger rows still on file for the user (the ledger is pruned by retention, the daily counter is not). */
+  countUsageLog(userId: string): Promise<number>;
+
+  /** The cached report for this exact (url, model, prompt version), if any. */
+  findReport(urlHash: string, model: string, promptVersion: string): Promise<ReportRow | null>;
+
+  /**
+   * Store a report in the shared cache. Rejects payloads over the size cap
+   * and a second report for the same (url, model, prompt version): the
+   * caller is expected to `findReport` first.
+   */
+  createReport(args: CreateReportArgs): Promise<ReportRow>;
+
+  /**
+   * Purge the cache: first the reports whose TTL has lapsed, then (only if
+   * still over the cap) the oldest beyond `maxCount`. Returns what was
+   * removed, so a periodic job can log it.
+   */
+  purgeReports(now: number, maxCount: number): Promise<PurgeReportsResult>;
+
+  /**
+   * Remove short-lived rows whose TTL has lapsed (nonces, web sessions,
+   * magic links, OAuth handshakes) plus ledger rows older than
+   * `usageLogRetentionMs`. Called by a periodic job, not per request.
+   */
+  purgeExpired(now: number, usageLogRetentionMs: number): Promise<void>;
 }
