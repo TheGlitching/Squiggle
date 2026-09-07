@@ -145,18 +145,22 @@ export interface UsageDailyRow {
   analyses: number;
 }
 
-/** A ledger entry: who ran which analysis, and when. Never content. */
+/**
+ * A ledger entry: that an account ran an analysis, and when.
+ *
+ * It deliberately does not say WHICH article. The ledger answers the quota and
+ * billing questions, and both are answered by the row existing and by its
+ * timestamp; naming the article would turn a 12-month ledger into a 12-month
+ * browsing history for no reader. See migration 005.
+ */
 export interface UsageLogRow {
   id: string;
   userId: string;
-  /** The report this analysis produced (the report may already be purged). */
-  reportId: string;
   createdAt: number;
 }
 
 export interface CreateUsageLogArgs {
   userId: string;
-  reportId: string;
   now: number;
 }
 

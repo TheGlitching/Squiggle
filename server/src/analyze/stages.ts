@@ -65,6 +65,19 @@ import { parseRunState, serializeRunState, type AnalysisRunState } from './runSt
 /** A run is abandoned if the extension stops driving it for this long. */
 export const RUN_TTL_MS = 60 * 60 * 1000;
 
+/**
+ * How much one credit can buy.
+ *
+ * The client drives the run, so without these the cost of an analysis is
+ * whatever the client asks for: a model that returns two hundred findings, or
+ * simply a client that keeps calling, would spend two hundred Gemini calls
+ * against a single credit. Both caps sit above what a real article produces —
+ * a long investigation raises a handful of factual objections, and the engine's
+ * own per-analysis page budget is eight — so a reader never meets them.
+ */
+export const MAX_RESEARCH_CALLS_PER_RUN = 25;
+export const MAX_SOURCE_CHECKS_PER_RUN = 8;
+
 /** Per-cited-page fetch timeout on the server. */
 const SOURCE_FETCH_TIMEOUT_MS = 10_000;
 
@@ -160,6 +173,20 @@ export async function analyzeAudit(
   const gate = await enforceStartCeilings(s, user, now);
   if (!gate.ok) return gate;
 
+  // The run row is opened BEFORE the audit call, not after it. The audit takes
+  // 5-25 seconds, and a row written afterwards leaves that whole window with
+  // nothing for the concurrency check to see: two audits fired together would
+  // both pass the ceiling, and their two finalizes would consume two credits
+  // from an account entitled to one. Opening it first makes the row itself the
+  // reservation.
+  const run = await s.db.createAnalysisRun({
+    userId: user.id,
+    urlHash,
+    state: serializeRunState(pendingState(now)),
+    now,
+    ttlMs: RUN_TTL_MS,
+  });
+
   const client = s.llm();
 
   const input: AnalysisInput = {
@@ -206,6 +233,9 @@ export async function analyzeAudit(
     });
     raw = completion.content;
   } catch {
+    // Close the reservation: an audit that never produced anything must not
+    // hold the account's single slot for the next five minutes.
+    await s.db.finalizeAnalysisRun(run.id, now);
     return apiError('provider_unavailable', "Le modèle n'a pas répondu. Réessayez dans un instant.");
   }
 
@@ -217,6 +247,7 @@ export async function analyzeAudit(
       articleSources: sourcesByBlock,
     });
   } catch {
+    await s.db.finalizeAnalysisRun(run.id, now);
     return apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
   }
 
@@ -239,15 +270,10 @@ export async function analyzeAudit(
     sourceChecks: [],
     queries: [],
     researchPerformed: false,
+    startedAt: now,
   };
 
-  const run = await s.db.createAnalysisRun({
-    userId: user.id,
-    urlHash,
-    state: serializeRunState(state),
-    now,
-    ttlMs: RUN_TTL_MS,
-  });
+  await s.db.updateAnalysisRunState(run.id, serializeRunState(state), now);
 
   logEvent({ event: 'analysis_started', requestId: s.requestId, userId: user.id, urlHash });
 
@@ -277,6 +303,12 @@ async function enforceStartCeilings(
   const refusal = refusalFor(await entitlementOf(s.db, user, now));
   if (refusal) return refusal;
 
+  // Read-then-insert, so it is not atomic: two requests can still both read
+  // zero. What the reservation below changes is the SIZE of that window —
+  // milliseconds between two statements instead of the 5-25 seconds an audit
+  // call takes. Closing it completely would need a unique partial index on
+  // "one open run per user", which is worth doing if this ever proves to
+  // matter and is not worth the schema today.
   const active = await s.db.countActiveAnalysisRuns(user.id, now - CONCURRENT_RUN_WINDOW_MS);
   if (active >= MAX_CONCURRENT_RUNS) {
     logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:concurrent', count: active });
@@ -307,7 +339,8 @@ async function enforceStartCeilings(
 function researchableFindingIds(state: AnalysisRunState): string[] {
   return state.findings
     .filter((finding) => RESEARCHABLE_FINDING_CATEGORIES[finding.category])
-    .map((finding) => finding.id);
+    .map((finding) => finding.id)
+    .slice(0, MAX_RESEARCH_CALLS_PER_RUN);
 }
 
 // ---------------------------------------------------------------------------
@@ -341,8 +374,18 @@ export async function analyzeResearch(
   if (!loaded.ok) return loaded;
   const { state } = loaded;
 
+  if (loaded.finalized) {
+    // The credit for this run has already been consumed. Left open, this stage
+    // would keep buying provider calls against a run that is already paid for.
+    return apiError('run_already_finalized', 'Cette analyse est déjà terminée.');
+  }
+
   const finding = state.findings.find((f) => f.id === payload.findingId);
   if (!finding) return apiError('not_found', 'Ce constat ne fait pas partie de cette analyse.');
+
+  if (state.claims.length >= MAX_RESEARCH_CALLS_PER_RUN) {
+    return apiError('rate_limited', 'Cette analyse a atteint son nombre de vérifications.');
+  }
 
   // Already researched: return what we have rather than paying twice.
   const existing = state.claims.find((claim) => claim.findingId === finding.id);
@@ -391,8 +434,16 @@ export async function analyzeSourceCheck(
   if (!loaded.ok) return loaded;
   const { state } = loaded;
 
+  if (loaded.finalized) {
+    return apiError('run_already_finalized', 'Cette analyse est déjà terminée.');
+  }
+
   const claim = state.claims.find((c) => c.id === payload.claimId);
   if (!claim) return apiError('not_found', "Cette affirmation ne fait pas partie de cette analyse.");
+
+  if (state.sourceChecks.length >= MAX_SOURCE_CHECKS_PER_RUN) {
+    return apiError('rate_limited', 'Cette analyse a atteint son nombre de sources lues.');
+  }
 
   // The URL must be one the ARTICLE cited, as recorded at audit time. A URL a
   // client invents is refused here, before any fetch: this endpoint reads the
@@ -491,10 +542,38 @@ export async function analyzeFinalize(
     }
   }
 
-  await s.db.recordAnalysis({ userId: user.id, reportId: urlHash, now });
+  // The ledger records that an analysis happened, not which article it was.
+  await s.db.recordAnalysis({ userId: user.id, now });
   logEvent({ event: 'analysis_finalized', requestId: s.requestId, userId: user.id, urlHash });
 
   return { ok: true, report, cached };
+}
+
+/**
+ * The state a run holds between being reserved and the audit answering. It
+ * exists so the reservation can be written before the provider is called; no
+ * stage other than the audit ever sees it.
+ */
+function pendingState(now: number): AnalysisRunState {
+  return {
+    url: '',
+    title: '',
+    partialAccess: false,
+    model: '',
+    promptVersion: '',
+    auditDurationMs: 0,
+    textLengthChars: 0,
+    blocksCount: 0,
+    summary: '',
+    findings: [],
+    rawScores: [],
+    citedSources: [],
+    claims: [],
+    sourceChecks: [],
+    queries: [],
+    researchPerformed: false,
+    startedAt: now,
+  };
 }
 
 /** Reconcile, rescore and assemble — the same arithmetic the BYOK pipeline does. */

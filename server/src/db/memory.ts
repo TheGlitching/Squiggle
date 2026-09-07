@@ -290,7 +290,6 @@ export class MemoryDb implements Db {
     const row: UsageLogRow = {
       id: randomToken(16),
       userId: args.userId,
-      reportId: args.reportId,
       createdAt: args.now,
     };
     this.usageLog.set(row.id, row);

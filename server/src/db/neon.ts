@@ -378,8 +378,8 @@ export class NeonDb implements Db {
     // so the quota and the ledger can never diverge on a partial failure.
     await this.q.transaction((t) => [
       t`
-        INSERT INTO usage_log (id, user_id, report_id, created_at)
-        VALUES (${id}, ${args.userId}, ${args.reportId}, ${args.now})
+        INSERT INTO usage_log (id, user_id, created_at)
+        VALUES (${id}, ${args.userId}, ${args.now})
       `,
       t`
         INSERT INTO usage_daily (user_id, day, analyses)
@@ -387,7 +387,7 @@ export class NeonDb implements Db {
         ON CONFLICT (user_id, day) DO UPDATE SET analyses = usage_daily.analyses + 1
       `,
     ]);
-    return { id, userId: args.userId, reportId: args.reportId, createdAt: args.now };
+    return { id, userId: args.userId, createdAt: args.now };
   }
 
   async getDailyUsage(userId: string, day: number): Promise<number> {

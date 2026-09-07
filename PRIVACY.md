@@ -123,7 +123,7 @@ canonique de l'article, plus le modèle et la version des consignes.
 | Texte de l'article | mémoire, le temps de l'appel d'audit | **jamais écrit** |
 | Rapport d'analyse (cache partagé) | base de données | 30 jours, 500 rapports au plus |
 | Analyse en cours (constats, sans l'article) | base de données | 1 heure |
-| Journal d'usage : qui a lancé une analyse, et quand | base de données | 12 mois, **sans aucun contenu** |
+| Journal d'usage : qu'un compte a lancé une analyse, et quand | base de données | 12 mois, **sans aucun contenu et sans dire de quel article** |
 | Compteur d'analyses du jour | base de données | tant que le compte existe |
 | Adresse e-mail | base de données | tant que le compte existe |
 | Identifiant Google (`sub`), si connexion Google | base de données | tant que le compte existe |
@@ -159,7 +159,8 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 - **Suppression** — supprimer le compte efface le compte, ses clés, ses jetons, ses
   sessions et son journal d'usage. Un rapport déjà présent dans le cache partagé n'est
   pas rattaché à vous : il ne porte que l'empreinte de l'adresse de l'article, et il
-  expire de lui-même sous 30 jours.
+  expire de lui-même sous 30 jours. Rien nulle part ne relie un compte à un article :
+  le journal d'usage note qu'une analyse a eu lieu, jamais laquelle.
 - **Rectification** — l'adresse e-mail est la seule donnée personnelle que vous nous
   confiez ; elle se change depuis la page de compte.
 - Pour tout le reste : [ouvrez un ticket](https://github.com/TheGlitching/Squiggle/issues)

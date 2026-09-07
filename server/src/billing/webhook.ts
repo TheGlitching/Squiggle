@@ -29,6 +29,12 @@ import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
 import { verifyStripeSignature } from './stripe';
 
+/**
+ * How long a checkout grants access before the subscription event that carries
+ * the real period end has to have arrived.
+ */
+const PROVISIONAL_ACCESS_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface WebhookDeps {
   db: Db;
   clock: Clock;
@@ -113,10 +119,14 @@ export async function handleStripeWebhook(
         now,
       );
       // The session says the payment succeeded but not how long it bought.
-      // The subscription event that follows carries the period end; until it
-      // arrives the reader is active with no expiry recorded, which the
-      // entitlement check treats as active.
-      await deps.db.setPlan(user.id, 'active', null, now);
+      // The `customer.subscription.created` that follows carries the period
+      // end and overwrites this. Recording no expiry at all would mean that if
+      // that event never arrived — an endpoint subscribed to the wrong types,
+      // say — the account stayed subscribed for ever and nobody would notice.
+      // A provisional week fails loudly instead: the reader sees it, we hear
+      // about it, and a correctly delivered subscription event replaces it
+      // long before it matters.
+      await deps.db.setPlan(user.id, 'active', now + PROVISIONAL_ACCESS_MS, now);
       break;
     }
 

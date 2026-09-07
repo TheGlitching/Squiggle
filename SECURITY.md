@@ -91,6 +91,13 @@ instead of on a key you hold. What that means concretely:
   account.** Both live in the extension's encrypted storage, which protects
   against casual inspection, not against someone already inside your browser
   profile. Revoking the key from the account page is the remedy.
+- **The cache answers "has anyone analysed this page?"** Any signed-in account
+  can call the preflight for an arbitrary URL and learn whether a report exists
+  for it. That is inherent to a shared cache — the saving comes precisely from
+  one reader's analysis being visible to the next — and it discloses nothing
+  about *who* ran it, since the usage ledger deliberately does not record which
+  article an analysis was of. It is still a corpus-level signal, and it is
+  named here rather than left to be discovered.
 - **The shared cache is a shared read.** If two readers open the same article,
   the second is served a report the first paid for. That is deliberate, and it
   is why the sanitizer exists. What it does mean: a report is not private to the

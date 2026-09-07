@@ -29,6 +29,8 @@ export interface AnalysisRunState {
   promptVersion: string;
   /** Wall time of the audit call, reported in the finished report's meta. */
   auditDurationMs: number;
+  /** When the run was reserved, before the audit call was made. */
+  startedAt: number;
   textLengthChars: number;
   blocksCount: number;
 

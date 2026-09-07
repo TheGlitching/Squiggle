@@ -5,6 +5,7 @@ import { sql as authSql } from '../src/migrations/001_auth';
 import { sql as usageSql } from '../src/migrations/002_usage_reports';
 import { sql as runsSql } from '../src/migrations/003_analysis_runs';
 import { sql as billingSql } from '../src/migrations/004_billing';
+import { sql as ledgerSql } from '../src/migrations/005_usage_log_no_article';
 import { T0 } from './helpers';
 
 /** A recording fake that answers the schema_migrations bookkeeping. */
@@ -113,5 +114,10 @@ describe('migration runner', () => {
     expect(billingSql).toContain('id TEXT PRIMARY KEY');
     // Webhook routing looks an account up by its Stripe customer.
     expect(billingSql).toContain('users_stripe_customer_idx');
+  });
+
+  it('the ledger stops naming the article', () => {
+    // Forward-only: 002 is amended, never edited.
+    expect(ledgerSql).toContain('ALTER TABLE usage_log DROP COLUMN IF EXISTS report_id');
   });
 });
