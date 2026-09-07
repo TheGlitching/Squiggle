@@ -1,0 +1,23 @@
+{
+  "name": "@squiggle/server",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Squiggle hosted backend — a Cloudflare Workers service: authentication (magic link, Google OAuth, signed extension tokens), the analysis stage endpoints, quotas, billing, and the shared report cache, on Neon Postgres.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "@squiggle/shared": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

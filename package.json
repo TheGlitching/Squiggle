@@ -14,7 +14,8 @@
   },
   "type": "module",
   "workspaces": [
-    "shared"
+    "shared",
+    "server"
   ],
   "scripts": {
     "dev": "vite",
@@ -24,9 +25,9 @@
     "build:firefox": "TARGET=firefox vite build && node scripts/build-content-script.mjs dist/firefox",
     "build:all": "npm run build:chrome && npm run build:firefox",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run && npm run test -w @squiggle/server",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server",
     "package": "npm run build:all && node scripts/package.mjs"
   },
   "dependencies": {
