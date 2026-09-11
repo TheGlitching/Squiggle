@@ -33,7 +33,10 @@ logic and palette (`web/src/demo.ts` mirrors `src/adapters/findingAdapters.ts`
 `severityToHighlightSeverity` and `src/content/shadowOverlay.ts`'s colours), and the
 R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBadge.tsx`,
 plus the PNGs in `src/assets/`). The design tokens themselves live in
-`web/tailwind.config.ts` and `web/src/index.css`.
+`web/tailwind.config.ts` and `web/src/index.css`. The dark theme's WCAG AA
+contract is pinned by `web/tests/contrast.test.ts`: primary buttons carry
+`accentForeground` (near-black) on `accent`, and demo severity labels use the
+bright `text` tone, not the darker fill that only clears 3:1 as text.
 
 ## Hosted mode in the extension
 
