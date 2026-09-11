@@ -27,6 +27,14 @@ out of `shared/`, move it instead.
 `web/BRIDGE.md`; the extension's half is `src/hosted/session.ts` (sign-in paths, the
 signed account read, sign-out) and `squiggle-auth.html` (the Chromium landing page).
 
+`web/` may not import from `src/`, so two web surfaces deliberately mirror the
+extension and must be changed in both halves together: the landing demo's severity
+logic and palette (`web/src/demo.ts` mirrors `src/adapters/findingAdapters.ts`
+`severityToHighlightSeverity` and `src/content/shadowOverlay.ts`'s colours), and the
+R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBadge.tsx`,
+plus the PNGs in `src/assets/`). The design tokens themselves live in
+`web/tailwind.config.ts` and `web/src/index.css`.
+
 ## Hosted mode in the extension
 
 Which engine runs an analysis is a stored mode (`SecureKeyStorage.getMode`, default

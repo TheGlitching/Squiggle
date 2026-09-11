@@ -1,26 +1,30 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * The web app's brand tokens. These values are the extension's own — see
- * `src/tokens/colors.ts`, `src/tokens/typography.ts` and `src/index.css` in
- * the extension workspace — copied rather than imported so the two builds stay
- * independent while reading as one product. Change them in both places
- * together.
+ * The web app's design tokens: the dark/tech system the captain approved in
+ * `data/squiggle-landing-redesign/prototypes/index.html`. The extension keeps
+ * its own palette; these are the web's. The animated demo's per-severity
+ * colours live in `src/demo.ts` because they are copied from the extension's
+ * `src/content/shadowOverlay.ts` and must stay in step with it.
+ *
+ * Change the ground/ink/accent here and in `src/index.css` together.
  */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        background: '#FBF9F5',
-        surface: '#FFFFFF',
-        muted: '#686259',
-        faint: '#A8A29E',
-        border: '#E3DDD2',
-        foreground: '#1C1917',
-        accent: '#9E2A2B',
-        accentHover: '#872324',
-        accentSoft: '#FDF2F2',
+        background: '#0a0a0b',
+        surface: '#0f0f11',
+        muted: '#948f88',
+        faint: '#938e86',
+        border: '#2a2a2f',
+        lineSoft: '#1b1b1f',
+        foreground: '#ece9e3',
+        accent: '#e0483f',
+        accentHover: '#c93a32',
+        accentSoft: '#251010',
+        accentInk: '#f08a80',
       },
       fontFamily: {
         display: ['Bricolage Grotesque', 'system-ui', 'sans-serif'],
@@ -30,6 +34,14 @@ export default {
       },
       maxWidth: {
         prose: '42rem',
+        hero: '22.5rem',
+      },
+      transitionTimingFunction: {
+        out: 'cubic-bezier(0.23, 1, 0.32, 1)',
+      },
+      borderRadius: {
+        card: '14px',
+        control: '10px',
       },
     },
   },

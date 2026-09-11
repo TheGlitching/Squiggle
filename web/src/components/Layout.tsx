@@ -1,34 +1,17 @@
 import type { ReactNode } from 'react';
 
+import { BrandLockup } from './Brand';
 import { Link } from '../router';
-
-function Mark() {
-  return (
-    <svg viewBox="0 0 128 128" aria-hidden="true" className="h-7 w-7 shrink-0">
-      <rect x="4" y="4" width="120" height="120" rx="30" fill="#9E2A2B" />
-      <rect x="30" y="42" width="68" height="12" rx="6" fill="#FBF9F5" />
-      <rect x="30" y="64" width="48" height="12" rx="6" fill="#FBF9F5" />
-      <path
-        d="M28 99 q12 -16 24 0 q12 16 24 0 q12 -16 24 0"
-        fill="none"
-        stroke="#FBF9F5"
-        strokeWidth="10"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border bg-surface/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-5 py-4">
-          <Link to="/" className="flex items-center gap-2.5" aria-label="Squiggle, accueil">
-            <Mark />
-            <span className="font-display text-lg font-semibold tracking-tight">Squiggle</span>
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-4">
+          <Link to="/" className="flex items-center" aria-label="Squiggle, accueil">
+            <BrandLockup />
           </Link>
-          <nav className="flex items-center gap-5 text-sm text-muted" aria-label="Navigation principale">
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted" aria-label="Navigation principale">
             <Link to="/tarifs" className="hover:text-foreground">
               Tarifs
             </Link>
@@ -40,7 +23,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </Link>
             <Link
               to="/compte"
-              className="rounded-md border border-border bg-surface px-3 py-1.5 font-medium text-foreground hover:border-accent hover:text-accent"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 font-medium text-foreground hover:border-accent hover:text-accentInk"
             >
               Mon compte
             </Link>
@@ -52,11 +35,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <footer className="mt-16 border-t border-border bg-surface">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-5 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            Squiggle — savoir ce que vaut ce que vous lisez. Aucune publicité, aucun traceur, aucune
-            télémétrie.
-          </p>
-          <nav className="flex gap-4" aria-label="Navigation de pied de page">
+          <p>Squiggle. Ce que l’article prouve, ce qu’il affirme. Aucune publicité, aucun traceur.</p>
+          <nav className="flex flex-wrap gap-4" aria-label="Navigation de pied de page">
             <Link to="/transparence" className="hover:text-foreground">
               Transparence
             </Link>

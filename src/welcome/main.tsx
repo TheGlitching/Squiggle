@@ -1,10 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
+import { SquiggleBadge } from '../ui/components/SquiggleBadge';
+
 export function WelcomeApp() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-[#FBFBFA] dark:bg-[#121214] text-[#1C1917] dark:text-[#E7E5E4]">
       <div className="max-w-xl w-full p-8 rounded-2xl bg-white dark:bg-[#18181B] border border-[#E7E5E4] dark:border-[#27272A] shadow-lg text-center space-y-6">
+        <SquiggleBadge className="mx-auto h-14 w-14" />
         <h1 className="text-3xl font-bold font-display text-[#1C1917] dark:text-[#FAFAFA]">
           Squiggle
         </h1>

@@ -12,6 +12,7 @@ import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { HostedAccountCard } from '../ui/components/HostedAccountCard';
 import { OnboardingTour, getTourCompletionStatus } from '../ui/components/OnboardingTour';
+import { SquiggleBadge } from '../ui/components/SquiggleBadge';
 import {
   beginHostedSignIn,
   describeHostedAccount,
@@ -445,13 +446,16 @@ function SidepanelApp() {
   return (
     <div className="flex flex-col min-h-screen p-4 font-sans bg-[#FBFBFA] dark:bg-[#121214] text-[#1C1917] dark:text-[#E7E5E4]">
       <header className="flex items-start justify-between gap-2 pb-3 border-b border-[#E7E5E4] dark:border-[#27272A]">
-        <div>
-          <h1 className="text-lg font-bold font-display tracking-tight text-[#1C1917] dark:text-[#FAFAFA]">
-            Squiggle
-          </h1>
-          <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">
-            Analyse critique de la fiabilité de l’article
-          </p>
+        <div className="flex items-start gap-2">
+          <SquiggleBadge className="mt-0.5 h-6 w-6 shrink-0" />
+          <div>
+            <h1 className="text-lg font-bold font-display tracking-tight text-[#1C1917] dark:text-[#FAFAFA]">
+              Squiggle
+            </h1>
+            <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">
+              Analyse critique de la fiabilité de l’article
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button
