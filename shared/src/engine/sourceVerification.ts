@@ -7,7 +7,7 @@ import {
   buildSourceJudgementUserPrompt
 } from './prompts';
 import type { CitedSource } from './research';
-import { fetchPageText, fetchableUrl } from './sourceFetch';
+import { fetchPageText, fetchableUrl, type PageFetcher } from './sourceFetch';
 
 /**
  * Inspection of the pages an article actually cites - the half of factual
@@ -69,6 +69,12 @@ export interface VerifyCitedSourcesArgs {
   fetchTimeoutMs?: number;
   /** Injectable fetcher; defaults to the global, which host_permissions already authorises. */
   fetchImpl?: typeof fetch;
+  /**
+   * Reads one cited page. Defaults to the browser-safe {@link fetchPageText};
+   * the hosted server overrides it with the SSRF-hardened `safeFetchPageText`.
+   * See the note on the same field in `ResearchFindingsArgs`.
+   */
+  fetchPage?: PageFetcher;
   /** Emits a human-readable line each time a cited page is fetched, for the live activity feed. */
   onActivity?: (note: string) => void;
 }
@@ -156,6 +162,7 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
     fetchImpl = fetch,
     onActivity
   } = args;
+  const fetchPage: PageFetcher = args.fetchPage ?? ((url, timeoutMs) => fetchPageText(url, timeoutMs, fetchImpl));
 
   const sourcesByBlock = new Map<string, CitedSource[]>();
   for (const source of citedSources) {
@@ -201,7 +208,7 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
 
       let pageText = '';
       try {
-        pageText = await fetchPageText(url, fetchTimeoutMs, fetchImpl);
+        pageText = await fetchPage(url, fetchTimeoutMs);
       } catch (err) {
         rethrowIfAborted(err, abortSignal);
         claimChecks.push({

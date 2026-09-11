@@ -34,7 +34,7 @@ describe('end to end', () => {
     const verify = await env.handler(
       new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
         body: JSON.stringify({ code }),
       }),
     );
@@ -109,7 +109,7 @@ describe('end to end', () => {
     const logout = await env.handler(
       new Request(`${env.webAppOrigin}/auth/logout`, {
         method: 'POST',
-        headers: { cookie: sessionCookie },
+        headers: { cookie: sessionCookie, origin: env.webAppOrigin },
       }),
     );
     expect(logout.status).toBe(200);

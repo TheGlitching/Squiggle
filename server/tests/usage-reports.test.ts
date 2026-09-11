@@ -35,9 +35,9 @@ describe('usage: ledger + daily counter', () => {
     // T0 is 22:13 UTC, so "+30 min" stays on the same UTC day; "+1s after
     // midnight" starts the next one.
     const day = utcDayOf(T0);
-    await db.recordAnalysis({ userId: user.id, reportId: 'r1', now: T0 });
-    await db.recordAnalysis({ userId: user.id, reportId: 'r2', now: T0 + 30 * 60 * 1000 });
-    await db.recordAnalysis({ userId: user.id, reportId: 'r3', now: day + DAY + 1000 });
+    await db.recordAnalysis({ userId: user.id, now: T0 });
+    await db.recordAnalysis({ userId: user.id, now: T0 + 30 * 60 * 1000 });
+    await db.recordAnalysis({ userId: user.id, now: day + DAY + 1000 });
 
     expect(await db.getDailyUsage(user.id, day)).toBe(2);
     expect(await db.getDailyUsage(user.id, day + DAY)).toBe(1);
@@ -46,7 +46,7 @@ describe('usage: ledger + daily counter', () => {
 
     // A different user's activity does not leak in.
     const other = await db.createUser({ email: 'jean@example.com' }, T0);
-    await db.recordAnalysis({ userId: other.id, reportId: 'r4', now: T0 });
+    await db.recordAnalysis({ userId: other.id, now: T0 });
     expect(await db.sumUsage(user.id)).toBe(3);
     expect(await db.sumUsage(other.id)).toBe(1);
   });
@@ -187,8 +187,8 @@ describe('purgeExpired (retention sweep)', () => {
     const db = new MemoryDb();
     const user = await db.createUser({ email: 'marie@example.com' }, T0);
 
-    const old = await db.recordAnalysis({ userId: user.id, reportId: 'r-old', now: T0 });
-    const recent = await db.recordAnalysis({ userId: user.id, reportId: 'r-recent', now: T0 + 1000 });
+    const old = await db.recordAnalysis({ userId: user.id, now: T0 });
+    const recent = await db.recordAnalysis({ userId: user.id, now: T0 + 1000 });
 
     // Both ledger rows survive a sweep well inside the retention window.
     await db.purgeExpired(T0 + 30 * DAY, USAGE_LOG_RETENTION_MS);

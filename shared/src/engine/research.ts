@@ -16,7 +16,7 @@ import {
   FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT,
   RESEARCH_AGENT_SYSTEM_PROMPT
 } from './prompts';
-import { fetchPageText, fetchableUrl } from './sourceFetch';
+import { fetchPageText, fetchableUrl, type PageFetcher } from './sourceFetch';
 
 /** A source the article itself links to, as the extractor recovers it. */
 export interface CitedSource {
@@ -50,6 +50,14 @@ export interface ResearchFindingsArgs {
   onActivity?: (note: string) => void;
   /** Injectable fetcher for reading a cited source the agent decides to read. */
   fetchImpl?: typeof fetch;
+  /**
+   * Reads one cited page and returns its text. Defaults to the browser-safe
+   * {@link fetchPageText}, which is only sound where a browser refuses to
+   * route to private addresses. The hosted server MUST override it with the
+   * SSRF-hardened `safeFetchPageText`, because there a cited "source" is an
+   * attacker-chosen URL executed inside our own network.
+   */
+  fetchPage?: PageFetcher;
   /** Per-cited-source fetch timeout; overridable in tests. */
   fetchTimeoutMs?: number;
   abortSignal?: AbortSignal;
@@ -255,11 +263,13 @@ async function researchClaimViaAgent(
     searchesBudget: number;
     onActivity?: (note: string) => void;
     fetchImpl?: typeof fetch;
+    fetchPage?: PageFetcher;
     fetchTimeoutMs?: number;
     abortSignal?: AbortSignal;
   }
 ): Promise<{ verdict: AgentVerdict; queries: string[] }> {
   const { searchesBudget, onActivity, fetchImpl = fetch, fetchTimeoutMs = AGENT_FETCH_TIMEOUT_MS, abortSignal } = opts;
+  const fetchPage: PageFetcher = opts.fetchPage ?? ((url, timeoutMs) => fetchPageText(url, timeoutMs, fetchImpl));
 
   const seenUrls = new Set<string>();
   const searchEvidence: { title: string; url: string; snippet: string }[] = [];
@@ -387,7 +397,7 @@ async function researchClaimViaAgent(
       onActivity?.(`Lecture de la source citée : ${candidate.text || candidate.domain}`);
       let pageText = '';
       try {
-        pageText = await fetchPageText(fetchUrl, fetchTimeoutMs, fetchImpl);
+        pageText = await fetchPage(fetchUrl, fetchTimeoutMs);
       } catch (err) {
         rethrowIfAborted(err, abortSignal);
         continue;
@@ -498,7 +508,7 @@ async function judgeClaimGrounded(
  * all of them.
  */
 export async function researchFindings(args: ResearchFindingsArgs): Promise<ResearchFindingsResult> {
-  const { client, input, findings, citedSources, maxSearches, onProgress, onActivity, fetchImpl, fetchTimeoutMs, abortSignal } = args;
+  const { client, input, findings, citedSources, maxSearches, onProgress, onActivity, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal } = args;
   const now = args.now ?? new Date();
   void input; // kept in the signature for parity with the prompt builders and future per-article context
 
@@ -601,7 +611,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         claimUnderTest,
         articleSourcesForBlock,
         now,
-        { searchesBudget: fairShare, onActivity, fetchImpl, fetchTimeoutMs, abortSignal }
+        { searchesBudget: fairShare, onActivity, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal }
       );
       totalSearchesLeft = Math.max(0, totalSearchesLeft - claimQueries.length);
       queries.push(...claimQueries);

@@ -1,3 +1,5 @@
+import { PROMPT_VERSION } from './prompts';
+
 export interface DemoArticle {
   url: string;
   title: string;
@@ -176,7 +178,7 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
   ],
   meta: {
     model: 'demo-fixture-v1',
-    promptVersion: '1.0.0-fourches-caudines',
+    promptVersion: PROMPT_VERSION,
     analyzedAt: '2026-03-12T14:30:00.000Z',
     durationMs: 1420,
     textLengthChars: 1618,

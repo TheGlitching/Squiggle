@@ -13,8 +13,10 @@ import { randomToken, sha256Hex } from '@squiggle/shared';
 
 import type { Clock } from '../lib/clock';
 import { apiError, type Outcome } from '../lib/errors';
+import { logEvent } from '../lib/log';
 import type { EmailSender } from '../lib/brevo';
 import type { Db } from '../db/types';
+import { HOUR_MS, MAGIC_LINK_VERIFY_PER_IP_PER_HOUR } from '../usage/abuse';
 import { createWebSession } from './session';
 
 export interface MagicLinkRequestDeps {
@@ -23,11 +25,15 @@ export interface MagicLinkRequestDeps {
   email: EmailSender;
   /** Absolute origin of the web app; the delivered link points here. */
   webAppOrigin: string;
+  /** Correlation id of the request, for the rate-limit log line. */
+  requestId?: string;
 }
 
 export interface MagicLinkVerifyDeps {
   db: Db;
   clock: Clock;
+  /** Correlation id of the request, for the rate-limit log line. */
+  requestId?: string;
 }
 
 /** Codes stop working 10 minutes after they are created. */
@@ -37,7 +43,6 @@ export const MAGIC_LINK_EMAIL_LIMIT_PER_HOUR = 3;
 /** A client IP may trigger at most this many codes per hour (any address). */
 export const MAGIC_LINK_IP_LIMIT_PER_HOUR = 5;
 
-const HOUR_MS = 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Trim and casefold an address; the canonical form used as a key everywhere. */
@@ -63,6 +68,9 @@ export async function requestMagicLink(
     now,
   });
   if (!perEmail.allowed) {
+    // Logged with its scope and count, never with the address: an operator
+    // needs to see that a limit is firing, not who tripped it.
+    logEvent({ event: 'rate_limited', requestId: deps.requestId ?? '', scope: 'magic_link:email', count: perEmail.count });
     return apiError('rate_limited', 'Too many magic links requested for this address. Try again later.');
   }
 
@@ -76,6 +84,11 @@ export async function requestMagicLink(
       now,
     });
     if (!perIp.allowed) {
+      // An IP is shared by whole offices and mobile carriers, so this limit is
+      // a loose backstop behind the per-address one, and every denial is
+      // visible here — a shared network that keeps tripping it should be seen,
+      // not silently locked out.
+      logEvent({ event: 'rate_limited', requestId: deps.requestId ?? '', scope: 'magic_link:ip', count: perIp.count });
       return apiError('rate_limited', 'Too many magic link requests from this network. Try again later.');
     }
   }
@@ -114,11 +127,28 @@ function magicLinkEmailHtml(linkUrl: string): string {
 export async function verifyMagicLink(
   deps: MagicLinkVerifyDeps,
   code: string,
+  ip?: string | null,
 ): Promise<Outcome<{ userId: string; email: string; sessionToken: string }>> {
   const normalized = code.trim();
   if (!normalized) return apiError('invalid_code', 'The code is missing.');
 
   const now = deps.clock.now();
+
+  // A code is 128 bits of randomness, so this is not what stops a guess; it
+  // stops a client from turning the endpoint into free traffic while it tries.
+  if (ip) {
+    const perIp = await deps.db.recordAndCheckRate({
+      scope: 'magic_link:verify_ip',
+      key: ip,
+      limit: MAGIC_LINK_VERIFY_PER_IP_PER_HOUR,
+      windowMs: HOUR_MS,
+      now,
+    });
+    if (!perIp.allowed) {
+      logEvent({ event: 'rate_limited', requestId: deps.requestId ?? '', scope: 'magic_link:verify_ip', count: perIp.count });
+      return apiError('rate_limited', 'Too many attempts from this network. Try again later.');
+    }
+  }
   const link = await deps.db.findMagicLinkByCodeHash(await sha256Hex(normalized));
   if (!link) return apiError('invalid_code', 'This code is not valid.');
   if (link.usedAt !== null) return apiError('link_already_used', 'This code has already been used.');

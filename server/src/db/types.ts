@@ -145,18 +145,22 @@ export interface UsageDailyRow {
   analyses: number;
 }
 
-/** A ledger entry: who ran which analysis, and when. Never content. */
+/**
+ * A ledger entry: that an account ran an analysis, and when.
+ *
+ * It deliberately does not say WHICH article. The ledger answers the quota and
+ * billing questions, and both are answered by the row existing and by its
+ * timestamp; naming the article would turn a 12-month ledger into a 12-month
+ * browsing history for no reader. See migration 005.
+ */
 export interface UsageLogRow {
   id: string;
   userId: string;
-  /** The report this analysis produced (the report may already be purged). */
-  reportId: string;
   createdAt: number;
 }
 
 export interface CreateUsageLogArgs {
   userId: string;
-  reportId: string;
   now: number;
 }
 
@@ -194,6 +198,36 @@ export interface PurgeReportsResult {
   overCap: number;
 }
 
+/**
+ * One analysis in flight, spread over the five stage calls (Phase 2c).
+ *
+ * `state` is the accumulated engine state as a JSON string, and it is only
+ * ever written by the server: the client names a run and a finding, never the
+ * content of either, which is what keeps a poisoned client out of the shared
+ * report cache. The article's text is never part of it (see migration 003).
+ */
+export interface AnalysisRunRow {
+  id: string;
+  userId: string;
+  /** SHA-256 hex of the canonical article URL — the shared cache key. */
+  urlHash: string;
+  /** The accumulated stage output, as a JSON string. */
+  state: string;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  /** Set exactly once, by the finalize that consumed the credit. */
+  finalizedAt: number | null;
+}
+
+export interface CreateAnalysisRunArgs {
+  userId: string;
+  urlHash: string;
+  state: string;
+  now: number;
+  ttlMs: number;
+}
+
 export interface RateCheckArgs {
   /** What is being limited, e.g. `magic_link:email` or `magic_link:ip`. */
   scope: string;
@@ -218,6 +252,29 @@ export interface Db {
   createUser(args: CreateUserArgs, now: number): Promise<UserRow>;
   markEmailVerified(userId: string, now: number): Promise<void>;
   attachGoogleSub(userId: string, googleSub: string, now: number): Promise<void>;
+
+  /** The account a Stripe customer belongs to, or null. Webhook routing. */
+  getUserByStripeCustomerId(customerId: string): Promise<UserRow | null>;
+
+  /**
+   * Set the plan and its expiry. Called ONLY from the webhook handler: the
+   * client never declares itself subscribed, so this must never be reachable
+   * from a request a client controls.
+   */
+  setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void>;
+
+  /** Attach (or update) the Stripe customer and subscription identifiers. */
+  setStripeIds(
+    userId: string,
+    ids: { customerId?: string | null; subId?: string | null },
+    now: number,
+  ): Promise<void>;
+
+  /**
+   * Record a Stripe event id. Returns false when it was already recorded,
+   * i.e. this is a redelivery and must not be applied a second time.
+   */
+  recordStripeEvent(id: string, type: string, now: number): Promise<boolean>;
 
   createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow>;
   getExtensionKey(id: string): Promise<ExtensionKeyRow | null>;
@@ -286,9 +343,32 @@ export interface Db {
    */
   purgeReports(now: number, maxCount: number): Promise<PurgeReportsResult>;
 
+  /** Open a new analysis run. */
+  createAnalysisRun(args: CreateAnalysisRunArgs): Promise<AnalysisRunRow>;
+
+  /** The run, or null when it is unknown. Expiry is the caller's to judge. */
+  getAnalysisRun(id: string): Promise<AnalysisRunRow | null>;
+
+  /** Replace a run's accumulated state (a stage just produced more of it). */
+  updateAnalysisRunState(id: string, state: string, now: number): Promise<void>;
+
+  /**
+   * Runs of this account that are still open and were touched since `since`.
+   * "Touched recently" rather than "not finalized" is what lets a reader who
+   * abandoned an analysis start another one without waiting out its TTL.
+   */
+  countActiveAnalysisRuns(userId: string, since: number): Promise<number>;
+
+  /**
+   * Mark the run finalized, atomically and only once. Returns false when the
+   * run was already finalized, which is what stops a replayed finalize from
+   * writing a second report or consuming a second credit.
+   */
+  finalizeAnalysisRun(id: string, now: number): Promise<boolean>;
+
   /**
    * Remove short-lived rows whose TTL has lapsed (nonces, web sessions,
-   * magic links, OAuth handshakes) plus ledger rows older than
+   * magic links, OAuth handshakes, analysis runs) plus ledger rows older than
    * `usageLogRetentionMs`. Called by a periodic job, not per request.
    */
   purgeExpired(now: number, usageLogRetentionMs: number): Promise<void>;
