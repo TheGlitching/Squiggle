@@ -13,9 +13,17 @@ export interface HostedAccountCardProps {
   busy: boolean;
   /** Firefox cannot return from the web page by itself, so it shows the code field. */
   showCode: boolean;
+  /**
+   * Whether hosted mode is the engine analyses currently run through. Only the
+   * settings sheet passes this, to offer a signed-in reader the switch back from
+   * BYOK. The panel renders this card only when hosted is already active.
+   */
+  isActive?: boolean;
   onSignIn: () => void;
   onRedeem: (code: string) => void;
   onSignOut: () => void;
+  /** Offered beside sign-out when signed in, entitled, and not the active engine. */
+  onUseHosted?: () => void;
 }
 
 export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
@@ -23,9 +31,11 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
   error,
   busy,
   showCode,
+  isActive,
   onSignIn,
   onRedeem,
   onSignOut,
+  onUseHosted,
 }) => {
   const [code, setCode] = useState('');
   const view = account ? describeHostedAccount(account) : null;
@@ -50,6 +60,16 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
               >
                 {view.needsSubscription ? 'S’abonner' : 'Mon compte'}
               </a>
+            )}
+            {onUseHosted && !isActive && view.canAnalyse && (
+              <button
+                type="button"
+                onClick={onUseHosted}
+                disabled={busy}
+                className="rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
+              >
+                Utiliser l’analyse hébergée
+              </button>
             )}
             <button
               type="button"

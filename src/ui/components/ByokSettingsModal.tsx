@@ -1,32 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SecureKeyStorage, type AnalysisMode } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
-import { listOpenRouterModels, OpenRouterModel } from '@squiggle/shared';
 import type { LLMProvider, ProviderConfig } from '@squiggle/shared';
+import { HostedAccountCard } from './HostedAccountCard';
 import {
   beginHostedSignIn,
-  describeHostedAccount,
   fetchHostedAccount,
   HostedAuthError,
   redeemHostedCode,
   signOutHosted,
   type HostedAccount,
 } from '../../hosted/session';
-import { ACCOUNT_URL, TRANSPARENCY_URL } from '../../hosted/config';
+import { TRANSPARENCY_URL } from '../../hosted/config';
 
 /**
- * BYOK configuration surface.
+ * Analysis-engine configuration.
  *
- * The task tree marked this component complete and it passed verification, but
- * no file was ever written - the extension shipped with no way to enter a key,
- * which is why every run silently fell back to the demo fixture.
+ * Hosted mode leads: the reader can be analysing in two taps without owning a
+ * key, and that is the product. BYOK is still fully supported, but it is the
+ * advanced path and lives behind a collapsed disclosure underneath.
  */
 
 interface ProviderPreset {
   id: LLMProvider;
   label: string;
-  defaultModel: string;
-  models: string[];
+  /** A greyed example of the id shape this provider expects. */
+  modelPlaceholder: string;
   keyHint: string;
   keyUrl: string;
 }
@@ -35,94 +34,32 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'anthropic',
     label: 'Anthropic',
-    defaultModel: 'claude-sonnet-4-20250514',
-    models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-haiku-20241022'],
+    modelPlaceholder: 'claude-sonnet-4-20250514',
     keyHint: 'sk-ant-...',
     keyUrl: 'https://console.anthropic.com/settings/keys',
   },
   {
     id: 'openai',
     label: 'OpenAI',
-    defaultModel: 'gpt-4o',
-    models: ['gpt-4o', 'gpt-4o-mini', 'o4-mini'],
+    modelPlaceholder: 'gpt-4o',
     keyHint: 'sk-...',
     keyUrl: 'https://platform.openai.com/api-keys',
   },
   {
     id: 'openrouter',
     label: 'OpenRouter',
-    defaultModel: 'anthropic/claude-sonnet-4',
-    models: ['anthropic/claude-sonnet-4', 'google/gemini-2.5-flash', 'openai/gpt-4o'],
+    modelPlaceholder: 'deepseek/deepseek-v4.1-flash',
     keyHint: 'sk-or-...',
     keyUrl: 'https://openrouter.ai/keys',
   },
   {
     id: 'gemini',
     label: 'Google Gemini',
-    defaultModel: 'gemini-2.5-flash',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    modelPlaceholder: 'gemini-2.5-flash',
     keyHint: 'AIza...',
     keyUrl: 'https://aistudio.google.com/apikey',
   },
 ];
-
-/**
- * Sentinel for the dropdown's escape hatch. It cannot collide with a real model
- * id, which is why it is not simply an empty string: an empty value would also
- * be what a cleared custom field holds.
- */
-const CUSTOM_MODEL_OPTION = '__custom__';
-
-/**
- * Decides whether a model belongs in the dropdown or in the free-text field.
- *
- * It exists as its own function because getting it wrong is silent: a model the
- * reader saved that this build no longer lists would leave the dropdown with a
- * value it has no option for, and the browser would settle on whichever option
- * comes first. The reader would then be analysing with a model they never chose.
- *
- * `liveModels` is the fetched catalogue for providers whose list moves faster
- * than the build (OpenRouter), so a model they advertised yesterday is offered
- * as a real option, not silently demoted to the free-text field.
- */
-export function resolveModelSelection(
-  preset: ProviderPreset | undefined,
-  storedModel: string | undefined,
-  liveModels: readonly string[] = []
-): { model: string; usesCustomModel: boolean } {
-  const model = storedModel || preset?.defaultModel || '';
-  const known = new Set<string>([...(preset?.models ?? []), ...liveModels]);
-  return { model, usesCustomModel: model !== '' && !known.has(model) };
-}
-
-export interface OpenRouterModelGroup {
-  author: string;
-  models: OpenRouterModel[];
-}
-
-/**
- * Groups the live catalogue by author org, ids sorted within a group and
- * groups by name, so the picker is navigable instead of a flat wall of 400
- * entries. Exported for the tests to assert against without a browser.
- */
-export function groupOpenRouterModels(models: OpenRouterModel[]): OpenRouterModelGroup[] {
-  const byAuthor = new Map<string, OpenRouterModel[]>();
-  for (const m of models) {
-    const bucket = byAuthor.get(m.author) ?? [];
-    bucket.push(m);
-    byAuthor.set(m.author, bucket);
-  }
-  return Array.from(byAuthor.entries())
-    .map(([author, group]) => ({
-      author,
-      // The tilde marks OpenRouter alias ids and must not move them around in
-      // the list, so it is stripped for ordering but never from the id itself.
-      models: group.sort((a, b) =>
-        a.id.replace(/^[^a-zA-Z0-9]+/, '').localeCompare(b.id.replace(/^[^a-zA-Z0-9]+/, ''))
-      ),
-    }))
-    .sort((a, b) => a.author.localeCompare(b.author));
-}
 
 type ValidationState =
   | { kind: 'idle' }
@@ -137,12 +74,6 @@ export interface ByokSettingsModalProps {
   /** Fired when the mode or the hosted session changes, so the panel refreshes. */
   onHostedChanged?: () => void;
   storage?: SecureKeyStorage;
-  /**
-   * Injected for tests only: how the OpenRouter catalogue is fetched. Defaults
-   * to the real fetching listOpenRouterModels; a test passes a stub so the
-   * modal render never touches the network.
-   */
-  openModelsLoader?: () => Promise<OpenRouterModel[]>;
 }
 
 export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
@@ -151,24 +82,19 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   onSaved,
   onHostedChanged,
   storage,
-  openModelsLoader,
 }) => {
   const [keyStorage] = useState(() => storage ?? new SecureKeyStorage());
   const [provider, setProvider] = useState<LLMProvider>('anthropic');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState(PROVIDER_PRESETS[0].defaultModel);
-  const [usesCustomModel, setUsesCustomModel] = useState(false);
+  const [model, setModel] = useState('');
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [validation, setValidation] = useState<ValidationState>({ kind: 'idle' });
   const [isSaving, setIsSaving] = useState(false);
-  /** OpenRouter models fetched live; empty means "not loaded, use the preset". */
-  const [liveOpenModels, setLiveOpenModels] = useState<OpenRouterModel[]>([]);
   /** Which engine analyses run through; hosted has its own state below. */
   const [mode, setMode] = useState<AnalysisMode>('byok');
   const [hostedAccount, setHostedAccount] = useState<HostedAccount | null>(null);
   const [hostedError, setHostedError] = useState<string | null>(null);
   const [hostedBusy, setHostedBusy] = useState(false);
-  const [code, setCode] = useState('');
   const [showCode, setShowCode] = useState(false);
 
   const preset = PROVIDER_PRESETS.find((p) => p.id === provider) ?? PROVIDER_PRESETS[0];
@@ -189,30 +115,9 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
     }
   }, [keyStorage]);
 
-  // Fetch the live catalogue when OpenRouter is the selected provider. It is
-  // public and keyless; any failure leaves the static preset in charge. Once
-  // the fetch lands, re-run the model selection so a model the static preset
-  // never listed (say `~deepseek/deepseek-v4-flash-latest`) is offered as a
-  // real option instead of the free-text field.
-  useEffect(() => {
-    if (!isOpen || provider !== 'openrouter') return;
-    let cancelled = false;
-
-    (async () => {
-      const list = openModelsLoader ? await openModelsLoader() : await listOpenRouterModels();
-      if (cancelled) return;
-      setLiveOpenModels(list);
-      const selection = resolveModelSelection(preset, model, list.map((m) => m.id));
-      setModel(selection.model);
-      setUsesCustomModel(selection.usesCustomModel);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, provider, openModelsLoader]);
-
-  // Load whatever is already configured whenever the modal opens.
+  // Load whatever is already configured whenever the modal opens. The hosted
+  // account is always read, not only in hosted mode, because its card leads the
+  // sheet and must state the truth in either mode.
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
@@ -225,12 +130,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
         setProvider(active);
         setHasStoredKey(Boolean(config?.apiKey));
         setApiKey('');
-        const selection = resolveModelSelection(
-          PROVIDER_PRESETS.find((p) => p.id === active),
-          config?.model
-        );
-        setModel(selection.model);
-        setUsesCustomModel(selection.usesCustomModel);
+        setModel(config?.model ?? '');
         setValidation({ kind: 'idle' });
       } catch {
         // First run: nothing stored yet.
@@ -241,12 +141,11 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
         if (cancelled) return;
         setMode(activeMode);
         setHostedError(null);
-        setCode('');
         setShowCode(false);
-        if (activeMode === 'hosted') await refreshHosted();
       } catch {
         // The mode read failed; BYOK stays selected.
       }
+      if (!cancelled) await refreshHosted();
     })();
 
     return () => {
@@ -259,19 +158,13 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       setProvider(next);
       setValidation({ kind: 'idle' });
       setApiKey('');
-      const nextPreset = PROVIDER_PRESETS.find((p) => p.id === next);
-      const applySelection = (stored?: string) => {
-        const selection = resolveModelSelection(nextPreset, stored);
-        setModel(selection.model);
-        setUsesCustomModel(selection.usesCustomModel);
-      };
       try {
         const existing = await keyStorage.getProviderConfig(next);
         setHasStoredKey(Boolean(existing?.apiKey));
-        applySelection(existing?.model);
+        setModel(existing?.model ?? '');
       } catch {
         setHasStoredKey(false);
-        applySelection(undefined);
+        setModel('');
       }
     },
     [keyStorage]
@@ -288,10 +181,14 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       setValidation({ kind: 'invalid', message: 'Renseignez une clé avant de la tester.' });
       return;
     }
+    if (!model.trim()) {
+      setValidation({ kind: 'invalid', message: 'Renseignez l’identifiant du modèle.' });
+      return;
+    }
 
     setValidation({ kind: 'validating' });
     try {
-      const client = createLLMClient({ provider, apiKey: candidateKey, model });
+      const client = createLLMClient({ provider, apiKey: candidateKey, model: model.trim() });
       const response = await client.complete({
         messages: [{ role: 'user', content: 'Réponds exactement: OK' }],
         maxTokens: 8,
@@ -300,7 +197,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       const reply = (response.content || '').trim();
       setValidation({
         kind: 'valid',
-        message: reply ? `Connexion établie (${model}).` : 'Connexion établie.',
+        message: reply ? `Connexion établie (${model.trim()}).` : 'Connexion établie.',
       });
     } catch (err: unknown) {
       setValidation({
@@ -313,13 +210,22 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      const trimmed = apiKey.trim();
-      if (trimmed) {
-        const config: ProviderConfig = { provider, apiKey: trimmed, model };
+      // Saving the BYOK config makes it the chosen engine.
+      const trimmedKey = apiKey.trim();
+      let key = trimmedKey;
+      if (!key && hasStoredKey) {
+        // Editing the model without retyping the key must still persist, so
+        // re-read the stored plaintext and save it back beside the new model.
+        key = (await keyStorage.getProviderConfig(provider))?.apiKey ?? '';
+      }
+      if (key) {
+        const config: ProviderConfig = { provider, apiKey: key, model: model.trim() };
         await keyStorage.saveProviderConfig(config);
       }
       await keyStorage.setActiveProvider(provider);
+      await keyStorage.setMode('byok');
       onSaved?.(provider);
+      onHostedChanged?.();
       onClose();
     } catch (err: unknown) {
       setValidation({
@@ -329,7 +235,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
     } finally {
       setIsSaving(false);
     }
-  }, [apiKey, keyStorage, model, onClose, onSaved, provider]);
+  }, [apiKey, hasStoredKey, keyStorage, model, onClose, onHostedChanged, onSaved, provider]);
 
   const handleRemove = useCallback(async () => {
     await keyStorage.removeProvider(provider);
@@ -338,51 +244,53 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
     setValidation({ kind: 'idle' });
   }, [keyStorage, provider]);
 
-  const handleModeChange = useCallback(
-    async (next: AnalysisMode) => {
-      setMode(next);
-      setHostedError(null);
-      try {
-        await keyStorage.setMode(next);
-      } catch {
-        setHostedError('Impossible d’enregistrer votre choix.');
-      }
-      if (next === 'hosted') await refreshHosted();
-      onHostedChanged?.();
-    },
-    [keyStorage, refreshHosted, onHostedChanged]
-  );
+  const handleUseHosted = useCallback(async () => {
+    setMode('hosted');
+    try {
+      await keyStorage.setMode('hosted');
+    } catch {
+      setHostedError('Impossible d’enregistrer votre choix.');
+    }
+    await refreshHosted();
+    onHostedChanged?.();
+  }, [keyStorage, refreshHosted, onHostedChanged]);
 
   const handleHostedSignIn = useCallback(async () => {
     setHostedBusy(true);
     setHostedError(null);
     try {
+      await keyStorage.setMode('hosted');
+      setMode('hosted');
       await beginHostedSignIn(keyStorage);
       // Firefox refuses the automatic return navigation, so the code field is
       // the only way back from the web page.
       if (__TARGET__ === 'firefox') setShowCode(true);
-    } catch (err) {
-      setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
-    } finally {
-      setHostedBusy(false);
-    }
-  }, [keyStorage]);
-
-  const handleRedeemCode = useCallback(async () => {
-    setHostedBusy(true);
-    setHostedError(null);
-    try {
-      const account = await redeemHostedCode(keyStorage, code);
-      setHostedAccount(account);
-      setCode('');
-      setShowCode(false);
       onHostedChanged?.();
     } catch (err) {
       setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
     } finally {
       setHostedBusy(false);
     }
-  }, [code, keyStorage, onHostedChanged]);
+  }, [keyStorage, onHostedChanged]);
+
+  const handleRedeemCode = useCallback(
+    async (code: string) => {
+      setHostedBusy(true);
+      setHostedError(null);
+      try {
+        const account = await redeemHostedCode(keyStorage, code);
+        setHostedAccount(account);
+        setMode('hosted');
+        setShowCode(false);
+        onHostedChanged?.();
+      } catch (err) {
+        setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
+      } finally {
+        setHostedBusy(false);
+      }
+    },
+    [keyStorage, onHostedChanged]
+  );
 
   const handleHostedSignOut = useCallback(async () => {
     setHostedBusy(true);
@@ -398,8 +306,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canSave = Boolean(apiKey.trim()) || hasStoredKey;
-  const hostedView = hostedAccount ? describeHostedAccount(hostedAccount) : null;
+  const canSave = Boolean(model.trim()) && (Boolean(apiKey.trim()) || hasStoredKey);
 
   return (
     <div
@@ -419,8 +326,8 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               Moteur d’analyse
             </h2>
             <p className="mt-0.5 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
-              Utilisez votre propre clé API, ou laissez-nous analyser via votre compte
-              Squiggle hébergé.
+              Sans clé d’API : connectez votre compte Squiggle et l’analyse tourne sur nos serveurs.
+              Vous préférez votre propre clé ? Dépliez la section avancée.
             </p>
           </div>
           <button
@@ -434,288 +341,151 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
         </div>
 
         <div className="mt-4 space-y-4">
-          <div>
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
-              Mode
-            </span>
-            <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Mode d’analyse">
-              <button
-                type="button"
-                onClick={() => void handleModeChange('byok')}
-                aria-pressed={mode === 'byok'}
-                className={
-                  mode === 'byok'
-                    ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
-                    : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
-                }
-              >
-                Ma clé (BYOK)
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleModeChange('hosted')}
-                aria-pressed={mode === 'hosted'}
-                className={
-                  mode === 'hosted'
-                    ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
-                    : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
-                }
-              >
-                Squiggle hébergé
-              </button>
-            </div>
-          </div>
+          {/* Hosted first and prominent: the obvious choice on open. */}
+          <section aria-label="Squiggle hébergé">
+            <HostedAccountCard
+              account={hostedAccount}
+              error={hostedError}
+              busy={hostedBusy}
+              showCode={showCode || __TARGET__ === 'firefox'}
+              isActive={mode === 'hosted'}
+              onSignIn={() => void handleHostedSignIn()}
+              onRedeem={(code) => void handleRedeemCode(code)}
+              onSignOut={() => void handleHostedSignOut()}
+              onUseHosted={() => void handleUseHosted()}
+            />
+            <p className="mt-2 text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
+              Voir{' '}
+              <a href={TRANSPARENCY_URL} target="_blank" rel="noreferrer" className="underline">
+                le trajet des données
+              </a>{' '}
+              — l’article est analysé sur nos serveurs, jamais conservé en clair.
+            </p>
+          </section>
 
-          {mode === 'byok' && (
-            <>
-          <div>
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
-              Fournisseur
-            </span>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {PROVIDER_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => handleProviderChange(p.id)}
-                  aria-pressed={provider === p.id}
+          {/* BYOK below, collapsed by default: the advanced path. */}
+          <details className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A]">
+            <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+              Utiliser ma propre clé{' '}
+              <span className="font-normal text-[#78716C] dark:text-[#A1A1AA]">(avancé)</span>
+            </summary>
+
+            <div className="space-y-4 border-t border-[#E7E5E4] dark:border-[#27272A] p-3">
+              <div>
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                  Fournisseur
+                </span>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {PROVIDER_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleProviderChange(p.id)}
+                      aria-pressed={provider === p.id}
+                      className={
+                        provider === p.id
+                          ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
+                          : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
+                      }
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                  Modèle
+                </span>
+                <input
+                  value={model}
+                  onChange={(e) => {
+                    setModel(e.target.value);
+                    setValidation({ kind: 'idle' });
+                  }}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={preset.modelPlaceholder}
+                  className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+                />
+                <span className="mt-1 block text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
+                  Identifiant exact du modèle chez le fournisseur.
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="flex items-baseline justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                    Clé API
+                  </span>
+                  <a
+                    href={preset.keyUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-medium text-[#2B4ACB] hover:underline"
+                  >
+                    Obtenir une clé ↗
+                  </a>
+                </span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  autoComplete="off"
+                  placeholder={hasStoredKey ? '•••••••• (clé enregistrée)' : preset.keyHint}
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    setValidation({ kind: 'idle' });
+                  }}
+                  className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+                />
+              </label>
+
+              {validation.kind !== 'idle' && (
+                <div
+                  role="status"
                   className={
-                    provider === p.id
-                      ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
-                      : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
+                    validation.kind === 'valid'
+                      ? 'rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300'
+                      : validation.kind === 'invalid'
+                      ? 'rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-300'
+                      : 'rounded-xl bg-[#F5F5F4] dark:bg-[#27272A] px-3 py-2 text-xs text-[#57534E] dark:text-[#D4D4D8]'
                   }
                 >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/*
-            A datalist on a text input looked like a dropdown without behaving as
-            one: the platform draws no usable affordance, so the list only appeared
-            if you already guessed a model name and started typing it. A native
-            select does open, which is the whole point of offering a list.
-
-            The escape hatch is not optional. OpenRouter alone exposes hundreds of
-            models and every provider's catalogue moves faster than this build, so
-            a closed list would eventually be a list of models nobody can select.
-          */}
-          <label className="block">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
-              Modèle
-            </span>
-            <select
-              value={usesCustomModel ? CUSTOM_MODEL_OPTION : model}
-              onChange={(e) => {
-                const choice = e.target.value;
-                setUsesCustomModel(choice === CUSTOM_MODEL_OPTION);
-                if (choice !== CUSTOM_MODEL_OPTION) setModel(choice);
-              }}
-              className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
-            >
-              {provider === 'openrouter' && liveOpenModels.length > 0
-                ? groupOpenRouterModels(liveOpenModels).map((group) => (
-                    <optgroup key={group.author} label={group.author}>
-                      {group.models.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.id}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
-                : preset.models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-              <option value={CUSTOM_MODEL_OPTION}>Autre modèle...</option>
-            </select>
-          </label>
-
-          {usesCustomModel && (
-            <label className="block">
-              <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
-                Identifiant du modèle
-              </span>
-              <input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={preset.defaultModel}
-                autoFocus
-                className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
-              />
-              <span className="mt-1 block text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
-                Tel qu'attendu par le fournisseur, à l'identique.
-              </span>
-            </label>
-          )}
-
-          <label className="block">
-            <span className="flex items-baseline justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
-                Clé API
-              </span>
-              <a
-                href={preset.keyUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-medium text-[#2B4ACB] hover:underline"
-              >
-                Obtenir une clé ↗
-              </a>
-            </span>
-            <input
-              type="password"
-              value={apiKey}
-              autoComplete="off"
-              placeholder={hasStoredKey ? '•••••••• (clé enregistrée)' : preset.keyHint}
-              onChange={(e) => {
-                setApiKey(e.target.value);
-                setValidation({ kind: 'idle' });
-              }}
-              className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
-            />
-          </label>
-
-          {validation.kind !== 'idle' && (
-            <div
-              role="status"
-              className={
-                validation.kind === 'valid'
-                  ? 'rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300'
-                  : validation.kind === 'invalid'
-                  ? 'rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-300'
-                  : 'rounded-xl bg-[#F5F5F4] dark:bg-[#27272A] px-3 py-2 text-xs text-[#57534E] dark:text-[#D4D4D8]'
-              }
-            >
-              {validation.kind === 'validating' ? 'Test de la connexion…' : validation.message}
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleValidate}
-              disabled={validation.kind === 'validating' || !apiKey.trim()}
-              className="flex-1 rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2.5 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA] disabled:opacity-40 hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
-            >
-              Tester la clé
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || !canSave}
-              className="flex-1 rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
-            >
-              {isSaving ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
-          </div>
-
-          {hasStoredKey && (
-            <button
-              type="button"
-              onClick={handleRemove}
-              className="w-full pt-1 text-center text-xs text-[#B3402F] hover:underline"
-            >
-              Supprimer la clé enregistrée pour {preset.label}
-            </button>
-          )}
-            </>
-          )}
-
-          {mode === 'hosted' && (
-            <div className="space-y-3">
-              {hostedAccount && hostedView ? (
-                <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] p-3">
-                  <p className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
-                    {hostedView.title}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
-                    {hostedView.detail}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {!hostedView.canAnalyse && (
-                      <a
-                        href={ACCOUNT_URL}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-white dark:text-[#18181B]"
-                      >
-                        {hostedView.needsSubscription ? 'S’abonner' : 'Mon compte'}
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => void handleHostedSignOut()}
-                      disabled={hostedBusy}
-                      className="rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-xs font-semibold text-[#57534E] dark:text-[#D4D4D8] disabled:opacity-40 hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
-                    >
-                      Se déconnecter
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] p-3">
-                  <p className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
-                    3 analyses offertes
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
-                    Sans clé d’API : créez un compte Squiggle, l’analyse tourne sur nos serveurs.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void handleHostedSignIn()}
-                    disabled={hostedBusy}
-                    className="mt-3 w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
-                  >
-                    {hostedBusy ? 'Ouverture…' : 'Se connecter'}
-                  </button>
+                  {validation.kind === 'validating' ? 'Test de la connexion…' : validation.message}
                 </div>
               )}
 
-              {(showCode || __TARGET__ === 'firefox') && !hostedAccount && (
-                <div className="rounded-xl bg-[#F5F5F4] dark:bg-[#27272A] p-3">
-                  <label className="block text-xs text-[#57534E] dark:text-[#D4D4D8]">
-                    Sur la page ouverte, demandez un code puis saisissez-le ici&nbsp;:
-                    <input
-                      value={code}
-                      onChange={(e) => setCode(e.target.value.toUpperCase())}
-                      maxLength={8}
-                      autoComplete="off"
-                      placeholder="ABCD2345"
-                      className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-center font-mono text-lg tracking-[0.3em] text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void handleRedeemCode()}
-                    disabled={hostedBusy || code.trim().length < 4}
-                    className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2.5 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA] disabled:opacity-40 hover:bg-white dark:hover:bg-[#18181B]"
-                  >
-                    Valider le code
-                  </button>
-                </div>
-              )}
-
-              {hostedError && (
-                <div
-                  role="alert"
-                  className="rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-300"
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleValidate}
+                  disabled={validation.kind === 'validating' || !apiKey.trim() || !model.trim()}
+                  className="flex-1 rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2.5 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA] disabled:opacity-40 hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
                 >
-                  {hostedError}
-                </div>
-              )}
+                  Tester la clé
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSaving || !canSave}
+                  className="flex-1 rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
+                >
+                  {isSaving ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </div>
 
-              <p className="text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
-                Voir{' '}
-                <a href={TRANSPARENCY_URL} target="_blank" rel="noreferrer" className="underline">
-                  le trajet des données
-                </a>{' '}
-                — l’article est analysé sur nos serveurs, jamais conservé en clair.
-              </p>
+              {hasStoredKey && (
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  className="w-full pt-1 text-center text-xs text-[#B3402F] hover:underline"
+                >
+                  Supprimer la clé enregistrée pour {preset.label}
+                </button>
+              )}
             </div>
-          )}
+          </details>
         </div>
       </div>
     </div>
