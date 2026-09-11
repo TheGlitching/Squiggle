@@ -16,6 +16,19 @@ export interface OpenRouterModel {
 export const OPENROUTER_CATALOG_URL = 'https://openrouter.ai/api/v1/models';
 
 /**
+ * The single seam for OpenRouter's `openrouter:web_search` server tool. Parallel
+ * `basic` is the default because it has broad language support (French
+ * included) at $0.005/request, versus the $0.007 Exa fallback the deprecated
+ * `:online` suffix selected. A later French-source quality spike can switch
+ * `mode` to `turbo` ($0.001, English/Japanese only) here, in one place.
+ */
+export const OPENROUTER_WEB_SEARCH = {
+  engine: 'parallel',
+  mode: 'basic',
+  maxResults: 5,
+} as const;
+
+/**
  * Fetches OpenRouter's live model catalogue, public and keyless. The picker's
  * curent static preset rot - its note says it plainly: a closed list is a list
  * of models nobody can select - so this returns exactly what the API exposes,
@@ -75,20 +88,36 @@ export class OpenRouterClient extends OpenAIClient {
   }
 
   /**
-   * Web search on OpenRouter is a `:online` model suffix rather than a
-   * per-model capability, so every routed model can search, unlike the
-   * bare OpenAI provider it extends.
+   * Web search on OpenRouter is a server tool rather than a per-model
+   * capability, so every routed model can search, unlike the bare OpenAI
+   * provider it extends.
    */
   override supportsWebSearch(): boolean {
     return true;
   }
 
+  /**
+   * The plain model id. Search is requested through the
+   * `openrouter:web_search` server tool instead of the deprecated `:online`
+   * suffix, which silently fell back to Exa for models like DeepSeek with no
+   * native search.
+   */
   protected override resolveWebSearchModel(): string {
-    const model = this.config.model || this.defaultModel;
-    return model.endsWith(':online') ? model : `${model}:online`;
+    return this.config.model || this.defaultModel;
   }
 
   protected override buildWebSearchExtras(): Record<string, unknown> {
-    return {};
+    return {
+      tools: [
+        {
+          type: 'openrouter:web_search',
+          parameters: {
+            engine: OPENROUTER_WEB_SEARCH.engine,
+            mode: OPENROUTER_WEB_SEARCH.mode,
+            max_results: OPENROUTER_WEB_SEARCH.maxResults,
+          },
+        },
+      ],
+    };
   }
 }

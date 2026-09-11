@@ -46,8 +46,9 @@ export class OpenAIClient extends BaseLLMClient {
   }
 
   /**
-   * Split out so OpenRouter, which searches via a `:online` model suffix
-   * instead of this field, can override without duplicating the request.
+   * Split out so OpenRouter, which searches via the `openrouter:web_search`
+   * server tool instead of this field, can override without duplicating the
+   * request.
    */
   protected resolveWebSearchModel(): string {
     return this.config.model || this.defaultModel;
@@ -412,7 +413,7 @@ export class OpenAIClient extends BaseLLMClient {
   /**
    * OpenAI and OpenRouter both return citations as `url_citation` annotations
    * on the assistant message; OpenRouter extends this client and reuses the
-   * parser for its own `:online` responses.
+   * parser for its own web-search server-tool responses.
    */
   protected parseAnnotations(annotations: unknown, maxResults?: number): SearchResult[] {
     if (!Array.isArray(annotations)) {
