@@ -83,7 +83,7 @@ describe('Finding evidence display', () => {
 
     // A sourcing remark must not borrow the colours that mean "problem".
     expect(markup).toContain(VERIFICATION_STYLES['non-sourcee'].className);
-    expect(markup).not.toContain('rose-');
+    expect(markup).not.toContain('severity-critical');
     expect(markup).not.toContain('border-dashed');
   });
 
@@ -106,7 +106,7 @@ describe('Finding evidence display', () => {
 
     expect(markup).toContain('Vérifiée');
     expect(markup).toContain('confirment ce point de l’article');
-    expect(markup).toContain('emerald-');
+    expect(markup).toContain('severity-positive');
   });
 
   // Two of the four states used to share the old neutral style, which is exactly

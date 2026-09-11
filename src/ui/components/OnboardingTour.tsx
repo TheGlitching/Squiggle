@@ -3,6 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useR
 import { SCORE_DOMAINS, type ScoreBand } from '@squiggle/shared';
 import { determineScoreBand, getScoreBandLabel } from '@squiggle/shared';
 import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
+import { darkTheme } from '../tokens/colors';
 
 export interface TourStep {
   id: string;
@@ -33,7 +34,6 @@ export interface OnboardingTourProps {
   storageVersion?: string;
   storageProvider?: Storage;
   autoStartIfUnseen?: boolean;
-  theme?: 'light' | 'dark';
   className?: string;
   zIndex?: number;
 }
@@ -256,7 +256,6 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   storageVersion = DEFAULT_STORAGE_VERSION,
   storageProvider,
   autoStartIfUnseen = false,
-  theme = 'light',
   className,
   zIndex = 50,
 }) => {
@@ -377,11 +376,11 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
 
   if (!visible || !step) return null;
 
-  const dark = theme === 'dark';
-  const surface = dark ? '#18181B' : '#FFFFFF';
-  const border = dark ? '#3F3F46' : '#E7E5E4';
-  const primaryText = dark ? '#FAFAFA' : '#1C1917';
-  const mutedText = dark ? '#A1A1AA' : '#78716C';
+  const surface = darkTheme.surface;
+  const border = darkTheme.border;
+  const primaryText = darkTheme.text;
+  const mutedText = darkTheme.textMuted;
+  const subtle = darkTheme.surfaceMuted;
 
   const centered = !highlightBox;
 
@@ -409,7 +408,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
             height: highlightBox.height,
             borderRadius: highlightBox.radius,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
-            border: `2px solid ${dark ? '#FAFAFA' : '#FFFFFF'}`,
+            border: `2px solid ${darkTheme.text}`,
             pointerEvents: step.preventInteraction ? 'auto' : 'none',
           }}
         />
@@ -466,7 +465,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
                 margin: '10px 0 0',
                 padding: '8px 10px',
                 borderRadius: 10,
-                background: dark ? '#27272A' : '#F5F5F4',
+                background: subtle,
                 fontSize: 11.5,
                 lineHeight: 1.5,
                 color: mutedText,
@@ -524,8 +523,8 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
               onClick={() => (isLast ? finish(false) : setStepIndex((i) => i + 1))}
               style={{
                 border: 'none',
-                background: primaryText,
-                color: dark ? '#18181B' : '#FFFFFF',
+                background: darkTheme.accent,
+                color: darkTheme.accentForeground,
                 borderRadius: 10,
                 padding: '6px 14px',
                 fontSize: 12.5,

@@ -37,7 +37,7 @@ function Host({ anchors }: { anchors: string[] }) {
           contenu
         </div>
       ))}
-      <OnboardingTour isOpen theme="light" />
+      <OnboardingTour isOpen />
     </div>
   );
 }

@@ -7,5 +7,35 @@
     --font-display: 'Bricolage Grotesque', sans-serif;
     --font-serif: 'Newsreader', serif;
     --font-mono: 'IBM Plex Mono', monospace;
+
+    /* Dark-only palette, mirroring src/ui/tokens/colors.ts. */
+    --bg: #0a0a0b;
+    --panel: #0f0f11;
+    --panel-elevated: #141417;
+    --fg: #ece9e3;
+    --muted: #948f88;
+    --faint: #938e86;
+    --line: #2a2a2f;
+    --line-soft: #1b1b1f;
+    --stroke: #4a4742;
+    --accent: #e0483f;
+    --accent-hover: #ef7268;
+    --accent-foreground: #0a0a0b;
+
+    --sev-critical: #dc2626;
+    --sev-warning: #d97706;
+    --sev-info: #2563eb;
+    --sev-positive: #059669;
+
+    color-scheme: dark;
+  }
+
+  html {
+    background-color: var(--bg);
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
   }
 }

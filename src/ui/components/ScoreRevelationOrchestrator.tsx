@@ -10,6 +10,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { useReducedMotion } from '../../useReducedMotion';
+import { darkTheme } from '../tokens/colors';
 /* =========================================================================
    1. Types & Timeline Specifications (§6.3 Specs)
    ========================================================================= */
@@ -504,7 +505,6 @@ export interface AnimatedScoreCounterProps {
   score?: number;
   maxScore?: number;
   label?: string;
-  theme?: 'light' | 'dark';
   className?: string;
   style?: CSSProperties;
 }
@@ -512,7 +512,6 @@ export interface AnimatedScoreCounterProps {
 export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
   score: controlledScore,
   label = 'INDICE DE FIABILITÉ',
-  theme = 'light',
   className = '',
   style = {},
 }) => {
@@ -521,16 +520,16 @@ export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
   const isReducedMotion = ctx?.isReducedMotion ?? false;
 
   // Determine score color band
-  let bandColor = '#B3402F'; // problematique
+  let bandColor = darkTheme.severity.critical.text; // problematique
   let bandLabel = 'PROBLÉMATIQUE';
   if (displayScore >= 80) {
-    bandColor = '#3F7A5E';
+    bandColor = darkTheme.severity.positive.text;
     bandLabel = 'SOLIDE';
   } else if (displayScore >= 65) {
-    bandColor = '#2B4ACB';
+    bandColor = darkTheme.severity.info.text;
     bandLabel = 'PERFECTIBLE';
   } else if (displayScore >= 45) {
-    bandColor = '#A8761F';
+    bandColor = darkTheme.severity.warning.text;
     bandLabel = 'FRAGILE';
   }
 
@@ -560,7 +559,7 @@ export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     marginTop: '6px',
-    color: theme === 'dark' ? '#9CA3AF' : '#6B7079',
+    color: darkTheme.textMuted,
   };
 
   const bandBadgeStyle: CSSProperties = {
@@ -665,7 +664,6 @@ export interface StaggeredGaugeBarProps {
   label: string;
   score: number; // 0 to 100
   color?: string;
-  theme?: 'light' | 'dark';
   style?: CSSProperties;
 }
 
@@ -673,8 +671,7 @@ export const StaggeredGaugeBar: React.FC<StaggeredGaugeBarProps> = ({
   index,
   label,
   score,
-  color = '#2B4ACB',
-  theme = 'light',
+  color = darkTheme.severity.info.fill,
   style = {},
 }) => {
   const ctx = useContext(ScoreRevelationContext);
@@ -685,7 +682,7 @@ export const StaggeredGaugeBar: React.FC<StaggeredGaugeBarProps> = ({
   const animatedScore = isReduced ? score : Math.round(progressRatio * score);
   const barWidthPercent = isReduced ? score : progressRatio * score;
 
-  const trackBg = theme === 'dark' ? '#2A2E37' : '#E5E7EB';
+  const trackBg = darkTheme.surfaceMuted;
 
   return (
     <div
@@ -703,7 +700,7 @@ export const StaggeredGaugeBar: React.FC<StaggeredGaugeBarProps> = ({
       data-progress={progressRatio}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: theme === 'dark' ? '#D1D5DB' : '#374151', fontWeight: 500 }}>{label}</span>
+        <span style={{ color: darkTheme.text, fontWeight: 500 }}>{label}</span>
         <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color }}>{animatedScore}%</span>
       </div>
       <div
