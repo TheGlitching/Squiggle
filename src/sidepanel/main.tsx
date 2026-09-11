@@ -10,7 +10,19 @@ import { FindingCard } from '../ui/components/FindingCard';
 import { CategoryFilterBar, type FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
+import { HostedAccountCard } from '../ui/components/HostedAccountCard';
 import { OnboardingTour, getTourCompletionStatus } from '../ui/components/OnboardingTour';
+import {
+  beginHostedSignIn,
+  describeHostedAccount,
+  fetchHostedAccount,
+  HostedAuthError,
+  redeemHostedCode,
+  signOutHosted,
+  type HostedAccount,
+} from '../hosted/session';
+import { disclosureText, hostedProviderDomain, TRANSPARENCY_URL } from '../hosted/config';
+import type { AnalysisMode } from '../crypto/storage';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
 import { SCORE_DOMAINS } from '@squiggle/shared';
@@ -66,6 +78,12 @@ function SidepanelApp() {
   const [expandedDomain, setExpandedDomain] = useState<ScoreDomainKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
+  /** Hosted mode state: which engine, and the account behind it when signed in. */
+  const [mode, setMode] = useState<AnalysisMode>('byok');
+  const [hostedAccount, setHostedAccount] = useState<HostedAccount | null>(null);
+  const [hostedError, setHostedError] = useState<string | null>(null);
+  const [hostedBusy, setHostedBusy] = useState(false);
+  const [showHostedCode, setShowHostedCode] = useState(false);
   // The visit earns its keep on the very first run, when the panel is empty and
   // nothing on screen says what the extension does or why it wants a key.
   const [tourOpen, setTourOpen] = useState(() => !getTourCompletionStatus().completed);
@@ -102,6 +120,73 @@ function SidepanelApp() {
         );
       }
       setHasKey(false);
+    }
+  }, []);
+
+  /**
+   * Re-read the selected engine and, in hosted mode, the account. Called at
+   * mount, when the settings panel reports a change, and when the window regains
+   * focus (the Chromium sign-in completes in another tab, so focus is the
+   * earliest moment the new session is observable).
+   */
+  const refreshHostedState = useCallback(async () => {
+    try {
+      const activeMode = await keyStorageRef.current!.getMode();
+      setMode(activeMode);
+      if (activeMode !== 'hosted') {
+        setHostedAccount(null);
+        return;
+      }
+      setShowHostedCode(__TARGET__ === 'firefox');
+      try {
+        setHostedAccount(await fetchHostedAccount(keyStorageRef.current!));
+        setHostedError(null);
+      } catch (err) {
+        setHostedAccount(null);
+        if (err instanceof HostedAuthError && err.code !== 'not_signed_in') {
+          setHostedError(err.message);
+        }
+      }
+    } catch {
+      // Storage unavailable; leave BYOK in charge.
+    }
+  }, []);
+
+  const handleHostedSignIn = useCallback(async () => {
+    setHostedBusy(true);
+    setHostedError(null);
+    try {
+      await beginHostedSignIn(keyStorageRef.current!);
+      if (__TARGET__ === 'firefox') setShowHostedCode(true);
+    } catch (err) {
+      setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
+    } finally {
+      setHostedBusy(false);
+    }
+  }, []);
+
+  const handleHostedRedeem = useCallback(
+    async (code: string) => {
+      setHostedBusy(true);
+      setHostedError(null);
+      try {
+        setHostedAccount(await redeemHostedCode(keyStorageRef.current!, code));
+      } catch (err) {
+        setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
+      } finally {
+        setHostedBusy(false);
+      }
+    },
+    []
+  );
+
+  const handleHostedSignOut = useCallback(async () => {
+    setHostedBusy(true);
+    try {
+      await signOutHosted(keyStorageRef.current!);
+      setHostedAccount(null);
+    } finally {
+      setHostedBusy(false);
     }
   }, []);
 
@@ -173,6 +258,8 @@ function SidepanelApp() {
 
       await refreshKeyPresence();
       if (cancelled) return;
+      await refreshHostedState();
+      if (cancelled) return;
 
       await hydrateTabState(resolvedId, () => cancelled);
     })();
@@ -180,7 +267,15 @@ function SidepanelApp() {
     return () => {
       cancelled = true;
     };
-  }, [bus, refreshKeyPresence, hydrateTabState]);
+  }, [bus, refreshKeyPresence, refreshHostedState, hydrateTabState]);
+
+  // The Chromium sign-in finishes in a tab of its own; coming back to the panel
+  // is the moment to notice the token it stored.
+  useEffect(() => {
+    const onFocus = () => void refreshHostedState();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshHostedState]);
 
   /**
    * Keep the panel pointed at the page the reader is actually looking at.
@@ -224,8 +319,8 @@ function SidepanelApp() {
   }, [hydrateTabState, resetForNewPage]);
 
   useEffect(() => {
-    if (hasKey === false && !report) setTourOpen(true);
-  }, [hasKey, report]);
+    if (mode === 'byok' && hasKey === false && !report) setTourOpen(true);
+  }, [hasKey, mode, report]);
 
   // Live analysis events from the background worker, filtered to the
   // currently tracked tab: an event addressed to a tab the reader has since
@@ -343,6 +438,9 @@ function SidepanelApp() {
 
   const busy = progress.status === 'extracting' || progress.status === 'analyzing';
   const theme = isDark ? 'dark' : 'light';
+  const hosted = mode === 'hosted';
+  const hostedCanAnalyse = hostedAccount ? describeHostedAccount(hostedAccount).canAnalyse : false;
+  const canRun = hosted ? hostedCanAnalyse : hasKey !== false;
 
   return (
     <div className="flex flex-col min-h-screen p-4 font-sans bg-[#FBFBFA] dark:bg-[#121214] text-[#1C1917] dark:text-[#E7E5E4]">
@@ -377,30 +475,42 @@ function SidepanelApp() {
       </header>
 
       <main className="flex-1 py-4 space-y-5">
-        {hasKey === false && (
-          <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] bg-white dark:bg-[#18181B] p-4">
-            <h2 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
-              Configurez votre clé pour commencer
-            </h2>
-            <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
-              L’extension fonctionne avec votre propre clé API. Sans clé, aucune analyse ne peut
-              être lancée.
-            </p>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="mt-3 w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B]"
-            >
-              Configurer ma clé
-            </button>
-          </div>
+        {hosted ? (
+          <HostedAccountCard
+            account={hostedAccount}
+            error={hostedError}
+            busy={hostedBusy}
+            showCode={showHostedCode}
+            onSignIn={() => void handleHostedSignIn()}
+            onRedeem={(code) => void handleHostedRedeem(code)}
+            onSignOut={() => void handleHostedSignOut()}
+          />
+        ) : (
+          hasKey === false && (
+            <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] bg-white dark:bg-[#18181B] p-4">
+              <h2 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+                Configurez votre clé pour commencer
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+                L’extension fonctionne avec votre propre clé API. Sans clé, aucune analyse ne peut
+                être lancée.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="mt-3 w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B]"
+              >
+                Configurer ma clé
+              </button>
+            </div>
+          )
         )}
 
         <button
           type="button"
           data-tour="run-analysis"
           onClick={runAnalysis}
-          disabled={busy || hasKey === false}
+          disabled={busy || !canRun}
           className="w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-3 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-50"
         >
           {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse critique'}
@@ -531,7 +641,7 @@ function SidepanelApp() {
           </>
         )}
 
-        {!report && !busy && !error && hasKey !== false && (
+        {!report && !busy && !error && (hosted ? hostedCanAnalyse : hasKey !== false) && (
           <p className="text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
             Ouvrez un article de presse, puis lancez l’analyse. Les constats seront surlignés
             directement dans la page.
@@ -540,7 +650,26 @@ function SidepanelApp() {
       </main>
 
       <footer className="pt-3 border-t border-[#E7E5E4] dark:border-[#27272A] text-center text-xs text-[#A8A29E]">
-        {report?.meta?.model ? `Modèle : ${report.meta.model}` : 'Analyse assistée par IA · MV3'}
+        {hosted ? (
+          <p className="leading-relaxed">
+            {report?.meta
+              ? disclosureText(report.meta.model, report.meta.promptVersion)
+              : `Analyse via ${hostedProviderDomain()}`}
+            {' · '}
+            <a
+              href={TRANSPARENCY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-[#78716C] dark:hover:text-[#A1A1AA]"
+            >
+              Transparence
+            </a>
+          </p>
+        ) : report?.meta?.model ? (
+          `Modèle : ${report.meta.model}`
+        ) : (
+          'Analyse assistée par IA · MV3'
+        )}
       </footer>
 
       <ByokSettingsModal
@@ -548,6 +677,7 @@ function SidepanelApp() {
         onClose={() => setSettingsOpen(false)}
         storage={keyStorageRef.current!}
         onSaved={() => void refreshKeyPresence()}
+        onHostedChanged={() => void refreshHostedState()}
       />
 
       <OnboardingTour

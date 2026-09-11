@@ -70,7 +70,8 @@
     {
       "resources": [
         "src/assets/*",
-        "fonts/*"
+        "fonts/*",
+        "squiggle-auth.html"
       ],
       "matches": [
         "<all_urls>"

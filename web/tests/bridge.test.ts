@@ -38,7 +38,7 @@ describe('parseBridgeJwk', () => {
 describe('buildExtensionAuthUrl', () => {
   it('percent-encodes the token, the key and the key id', () => {
     const url = buildExtensionAuthUrl('ext-id', 'tok/with+chars', JSON.stringify(JWK), 'key 1');
-    expect(url.startsWith('chrome-extension://ext-id/squiggle-auth?')).toBe(true);
+    expect(url.startsWith('chrome-extension://ext-id/squiggle-auth.html?')).toBe(true);
     const query = new URLSearchParams(url.slice(url.indexOf('?') + 1));
     expect(query.get('token')).toBe('tok/with+chars');
     expect(query.get('pub')).toBe(JSON.stringify(JWK));

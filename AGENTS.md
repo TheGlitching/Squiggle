@@ -23,8 +23,20 @@ and a hosted reader are told about the same article. If you are about to copy so
 out of `shared/`, move it instead.
 
 `web/` is the keyless reader's half of hosted mode. Its browser-session namespace is
-`/web/account*` in `server/src/index.ts`, and the contract the extension must implement
-to connect is `web/BRIDGE.md` — the extension half does not exist yet.
+`/web/account*` in `server/src/index.ts`, and the contract both halves implement is
+`web/BRIDGE.md`; the extension's half is `src/hosted/session.ts` (sign-in paths, the
+signed account read, sign-out) and `squiggle-auth.html` (the Chromium landing page).
+
+## Hosted mode in the extension
+
+Which engine runs an analysis is a stored mode (`SecureKeyStorage.getMode`, default
+`byok`). The background chooses `HostedRunner` (`src/hosted/runner.ts`) or
+`AnalysisPipeline` at a single seam in `src/background/index.ts` and feeds the same
+`PipelineProgressEvent` stream and tab state machine either way, so the panel has no
+second code path. The install's P-256 keypair and the hosted token live encrypted in
+`SecureKeyStorage` beside the BYOK key, never in a plain `storage.local` field. The wire
+contract is `web/BRIDGE.md`; the only place an endpoint or URL shape is built is
+`src/hosted/config.ts`, and no hosted feature may add an extension permission.
 
 ## Secrets and identifiers
 
