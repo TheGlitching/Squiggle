@@ -9,12 +9,12 @@ export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ severity }) => {
   const getBadgeStyle = () => {
     switch (severity) {
       case 3:
-        return 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800';
+        return 'bg-severity-critical/15 text-severity-critical-ink border-severity-critical/50';
       case 2:
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+        return 'bg-severity-warning/15 text-severity-warning-ink border-severity-warning/50';
       case 1:
       default:
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300 dark:border-blue-800';
+        return 'bg-severity-info/15 text-severity-info-ink border-severity-info/50';
     }
   };
 

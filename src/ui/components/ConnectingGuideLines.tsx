@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { durationTokens, easingCurves } from '../../tokens';
 import { useReducedMotion } from '../../useReducedMotion';
-import { lightTheme, ThemeColors } from '../tokens/colors';
+import { darkTheme, ThemeColors } from '../tokens/colors';
 
 /* =========================================================================
    1. Types & Coordinate Interfaces
@@ -389,7 +389,7 @@ export const ConnectingGuideLine: React.FC<ConnectingGuideLineProps> = ({
   showEndpoints = true,
   sourceEndpointSize = 4,
   targetEndpointSize = 5,
-  theme = lightTheme,
+  theme = darkTheme,
   className,
   style,
   ...rest
@@ -399,7 +399,7 @@ export const ConnectingGuideLine: React.FC<ConnectingGuideLineProps> = ({
   const [pathLength, setPathLength] = useState<number>(result.length || 200);
   const [isRendered, setIsRendered] = useState<boolean>(false);
 
-  const strokeColor = color || theme.accent || '#9B2C2C';
+  const strokeColor = color || theme.accent;
 
   // Measure exact rendered SVG path length for pixel-perfect dash animation
   useEffect(() => {
@@ -536,7 +536,7 @@ export interface ConnectingGuideLinesProps {
 export const ConnectingGuideLines: React.FC<ConnectingGuideLinesProps> = ({
   items,
   enabled = true,
-  theme = lightTheme,
+  theme = darkTheme,
   className = '',
   style,
   zIndex = 9999,
@@ -574,14 +574,9 @@ export const ConnectingGuideLines: React.FC<ConnectingGuideLinesProps> = ({
       {resolvedPaths.map(({ item, result }) => {
         if (!result) return null;
 
-        // Extract category specific theme color if provided
-        let itemColor = item.color;
-        if (!itemColor && item.category && theme) {
-          const catKey = item.category as keyof ThemeColors;
-          if (typeof theme[catKey] === 'string') {
-            itemColor = theme[catKey] as string;
-          }
-        }
+        // Colour means severity, not category: a caller passes an explicit
+        // severity colour on the item, and never a category hue.
+        const itemColor = item.color;
 
         return (
           <ConnectingGuideLine

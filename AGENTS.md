@@ -35,6 +35,17 @@ R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBa
 plus the PNGs in `src/assets/`). The design tokens themselves live in
 `web/tailwind.config.ts` and `web/src/index.css`.
 
+## The extension UI design system
+
+The extension sidepanel is **dark-only**, like the landing: there is no light theme and
+no `prefers-color-scheme` branch. Colour carries exactly one kind of meaning — severity
+(critical/warning/info/positive) — so a finding *category* is identified by its label and
+glyph, never by a hue of its own. The single token source is `src/ui/tokens/colors.ts`,
+mirrored by the Tailwind palette in `tailwind.config.ts` and the CSS variables in
+`src/index.css`; the in-page overlay's severity palette in `src/content/shadowOverlay.ts`
+is the reference for tints and borders. A primary button on the accent uses the dark ink
+(`accentForeground`), not white, to pass AA.
+
 ## Hosted mode in the extension
 
 Which engine runs an analysis is a stored mode (`SecureKeyStorage.getMode`, default

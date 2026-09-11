@@ -1,28 +1,54 @@
 import { describe, it, expect } from 'vitest';
-import { lightTheme, darkTheme } from '../src/ui/tokens/colors';
+import { darkTheme } from '../src/ui/tokens/colors';
 import { TYPOGRAPHY, GOOGLE_FONTS_URL, typographyTokens } from '../src/ui/tokens/typography';
 import { formatPoints, getScoreBandColor } from '../src/ui/components/ScoreGauges';
 import { determineScoreBand } from '@squiggle/shared';
 import { SCORE_DOMAINS, ScoreDomainKey } from '@squiggle/shared';
 import { VERIFICATION_STYLES } from '../src/ui/components/VerificationBadge';
 
-describe('Editorial Design System & Tokens', () => {
-  it('should define complete color tokens for both light and dark modes', () => {
-    expect(lightTheme.bg).toBeDefined();
-    expect(darkTheme.bg).toBeDefined();
-    expect(lightTheme.accent).toBeDefined();
-    expect(darkTheme.accent).toBeDefined();
+/** WCAG relative luminance, for the one contrast promise the design system makes. */
+function relativeLuminance(hex: string): number {
+  const channel = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const value = hex.replace('#', '');
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
 
-    // 6 finding category colors
-    expect(lightTheme.sophisme).toBeDefined();
-    expect(lightTheme.unsupported).toBeDefined();
-    expect(lightTheme.overreach).toBeDefined();
-    expect(lightTheme.sourceAbsent).toBeDefined();
-    expect(lightTheme.framing).toBeDefined();
-    expect(lightTheme.strength).toBeDefined();
+function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('Editorial Design System & Tokens', () => {
+  // The extension is dark-only and colour means severity only: there is one
+  // theme, and it exposes four severity tones and no category hues at all.
+  it('defines the single dark theme with severity as the only colour channel', () => {
+    expect(darkTheme.bg).toBe('#0a0a0b');
+    expect(darkTheme.accent).toBe('#e0483f');
+
+    expect(darkTheme.severity.critical.fill).toBe('#dc2626');
+    expect(darkTheme.severity.warning.fill).toBe('#d97706');
+    expect(darkTheme.severity.info.fill).toBe('#2563eb');
+    expect(darkTheme.severity.positive.fill).toBe('#059669');
+
+    // The six historical category hues are gone.
+    for (const gone of ['sophisme', 'unsupported', 'overreach', 'sourceAbsent', 'framing', 'strength']) {
+      expect(darkTheme).not.toHaveProperty(gone);
+    }
   });
 
-  it('should configure typography tokens for Bricolage Grotesque, Newsreader, and IBM Plex Mono', () => {
+  // A primary button on the accent shipped white-on-red at 4.06:1, below AA. The
+  // label is the dark ground instead; this is the arithmetic that guards it.
+  it('passes AA for the primary button label on the accent', () => {
+    expect(contrastRatio(darkTheme.accentForeground, darkTheme.accent)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('configures typography tokens for Bricolage Grotesque, Newsreader, and IBM Plex Mono', () => {
     expect(typographyTokens.fontFamilies.sans).toContain('Bricolage Grotesque');
     expect(typographyTokens.fontFamilies.serif).toContain('Newsreader');
     expect(typographyTokens.fontFamilies.mono).toContain('IBM Plex Mono');
@@ -121,30 +147,31 @@ describe('Verification badge palette', () => {
   });
 
   it('escalates colour only where the evidence justifies it', () => {
-    expect(VERIFICATION_STYLES.verifiee.className).toContain('emerald');
-    expect(VERIFICATION_STYLES.douteuse.className).toContain('rose');
+    expect(VERIFICATION_STYLES.verifiee.className).toContain('severity-positive');
+    expect(VERIFICATION_STYLES.douteuse.className).toContain('severity-critical');
 
-    // A sourcing observation is not a fault. It takes the neutral stone of the
+    // A sourcing observation is not a fault. It takes the neutral surface of the
     // palette, with a solid border, so it never reads as a warning: the reader
     // has to see it as a remark on the article's citations, nothing more.
-    expect(VERIFICATION_STYLES['non-sourcee'].className).toContain('stone');
-    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('rose');
-    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('amber');
+    expect(VERIFICATION_STYLES['non-sourcee'].className).toContain('panel-muted');
+    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('severity-critical');
+    expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('severity-warning');
     expect(VERIFICATION_STYLES['non-sourcee'].className).not.toContain('border-dashed');
 
     // Nothing was established either way, so the border stays provisional
-    // instead of asserting a verdict, the same dashed amber the panel already
+    // instead of asserting a verdict, the same dashed warning the panel already
     // uses to declare a research stage that never ran.
-    expect(VERIFICATION_STYLES['non-verifiable'].className).toContain('amber');
+    expect(VERIFICATION_STYLES['non-verifiable'].className).toContain('severity-warning');
     expect(VERIFICATION_STYLES['non-verifiable'].className).toContain('border-dashed');
-    expect(VERIFICATION_STYLES['non-verifiable'].className).not.toContain('rose');
+    expect(VERIFICATION_STYLES['non-verifiable'].className).not.toContain('severity-critical');
   });
 
-  it('carries a dark-mode variant for every state, like every other token', () => {
+  // Dark-only means every state is painted on the one ground: a leftover
+  // `dark:` variant would be a second theme nobody switches on any more.
+  it('paints every state on the single dark ground, with no theme variants', () => {
     for (const style of Object.values(VERIFICATION_STYLES)) {
-      expect(style.className).toContain('dark:bg-');
-      expect(style.className).toContain('dark:text-');
-      expect(style.className).toContain('dark:border-');
+      expect(style.className).not.toContain('dark:');
+      expect(style.className.length).toBeGreaterThan(0);
     }
   });
 });

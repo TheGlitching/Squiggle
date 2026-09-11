@@ -25,7 +25,7 @@ import type {
 import type { FindingHighlightTarget } from '../content/types';
 import type { FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 
-/** Engine category -> filter-bar/theme key (the filter key doubles as a ThemeColors lookup). */
+/** Engine category -> filter-bar key. Category has no colour of its own any more. */
 const ENGINE_TO_FILTER: Record<EngineCategory, Exclude<FilterCategory, 'all'>> = {
   sophisme: 'sophisme',
   'affirmation-non-etayee': 'unsupported',
