@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { listOpenRouterModels } from '@squiggle/shared';
-import { groupOpenRouterModels } from '../src/ui/components/ByokSettingsModal';
 
 /**
  * OpenRouter's model ids are not predictable from the model name: the "latest"
  * alias for DeepSeek V4 Flash exists only as `~deepseek/deepseek-v4-flash-latest`,
  * tilde and all, and the API rejects a request for the bare form with
  * "[BYOK - openrouter] deepseek/deepseek-v4-flash-latest is not a valid model
- * ID". The picker therefore offers the live catalogue, and these tests pin
- * that the exact ids survive the fetch, untrimmed.
+ * ID". The extension no longer builds a picker from this catalogue (the model
+ * is a free-text field now), but the helper is still part of the shared
+ * package's public surface, so its contract stays pinned here.
  */
 describe('listOpenRouterModels', () => {
   function stubResponse(payload: unknown, ok = true): Response {
@@ -53,22 +53,5 @@ describe('listOpenRouterModels', () => {
     expect(
       await listOpenRouterModels(async () => stubResponse({ nope: true }))
     ).toEqual([]);
-  });
-});
-
-describe('groupOpenRouterModels', () => {
-  it('groups by author and sorts ids within a group', () => {
-    const groups = groupOpenRouterModels([
-      { id: 'openai/gpt-4o', name: 'GPT-4o', author: 'openai' },
-      { id: '~deepseek/deepseek-v4-flash-latest', name: 'DeepSeek V4 Flash Latest', author: 'deepseek' },
-      { id: 'deepseek/deepseek-v4-flash-0731', name: 'DeepSeek V4 Flash 0731', author: 'deepseek' }
-    ]);
-
-    const deepseek = groups.find((g) => g.author === 'deepseek')!;
-    expect(deepseek.models.map((m) => m.id)).toEqual([
-      'deepseek/deepseek-v4-flash-0731',
-      '~deepseek/deepseek-v4-flash-latest'
-    ]);
-    expect(groups.map((g) => g.author)).toEqual(['deepseek', 'openai']);
   });
 });
