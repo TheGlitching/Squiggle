@@ -46,5 +46,5 @@ export function buildExtensionAuthUrl(
   keyId: string,
 ): string {
   const query = new URLSearchParams({ token, pub, keyId });
-  return `chrome-extension://${ext}/squiggle-auth?${query.toString()}`;
+  return `chrome-extension://${ext}/squiggle-auth.html?${query.toString()}`;
 }

@@ -12,3 +12,9 @@ declare const browser: typeof chrome | undefined;
  * behind a runtime `typeof chrome` guard.
  */
 declare const __TARGET__: 'chrome' | 'firefox';
+
+/**
+ * The hosted-mode origin injected by vite.config.ts at compile time. Set from
+ * `SQUIGGLE_HOSTED_ORIGIN` for a real deployment; a placeholder otherwise.
+ */
+declare const __HOSTED_ORIGIN__: string;

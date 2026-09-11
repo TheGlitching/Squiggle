@@ -9,6 +9,7 @@ import { TabStateManager } from './tabStateManager';
 import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 import { LLMClientFactory } from '../client/factory';
 import { AnalysisPipeline } from '@squiggle/shared';
+import { HostedRunner, type AnalysisRunner } from '../hosted/runner';
 // `PipelineProgressEvent` is exported by BOTH engine/types.ts ({step,progress})
 // and engine/pipeline.ts ({status,stage,message,progress}). The star barrel makes
 // the bare name ambiguous, and the types.ts variant (which this file used to
@@ -61,7 +62,7 @@ export class BackgroundServiceWorker {
   private bus: TypedMessageBus;
   private stateManager: TabStateManager;
   private keyStorage: SecureKeyStorage;
-  private activePipelines = new Map<number, AnalysisPipeline>();
+  private activePipelines = new Map<number, AnalysisRunner>();
   private navigationAbortedTabIds = new Set<number>();
   private tabListenerCleanups: Array<() => void> = [];
 
@@ -384,56 +385,66 @@ export class BackgroundServiceWorker {
       return { success: false, error: err };
     }
 
-    // 2. Resolve the configured provider. Without one there is nothing to
-    // analyse with, and the only honest outcome is to ask for a key: the demo
-    // report describes a sample article, so returning it here would answer a
-    // question about the user's page with prose about a different one.
-    let client;
+    const onProgress = (evt: PipelineProgressEvent) => {
+      // The pipeline emits 'completed'; TabAnalysisState.status is
+      // PipelineStatus which spells it 'complete'. Normalise at this seam so
+      // the sidepanel only ever sees one spelling.
+      this.stateManager.updateTabState(tabId, {
+        status: evt.status === 'completed' ? 'complete' : evt.status,
+        progress: evt.progress,
+        currentStep: evt.message,
+      });
+
+      this.safeDispatch('ANALYSIS_PROGRESS', { tabId, ...evt });
+    };
+
+    // 2. Pick the engine. One seam: hosted mode streams the same stages through
+    // `HostedRunner`, BYOK keeps `AnalysisPipeline`, and everything downstream
+    // (the state machine, the panel, the highlights) is unaware of the choice.
+    let runner: AnalysisRunner;
     try {
-      const activeProvider = await this.keyStorage.getActiveProvider();
-      const providerConfig = await this.keyStorage.getProviderConfig(activeProvider);
-      if (providerConfig?.apiKey) {
-        client = LLMClientFactory.createClient(providerConfig);
+      if ((await this.keyStorage.getMode()) === 'hosted') {
+        const session = await this.keyStorage.getHostedSession();
+        if (!session) {
+          const err =
+            'Le mode hébergé est activé mais vous n’êtes pas connecté. ' +
+            'Connectez-vous depuis les réglages.';
+          this.stateManager.updateTabState(tabId, { status: 'error', error: err });
+          this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
+          return { success: false, error: err };
+        }
+        runner = new HostedRunner(session, onProgress);
+      } else {
+        const activeProvider = await this.keyStorage.getActiveProvider();
+        const providerConfig = await this.keyStorage.getProviderConfig(activeProvider);
+        const client = providerConfig?.apiKey
+          ? LLMClientFactory.createClient(providerConfig)
+          : undefined;
+        if (!client) {
+          const err =
+            'Aucune clé API configurée. Ajoutez votre clé dans les réglages pour ' +
+            'lancer une analyse de cette page.';
+          this.stateManager.updateTabState(tabId, { status: 'error', error: err });
+          this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
+          return { success: false, error: err };
+        }
+        runner = new AnalysisPipeline({ client, onProgress });
       }
     } catch (e) {
       const err =
         e instanceof UnreadableKeyError
           ? 'Votre clé API enregistrée n’a pas pu être déchiffrée. ' +
             'Saisissez-la à nouveau dans les réglages.'
-          : 'Impossible de lire la configuration de votre clé API. ' +
-            'Vérifiez-la dans les réglages.';
-      console.warn('Could not load the active provider key:', e);
+          : e instanceof Error && e.message
+          ? e.message
+          : 'Impossible de préparer l’analyse. Vérifiez les réglages.';
+      console.warn('Could not prepare the analysis engine:', e);
       this.stateManager.updateTabState(tabId, { status: 'error', error: err });
       this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
       return { success: false, error: err };
     }
 
-    if (!client) {
-      const err =
-        'Aucune clé API configurée. Ajoutez votre clé dans les réglages pour ' +
-        'lancer une analyse de cette page.';
-      this.stateManager.updateTabState(tabId, { status: 'error', error: err });
-      this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
-      return { success: false, error: err };
-    }
-
-    const pipeline = new AnalysisPipeline({
-      client,
-      onProgress: (evt: PipelineProgressEvent) => {
-        // The pipeline emits 'completed'; TabAnalysisState.status is
-        // PipelineStatus which spells it 'complete'. Normalise at this seam so
-        // the sidepanel only ever sees one spelling.
-        this.stateManager.updateTabState(tabId, {
-          status: evt.status === 'completed' ? 'complete' : evt.status,
-          progress: evt.progress,
-          currentStep: evt.message,
-        });
-
-        this.safeDispatch('ANALYSIS_PROGRESS', { tabId, ...evt });
-      },
-    });
-
-    this.activePipelines.set(tabId, pipeline);
+    this.activePipelines.set(tabId, runner);
     this.stateManager.updateTabState(tabId, {
       status: 'analyzing',
       progress: 0,
@@ -441,7 +452,7 @@ export class BackgroundServiceWorker {
     });
 
     try {
-      const result = await pipeline.analyze({
+      const result = await runner.analyze({
         text: articleText,
         title: articleTitle,
         url: extracted?.metadata?.canonicalUrl || undefined,
@@ -496,7 +507,7 @@ export class BackgroundServiceWorker {
       // A second analysis on the same tab, started right after this one was
       // aborted, may already have installed its own pipeline under the same
       // key; only remove the entry if it is still this run's.
-      if (this.activePipelines.get(tabId) === pipeline) {
+      if (this.activePipelines.get(tabId) === runner) {
         this.activePipelines.delete(tabId);
       }
     }

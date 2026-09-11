@@ -1,4 +1,5 @@
 import type { EncryptedPayload, LLMProvider, ProviderConfig } from '@squiggle/shared';
+import { exportP256Jwk, generateSigningKeyPair, type P256Jwk } from '@squiggle/shared';
 import { decryptSecret, encryptSecret } from './crypto';
 
 export interface StoredProviderSettings {
@@ -9,9 +10,30 @@ export interface StoredProviderSettings {
   customHeaders?: Record<string, string>;
 }
 
+/** Which engine the extension sends an analysis to. */
+export type AnalysisMode = 'byok' | 'hosted';
+
+/** The install token and the key id it was bound to, once the reader signed in. */
+export interface StoredHostedSession {
+  token: string;
+  keyId: string;
+  userId?: string;
+}
+
+interface StoredHostedKeyPair {
+  publicKeyJwk: P256Jwk;
+  privateKeyJwk: JsonWebKey;
+}
+
 export interface KeyStorageSchema {
   providers: Partial<Record<LLMProvider, StoredProviderSettings>>;
   activeProvider: LLMProvider;
+  /** Absent on installs that predate hosted mode; `byok` is the default. */
+  mode?: AnalysisMode;
+  /** Encrypted: `{ publicKeyJwk, privateKeyJwk }`. */
+  hostedKeyPair?: EncryptedPayload;
+  /** Encrypted: `StoredHostedSession`. Cleared on sign-out. */
+  hostedSession?: EncryptedPayload;
 }
 
 /**
@@ -45,6 +67,17 @@ function newSeed(): string {
   const random =
     typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36);
   return `squiggle_device_${random}`;
+}
+
+/** Import the hosted signing key back into a usable, sign-only CryptoKey. */
+async function importPrivateJwk(jwk: JsonWebKey): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'jwk',
+    jwk,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['sign']
+  );
 }
 
 /**
@@ -210,6 +243,104 @@ export class SecureKeyStorage {
   public async removeProvider(provider: LLMProvider): Promise<void> {
     const rawStorage = await this.loadAll();
     delete rawStorage.providers[provider];
+    await this.persist(rawStorage);
+  }
+
+  // -------------------------------------------------------------------------
+  // Hosted mode
+  //
+  // The private key and the token are as sensitive as a BYOK key, so they live
+  // in the same encrypted blob store rather than a plainly readable field. The
+  // keypair is generated once, on first sign-in, and reused for reconnects.
+  // -------------------------------------------------------------------------
+
+  /** Which engine analyses run through. Absent/unknown means BYOK. */
+  public async getMode(): Promise<AnalysisMode> {
+    const rawStorage = await this.loadAll();
+    return rawStorage.mode === 'hosted' ? 'hosted' : 'byok';
+  }
+
+  public async setMode(mode: AnalysisMode): Promise<void> {
+    const rawStorage = await this.loadAll();
+    rawStorage.mode = mode;
+    await this.persist(rawStorage);
+  }
+
+  /**
+   * The install's P-256 keypair, created and encrypted on first call. A stored
+   * pair that can no longer be decrypted is worthless (the server only knows
+   * its public half, and the token that used it is cleared too), so it is
+   * replaced rather than throwing the reader into a dead end.
+   */
+  public async getOrCreateHostedKeyPair(): Promise<{ publicKeyJwk: P256Jwk; privateKey: CryptoKey }> {
+    const rawStorage = await this.loadAll();
+    const passphrase = await this.getPassphrase({ create: true });
+    if (!passphrase) throw new Error('No passphrase available to encrypt the hosted key');
+
+    if (rawStorage.hostedKeyPair) {
+      try {
+        const decoded = JSON.parse(
+          await decryptSecret(rawStorage.hostedKeyPair, passphrase)
+        ) as Partial<StoredHostedKeyPair>;
+        if (decoded.publicKeyJwk && decoded.privateKeyJwk) {
+          const privateKey = await importPrivateJwk(decoded.privateKeyJwk);
+          return { publicKeyJwk: decoded.publicKeyJwk, privateKey };
+        }
+      } catch {
+        // Fall through and mint a fresh pair.
+      }
+    }
+
+    const pair = await generateSigningKeyPair();
+    const publicKeyJwk = await exportP256Jwk(pair.publicKey);
+    const privateKeyJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    rawStorage.hostedKeyPair = await encryptSecret(
+      JSON.stringify({ publicKeyJwk, privateKeyJwk } satisfies StoredHostedKeyPair),
+      passphrase
+    );
+    // The old token signed with the old key; it cannot verify against this one.
+    delete rawStorage.hostedSession;
+    await this.persist(rawStorage);
+    return { publicKeyJwk, privateKey: pair.privateKey };
+  }
+
+  public async saveHostedSession(session: StoredHostedSession): Promise<void> {
+    const rawStorage = await this.loadAll();
+    const passphrase = await this.getPassphrase({ create: true });
+    if (!passphrase) throw new Error('No passphrase available to encrypt the hosted token');
+    rawStorage.hostedSession = await encryptSecret(JSON.stringify(session), passphrase);
+    rawStorage.mode = 'hosted';
+    await this.persist(rawStorage);
+  }
+
+  /**
+   * The decrypted install token and signing key, or null when the reader has
+   * never signed in (or signed out). Throws only when something IS stored but
+   * cannot be read, which is a different state the caller must report.
+   */
+  public async getHostedSession(): Promise<
+    (StoredHostedSession & { privateKey: CryptoKey; publicKeyJwk: P256Jwk }) | null
+  > {
+    const rawStorage = await this.loadAll();
+    if (!rawStorage.hostedSession || !rawStorage.hostedKeyPair) return null;
+
+    const passphrase = await this.getPassphrase({ create: false });
+    if (!passphrase) throw new Error('La connexion enregistrée est illisible. Reconnectez-vous.');
+
+    const session = JSON.parse(
+      await decryptSecret(rawStorage.hostedSession, passphrase)
+    ) as StoredHostedSession;
+    const keyPair = JSON.parse(
+      await decryptSecret(rawStorage.hostedKeyPair, passphrase)
+    ) as StoredHostedKeyPair;
+    const privateKey = await importPrivateJwk(keyPair.privateKeyJwk);
+    return { ...session, privateKey, publicKeyJwk: keyPair.publicKeyJwk };
+  }
+
+  /** Forget the local token. The keypair is kept so a reconnect can reuse it. */
+  public async clearHostedSession(): Promise<void> {
+    const rawStorage = await this.loadAll();
+    delete rawStorage.hostedSession;
     await this.persist(rawStorage);
   }
 
