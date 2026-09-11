@@ -45,7 +45,7 @@ export function Legal() {
           <p className="mt-3 text-muted">
             L’accès se fait par une adresse e-mail vérifiée ou par un compte Google. Vous êtes
             responsable de l’usage fait depuis votre compte. Un compte donne droit à trois analyses
-            offertes ; un abonnement mensuel donne droit à cinq analyses par jour, comptées sur la
+            offertes ; un abonnement mensuel donne droit à dix analyses par jour, comptées sur la
             journée UTC.
           </p>
         </section>

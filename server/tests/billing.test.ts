@@ -3,8 +3,8 @@
  * signatures. No account, no key, no network.
  *
  * The journey the acceptance criteria describe is one test at the bottom:
- * trial → paywall → activation → the fifth analysis of the day → the sixth
- * refused → cancellation → back to nothing.
+ * trial → paywall → activation → the tenth analysis of the day → the
+ * eleventh refused → cancellation → back to nothing.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -190,6 +190,10 @@ describe('checkout and portal', () => {
 });
 
 describe('quotas', () => {
+  it('allows ten analyses a day on an active plan', () => {
+    expect(ACTIVE_ANALYSES_PER_DAY).toBe(10);
+  });
+
   it('reports the entitlement on the account endpoint', async () => {
     const env = makeTestEnv();
     const who = await signedIn(env, 'marie@example.org');
@@ -272,13 +276,13 @@ describe('quotas', () => {
     expect(account.json.plan).toBe('active');
     expect((account.json.usage as { limit: number }).limit).toBe(ACTIVE_ANALYSES_PER_DAY);
 
-    // 4. Five a day pass; the sixth does not.
+    // 4. Ten a day pass; the eleventh does not.
     for (let i = 0; i < ACTIVE_ANALYSES_PER_DAY; i += 1) {
       expect((await analyse(env, who, `${ARTICLE_URL}/day1-${i}`)).status).toBe(200);
     }
-    const sixth = await analyse(env, who, `${ARTICLE_URL}/day1-6`);
-    expect(sixth.status).toBe(429);
-    expect(sixth.json.error).toBe('quota_exhausted');
+    const eleventh = await analyse(env, who, `${ARTICLE_URL}/day1-10`);
+    expect(eleventh.status).toBe(429);
+    expect(eleventh.json.error).toBe('quota_exhausted');
 
     // 5. Tomorrow the daily count resets - unlike the trial.
     env.clock.advance(DAY_MS);
