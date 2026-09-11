@@ -1,4 +1,5 @@
 import { computeFourchesCaudinesScore } from './scoring';
+import { PROMPT_VERSION } from './prompts';
 import {
   AnalysisInput,
   AnalysisReport,
@@ -330,7 +331,7 @@ export function parseAndValidateLlmOutput(
     research,
     meta: {
       model: options.modelName || 'llm-byok',
-      promptVersion: '1.0.0-fourches-caudines',
+      promptVersion: PROMPT_VERSION,
       analyzedAt: new Date().toISOString(),
       durationMs: options.durationMs || 0,
       textLengthChars: input.blocks.reduce((acc, b) => acc + b.text.length, 0),

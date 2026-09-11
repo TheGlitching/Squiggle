@@ -97,7 +97,7 @@ describe('POST /auth/magic-link/verify', () => {
     const unknown = await env.handler(
       new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
         body: JSON.stringify({ code: 'forged-code' }),
       }),
     );
@@ -110,7 +110,7 @@ describe('POST /auth/magic-link/verify', () => {
     const firstUse = await env.handler(
       new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
         body: JSON.stringify({ code }),
       }),
     );
@@ -118,7 +118,7 @@ describe('POST /auth/magic-link/verify', () => {
     const reuse = await env.handler(
       new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
         body: JSON.stringify({ code }),
       }),
     );
@@ -131,7 +131,7 @@ describe('POST /auth/magic-link/verify', () => {
     const expired = await env.handler(
       new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
         body: JSON.stringify({ code: env.email.lastCode()! }),
       }),
     );

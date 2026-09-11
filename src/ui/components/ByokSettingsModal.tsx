@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SecureKeyStorage } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
-import { listOpenRouterModels, OpenRouterModel } from '../../client/openrouter';
+import { listOpenRouterModels, OpenRouterModel } from '@squiggle/shared';
 import type { LLMProvider, ProviderConfig } from '@squiggle/shared';
 
 /**

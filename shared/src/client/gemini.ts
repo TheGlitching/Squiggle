@@ -8,6 +8,24 @@ import type { GroundedAnswer, SearchResult } from './base';
 import { BaseLLMClient } from './base';
 
 export class GeminiClient extends BaseLLMClient {
+  /**
+   * The API key travels in a header, never in the query string.
+   *
+   * Google accepts `?key=…` and their own samples use it, but a URL is the
+   * most-copied string in any system: it lands in a browser devtools network
+   * panel, in a proxy access log, in an error report, in a `Referer`. The
+   * header form keeps the key out of every one of those. It matters on both
+   * sides — for a BYOK user this is *their* key in *their* devtools, and for
+   * the hosted server it is ours.
+   */
+  private get authHeaders(): Record<string, string> {
+    return {
+      'content-type': 'application/json',
+      'x-goog-api-key': this.config.apiKey,
+      ...this.config.customHeaders,
+    };
+  }
+
   private get baseUrl(): string {
     return this.config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
   }
@@ -54,14 +72,11 @@ export class GeminiClient extends BaseLLMClient {
       (body.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema;
     }
 
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent?key=${this.config.apiKey}`;
+    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...this.config.customHeaders,
-      },
+      headers: this.authHeaders,
       body: JSON.stringify(body),
       signal: options.abortSignal,
     });
@@ -130,14 +145,11 @@ export class GeminiClient extends BaseLLMClient {
       tools: [{ google_search: {} }],
     };
 
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent?key=${this.config.apiKey}`;
+    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...this.config.customHeaders,
-      },
+      headers: this.authHeaders,
       body: JSON.stringify(body),
     });
 
@@ -243,14 +255,11 @@ export class GeminiClient extends BaseLLMClient {
       body.systemInstruction = systemInstruction;
     }
 
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent?key=${this.config.apiKey}`;
+    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...this.config.customHeaders,
-      },
+      headers: this.authHeaders,
       body: JSON.stringify(body),
       signal: options.abortSignal,
     });
@@ -336,14 +345,11 @@ export class GeminiClient extends BaseLLMClient {
       (body.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema;
     }
 
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:streamGenerateContent?alt=sse&key=${this.config.apiKey}`;
+    const endpoint = `${this.baseUrl}/models/${this.modelName}:streamGenerateContent?alt=sse`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...this.config.customHeaders,
-      },
+      headers: this.authHeaders,
       body: JSON.stringify(body),
       signal: options.abortSignal,
     });

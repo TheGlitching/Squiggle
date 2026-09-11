@@ -20,10 +20,39 @@
  *   GET    /auth/google/callback       finish Google OAuth, open a session
  *   GET|POST /auth/claim               exchange a session for an extension token
  *   POST   /auth/logout                end the current web session
- *   GET    /v1/account                 (signed) who am I
+ *   GET    /v1/account                 (signed) who am I, plan and usage
+ *   POST   /v1/account/checkout        (signed) open a Stripe Checkout session
+ *   POST   /v1/account/portal          (signed) open the Stripe customer portal
+ *   POST   /webhooks/stripe            (Stripe-signed) the only writer of a plan
+ *   GET    /v1/analyze/check           (signed) shared-cache preflight, 0 credits
+ *   POST   /v1/analyze/audit           (signed) audit the article, opens a run
+ *   POST   /v1/analyze/research        (signed) check one factual finding
+ *   POST   /v1/analyze/source-check    (signed) read one link the article cites
+ *   POST   /v1/analyze/finalize        (signed) reconcile, cache, consume 1 credit
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
 import { neon } from '@neondatabase/serverless';
+import {
+  GeminiClient,
+  OpenRouterClient,
+  PROMPT_VERSION,
+  type BaseLLMClient,
+} from '@squiggle/shared';
+
+import {
+  analyzeAudit,
+  analyzeCheck,
+  analyzeFinalize,
+  analyzeResearch,
+  analyzeSourceCheck,
+  type AnalyzeServices,
+} from './analyze/stages';
+import {
+  AuditRequestSchema,
+  FinalizeRequestSchema,
+  ResearchRequestSchema,
+  SourceCheckRequestSchema,
+} from './analyze/schemas';
 
 import { claimExtensionToken } from './auth/claim';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
@@ -36,6 +65,11 @@ import {
   sessionSetCookie,
   sessionUser,
 } from './auth/session';
+import { entitlementOf } from './billing/quota';
+import { createCheckoutSession, createPortalSession, type StripeConfig } from './billing/stripe';
+import { handleStripeWebhook } from './billing/webhook';
+import { corsHeaders, originRequired } from './lib/cors';
+import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
 import { NeonDb } from './db/neon';
 import type { Db } from './db/types';
 import type { Clock } from './lib/clock';
@@ -45,6 +79,7 @@ import { BrevoEmailSender } from './lib/brevo';
 import { apiError, errorResponse, type Outcome } from './lib/errors';
 import { sha256Hex } from '@squiggle/shared';
 import { migrate, type SqlQuery } from './migrations';
+import { secureEquals } from './lib/secureCompare';
 
 export interface Env {
   // Non-secret (wrangler.jsonc vars)
@@ -58,6 +93,20 @@ export interface Env {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
+  STRIPE_SECRET_KEY: string;
+  STRIPE_WEBHOOK_SECRET: string;
+  /** Non-secret: the `price_…` the subscription is sold at (wrangler.jsonc var). */
+  STRIPE_PRICE_ID: string;
+  /** Non-secret: which provider hosted analyses run on. Defaults to `openrouter`. */
+  LLM_PROVIDER?: string;
+  /** Our own OpenRouter key. Hosted mode runs on it; BYOK never touches it. */
+  OPENROUTER_API_KEY?: string;
+  /** Non-secret: the exact OpenRouter model id (wrangler.jsonc var). */
+  OPENROUTER_MODEL?: string;
+  /** The switchable alternative provider, used only when `LLM_PROVIDER` is `gemini`. */
+  GEMINI_API_KEY?: string;
+  /** Non-secret: the exact Gemini model id, used only for the `gemini` selection. */
+  GEMINI_MODEL?: string;
 }
 
 export interface Services {
@@ -70,8 +119,69 @@ export interface Services {
   googleClientSecret?: string;
   fetchImpl?: FetchLike;
   adminToken?: string;
+  /**
+   * Builds the LLM client hosted analyses run on. A factory, not an instance,
+   * so a test can supply a stub and no code path can reach a real provider
+   * without one being configured.
+   */
+  llm?: () => BaseLLMClient;
+  /** Prompt set version; part of the shared cache key. */
+  promptVersion?: string;
+  /** Billing configuration. Absent on a server built without payments. */
+  stripe?: StripeConfig;
   /** Apply pending migrations; only present in the live (Neon) deployment. */
   runMigrations?: (now: number) => Promise<string[]>;
+}
+
+/**
+ * The model hosted analyses default to when the deployment names none. The id
+ * is the exact OpenRouter catalogue id, tilde-free: OpenRouter ids are not
+ * predictable from the model name, and the API rejects anything that is not
+ * exactly right.
+ */
+export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash';
+
+/** The deployment settings the provider gateway reads. */
+export interface LlmEnv {
+  LLM_PROVIDER?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+}
+
+/**
+ * Builds the hosted LLM client from deployment config, so the provider and the
+ * model are settings rather than something baked into a build. OpenRouter is
+ * the default; `gemini` is kept selectable.
+ *
+ * A provider whose key is absent yields `undefined` rather than throwing at
+ * request time or silently falling back to a provider the deployment did not
+ * choose. `undefined` is what the analyze route already turns into the existing
+ * "mode hébergé n'est pas configuré" refusal.
+ */
+export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
+  const provider = (env.LLM_PROVIDER || 'openrouter').trim().toLowerCase();
+
+  if (provider === 'gemini') {
+    if (!env.GEMINI_API_KEY) return undefined;
+    return new GeminiClient({
+      provider: 'gemini',
+      apiKey: env.GEMINI_API_KEY,
+      model: env.GEMINI_MODEL || 'gemini-2.5-flash',
+    });
+  }
+
+  if (provider === 'openrouter') {
+    if (!env.OPENROUTER_API_KEY) return undefined;
+    return new OpenRouterClient({
+      provider: 'openrouter',
+      apiKey: env.OPENROUTER_API_KEY,
+      model: env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
+    });
+  }
+
+  return undefined;
 }
 
 /** Build the request handler from dependencies (the testable core). */
@@ -86,11 +196,20 @@ async function handle(
   allowedOrigins: Set<string>,
 ): Promise<Response> {
   const url = new URL(req.url);
+  const requestId = newRequestId();
+  const startedAt = Date.now();
   const origin = req.headers.get('origin');
   const originAllowed = origin !== null && allowedOrigins.has(origin);
 
-  if (origin !== null && !originAllowed) {
-    return errorResponse(apiError('origin_not_allowed', 'This origin is not allowed to call this API.'));
+  // A wrong origin is refused everywhere; a MISSING one is refused on the
+  // endpoints that a page could otherwise drive with the reader's own cookie.
+  // See lib/cors.ts for why the list is a list and not "every POST".
+  if ((origin !== null && !originAllowed) || (!originAllowed && originRequired(req.method, url.pathname))) {
+    logEvent({ event: 'origin_rejected', requestId, method: req.method, path: url.pathname });
+    return withRequestId(
+      errorResponse(apiError('origin_not_allowed', 'This origin is not allowed to call this API.')),
+      requestId,
+    );
   }
 
   if (req.method === 'OPTIONS') {
@@ -100,37 +219,48 @@ async function handle(
 
   let res: Response;
   try {
-    res = await route(req, url, s);
+    res = await route(req, url, s, requestId);
   } catch {
+    // The thrown value is never logged: it can carry a fragment of whatever
+    // was being parsed, and that is article text.
+    logEvent({ event: 'unhandled_error', requestId, method: req.method, path: url.pathname });
     res = errorResponse(apiError('internal', 'Something went wrong. Please try again.'));
   }
 
+  const headers = new Headers(res.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
   if (originAllowed) {
-    const headers = new Headers(res.headers);
     for (const [k, v] of Object.entries(corsHeaders(origin as string))) headers.set(k, v);
-    res = new Response(res.body, { status: res.status, statusText: res.statusText, headers });
   }
+  res = new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+
+  // The route pattern, never the query string: on `/v1/analyze/check` the
+  // query string is the article the reader is looking at.
+  logEvent({
+    event: 'request',
+    requestId,
+    method: req.method,
+    path: url.pathname,
+    status: res.status,
+    durationMs: Date.now() - startedAt,
+  });
   return res;
 }
 
-function corsHeaders(origin: string): Record<string, string> {
-  return {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'authorization, content-type, x-squiggle-sig, x-squiggle-nonce, x-squiggle-ts',
-    'access-control-expose-headers': 'x-squiggle-request-id',
-    'access-control-max-age': '86400',
-  };
+function withRequestId(res: Response, requestId: string): Response {
+  const headers = new Headers(res.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-function finish(outcome: Outcome<Record<string, unknown>>, setCookie?: string | null): Response {
+function finish<T extends object>(outcome: Outcome<T>, setCookie?: string | null): Response {
   const base = outcome.ok ? Response.json(outcome, { status: 200 }) : errorResponse(outcome);
   const res = new Response(base.body, { status: base.status, statusText: base.statusText, headers: base.headers });
   if (setCookie) res.headers.set('set-cookie', setCookie);
   return res;
 }
 
-async function route(req: Request, url: URL, s: Services): Promise<Response> {
+async function route(req: Request, url: URL, s: Services, requestId: string): Promise<Response> {
   const path = url.pathname;
   const method = req.method;
 
@@ -143,7 +273,7 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
     const email = typeof body.email === 'string' ? body.email : '';
     const ip = req.headers.get('cf-connecting-ip');
     const outcome = await requestMagicLink(
-      { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin },
+      { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin, requestId },
       { email, ip },
     );
     return finish(outcome);
@@ -152,7 +282,11 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
   if (path === '/auth/magic-link/verify' && method === 'POST') {
     const body = await readJson(req);
     const code = typeof body.code === 'string' ? body.code : '';
-    const outcome = await verifyMagicLink({ db: s.db, clock: s.clock }, code);
+    const outcome = await verifyMagicLink(
+      { db: s.db, clock: s.clock, requestId },
+      code,
+      req.headers.get('cf-connecting-ip'),
+    );
     return finish(outcome, outcome.ok ? sessionSetCookie(outcome.sessionToken) : null);
   }
 
@@ -224,22 +358,33 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
     return res;
   }
 
-  if (path === '/v1/account' && method === 'GET') {
-    const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, await req.text());
-    if (!auth.ok) return finish(auth);
-    const { user } = auth;
-    return finish({
-      ok: true,
-      id: user.id,
-      email: user.email,
-      plan: user.plan,
-      planExpiresAt: user.planExpiresAt,
-    });
+  if (path === '/webhooks/stripe' && method === 'POST') {
+    if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    // Stripe is not a browser: it sends no Origin, and its signature is the
+    // authentication. The raw bytes are what was signed, so they are what is
+    // verified — never a re-serialization of the parsed JSON.
+    const outcome = await handleStripeWebhook(
+      { db: s.db, clock: s.clock, webhookSecret: s.stripe.webhookSecret, requestId },
+      await req.text(),
+      req.headers.get('stripe-signature'),
+    );
+    return finish(outcome);
+  }
+
+  if (path.startsWith('/v1/account')) {
+    return accountRoute(req, s, path, method);
+  }
+
+  if (path.startsWith('/v1/analyze/')) {
+    return analyzeRoute(req, url, s, path, method, requestId);
   }
 
   if (path === '/admin/migrate' && method === 'POST') {
-    const header = req.headers.get('authorization');
-    if (!s.adminToken || header !== `Bearer ${s.adminToken}`) {
+    // Constant-time: a plain `!==` short-circuits at the first differing byte,
+    // which lets an attacker recover the admin token one character at a time.
+    const header = req.headers.get('authorization') ?? '';
+    const expected = s.adminToken ? `Bearer ${s.adminToken}` : '';
+    if (!s.adminToken || !(await secureEquals(header, expected))) {
       return finish(apiError('invalid_token', 'Invalid admin token.'));
     }
     if (!s.runMigrations) {
@@ -254,6 +399,152 @@ async function route(req: Request, url: URL, s: Services): Promise<Response> {
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/** The account and billing endpoints, all behind the signed-request gate. */
+async function accountRoute(
+  req: Request,
+  s: Services,
+  path: string,
+  method: string,
+): Promise<Response> {
+  const rawBody = method === 'GET' ? '' : await req.text();
+  const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
+  if (!auth.ok) return finish(auth);
+  const { user } = auth;
+  const now = s.clock.now();
+
+  if (path === '/v1/account' && method === 'GET') {
+    // The panel renders its quota states from this, so it carries the
+    // entitlement, not just the stored plan: an `active` row whose period has
+    // ended is reported as `none`, which is what is actually true.
+    const entitlement = await entitlementOf(s.db, user, now);
+    return finish({
+      ok: true,
+      id: user.id,
+      email: user.email,
+      plan: entitlement.plan,
+      planExpiresAt: user.planExpiresAt,
+      usage: {
+        used: entitlement.used,
+        limit: entitlement.limit,
+        remaining: entitlement.remaining,
+        resetsAt: entitlement.resetsAt,
+      },
+    });
+  }
+
+  if (path === '/v1/account/checkout' && method === 'POST') {
+    if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    const outcome = await createCheckoutSession({
+      config: s.stripe,
+      userId: user.id,
+      email: user.email,
+      customerId: user.stripeCustomerId,
+      successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
+      cancelUrl: `${s.webAppOrigin}/tarifs?paiement=annule`,
+    });
+    return finish(outcome);
+  }
+
+  if (path === '/v1/account/portal' && method === 'POST') {
+    if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    if (!user.stripeCustomerId) {
+      return finish(apiError('not_found', 'Aucun abonnement à gérer pour ce compte.'));
+    }
+    return finish(await createPortalSession(s.stripe, user.stripeCustomerId, `${s.webAppOrigin}/compte`));
+  }
+
+  return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/**
+ * The analysis stages. Every one of them is behind the same signed-request
+ * gate as the rest of `/v1/`, and every body is parsed by its zod schema
+ * before a handler sees it — so a handler only ever receives a value of the
+ * shape it declares, and an oversized or malformed payload costs no tokens.
+ */
+async function analyzeRoute(
+  req: Request,
+  url: URL,
+  s: Services,
+  path: string,
+  method: string,
+  requestId: string,
+): Promise<Response> {
+  if (!s.llm) {
+    return finish(apiError('internal', "Le mode hébergé n'est pas configuré sur ce serveur."));
+  }
+  const analyze: AnalyzeServices = {
+    db: s.db,
+    clock: s.clock,
+    llm: s.llm,
+    promptVersion: s.promptVersion ?? PROMPT_VERSION,
+    fetchImpl: s.fetchImpl as typeof fetch | undefined,
+    requestId,
+  };
+
+  // The signature covers the body byte-for-byte, so the raw text has to be
+  // read once and reused: re-reading a consumed body would verify one string
+  // and parse another.
+  const rawBody = method === 'GET' ? '' : await req.text();
+  const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
+  if (!auth.ok) return finish(auth);
+
+  if (path === '/v1/analyze/check' && method === 'GET') {
+    const target = url.searchParams.get('url') ?? '';
+    return finish(await analyzeCheck(analyze, target));
+  }
+
+  if (path === '/v1/analyze/audit' && method === 'POST') {
+    const parsed = AuditRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
+    return finish(await analyzeAudit(analyze, auth.user, parsed.data));
+  }
+
+  if (path === '/v1/analyze/research' && method === 'POST') {
+    const parsed = ResearchRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
+    return finish(await analyzeResearch(analyze, auth.user, parsed.data));
+  }
+
+  if (path === '/v1/analyze/source-check' && method === 'POST') {
+    const parsed = SourceCheckRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
+    return finish(await analyzeSourceCheck(analyze, auth.user, parsed.data));
+  }
+
+  if (path === '/v1/analyze/finalize' && method === 'POST') {
+    const parsed = FinalizeRequestSchema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
+    return finish(await analyzeFinalize(analyze, auth.user, parsed.data));
+  }
+
+  return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/**
+ * A rejected payload is named by its FIELD, never echoed back: the value that
+ * failed validation is attacker-supplied article text, and it belongs neither
+ * in a response nor in a log line. Naming the field is what keeps a real
+ * client's bug debuggable without any of that.
+ */
+function invalidPayload(
+  error: { issues: Array<{ path: PropertyKey[] }> },
+  requestId: string,
+  userId: string,
+) {
+  const fields = [...new Set(error.issues.map((issue) => issue.path.join('.') || '(racine)'))].slice(0, 5);
+  logEvent({ event: 'payload_rejected', requestId, userId, fields });
+  return apiError('invalid_payload', `Requête invalide : ${fields.join(', ')}.`);
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 async function readJson(req: Request): Promise<Record<string, unknown>> {
@@ -275,6 +566,12 @@ let live: Services | null = null;
 function servicesFromEnv(env: Env): Services {
   if (live) return live;
   const sql = neon(env.DATABASE_URL);
+  // The provider is a deployment setting. When its key is missing this is
+  // `undefined`, and the analyze route refuses — it never picks a provider the
+  // deployment did not configure. Our own key is read from the Workers secret
+  // store and never leaves this process; a BYOK user's key is a different thing
+  // entirely and never reaches this server at all.
+  const hostedLlm = createHostedLlm(env);
   live = {
     db: new NeonDb(env.DATABASE_URL),
     clock: systemClock,
@@ -288,6 +585,13 @@ function servicesFromEnv(env: Env): Services {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,
+    llm: hostedLlm ? () => hostedLlm : undefined,
+    promptVersion: PROMPT_VERSION,
+    stripe: {
+      secretKey: env.STRIPE_SECRET_KEY,
+      priceId: env.STRIPE_PRICE_ID,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    },
     runMigrations: (now) => {
       const q: SqlQuery = {
         query: (text, params) =>

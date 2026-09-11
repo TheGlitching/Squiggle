@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listOpenRouterModels } from '../src/client/openrouter';
+import { listOpenRouterModels } from '@squiggle/shared';
 import { groupOpenRouterModels } from '../src/ui/components/ByokSettingsModal';
 
 /**

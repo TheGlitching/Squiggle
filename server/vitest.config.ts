@@ -21,5 +21,8 @@ export default defineConfig({
     // genuine crypto.subtle, not happy-dom's.
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Every request writes a structured log line; printing them all buries
+    // the results. A test that cares about a line spies on console.log.
+    silent: true,
   },
 });

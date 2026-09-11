@@ -11,6 +11,9 @@ import { randomToken } from '@squiggle/shared';
 
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
+  AnalysisRunRow,
+  Plan,
+  CreateAnalysisRunArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
   CreateReportArgs,
@@ -47,8 +50,11 @@ export class MemoryDb implements Db {
   private readonly usageDaily = new Map<string, UsageDailyRow>();
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
+  private readonly runs = new Map<string, AnalysisRunRow>();
+  private readonly stripeEvents = new Set<string>();
 
   // ---- users ---------------------------------------------------------------
+
 
   async getUserById(id: string): Promise<UserRow | null> {
     return this.users.get(id) ?? null;
@@ -74,7 +80,10 @@ export class MemoryDb implements Db {
       email: args.email ?? null,
       emailVerified: args.emailVerified ?? false,
       googleSub: args.googleSub ?? null,
-      plan: 'none',
+      // A new account starts on the trial: 3 analyses, ever. Set here so
+      // there is one answer to "what does a fresh account get" (see
+      // billing/quota.ts for what the plans mean).
+      plan: 'trial',
       planExpiresAt: null,
       stripeCustomerId: null,
       stripeSubId: null,
@@ -102,6 +111,39 @@ export class MemoryDb implements Db {
   }
 
   // ---- extension signing keys ----------------------------------------------
+
+  async getUserByStripeCustomerId(customerId: string): Promise<UserRow | null> {
+    for (const user of this.users.values()) {
+      if (user.stripeCustomerId === customerId) return user;
+    }
+    return null;
+  }
+
+  async setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    user.plan = plan;
+    user.planExpiresAt = planExpiresAt;
+    user.updatedAt = now;
+  }
+
+  async setStripeIds(
+    userId: string,
+    ids: { customerId?: string | null; subId?: string | null },
+    now: number,
+  ): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    if (ids.customerId !== undefined) user.stripeCustomerId = ids.customerId;
+    if (ids.subId !== undefined) user.stripeSubId = ids.subId;
+    user.updatedAt = now;
+  }
+
+  async recordStripeEvent(id: string, _type: string, _now: number): Promise<boolean> {
+    if (this.stripeEvents.has(id)) return false;
+    this.stripeEvents.add(id);
+    return true;
+  }
 
   async createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow> {
     const row: ExtensionKeyRow = { id: randomToken(16), userId, publicKeyJwk, createdAt: now };
@@ -248,7 +290,6 @@ export class MemoryDb implements Db {
     const row: UsageLogRow = {
       id: randomToken(16),
       userId: args.userId,
-      reportId: args.reportId,
       createdAt: args.now,
     };
     this.usageLog.set(row.id, row);
@@ -324,11 +365,56 @@ export class MemoryDb implements Db {
     return { expired, overCap };
   }
 
+  // ---- analysis runs -------------------------------------------------------
+
+  async createAnalysisRun(args: CreateAnalysisRunArgs): Promise<AnalysisRunRow> {
+    const row: AnalysisRunRow = {
+      id: randomToken(16),
+      userId: args.userId,
+      urlHash: args.urlHash,
+      state: args.state,
+      createdAt: args.now,
+      updatedAt: args.now,
+      expiresAt: args.now + args.ttlMs,
+      finalizedAt: null,
+    };
+    this.runs.set(row.id, row);
+    return row;
+  }
+
+  async getAnalysisRun(id: string): Promise<AnalysisRunRow | null> {
+    return this.runs.get(id) ?? null;
+  }
+
+  async updateAnalysisRunState(id: string, state: string, now: number): Promise<void> {
+    const row = this.runs.get(id);
+    if (!row) return;
+    row.state = state;
+    row.updatedAt = now;
+  }
+
+  async countActiveAnalysisRuns(userId: string, since: number): Promise<number> {
+    let count = 0;
+    for (const row of this.runs.values()) {
+      if (row.userId === userId && row.finalizedAt === null && row.updatedAt >= since) count += 1;
+    }
+    return count;
+  }
+
+  async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
+    const row = this.runs.get(id);
+    if (!row || row.finalizedAt !== null) return false;
+    row.finalizedAt = now;
+    row.updatedAt = now;
+    return true;
+  }
+
   async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
     for (const [nonce, row] of this.nonces) if (row.expiresAt <= now) this.nonces.delete(nonce);
     for (const [hash, row] of this.sessions) if (row.expiresAt <= now) this.sessions.delete(hash);
     for (const [hash, row] of this.magicLinks) if (row.expiresAt <= now) this.magicLinks.delete(hash);
     for (const [state, row] of this.oauth) if (row.expiresAt <= now) this.oauth.delete(state);
+    for (const [id, row] of this.runs) if (row.expiresAt <= now) this.runs.delete(id);
     const cutoff = now - usageLogRetentionMs;
     for (const [id, row] of this.usageLog) if (row.createdAt <= cutoff) this.usageLog.delete(id);
   }

@@ -15,6 +15,8 @@ import {
   signRequest,
 } from '@squiggle/shared';
 
+import { BaseLLMClient, type CompletionOptions, type CompletionResponse, type GroundedAnswer, type StreamCallbacks } from '@squiggle/shared';
+
 import { GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL } from '../src/auth/google';
 import type { EmailMessage, EmailSender, FetchLike } from '../src/lib/brevo';
 import { ManualClock } from '../src/lib/clock';
@@ -148,6 +150,188 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
 }
 
 // ---------------------------------------------------------------------------
+// Stub LLM
+// ---------------------------------------------------------------------------
+
+/**
+ * The provider the analysis tests run against. It answers each of the three
+ * kinds of call the engine makes (audit, grounded claim judgement, cited-page
+ * judgement) with a canned strict-JSON reply, counts every call, and can be
+ * told to fail the next one — which is how "a failed finding degrades only
+ * that finding" is exercised without a network.
+ *
+ * `calls` is what the cache tests assert on: a cache hit must cost zero.
+ */
+export class StubLlm extends BaseLLMClient {
+  calls = { complete: 0, grounded: 0 };
+  /** Fail the next `complete` call (the audit or a source judgement). */
+  failNextComplete = false;
+  /** Fail the next grounded call (a research judgement). */
+  failNextGrounded = false;
+  /** Audit reply, overridable per test. */
+  auditJson: string = JSON.stringify({
+    summary: "L'article avance un chiffre sans le sourcer.",
+    scores: [
+      { domain: 'robustesse_factuelle', score: 20, strengths: [], weaknesses: ['chiffre non sourcé'] },
+      { domain: 'solidite_logique', score: 20, strengths: [], weaknesses: [] },
+      { domain: 'cadrage_manipulation', score: 20, strengths: [], weaknesses: [] },
+      { domain: 'deontologie', score: 8, strengths: [], weaknesses: [] },
+      { domain: 'orthographe_grammaire', score: 4, strengths: [], weaknesses: [] },
+    ],
+    findings: [
+      {
+        id: 'f1',
+        blockId: 'b1',
+        quote: 'Le chômage a baissé de 12 % en un an.',
+        category: 'affirmation-non-etayee',
+        severity: 2,
+        label: 'Chiffre non étayé',
+        explanation: "Aucune source n'est citée pour ce chiffre.",
+        confidence: 0.9,
+      },
+      {
+        id: 'f2',
+        blockId: 'b2',
+        quote: 'Tout le monde le sait.',
+        category: 'cadrage',
+        severity: 1,
+        label: 'Appel au sens commun',
+        explanation: 'Le texte substitue une évidence supposée à une démonstration.',
+        confidence: 0.8,
+      },
+    ],
+    claims: [],
+  });
+
+  constructor(model = 'stub-model') {
+    super({ provider: 'gemini', apiKey: 'test-key-not-a-secret', model });
+  }
+
+  override supportsGroundedAnswer(): boolean {
+    return true;
+  }
+
+  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+    this.calls.complete += 1;
+    if (this.failNextComplete) {
+      this.failNextComplete = false;
+      throw new Error('stub provider failure');
+    }
+    const system = options.systemPrompt ?? '';
+    // The source-judgement prompt is the only `complete` the engine makes
+    // besides the audit; telling them apart by their system prompt keeps the
+    // stub honest about which call it is answering.
+    const content = system.includes('inspection des sources')
+      ? JSON.stringify({
+          relation: 'supporte',
+          fiabilite: 'fiable',
+          passage: 'La page citée donne bien ce chiffre.',
+          raison: 'concordance',
+        })
+      : this.auditJson;
+    return { content, model: this.getModel(), provider: 'gemini' };
+  }
+
+  async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {
+    const res = await this.complete(options);
+    callbacks.onChunk(res.content);
+    return res;
+  }
+
+  override async groundedAnswer(): Promise<GroundedAnswer> {
+    this.calls.grounded += 1;
+    if (this.failNextGrounded) {
+      this.failNextGrounded = false;
+      throw new Error('stub grounded failure');
+    }
+    return {
+      content: JSON.stringify({
+        verification: 'verifiee',
+        sources: [{ title: 'Insee', url: 'https://insee.example/chomage', origin: 'search' }],
+        rationale: "La statistique publique confirme l'ordre de grandeur.",
+      }),
+      citations: [{ title: 'Insee', url: 'https://insee.example/chomage', snippet: 'baisse de 12 %' }],
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fake Stripe
+// ---------------------------------------------------------------------------
+
+export const STRIPE_SECRET_KEY = 'sk_test_not_a_real_key';
+export const STRIPE_PRICE_ID = 'price_test_placeholder';
+export const STRIPE_WEBHOOK_SECRET = 'whsec_test_placeholder';
+
+export interface FakeStripe {
+  fetchImpl: FetchLike;
+  /** Every request the server made, as (path, form) pairs. */
+  calls: Array<{ path: string; form: Record<string, string> }>;
+  /** Fail the next API call, to exercise the degraded path. */
+  failNext: boolean;
+}
+
+export function makeFakeStripe(): FakeStripe {
+  const state: FakeStripe = {
+    calls: [],
+    failNext: false,
+    fetchImpl: async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const path = url.replace('https://api.stripe.com/v1', '');
+      const form = Object.fromEntries(new URLSearchParams(typeof init?.body === 'string' ? init.body : ''));
+      state.calls.push({ path, form });
+      if (state.failNext) {
+        state.failNext = false;
+        return Response.json({ error: { message: 'boom' } }, { status: 400 });
+      }
+      if (path === '/checkout/sessions') {
+        return Response.json({ id: 'cs_test_1', url: 'https://checkout.stripe.example/cs_test_1' });
+      }
+      if (path === '/billing_portal/sessions') {
+        return Response.json({ id: 'bps_test_1', url: 'https://billing.stripe.example/bps_test_1' });
+      }
+      return new Response('not found', { status: 404 });
+    },
+  };
+  return state;
+}
+
+/**
+ * Sign a webhook body exactly as Stripe does: HMAC-SHA256 over
+ * `${t}.${rawBody}` with the endpoint secret, rendered as `t=…,v1=…`.
+ */
+export async function stripeSignature(rawBody: string, timestampSec: number, secret = STRIPE_WEBHOOK_SECRET): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${timestampSec}.${rawBody}`));
+  const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `t=${timestampSec},v1=${hex}`;
+}
+
+/** Post a correctly signed Stripe event at the webhook endpoint. */
+export async function postStripeEvent(
+  env: TestEnv,
+  event: Record<string, unknown>,
+  opts: { secret?: string; timestampSec?: number; tamperBody?: boolean } = {},
+): Promise<Response> {
+  const rawBody = JSON.stringify(event);
+  const timestampSec = opts.timestampSec ?? Math.floor(env.clock.now() / 1000);
+  const signature = await stripeSignature(rawBody, timestampSec, opts.secret);
+  return env.handler(
+    new Request(`${env.webAppOrigin}/webhooks/stripe`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'stripe-signature': signature },
+      body: opts.tamperBody ? `${rawBody} ` : rawBody,
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
 
@@ -157,13 +341,32 @@ export interface TestEnv {
   db: MemoryDb;
   clock: ManualClock;
   email: FakeEmail;
+  llm: StubLlm;
+  stripe: FakeStripe;
   webAppOrigin: string;
 }
 
-export function makeTestEnv(opts: { fetchImpl?: FetchLike; adminToken?: string } = {}): TestEnv {
-  const db = new MemoryDb();
-  const clock = new ManualClock(T0);
+export function makeTestEnv(
+  opts: {
+    fetchImpl?: FetchLike;
+    adminToken?: string;
+    llm?: StubLlm;
+    db?: MemoryDb;
+    stripe?: FakeStripe;
+    /**
+     * Start of the manual clock. Defaults to the suite's fixed T0; a test that
+     * drives the real extension client passes the real time, because that
+     * client stamps requests from `Date.now()` and the signature window is
+     * five minutes wide.
+     */
+    now?: number;
+  } = {},
+): TestEnv {
+  const db = opts.db ?? new MemoryDb();
+  const clock = new ManualClock(opts.now ?? T0);
   const email = new FakeEmail();
+  const llm = opts.llm ?? new StubLlm();
+  const stripe = opts.stripe ?? makeFakeStripe();
   const webAppOrigin = WEB_APP_ORIGIN;
   const services: Services = {
     db,
@@ -174,9 +377,16 @@ export function makeTestEnv(opts: { fetchImpl?: FetchLike; adminToken?: string }
     googleClientId: 'test-google-client-id',
     fetchImpl: opts.fetchImpl,
     adminToken: opts.adminToken,
+    llm: () => llm,
+    stripe: {
+      secretKey: STRIPE_SECRET_KEY,
+      priceId: STRIPE_PRICE_ID,
+      webhookSecret: STRIPE_WEBHOOK_SECRET,
+      fetchImpl: stripe.fetchImpl as unknown as typeof fetch,
+    },
   };
   const worker = createWorker(services);
-  return { services, handler: (req) => worker.fetch(req), db, clock, email, webAppOrigin };
+  return { services, handler: (req) => worker.fetch(req), db, clock, email, llm, stripe, webAppOrigin };
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +399,10 @@ export async function requestMagicLink(
   emailAddr: string,
   ip?: string,
 ): Promise<Response> {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  // The web app reaches these endpoints by `fetch`, which always sets Origin,
+  // and the server now requires it there (see src/lib/cors.ts). The helper
+  // sends it for the same reason the real caller does.
+  const headers: Record<string, string> = { 'content-type': 'application/json', origin: env.webAppOrigin };
   if (ip) headers['cf-connecting-ip'] = ip;
   return env.handler(
     new Request(`${env.webAppOrigin}/auth/magic-link`, {
@@ -213,7 +426,7 @@ export async function magicLogin(
   const verifyRes = await env.handler(
     new Request(`${env.webAppOrigin}/auth/magic-link/verify`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: env.webAppOrigin },
       body: JSON.stringify({ code }),
     }),
   );
@@ -237,7 +450,7 @@ export async function claim(
   return env.handler(
     new Request(`${env.webAppOrigin}/auth/claim`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: sessionCookie },
+      headers: { 'content-type': 'application/json', cookie: sessionCookie, origin: env.webAppOrigin },
       body: JSON.stringify({ publicKeyJwk: jwk }),
     }),
   );

@@ -17,6 +17,9 @@ import { randomToken } from '@squiggle/shared';
 
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
+  AnalysisRunRow,
+  Plan,
+  CreateAnalysisRunArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
   CreateReportArgs,
@@ -106,14 +109,14 @@ export class NeonDb implements Db {
     const id = randomToken(16);
     await this.q`
       INSERT INTO users (id, email, email_verified, google_sub, plan, plan_expires_at, created_at, updated_at)
-      VALUES (${id}, ${args.email ?? null}, ${args.emailVerified ?? false}, ${args.googleSub ?? null}, 'none', NULL, ${now}, ${now})
+      VALUES (${id}, ${args.email ?? null}, ${args.emailVerified ?? false}, ${args.googleSub ?? null}, 'trial', NULL, ${now}, ${now})
     `;
     return {
       id,
       email: args.email ?? null,
       emailVerified: args.emailVerified ?? false,
       googleSub: args.googleSub ?? null,
-      plan: 'none',
+      plan: 'trial',
       planExpiresAt: null,
       stripeCustomerId: null,
       stripeSubId: null,
@@ -131,6 +134,46 @@ export class NeonDb implements Db {
   }
 
   // ---- extension signing keys ----------------------------------------------
+
+  async getUserByStripeCustomerId(customerId: string): Promise<UserRow | null> {
+    const rows = await this.q`SELECT * FROM users WHERE stripe_customer_id = ${customerId}`;
+    return rows[0] ? mapUser(rows[0]) : null;
+  }
+
+  async setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void> {
+    await this.q`
+      UPDATE users SET plan = ${plan}, plan_expires_at = ${planExpiresAt}, updated_at = ${now}
+      WHERE id = ${userId}
+    `;
+  }
+
+  async setStripeIds(
+    userId: string,
+    ids: { customerId?: string | null; subId?: string | null },
+    now: number,
+  ): Promise<void> {
+    // COALESCE on the parameter, so `undefined` (sent as NULL) leaves the
+    // column alone and an explicit null is expressed by passing the current
+    // value — a webhook that carries only a subscription id must not wipe the
+    // customer id.
+    if (ids.customerId !== undefined) {
+      await this.q`UPDATE users SET stripe_customer_id = ${ids.customerId}, updated_at = ${now} WHERE id = ${userId}`;
+    }
+    if (ids.subId !== undefined) {
+      await this.q`UPDATE users SET stripe_sub_id = ${ids.subId}, updated_at = ${now} WHERE id = ${userId}`;
+    }
+  }
+
+  async recordStripeEvent(id: string, type: string, now: number): Promise<boolean> {
+    // The primary key is the deduplication: a redelivery collides here rather
+    // than being applied twice.
+    const rows = await this.q`
+      INSERT INTO stripe_events (id, type, received_at) VALUES (${id}, ${type}, ${now})
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
 
   async createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow> {
     const id = randomToken(16);
@@ -335,8 +378,8 @@ export class NeonDb implements Db {
     // so the quota and the ledger can never diverge on a partial failure.
     await this.q.transaction((t) => [
       t`
-        INSERT INTO usage_log (id, user_id, report_id, created_at)
-        VALUES (${id}, ${args.userId}, ${args.reportId}, ${args.now})
+        INSERT INTO usage_log (id, user_id, created_at)
+        VALUES (${id}, ${args.userId}, ${args.now})
       `,
       t`
         INSERT INTO usage_daily (user_id, day, analyses)
@@ -344,7 +387,7 @@ export class NeonDb implements Db {
         ON CONFLICT (user_id, day) DO UPDATE SET analyses = usage_daily.analyses + 1
       `,
     ]);
-    return { id, userId: args.userId, reportId: args.reportId, createdAt: args.now };
+    return { id, userId: args.userId, createdAt: args.now };
   }
 
   async getDailyUsage(userId: string, day: number): Promise<number> {
@@ -412,11 +455,75 @@ export class NeonDb implements Db {
     return { expired, overCap };
   }
 
+  // ---- analysis runs -------------------------------------------------------
+
+  async createAnalysisRun(args: CreateAnalysisRunArgs): Promise<AnalysisRunRow> {
+    const id = randomToken(16);
+    const expiresAt = args.now + args.ttlMs;
+    await this.q`
+      INSERT INTO analysis_runs (id, user_id, url_hash, state, created_at, updated_at, expires_at)
+      VALUES (${id}, ${args.userId}, ${args.urlHash}, ${args.state}::jsonb, ${args.now}, ${args.now}, ${expiresAt})
+    `;
+    return {
+      id,
+      userId: args.userId,
+      urlHash: args.urlHash,
+      state: args.state,
+      createdAt: args.now,
+      updatedAt: args.now,
+      expiresAt,
+      finalizedAt: null,
+    };
+  }
+
+  async getAnalysisRun(id: string): Promise<AnalysisRunRow | null> {
+    const rows = await this.q`SELECT * FROM analysis_runs WHERE id = ${id}`;
+    if (!rows[0]) return null;
+    const r = rows[0];
+    return {
+      id: r.id as string,
+      userId: r.user_id as string,
+      urlHash: r.url_hash as string,
+      // JSONB comes back parsed; the rest of the server treats state as text.
+      state: typeof r.state === 'string' ? r.state : JSON.stringify(r.state),
+      createdAt: num(r.created_at),
+      updatedAt: num(r.updated_at),
+      expiresAt: num(r.expires_at),
+      finalizedAt: r.finalized_at === null ? null : num(r.finalized_at),
+    };
+  }
+
+  async updateAnalysisRunState(id: string, state: string, now: number): Promise<void> {
+    await this.q`
+      UPDATE analysis_runs SET state = ${state}::jsonb, updated_at = ${now} WHERE id = ${id}
+    `;
+  }
+
+  async countActiveAnalysisRuns(userId: string, since: number): Promise<number> {
+    const rows = await this.q`
+      SELECT COUNT(*) AS n FROM analysis_runs
+      WHERE user_id = ${userId} AND finalized_at IS NULL AND updated_at >= ${since}
+    `;
+    return num(rows[0].n);
+  }
+
+  async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
+    // Conditional on finalized_at still being NULL, so a replayed finalize
+    // updates zero rows instead of consuming a second credit.
+    const rows = await this.q`
+      UPDATE analysis_runs SET finalized_at = ${now}, updated_at = ${now}
+      WHERE id = ${id} AND finalized_at IS NULL
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
+
   async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
     await this.q`DELETE FROM nonces WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM web_sessions WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM magic_links WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs}`;
   }
 }

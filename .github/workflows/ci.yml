@@ -24,7 +24,16 @@ jobs:
           node-version: 20
           cache: npm
 
+      # `npm ci` is itself the lockfile-integrity gate: it refuses to install
+      # when package.json and package-lock.json disagree, and it verifies the
+      # integrity hash of every package it unpacks. A separate tripwire would
+      # only restate that.
       - run: npm ci
+
+      # What the lockfile cannot tell us: whether what it pins has since been
+      # found vulnerable. Advisories move, the lockfile does not.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
