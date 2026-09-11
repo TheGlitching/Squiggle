@@ -5,7 +5,7 @@
  *
  *   trial   3 analyses in total, ever. Not per day — it is a taste, not an
  *           allowance, and a per-day trial would just be a free plan.
- *   active  5 analyses per UTC day. UTC and not the reader's timezone, so
+ *   active  10 analyses per UTC day. UTC and not the reader's timezone, so
  *           there is no timezone surface anywhere and the reset moment is a
  *           documented fact rather than a guess about where someone is.
  *   none    nothing. Either the trial was used up and no subscription
@@ -29,7 +29,7 @@ import { utcDayOf } from '../usage/limits';
 export const TRIAL_ANALYSES = 3;
 
 /** Analyses an active subscription may run per UTC day. */
-export const ACTIVE_ANALYSES_PER_DAY = 5;
+export const ACTIVE_ANALYSES_PER_DAY = 10;
 
 export interface Entitlement {
   plan: UserRow['plan'];

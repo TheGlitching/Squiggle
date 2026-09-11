@@ -112,7 +112,7 @@ export function Accueil() {
             </div>
             <div className="rounded-2xl border-2 border-accent bg-background p-6">
               <h3 className="font-display text-lg font-semibold">Abonnement mensuel</h3>
-              <p className="mt-2 font-serif text-3xl font-semibold">5 analyses / jour</p>
+              <p className="mt-2 font-serif text-3xl font-semibold">10 analyses / jour</p>
               <p className="mt-1 text-sm text-muted">
                 Le montant exact est affiché avant le paiement.
               </p>

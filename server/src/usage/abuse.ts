@@ -1,7 +1,7 @@
 /**
  * The ceilings that bound what abuse can cost us (Phase 2e).
  *
- * These are not the product's quotas — a reader's 3 trial analyses and 5 a day
+ * These are not the product's quotas — a reader's 3 trial analyses and 10 a day
  * live in the billing layer. These are the limits that stop a runaway or
  * hostile client from turning our model bill into someone else's denial of
  * service, and they sit deliberately far above anything a real reader does, so

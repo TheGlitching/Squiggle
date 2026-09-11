@@ -10,10 +10,10 @@ import { Accueil } from '../src/pages/Accueil';
 afterEach(cleanup);
 
 describe('Accueil / Tarifs', () => {
-  it('offers three free analyses and a five-a-day subscription', () => {
+  it('offers three free analyses and a ten-a-day subscription', () => {
     render(<Accueil />);
     expect(screen.getByText('3 analyses')).toBeInTheDocument();
-    expect(screen.getByText('5 analyses / jour')).toBeInTheDocument();
+    expect(screen.getByText('10 analyses / jour')).toBeInTheDocument();
     expect(screen.getByText(/3 analyses offertes/)).toBeInTheDocument();
   });
 
