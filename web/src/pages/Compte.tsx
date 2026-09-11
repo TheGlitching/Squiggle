@@ -66,7 +66,7 @@ export function Compte() {
         {error ? <p role="alert" className="mt-4 text-sm text-accent">{error}</p> : null}
         <Link
           to="/connexion?next=/compte"
-          className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-white hover:bg-accentHover"
+          className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover"
         >
           Se connecter
         </Link>
@@ -124,7 +124,7 @@ export function Compte() {
             <button
               onClick={subscribe}
               disabled={busy}
-              className="rounded-lg bg-accent px-5 py-2.5 font-medium text-white hover:bg-accentHover disabled:opacity-60"
+              className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
             >
               S’abonner — 10 analyses / jour
             </button>

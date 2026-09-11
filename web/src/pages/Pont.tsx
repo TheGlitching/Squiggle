@@ -99,7 +99,7 @@ export function Pont() {
         </p>
         <Link
           to={`/connexion?next=${next}`}
-          className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-white hover:bg-accentHover"
+          className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover"
         >
           Se connecter
         </Link>

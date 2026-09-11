@@ -14,7 +14,7 @@ const PERKS = [
 ];
 
 const PRIMARY_BUTTON =
-  'flex items-center justify-center gap-2 rounded-control bg-accent px-[18px] py-[14px] text-[15px] font-semibold text-white transition-[transform,background-color,border-color,color] duration-[160ms] ease-out hover:bg-accentHover active:scale-[0.97] motion-reduce:active:scale-100';
+  'flex items-center justify-center gap-2 rounded-control bg-accent px-[18px] py-[14px] text-[15px] font-semibold text-accentForeground transition-[transform,background-color,border-color,color] duration-[160ms] ease-out hover:bg-accentHover active:scale-[0.97] motion-reduce:active:scale-100';
 const SECONDARY_BUTTON =
   'flex items-center justify-center gap-2 rounded-control border border-border bg-transparent px-[18px] py-[14px] text-[15px] font-medium text-foreground transition-[transform,background-color,border-color,color] duration-[160ms] ease-out hover:border-accent hover:text-accentInk active:scale-[0.97] motion-reduce:active:scale-100';
 const QUIET_LINK =

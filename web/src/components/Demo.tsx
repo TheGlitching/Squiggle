@@ -135,9 +135,9 @@ function DemoBody({ example, active, revealed, instant = false, onTyped }: BodyP
       >
         <span
           className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.14em]"
-          style={{ color: 'var(--sev-color)' }}
+          style={{ color: color.text }}
         >
-          <span className="h-[5px] w-[5px] flex-none rounded-[1px]" style={{ background: 'var(--sev-color)' }} />
+          <span className="h-[5px] w-[5px] flex-none rounded-[1px]" style={{ background: color.text }} />
           {example.cat}
         </span>
         <p className="m-0 text-[0.85rem] leading-normal text-muted">{example.explain}</p>

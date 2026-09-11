@@ -15,7 +15,7 @@
 
   ::selection {
     background: theme('colors.accent');
-    color: #fff;
+    color: theme('colors.accentForeground');
   }
 
   :focus-visible {
