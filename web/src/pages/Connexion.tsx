@@ -89,7 +89,7 @@ export function Connexion() {
       </p>
 
       {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accent">
+        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
           {error}
         </p>
       ) : null}
@@ -168,7 +168,7 @@ export function Connexion() {
 
       <a
         href={googleSignInUrl()}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 font-medium hover:border-accent hover:text-accent"
+        className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 font-medium hover:border-accent hover:text-accentInk"
       >
         Continuer avec Google
       </a>

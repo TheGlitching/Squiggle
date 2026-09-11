@@ -76,7 +76,7 @@ export function Pont() {
         </p>
         <Link
           to="/compte"
-          className="mt-6 inline-block rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accent"
+          className="mt-6 inline-block rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
         >
           Retour à mon compte
         </Link>
@@ -132,7 +132,7 @@ export function Pont() {
       )}
 
       {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accent">
+        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
           {error}
         </p>
       ) : null}
@@ -147,7 +147,7 @@ export function Pont() {
         </p>
         <button
           onClick={requestCode}
-          className="mt-4 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accent"
+          className="mt-4 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
         >
           Afficher un code à saisir
         </button>

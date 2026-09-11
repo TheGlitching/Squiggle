@@ -64,5 +64,9 @@ export function App() {
       page = <NotFound />;
   }
 
+  // The landing is its own full-bleed page, faithful to the approved
+  // prototype: it carries its own slim header and has no site chrome.
+  if (route === '/' || route === '/tarifs') return page;
+
   return <Layout>{page}</Layout>;
 }

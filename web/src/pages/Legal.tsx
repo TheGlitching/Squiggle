@@ -4,7 +4,7 @@ import { Page } from '../components/Layout';
 import { Link } from '../router';
 
 function Todo({ children }: { children: ReactNode }) {
-  return <span className="rounded bg-accentSoft px-1.5 py-0.5 font-mono text-xs text-accent">{children}</span>;
+  return <span className="rounded bg-accentSoft px-1.5 py-0.5 font-mono text-xs text-accentInk">{children}</span>;
 }
 
 export function Legal() {
@@ -15,7 +15,7 @@ export function Legal() {
     >
       <div className="space-y-10 text-sm leading-relaxed">
         <section className="rounded-xl border-2 border-accent bg-accentSoft p-5">
-          <h2 className="font-display text-lg font-semibold text-accent">À confirmer avant la mise en ligne</h2>
+          <h2 className="font-display text-lg font-semibold text-accentInk">À confirmer avant la mise en ligne</h2>
           <p className="mt-2 text-muted">
             Ces éléments sont des emplacements, pas des décisions. Ils doivent être vérifiés par un
             juriste ou tranchés par l’éditeur avant toute ouverture au public.
