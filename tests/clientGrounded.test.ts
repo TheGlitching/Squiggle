@@ -376,7 +376,7 @@ describe('OpenRouterClient grounded answer', () => {
     expect(client.supportsGroundedAnswer()).toBe(true);
   });
 
-  it('requests the :online model suffix and reads annotations into citations', async () => {
+  it('requests the Parallel web_search server tool and reads annotations into citations', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       choices: [
         {
@@ -402,7 +402,15 @@ describe('OpenRouterClient grounded answer', () => {
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const requestBody = JSON.parse(requestInit.body as string);
-    expect(requestBody.model).toBe('anthropic/claude-3.5-sonnet:online');
+    expect(requestBody.model).toBe('anthropic/claude-3.5-sonnet');
+    expect(requestBody.model).not.toContain(':online');
+    expect(requestBody.tools).toEqual([
+      {
+        type: 'openrouter:web_search',
+        parameters: { engine: 'parallel', mode: 'basic', max_results: 5 },
+      },
+    ]);
+    expect(requestBody.plugins).toBeUndefined();
     expect(requestBody.web_search_options).toBeUndefined();
   });
 

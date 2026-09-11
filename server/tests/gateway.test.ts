@@ -63,7 +63,7 @@ describe('the research stage on OpenRouter', () => {
     vi.unstubAllGlobals();
   });
 
-  it('judges a factual finding through the :online model path', async () => {
+  it('judges a factual finding through the Parallel web_search server tool', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -122,8 +122,15 @@ describe('the research stage on OpenRouter', () => {
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(requestInit.body as string);
-    // OpenRouter searches via the model suffix, not a web_search_options field.
-    expect(body.model).toBe(`${DEFAULT_OPENROUTER_MODEL}:online`);
+    // OpenRouter searches via the web_search server tool, not a model suffix.
+    expect(body.model).toBe(DEFAULT_OPENROUTER_MODEL);
+    expect(body.model).not.toContain(':online');
+    expect(body.tools).toEqual([
+      {
+        type: 'openrouter:web_search',
+        parameters: { engine: 'parallel', mode: 'basic', max_results: 5 },
+      },
+    ]);
     expect(body.web_search_options).toBeUndefined();
 
     expect(result.claims[0]?.verification).toBe('verifiee');
