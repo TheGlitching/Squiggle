@@ -38,6 +38,17 @@ contract is pinned by `web/tests/contrast.test.ts`: primary buttons carry
 `accentForeground` (near-black) on `accent`, and demo severity labels use the
 bright `text` tone, not the darker fill that only clears 3:1 as text.
 
+## The extension UI design system
+
+The extension sidepanel is **dark-only**, like the landing: there is no light theme and
+no `prefers-color-scheme` branch. Colour carries exactly one kind of meaning — severity
+(critical/warning/info/positive) — so a finding *category* is identified by its label and
+glyph, never by a hue of its own. The single token source is `src/ui/tokens/colors.ts`,
+mirrored by the Tailwind palette in `tailwind.config.ts` and the CSS variables in
+`src/index.css`; the in-page overlay's severity palette in `src/content/shadowOverlay.ts`
+is the reference for tints and borders. A primary button on the accent uses the dark ink
+(`accentForeground`), not white, to pass AA.
+
 ## Hosted mode in the extension
 
 Which engine runs an analysis is a stored mode (`SecureKeyStorage.getMode`, default

@@ -1,7 +1,24 @@
 /**
  * Squiggle - Color Tokens
- * Light and Dark themes for authentic editorial press aesthetic.
+ *
+ * The extension is dark-only, exactly like the landing. There is one theme, and
+ * colour carries exactly one kind of meaning: severity. A finding category is
+ * identified by its label and its glyph, never by a hue of its own, so the six
+ * historical category colours are gone and the four severity tones below are the
+ * only chromatic channel left.
  */
+
+/** One severity tone, with the four forms the panel and the overlay both need. */
+export interface SeverityTone {
+  /** Saturated fill, as used by the in-page overlay's severity bars. */
+  fill: string;
+  /** Text/glyph tone lightened for AA contrast on the dark ground. */
+  text: string;
+  /** Translucent tint for card and chip backgrounds. */
+  subtle: string;
+  /** Translucent border matching the fill. */
+  border: string;
+}
 
 export interface ThemeColors {
   // Backgrounds & Surfaces
@@ -24,38 +41,21 @@ export interface ThemeColors {
   textFaint: string;
   textInverted: string;
 
-  // Editorial Accent (Lead / Stamp tone)
+  // The one accent
   accent: string;
   accentSubtle: string;
   accentHover: string;
   accentForeground: string;
 
-  // Category Findings (6 Fourches Caudines categories)
-  sophisme: string;
-  sophismeSubtle: string;
-  sophismeBorder: string;
-  
-  unsupported: string;
-  unsupportedSubtle: string;
-  unsupportedBorder: string;
+  // The only chromatic channel: severity. Categories use label + glyph instead.
+  severity: {
+    critical: SeverityTone;
+    warning: SeverityTone;
+    info: SeverityTone;
+    positive: SeverityTone;
+  };
 
-  overreach: string;
-  overreachSubtle: string;
-  overreachBorder: string;
-
-  sourceAbsent: string;
-  sourceAbsentSubtle: string;
-  sourceAbsentBorder: string;
-
-  framing: string;
-  framingSubtle: string;
-  framingBorder: string;
-
-  strength: string;
-  strengthSubtle: string;
-  strengthBorder: string;
-
-  // Score Gauge bands
+  // Score Gauge bands, mapped onto the same four severity tones.
   scoreSolide: string;
   scoreSolideBg: string;
   scorePerfectible: string;
@@ -66,116 +66,65 @@ export interface ThemeColors {
   scoreProblematiqueBg: string;
 }
 
-export const lightTheme: ThemeColors = {
-  bg: '#FBF9F5', // Warm editorial newsprint parchment
-  surface: '#FFFFFF',
-  surfaceElevated: '#FFFFFF',
-  surfaceHover: '#F5F2EB',
-  surfaceMuted: '#F0EBE1',
-  surfaceHighlight: '#FAF5EE',
+export const darkTheme: ThemeColors = {
+  bg: '#0a0a0b', // landing ground
+  surface: '#0f0f11', // cards
+  surfaceElevated: '#141417',
+  surfaceHover: '#161619',
+  surfaceMuted: '#121215',
+  surfaceHighlight: '#161619',
 
-  border: '#E3DDD2',
-  borderSubtle: '#EDE8DF',
-  borderFocus: '#2D3142',
-  borderHeavy: '#C9C0B1',
+  border: '#2a2a2f',
+  borderSubtle: '#1b1b1f',
+  borderFocus: '#e0483f',
+  borderHeavy: '#3a3a40',
 
-  text: '#1C1917', // Deep charcoal ink
-  textMuted: '#686259',
-  textFaint: '#A8A29E',
-  textInverted: '#FAFAF9',
+  text: '#ece9e3', // 16.3:1 on ground
+  textMuted: '#948f88', //  6.2:1 on ground
+  textFaint: '#938e86', //  6.1:1 on ground
+  textInverted: '#0a0a0b',
 
-  accent: '#9E2A2B', // Deep editorial crimson carmine
-  accentSubtle: '#FDF2F2',
-  accentHover: '#872324',
-  accentForeground: '#FFFFFF',
+  accent: '#e0483f',
+  accentSubtle: 'rgba(224, 72, 63, 0.12)',
+  accentHover: '#ef7268',
+  accentForeground: '#0a0a0b', // 4.87:1 on the accent - AA
 
-  sophisme: '#DC2626', // Crimson Red
-  sophismeSubtle: '#FEF2F2',
-  sophismeBorder: '#FECACA',
-
-  unsupported: '#D97706', // Amber Ochre
-  unsupportedSubtle: '#FFFBEB',
-  unsupportedBorder: '#FDE68A',
-
-  overreach: '#7C3AED', // Violet / Purple
-  overreachSubtle: '#F5F3FF',
-  overreachBorder: '#DDD6FE',
-
-  sourceAbsent: '#EA580C', // Rust Orange
-  sourceAbsentSubtle: '#FFF7ED',
-  sourceAbsentBorder: '#FFEDD5',
-
-  framing: '#4F46E5', // Indigo Blue
-  framingSubtle: '#EEF2FF',
-  framingBorder: '#C7D2FE',
-
-  strength: '#059669', // Forest Green
-  strengthSubtle: '#ECFDF5',
-  strengthBorder: '#A7F3D0',
+  severity: {
+    critical: {
+      fill: '#dc2626',
+      text: '#f87171',
+      subtle: 'rgba(220, 38, 38, 0.14)',
+      border: 'rgba(220, 38, 38, 0.5)',
+    },
+    warning: {
+      fill: '#d97706',
+      text: '#fbbf24',
+      subtle: 'rgba(217, 119, 6, 0.13)',
+      border: 'rgba(217, 119, 6, 0.5)',
+    },
+    info: {
+      fill: '#2563eb',
+      text: '#60a5fa',
+      subtle: 'rgba(37, 99, 235, 0.14)',
+      border: 'rgba(37, 99, 235, 0.5)',
+    },
+    positive: {
+      fill: '#059669',
+      text: '#34d399',
+      subtle: 'rgba(5, 150, 105, 0.13)',
+      border: 'rgba(5, 150, 105, 0.5)',
+    },
+  },
 
   scoreSolide: '#059669',
-  scoreSolideBg: '#ECFDF5',
-  scorePerfectible: '#2563EB',
-  scorePerfectibleBg: '#EFF6FF',
-  scoreFragile: '#D97706',
-  scoreFragileBg: '#FFFBEB',
-  scoreProblematique: '#DC2626',
-  scoreProblematiqueBg: '#FEF2F2',
+  scoreSolideBg: 'rgba(5, 150, 105, 0.13)',
+  scorePerfectible: '#2563eb',
+  scorePerfectibleBg: 'rgba(37, 99, 235, 0.14)',
+  scoreFragile: '#d97706',
+  scoreFragileBg: 'rgba(217, 119, 6, 0.13)',
+  scoreProblematique: '#dc2626',
+  scoreProblematiqueBg: 'rgba(220, 38, 38, 0.14)',
 };
 
-export const darkTheme: ThemeColors = {
-  bg: '#141416', // Dark matte slate newsroom
-  surface: '#1E1E22',
-  surfaceElevated: '#28282E',
-  surfaceHover: '#2E2E36',
-  surfaceMuted: '#24242A',
-  surfaceHighlight: '#2A2A32',
-
-  border: '#33333C',
-  borderSubtle: '#26262E',
-  borderFocus: '#E2E8F0',
-  borderHeavy: '#474754',
-
-  text: '#F5F5F4', // Warm white newsprint text
-  textMuted: '#A8A29E',
-  textFaint: '#666360',
-  textInverted: '#1C1917',
-
-  accent: '#E05759', // Luminous editorial crimson
-  accentSubtle: '#331D1E',
-  accentHover: '#E86E70',
-  accentForeground: '#FFFFFF',
-
-  sophisme: '#F87171',
-  sophismeSubtle: '#3B1B1B',
-  sophismeBorder: '#5C2222',
-
-  unsupported: '#FBBF24',
-  unsupportedSubtle: '#3B2A12',
-  unsupportedBorder: '#614318',
-
-  overreach: '#A78BFA',
-  overreachSubtle: '#2D1B4E',
-  overreachBorder: '#482B7D',
-
-  sourceAbsent: '#FB923C',
-  sourceAbsentSubtle: '#382012',
-  sourceAbsentBorder: '#5C331B',
-
-  framing: '#818CF8',
-  framingSubtle: '#1C2046',
-  framingBorder: '#2E3572',
-
-  strength: '#34D399',
-  strengthSubtle: '#102F24',
-  strengthBorder: '#1A533E',
-
-  scoreSolide: '#34D399',
-  scoreSolideBg: '#064E3B',
-  scorePerfectible: '#60A5FA',
-  scorePerfectibleBg: '#1E3A8A',
-  scoreFragile: '#FBBF24',
-  scoreFragileBg: '#78350F',
-  scoreProblematique: '#F87171',
-  scoreProblematiqueBg: '#7F1D1D',
-};
+/** Alias documenting intent at call sites that just want "the theme". */
+export const theme = darkTheme;

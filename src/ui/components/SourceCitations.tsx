@@ -31,7 +31,7 @@ export const SourceCitations: React.FC<SourceCitationsProps> = ({
 
   return (
     <div className="mt-2" data-tour="finding-sources">
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted">
         {label}
       </span>
       <ul className="mt-1 space-y-1.5">
@@ -44,19 +44,19 @@ export const SourceCitations: React.FC<SourceCitationsProps> = ({
               // The enclosing card toggles selection on click; following a
               // citation must not also collapse the card it was read from.
               onClick={(event) => event.stopPropagation()}
-              className="block text-amber-700 dark:text-amber-400 underline decoration-dotted decoration-from-font underline-offset-2 hover:decoration-solid"
+              className="block text-accent-hover underline decoration-dotted decoration-from-font underline-offset-2 hover:decoration-solid"
             >
-              <span className="font-mono text-stone-500 dark:text-stone-400">
+              <span className="font-mono text-muted">
                 {sourceDomain(source.url)}
               </span>
               {' · '}
               {source.title || source.url}
             </a>
-            <span className="block text-[10px] text-stone-500 dark:text-stone-400">
+            <span className="block text-[10px] text-faint">
               {ORIGIN_LABELS[source.origin]}
             </span>
             {source.quote && (
-              <p className="mt-0.5 pl-2 border-l border-stone-300 dark:border-stone-700 font-serif italic text-stone-500 dark:text-stone-400">
+              <p className="mt-0.5 pl-2 border-l border-line font-serif italic text-muted">
                 « {source.quote} »
               </p>
             )}

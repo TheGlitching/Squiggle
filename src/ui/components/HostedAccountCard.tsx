@@ -41,22 +41,38 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
   const view = account ? describeHostedAccount(account) : null;
 
   return (
-    <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] bg-white dark:bg-[#18181B] p-4">
+    <div className="rounded-xl border border-line bg-panel p-4">
       {account && view ? (
         <>
-          <h2 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+          <h2 className="text-sm font-semibold text-ink">
             {view.title}
           </h2>
-          <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+          <p className="mt-1 text-xs leading-relaxed text-muted">
             {view.detail}
           </p>
+          {/* The quota reads as a bar of pips before it is read as a sentence. */}
+          {account.usage.limit > 0 && (
+            <div className="mt-2 flex items-center gap-1.5" aria-hidden="true">
+              {Array.from({ length: account.usage.limit }).map((_, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 w-6 rounded-full ${
+                    i < account.usage.remaining ? 'bg-accent' : 'bg-line'
+                  }`}
+                />
+              ))}
+              <span className="ml-1 font-mono text-[10px] text-muted">
+                {account.usage.remaining} / {account.usage.limit}
+              </span>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {!view.canAnalyse && (
               <a
                 href={ACCOUNT_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-white dark:text-[#18181B]"
+                className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-accent-foreground hover:bg-accent-hover"
               >
                 {view.needsSubscription ? 'S’abonner' : 'Mon compte'}
               </a>
@@ -66,7 +82,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
                 type="button"
                 onClick={onUseHosted}
                 disabled={busy}
-                className="rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
+                className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-40"
               >
                 Utiliser l’analyse hébergée
               </button>
@@ -75,7 +91,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
               type="button"
               onClick={onSignOut}
               disabled={busy}
-              className="rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-xs font-semibold text-[#57534E] dark:text-[#D4D4D8] disabled:opacity-40 hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
+              className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-ink/80 disabled:opacity-40 hover:bg-panel-muted"
             >
               Se déconnecter
             </button>
@@ -83,17 +99,17 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
         </>
       ) : (
         <>
-          <h2 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+          <h2 className="text-sm font-semibold text-ink">
             3 analyses offertes
           </h2>
-          <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+          <p className="mt-1 text-xs leading-relaxed text-muted">
             Sans clé d’API : connectez votre compte Squiggle, l’analyse tourne sur nos serveurs.
           </p>
           <button
             type="button"
             onClick={onSignIn}
             disabled={busy}
-            className="mt-3 w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
+            className="mt-3 w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-40"
           >
             {busy ? 'Ouverture…' : 'Se connecter'}
           </button>
@@ -101,8 +117,8 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
       )}
 
       {showCode && !account && (
-        <div className="mt-3 rounded-xl bg-[#F5F5F4] dark:bg-[#27272A] p-3">
-          <label className="block text-xs text-[#57534E] dark:text-[#D4D4D8]">
+        <div className="mt-3 rounded-xl bg-panel-muted p-3">
+          <label className="block text-xs text-ink/80">
             Sur la page ouverte, demandez un code puis saisissez-le ici&nbsp;:
             <input
               value={code}
@@ -111,14 +127,14 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
               autoComplete="off"
               placeholder="ABCD2345"
               aria-label="Code de connexion"
-              className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-center font-mono text-lg tracking-[0.3em] text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+              className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-center font-mono text-lg tracking-[0.3em] text-ink outline-none focus:border-accent"
             />
           </label>
           <button
             type="button"
             onClick={() => onRedeem(code)}
             disabled={busy || code.trim().length < 4}
-            className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2.5 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA] disabled:opacity-40 hover:bg-white dark:hover:bg-[#18181B]"
+            className="mt-2 w-full rounded-xl border border-line px-3 py-2.5 text-sm font-semibold text-ink disabled:opacity-40 hover:bg-panel"
           >
             Valider le code
           </button>
@@ -128,7 +144,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
       {error && (
         <p
           role="alert"
-          className="mt-3 rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-300"
+          className="mt-3 rounded-xl bg-severity-critical/15 px-3 py-2 text-xs text-severity-critical-ink"
         >
           {error}
         </p>

@@ -317,15 +317,15 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-h-[92vh] overflow-y-auto rounded-t-2xl bg-white dark:bg-[#18181B] border-t border-[#E7E5E4] dark:border-[#27272A] p-5 shadow-2xl"
+        className="w-full max-h-[92vh] overflow-y-auto rounded-t-2xl bg-panel border-t border-line p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold font-display tracking-tight text-[#1C1917] dark:text-[#FAFAFA]">
+            <h2 className="text-base font-bold font-display tracking-tight text-ink">
               Moteur d’analyse
             </h2>
-            <p className="mt-0.5 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
               Sans clé d’API : connectez votre compte Squiggle et l’analyse tourne sur nos serveurs.
               Vous préférez votre propre clé ? Dépliez la section avancée.
             </p>
@@ -334,7 +334,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="shrink-0 rounded-lg px-2 py-1 text-[#78716C] hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
+            className="shrink-0 rounded-lg px-2 py-1 text-muted hover:bg-panel-muted"
           >
             ✕
           </button>
@@ -354,7 +354,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               onSignOut={() => void handleHostedSignOut()}
               onUseHosted={() => void handleUseHosted()}
             />
-            <p className="mt-2 text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
+            <p className="mt-2 text-[11px] leading-snug text-muted">
               Voir{' '}
               <a href={TRANSPARENCY_URL} target="_blank" rel="noreferrer" className="underline">
                 le trajet des données
@@ -364,15 +364,15 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
           </section>
 
           {/* BYOK below, collapsed by default: the advanced path. */}
-          <details className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A]">
-            <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+          <details className="rounded-xl border border-line">
+            <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-ink">
               Utiliser ma propre clé{' '}
-              <span className="font-normal text-[#78716C] dark:text-[#A1A1AA]">(avancé)</span>
+              <span className="font-normal text-muted">(avancé)</span>
             </summary>
 
-            <div className="space-y-4 border-t border-[#E7E5E4] dark:border-[#27272A] p-3">
+            <div className="space-y-4 border-t border-line p-3">
               <div>
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
                   Fournisseur
                 </span>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -384,8 +384,8 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                       aria-pressed={provider === p.id}
                       className={
                         provider === p.id
-                          ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
-                          : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
+                          ? 'rounded-xl border-2 border-accent px-3 py-2 text-sm font-semibold text-ink'
+                          : 'rounded-xl border border-line px-3 py-2 text-sm text-ink/80 hover:border-line-heavy'
                       }
                     >
                       {p.label}
@@ -395,7 +395,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               </div>
 
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
                   Modèle
                 </span>
                 <input
@@ -407,23 +407,23 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   autoComplete="off"
                   spellCheck={false}
                   placeholder={preset.modelPlaceholder}
-                  className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-none focus:border-accent"
                 />
-                <span className="mt-1 block text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
+                <span className="mt-1 block text-[11px] leading-snug text-muted">
                   Identifiant exact du modèle chez le fournisseur.
                 </span>
               </label>
 
               <label className="block">
                 <span className="flex items-baseline justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                     Clé API
                   </span>
                   <a
                     href={preset.keyUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] font-medium text-[#2B4ACB] hover:underline"
+                    className="text-[11px] font-medium text-accent-hover hover:underline"
                   >
                     Obtenir une clé ↗
                   </a>
@@ -437,7 +437,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                     setApiKey(e.target.value);
                     setValidation({ kind: 'idle' });
                   }}
-                  className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-sm font-mono text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-none focus:border-accent"
                 />
               </label>
 
@@ -446,10 +446,10 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   role="status"
                   className={
                     validation.kind === 'valid'
-                      ? 'rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300'
+                      ? 'rounded-xl bg-severity-positive/15 px-3 py-2 text-xs text-severity-positive-ink'
                       : validation.kind === 'invalid'
-                      ? 'rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-300'
-                      : 'rounded-xl bg-[#F5F5F4] dark:bg-[#27272A] px-3 py-2 text-xs text-[#57534E] dark:text-[#D4D4D8]'
+                      ? 'rounded-xl bg-severity-critical/15 px-3 py-2 text-xs text-severity-critical-ink'
+                      : 'rounded-xl bg-panel-muted px-3 py-2 text-xs text-ink/80'
                   }
                 >
                   {validation.kind === 'validating' ? 'Test de la connexion…' : validation.message}
@@ -461,7 +461,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   type="button"
                   onClick={handleValidate}
                   disabled={validation.kind === 'validating' || !apiKey.trim() || !model.trim()}
-                  className="flex-1 rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2.5 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA] disabled:opacity-40 hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
+                  className="flex-1 rounded-xl border border-line px-3 py-2.5 text-sm font-semibold text-ink disabled:opacity-40 hover:bg-panel-muted"
                 >
                   Tester la clé
                 </button>
@@ -469,7 +469,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   type="button"
                   onClick={handleSave}
                   disabled={isSaving || !canSave}
-                  className="flex-1 rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
+                  className="flex-1 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-accent-foreground disabled:opacity-40"
                 >
                   {isSaving ? 'Enregistrement…' : 'Enregistrer'}
                 </button>
@@ -479,7 +479,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleRemove}
-                  className="w-full pt-1 text-center text-xs text-[#B3402F] hover:underline"
+                  className="w-full pt-1 text-center text-xs text-severity-critical-ink hover:underline"
                 >
                   Supprimer la clé enregistrée pour {preset.label}
                 </button>

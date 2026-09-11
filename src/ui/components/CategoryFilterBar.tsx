@@ -1,5 +1,4 @@
 import React from 'react';
-import { lightTheme, darkTheme, ThemeColors } from '../tokens/colors';
 import { typographyTokens } from '../tokens/typography';
 
 export type FindingCategory =
@@ -11,24 +10,17 @@ export type FindingCategory =
   | 'framing'
   | 'strength';
 
+/**
+ * Category identity is label + glyph, never colour. The six historical hues are
+ * gone; colour in this panel means gravity (severity), so every pill is neutral
+ * and only the selected one wears the accent.
+ */
 export interface CategoryPillConfig {
   id: FindingCategory;
   label: string;
   frenchLabel: string;
   shortCode: string;
   icon: string;
-  colorKey: keyof Pick<
-    ThemeColors,
-    'accent' | 'sophisme' | 'unsupported' | 'overreach' | 'sourceAbsent' | 'framing' | 'strength'
-  >;
-  subtleColorKey: keyof Pick<
-    ThemeColors,
-    'accentSubtle' | 'sophismeSubtle' | 'unsupportedSubtle' | 'overreachSubtle' | 'sourceAbsentSubtle' | 'framingSubtle' | 'strengthSubtle'
-  >;
-  borderColorKey: keyof Pick<
-    ThemeColors,
-    'border' | 'sophismeBorder' | 'unsupportedBorder' | 'overreachBorder' | 'sourceAbsentBorder' | 'framingBorder' | 'strengthBorder'
-  >;
 }
 
 export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
@@ -38,9 +30,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Tous les constats',
     shortCode: 'ALL',
     icon: '◈',
-    colorKey: 'accent',
-    subtleColorKey: 'accentSubtle',
-    borderColorKey: 'border',
   },
   {
     id: 'sophisme',
@@ -48,9 +37,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Sophisme',
     shortCode: 'SOPH',
     icon: '⚡',
-    colorKey: 'sophisme',
-    subtleColorKey: 'sophismeSubtle',
-    borderColorKey: 'sophismeBorder',
   },
   {
     id: 'unsupported',
@@ -58,9 +44,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Affirmation non étayée',
     shortCode: 'NON-ÉT',
     icon: '⚠',
-    colorKey: 'unsupported',
-    subtleColorKey: 'unsupportedSubtle',
-    borderColorKey: 'unsupportedBorder',
   },
   {
     id: 'overreach',
@@ -68,9 +51,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Surinterprétation',
     shortCode: 'SUR-INT',
     icon: '⇗',
-    colorKey: 'overreach',
-    subtleColorKey: 'overreachSubtle',
-    borderColorKey: 'overreachBorder',
   },
   {
     id: 'sourceAbsent',
@@ -78,9 +58,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Source absente',
     shortCode: 'SRC-ABS',
     icon: '∅',
-    colorKey: 'sourceAbsent',
-    subtleColorKey: 'sourceAbsentSubtle',
-    borderColorKey: 'sourceAbsentBorder',
   },
   {
     id: 'framing',
@@ -88,9 +65,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Biais de cadrage',
     shortCode: 'CADR',
     icon: '⧉',
-    colorKey: 'framing',
-    subtleColorKey: 'framingSubtle',
-    borderColorKey: 'framingBorder',
   },
   {
     id: 'strength',
@@ -98,9 +72,6 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     frenchLabel: 'Point fort',
     shortCode: 'FORT',
     icon: '✦',
-    colorKey: 'strength',
-    subtleColorKey: 'strengthSubtle',
-    borderColorKey: 'strengthBorder',
   },
 ];
 
@@ -111,7 +82,6 @@ export interface CategoryFilterBarProps {
   onSelectCategory: (category: FindingCategory) => void;
   counts?: FindingCounts;
   totalCount?: number;
-  theme?: 'light' | 'dark';
   size?: 'sm' | 'md' | 'lg';
   showZeroCounts?: boolean;
   className?: string;
@@ -122,13 +92,10 @@ export const CategoryFilterBar: React.FC<CategoryFilterBarProps> = ({
   onSelectCategory,
   counts = {},
   totalCount,
-  theme = 'light',
   size = 'md',
   showZeroCounts = true,
   className = '',
 }) => {
-  const currentTheme = theme === 'dark' ? darkTheme : lightTheme;
-
   const calculatedTotal =
     totalCount !== undefined
       ? totalCount
@@ -189,70 +156,31 @@ export const CategoryFilterBar: React.FC<CategoryFilterBarProps> = ({
           return null;
         }
 
-        const categoryColor = currentTheme[category.colorKey] as string;
-        const categorySubtle = currentTheme[category.subtleColorKey] as string;
-        const categoryBorder = currentTheme[category.borderColorKey] as string;
-
         return (
           <button
             key={category.id}
             type="button"
             onClick={() => onSelectCategory(category.id)}
             aria-pressed={isSelected}
+            className={`inline-flex items-center justify-center rounded-full border transition-colors ${
+              isSelected
+                ? 'border-accent bg-accent/10 text-accent-hover font-semibold'
+                : 'border-line bg-transparent text-muted hover:text-ink hover:border-line-heavy'
+            }`}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               gap: sizeStyles.gap,
               padding: sizeStyles.padding,
               fontSize: sizeStyles.fontSize,
-              fontWeight: isSelected
-                ? typographyTokens.fontWeights.bold
-                : typographyTokens.fontWeights.medium,
               lineHeight: 1,
-              borderRadius: '9999px',
               cursor: 'pointer',
-              transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
               outline: 'none',
-              border: `1.5px solid ${
-                isSelected
-                  ? categoryColor
-                  : currentTheme.border
-              }`,
-              backgroundColor: isSelected
-                ? categorySubtle
-                : currentTheme.surface,
-              color: isSelected
-                ? categoryColor
-                : currentTheme.textMuted,
-              boxShadow: isSelected
-                ? `0 2px 8px -2px ${categoryColor}33, 0 1px 2px 0 rgba(0,0,0,0.05)`
-                : '0 1px 2px 0 rgba(0,0,0,0.02)',
               userSelect: 'none',
             }}
-            onMouseEnter={(e) => {
-              if (!isSelected) {
-                e.currentTarget.style.borderColor = categoryBorder;
-                e.currentTarget.style.backgroundColor = currentTheme.surfaceHover;
-                e.currentTarget.style.color = currentTheme.text;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSelected) {
-                e.currentTarget.style.borderColor = currentTheme.border;
-                e.currentTarget.style.backgroundColor = currentTheme.surface;
-                e.currentTarget.style.color = currentTheme.textMuted;
-              }
-            }}
           >
-            {/* Category Icon */}
+            {/* Category glyph: identity without colour. */}
             <span
-              style={{
-                fontSize: sizeStyles.iconSize,
-                color: isSelected ? categoryColor : currentTheme.textFaint,
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
+              className={isSelected ? 'text-accent-hover' : 'text-faint'}
+              style={{ fontSize: sizeStyles.iconSize, display: 'inline-flex', alignItems: 'center' }}
               aria-hidden="true"
             >
               {category.icon}
@@ -263,24 +191,15 @@ export const CategoryFilterBar: React.FC<CategoryFilterBarProps> = ({
 
             {/* Finding Count Badge */}
             <span
+              className={`inline-flex items-center justify-center rounded-full font-semibold ${
+                isSelected ? 'bg-accent text-accent-foreground' : 'bg-line-soft text-muted'
+              }`}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 minWidth: sizeStyles.badgeSize,
                 height: sizeStyles.badgeSize,
                 padding: '0 5px',
-                borderRadius: '9999px',
                 fontSize: sizeStyles.badgeFontSize,
                 fontFamily: typographyTokens.fontFamilies.mono,
-                fontWeight: typographyTokens.fontWeights.semibold,
-                backgroundColor: isSelected
-                  ? categoryColor
-                  : currentTheme.surfaceMuted,
-                color: isSelected
-                  ? '#FFFFFF'
-                  : currentTheme.textMuted,
-                transition: 'background-color 0.15s ease, color 0.15s ease',
               }}
             >
               {count}

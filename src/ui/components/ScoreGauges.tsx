@@ -22,13 +22,13 @@ export function formatPoints(value: number): string {
 export function getScoreBandColor(band: ScoreBand): { stroke: string; text: string; bg: string } {
   switch (band) {
     case 'solide':
-      return { stroke: '#059669', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' };
+      return { stroke: '#059669', text: 'text-severity-positive-ink', bg: 'bg-severity-positive/15' };
     case 'perfectible':
-      return { stroke: '#2563EB', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' };
+      return { stroke: '#2563EB', text: 'text-severity-info-ink', bg: 'bg-severity-info/15' };
     case 'fragile':
-      return { stroke: '#D97706', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' };
+      return { stroke: '#D97706', text: 'text-severity-warning-ink', bg: 'bg-severity-warning/15' };
     case 'problematique':
-      return { stroke: '#DC2626', text: 'text-rose-700 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40' };
+      return { stroke: '#DC2626', text: 'text-severity-critical-ink', bg: 'bg-severity-critical/15' };
   }
 }
 
@@ -59,7 +59,7 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
           r={radius}
           stroke="currentColor"
           strokeWidth={strokeWidth}
-          className="text-stone-200 dark:text-stone-800 fill-none"
+          className="text-line fill-none"
         />
         {/* Value circle */}
         <circle
@@ -77,10 +77,10 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
 
       {/* Center score readout */}
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="font-mono text-2xl font-black text-stone-900 dark:text-stone-100 tracking-tight leading-none">
+        <span className="font-mono text-2xl font-black text-ink tracking-tight leading-none">
           {Math.round(clampedScore)}
         </span>
-        <span className="font-sans text-[10px] text-stone-500 dark:text-stone-400 font-semibold uppercase tracking-widest mt-0.5">
+        <span className="font-sans text-[10px] text-muted font-semibold uppercase tracking-widest mt-0.5">
           / 100
         </span>
       </div>
@@ -134,7 +134,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
   return (
     <div
-      className={`p-3 rounded border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 transition-colors ${className}`}
+      className={`p-3 rounded border border-line bg-panel transition-colors ${className}`}
     >
       <div
         className="flex items-start justify-between cursor-pointer select-none"
@@ -144,16 +144,16 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
           {/* The side panel is narrow and these labels are long: the label owns
               the slack and wraps, the mark stays on one line and never shrinks. */}
           <div className="flex items-baseline justify-between gap-2 text-xs mb-1">
-            <span className="font-sans font-bold text-stone-800 dark:text-stone-200 min-w-0 break-words leading-snug">
+            <span className="font-sans font-bold text-ink min-w-0 break-words leading-snug">
               {def.label}
             </span>
-            <span className="font-mono font-semibold text-stone-600 dark:text-stone-400 shrink-0 whitespace-nowrap tabular-nums">
-              <strong className="text-stone-900 dark:text-stone-100">{formatPoints(score)}</strong> / {formatPoints(weight)} pts
+            <span className="font-mono font-semibold text-muted shrink-0 whitespace-nowrap tabular-nums">
+              <strong className="text-ink">{formatPoints(score)}</strong> / {formatPoints(weight)} pts
             </span>
           </div>
 
           {/* Progress Bar */}
-          <div className="h-2 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+          <div className="h-2 w-full bg-line-soft rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
@@ -166,25 +166,25 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
         {/* Anchored to the first line rather than centred: a label that wraps to
             two lines would otherwise pull the caret away from the row it opens. */}
-        <div className="font-mono text-xs text-stone-400 pl-1 shrink-0">
+        <div className="font-mono text-xs text-faint pl-1 shrink-0">
           {expanded ? '▲' : '▼'}
         </div>
       </div>
 
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs space-y-2">
-          <p className="font-serif italic text-stone-600 dark:text-stone-400 text-[13px]">
+        <div className="mt-3 pt-3 border-t border-line-soft text-xs space-y-2">
+          <p className="font-serif italic text-muted text-[13px]">
             {def.description}
           </p>
 
           {def.criteria && def.criteria.length > 0 && (
             <div className="mt-2">
-              <div className="font-sans uppercase text-[10px] font-bold text-stone-500 tracking-wider mb-1">
+              <div className="font-sans uppercase text-[10px] font-bold text-muted tracking-wider mb-1">
                 Critères vérifiés
               </div>
               {/* Outside markers: at side-panel width most of these wrap, and an
                   inside marker sends the second line back under the bullet. */}
-              <ul className="list-disc list-outside pl-4 space-y-0.5 text-stone-700 dark:text-stone-300">
+              <ul className="list-disc list-outside pl-4 space-y-0.5 text-ink/80">
                 {def.criteria.map((crit, idx) => (
                   <li key={idx} className="text-[12px]">{crit}</li>
                 ))}
@@ -193,7 +193,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
           )}
 
           {strengths.length > 0 && (
-            <div className="mt-2 text-emerald-700 dark:text-emerald-400">
+            <div className="mt-2 text-severity-positive-ink">
               <span className="font-bold text-[11px] uppercase tracking-wide">Points forts :</span>
               <ul className="list-disc list-outside pl-4 text-[12px] space-y-0.5 mt-0.5">
                 {strengths.map((s, idx) => (
@@ -204,7 +204,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
           )}
 
           {weaknesses.length > 0 && (
-            <div className="mt-2 text-rose-700 dark:text-rose-400">
+            <div className="mt-2 text-severity-critical-ink">
               <span className="font-bold text-[11px] uppercase tracking-wide">Faiblesses relevées :</span>
               <ul className="list-disc list-outside pl-4 text-[12px] space-y-0.5 mt-0.5">
                 {weaknesses.map((w, idx) => (

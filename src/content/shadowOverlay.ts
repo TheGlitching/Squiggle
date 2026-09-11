@@ -423,7 +423,7 @@ export class ShadowHighlightOverlay {
         width: 100%;
         height: 100%;
         pointer-events: none;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       .fc-highlight-rect {
         position: absolute;
@@ -461,7 +461,7 @@ export class ShadowHighlightOverlay {
       }
       .fc-highlight-group.fc-is-active .fc-highlight-rect {
         transform: scale(1.03);
-        box-shadow: 0 0 0 2px #111827, 0 4px 12px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 0 0 2px #0a0a0b, 0 4px 12px rgba(0, 0, 0, 0.18);
         z-index: 20;
       }
 

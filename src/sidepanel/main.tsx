@@ -88,24 +88,6 @@ function SidepanelApp() {
   // The visit earns its keep on the very first run, when the panel is empty and
   // nothing on screen says what the extension does or why it wants a key.
   const [tourOpen, setTourOpen] = useState(() => !getTourCompletionStatus().completed);
-  const [isDark, setIsDark] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
-  );
-
-  // Keep Tailwind's `dark:` variants and the inline-style components in sync -
-  // the two styling dialects need the same single source of truth.
-  useEffect(() => {
-    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-    if (!mq) return;
-    const apply = (matches: boolean) => {
-      setIsDark(matches);
-      document.documentElement.classList.toggle('dark', matches);
-    };
-    apply(mq.matches);
-    const listener = (e: MediaQueryListEvent) => apply(e.matches);
-    mq.addEventListener('change', listener);
-    return () => mq.removeEventListener('change', listener);
-  }, []);
 
   const refreshKeyPresence = useCallback(async () => {
     try {
@@ -438,21 +420,20 @@ function SidepanelApp() {
   );
 
   const busy = progress.status === 'extracting' || progress.status === 'analyzing';
-  const theme = isDark ? 'dark' : 'light';
   const hosted = mode === 'hosted';
   const hostedCanAnalyse = hostedAccount ? describeHostedAccount(hostedAccount).canAnalyse : false;
   const canRun = hosted ? hostedCanAnalyse : hasKey !== false;
 
   return (
-    <div className="flex flex-col min-h-screen p-4 font-sans bg-[#FBFBFA] dark:bg-[#121214] text-[#1C1917] dark:text-[#E7E5E4]">
-      <header className="flex items-start justify-between gap-2 pb-3 border-b border-[#E7E5E4] dark:border-[#27272A]">
+    <div className="flex flex-col min-h-screen p-4 font-sans bg-ground text-ink">
+      <header className="flex items-start justify-between gap-2 pb-3 border-b border-line-soft">
         <div className="flex items-start gap-2">
           <SquiggleBadge className="mt-0.5 h-6 w-6 shrink-0" />
           <div>
-            <h1 className="text-lg font-bold font-display tracking-tight text-[#1C1917] dark:text-[#FAFAFA]">
+            <h1 className="text-lg font-bold font-display tracking-tight text-ink">
               Squiggle
             </h1>
-            <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">
+            <p className="text-xs text-muted">
               Analyse critique de la fiabilité de l’article
             </p>
           </div>
@@ -462,7 +443,7 @@ function SidepanelApp() {
             type="button"
             onClick={() => setTourOpen(true)}
             aria-label="Revoir la visite guidée"
-            className="rounded-lg px-2 py-1.5 text-sm text-[#78716C] hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
+            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:bg-panel-muted hover:text-ink"
           >
             ?
           </button>
@@ -471,7 +452,7 @@ function SidepanelApp() {
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Configurer la clé API"
-            className="rounded-lg px-2 py-1.5 text-sm text-[#78716C] hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
+            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:bg-panel-muted hover:text-ink"
           >
             ⚙
           </button>
@@ -491,18 +472,18 @@ function SidepanelApp() {
           />
         ) : (
           hasKey === false && (
-            <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] bg-white dark:bg-[#18181B] p-4">
-              <h2 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+            <div className="rounded-xl border border-line bg-panel p-4">
+              <h2 className="text-sm font-semibold text-ink">
                 Configurez votre clé pour commencer
               </h2>
-              <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+              <p className="mt-1 text-xs leading-relaxed text-muted">
                 L’extension fonctionne avec votre propre clé API. Sans clé, aucune analyse ne peut
                 être lancée.
               </p>
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
-                className="mt-3 w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B]"
+                className="mt-3 w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover"
               >
                 Configurer ma clé
               </button>
@@ -515,7 +496,7 @@ function SidepanelApp() {
           data-tour="run-analysis"
           onClick={runAnalysis}
           disabled={busy || !canRun}
-          className="w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-3 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-50"
+          className="w-full rounded-xl bg-accent px-3 py-3 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
         >
           {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse critique'}
         </button>
@@ -523,30 +504,30 @@ function SidepanelApp() {
         {busy && (
           <div className="space-y-2" role="status" aria-live="polite">
             <div className="space-y-1.5">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E7E5E4] dark:bg-[#27272A]">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-[#1C1917] dark:bg-[#FAFAFA] transition-all duration-300"
+                  className="h-full rounded-full bg-accent transition-all duration-300"
                   style={{ width: `${Math.max(progress.progress, 4)}%` }}
                 />
               </div>
-              <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">{progress.message}</p>
+              <p className="text-xs text-muted">{progress.message}</p>
             </div>
 
             {/* Live feed: what the research agent is doing right now, so a long
                 run never looks stuck. Each line is one step the engine already
                 took; the most recent sits at the bottom, newest-last. */}
             {progress.notes.length > 0 && (
-              <ol className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-[#E7E5E4] dark:border-[#27272A] bg-white dark:bg-[#18181B] p-3">
+              <ol className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-line bg-panel p-3">
                 {progress.notes.map((note, idx) => (
                   <li
                     key={`${idx}-${note}`}
                     className={
                       idx === progress.notes.length - 1
-                        ? 'flex gap-1.5 items-start text-xs font-medium text-[#57534E] dark:text-[#D4D4D8]'
-                        : 'flex gap-1.5 items-start text-xs text-[#A8A29E] dark:text-[#71717A]'
+                        ? 'flex gap-1.5 items-start text-xs font-medium text-ink'
+                        : 'flex gap-1.5 items-start text-xs text-faint'
                     }
                   >
-                    <span className="mt-0.5 shrink-0 text-[#A8A29E] dark:text-[#71717A]" aria-hidden>
+                    <span className="mt-0.5 shrink-0 text-faint" aria-hidden>
                       •
                     </span>
                     <span>{note}</span>
@@ -558,22 +539,22 @@ function SidepanelApp() {
         )}
 
         {error && (
-          <div className="rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2.5 text-xs text-red-800 dark:text-red-300">
+          <div className="rounded-xl bg-severity-critical/10 px-3 py-2.5 text-xs text-severity-critical-ink">
             {error}
           </div>
         )}
 
         {report && (
           <>
-            <section className="p-4 rounded-xl bg-white dark:bg-[#18181B] border border-[#E7E5E4] dark:border-[#27272A] shadow-sm">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+            <section className="p-4 rounded-xl bg-panel border border-line shadow-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
                 Évaluation globale
               </h2>
               <div className="mt-4 flex justify-center" data-tour="score-gauges">
                 <ScoreGauge score={report.score} size={110} strokeWidth={8} showBandLabel />
               </div>
               {report.summary && (
-                <p className="mt-3 text-xs leading-relaxed text-[#57534E] dark:text-[#D4D4D8]">
+                <p className="mt-3 text-xs leading-relaxed text-ink/80">
                   {report.summary}
                 </p>
               )}
@@ -588,7 +569,7 @@ function SidepanelApp() {
 
             {scoredDomains.length > 0 && (
               <section className="space-y-2">
-                <h3 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+                <h3 className="text-sm font-semibold text-ink">
                   Domaines évalués
                 </h3>
                 <div className="space-y-1.5" data-tour="domain-scores">
@@ -611,7 +592,7 @@ function SidepanelApp() {
             )}
 
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+              <h3 className="text-sm font-semibold text-ink">
                 Grille des constats
               </h3>
               <div data-tour="category-filters">
@@ -620,12 +601,11 @@ function SidepanelApp() {
                   onSelectCategory={setCategory}
                   counts={counts}
                   totalCount={findings.length}
-                  theme={theme}
                 />
               </div>
               <div className="space-y-2.5" data-tour="finding-card">
                 {visibleFindings.length === 0 ? (
-                  <p className="text-xs text-[#78716C] dark:text-[#A1A1AA]">
+                  <p className="text-xs text-muted">
                     Aucun constat dans cette catégorie.
                   </p>
                 ) : (
@@ -646,14 +626,14 @@ function SidepanelApp() {
         )}
 
         {!report && !busy && !error && (hosted ? hostedCanAnalyse : hasKey !== false) && (
-          <p className="text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+          <p className="text-xs leading-relaxed text-muted">
             Ouvrez un article de presse, puis lancez l’analyse. Les constats seront surlignés
             directement dans la page.
           </p>
         )}
       </main>
 
-      <footer className="pt-3 border-t border-[#E7E5E4] dark:border-[#27272A] text-center text-xs text-[#A8A29E]">
+      <footer className="pt-3 border-t border-line-soft text-center text-xs text-faint">
         {hosted ? (
           <p className="leading-relaxed">
             {report?.meta
@@ -664,7 +644,7 @@ function SidepanelApp() {
               href={TRANSPARENCY_URL}
               target="_blank"
               rel="noreferrer"
-              className="underline hover:text-[#78716C] dark:hover:text-[#A1A1AA]"
+              className="underline hover:text-muted"
             >
               Transparence
             </a>
@@ -686,7 +666,6 @@ function SidepanelApp() {
 
       <OnboardingTour
         isOpen={tourOpen}
-        theme={theme}
         onComplete={() => setTourOpen(false)}
         onSkip={() => setTourOpen(false)}
       />
