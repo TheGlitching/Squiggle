@@ -95,7 +95,7 @@ export function Compte() {
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accent">
+        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
           {error}
         </p>
       ) : null}
@@ -133,7 +133,7 @@ export function Compte() {
             <button
               onClick={manage}
               disabled={busy}
-              className="rounded-lg border border-border bg-background px-5 py-2.5 font-medium hover:border-accent hover:text-accent disabled:opacity-60"
+              className="rounded-lg border border-border bg-background px-5 py-2.5 font-medium hover:border-accent hover:text-accentInk disabled:opacity-60"
             >
               Gérer ou résilier mon abonnement
             </button>
@@ -149,7 +149,7 @@ export function Compte() {
         </p>
         <Link
           to="/pont"
-          className="mt-4 inline-block rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accent"
+          className="mt-4 inline-block rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
         >
           Connecter l’extension
         </Link>
