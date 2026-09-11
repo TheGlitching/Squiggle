@@ -12,6 +12,7 @@ that are load-bearing and not visible from any one file.
 src/      the extension (Chrome + Firefox MV3)
 shared/   the analysis engine, the provider clients, the request-signing protocol
 server/   the hosted backend (Cloudflare Workers + Neon Postgres)
+web/      the public web app (Vite + React): sign-in, subscription, extension bridge
 ```
 
 `shared/` is not a convenience directory. Anything imported by **both** the extension
@@ -20,6 +21,10 @@ analysis can now run in two places: a prompt, a scoring rule or a canonical sign
 string existing in two copies would be a silent divergence between what a BYOK reader
 and a hosted reader are told about the same article. If you are about to copy something
 out of `shared/`, move it instead.
+
+`web/` is the keyless reader's half of hosted mode. Its browser-session namespace is
+`/web/account*` in `server/src/index.ts`, and the contract the extension must implement
+to connect is `web/BRIDGE.md` — the extension half does not exist yet.
 
 ## Secrets and identifiers
 

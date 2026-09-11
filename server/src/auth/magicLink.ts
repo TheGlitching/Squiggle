@@ -9,10 +9,11 @@
  * `verifyMagicLink` consumes the code exactly once, marks the address
  * verified, finds or creates the account, and opens a web session.
  */
-import { randomToken, sha256Hex } from '@squiggle/shared';
+import { sha256Hex } from '@squiggle/shared';
 
 import type { Clock } from '../lib/clock';
 import { apiError, type Outcome } from '../lib/errors';
+import { generateHumanCode, normalizeHumanCode } from '../lib/humanCode';
 import { logEvent } from '../lib/log';
 import type { EmailSender } from '../lib/brevo';
 import type { Db } from '../db/types';
@@ -38,6 +39,8 @@ export interface MagicLinkVerifyDeps {
 
 /** Codes stop working 10 minutes after they are created. */
 export const MAGIC_LINK_TTL_MS = 10 * 60 * 1000;
+/** How many characters a login code has (see lib/humanCode.ts). */
+export const MAGIC_LINK_CODE_LENGTH = 8;
 /** An address may trigger at most this many codes per hour. */
 export const MAGIC_LINK_EMAIL_LIMIT_PER_HOUR = 3;
 /** A client IP may trigger at most this many codes per hour (any address). */
@@ -93,7 +96,7 @@ export async function requestMagicLink(
     }
   }
 
-  const code = randomToken(16);
+  const code = generateHumanCode(MAGIC_LINK_CODE_LENGTH);
   await deps.db.createMagicLink({
     email,
     codeHash: await sha256Hex(code),
@@ -102,12 +105,15 @@ export async function requestMagicLink(
     ttlMs: MAGIC_LINK_TTL_MS,
   });
 
-  const linkUrl = `${deps.webAppOrigin}/magic-link?code=${encodeURIComponent(code)}`;
+  // The reader can either click the link or type the code; the code is what
+  // makes the login work across devices (read it on a phone, type it on a
+  // desktop) and does not depend on a redirect landing anywhere.
+  const linkUrl = `${deps.webAppOrigin}/connexion?code=${encodeURIComponent(code)}`;
   try {
     await deps.email.send({
       to: email,
-      subject: 'Your Squiggle login link',
-      html: magicLinkEmailHtml(linkUrl),
+      subject: 'Votre code de connexion Squiggle',
+      html: magicLinkEmailHtml(code, linkUrl),
     });
   } catch {
     return apiError('internal', 'We could not send the email right now. Please try again.');
@@ -116,11 +122,13 @@ export async function requestMagicLink(
   return { ok: true, sent: true };
 }
 
-function magicLinkEmailHtml(linkUrl: string): string {
+function magicLinkEmailHtml(code: string, linkUrl: string): string {
   return [
-    '<p>Use this link to sign in to Squiggle. It expires in 10 minutes:</p>',
-    `<p><a href="${linkUrl}">${linkUrl}</a></p>`,
-    '<p>If you did not ask for this, you can ignore this email.</p>',
+    '<p>Voici votre code de connexion Squiggle :</p>',
+    `<p style="font-size:24px;letter-spacing:4px"><strong>${code}</strong></p>`,
+    '<p>Ou cliquez sur ce lien, valable 10 minutes :</p>',
+    `<p><a href="${linkUrl}">Se connecter</a></p>`,
+    '<p>Si vous n’avez pas demandé ce code, vous pouvez ignorer cet e-mail.</p>',
   ].join('\n');
 }
 
@@ -129,7 +137,7 @@ export async function verifyMagicLink(
   code: string,
   ip?: string | null,
 ): Promise<Outcome<{ userId: string; email: string; sessionToken: string }>> {
-  const normalized = code.trim();
+  const normalized = normalizeHumanCode(code);
   if (!normalized) return apiError('invalid_code', 'The code is missing.');
 
   const now = deps.clock.now();

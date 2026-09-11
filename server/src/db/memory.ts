@@ -13,7 +13,9 @@ import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   AnalysisRunRow,
   Plan,
+  BridgeCodeRow,
   CreateAnalysisRunArgs,
+  CreateBridgeCodeArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
   CreateReportArgs,
@@ -44,6 +46,7 @@ export class MemoryDb implements Db {
   private readonly tokens = new Map<string, TokenRow>();
   private readonly magicLinks = new Map<string, MagicLinkRow>();
   private readonly sessions = new Map<string, WebSessionRow>();
+  private readonly bridgeCodes = new Map<string, BridgeCodeRow>();
   private readonly nonces = new Map<string, NonceRow>();
   private readonly oauth = new Map<string, OAuthPendingRow>();
   private readonly rates = new Map<string, { count: number; windowStart: number }>();
@@ -233,6 +236,37 @@ export class MemoryDb implements Db {
     if (row && row.revokedAt === null) row.revokedAt = now;
   }
 
+  // ---- manual bridge codes -------------------------------------------------------
+
+  async createBridgeCode(args: CreateBridgeCodeArgs): Promise<BridgeCodeRow> {
+    const row: BridgeCodeRow = {
+      id: randomToken(16),
+      codeHash: args.codeHash,
+      userId: args.userId,
+      sessionHash: args.sessionHash,
+      publicKeyJwk: args.publicKeyJwk,
+      createdAt: args.now,
+      expiresAt: args.now + args.ttlMs,
+      usedAt: null,
+    };
+    this.bridgeCodes.set(row.codeHash, row);
+    return row;
+  }
+
+  async findBridgeCodeByHash(codeHash: string): Promise<BridgeCodeRow | null> {
+    return this.bridgeCodes.get(codeHash) ?? null;
+  }
+
+  async markBridgeCodeUsed(id: string, now: number): Promise<boolean> {
+    for (const row of this.bridgeCodes.values()) {
+      if (row.id === id && row.usedAt === null) {
+        row.usedAt = now;
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ---- nonces ---------------------------------------------------------------------
 
   async addNonce(args: NonceArgs): Promise<boolean> {
@@ -413,6 +447,7 @@ export class MemoryDb implements Db {
     for (const [nonce, row] of this.nonces) if (row.expiresAt <= now) this.nonces.delete(nonce);
     for (const [hash, row] of this.sessions) if (row.expiresAt <= now) this.sessions.delete(hash);
     for (const [hash, row] of this.magicLinks) if (row.expiresAt <= now) this.magicLinks.delete(hash);
+    for (const [hash, row] of this.bridgeCodes) if (row.expiresAt <= now) this.bridgeCodes.delete(hash);
     for (const [state, row] of this.oauth) if (row.expiresAt <= now) this.oauth.delete(state);
     for (const [id, row] of this.runs) if (row.expiresAt <= now) this.runs.delete(id);
     const cutoff = now - usageLogRetentionMs;
