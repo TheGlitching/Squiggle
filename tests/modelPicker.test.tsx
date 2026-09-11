@@ -1,107 +1,65 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import {
-  ByokSettingsModal,
-  PROVIDER_PRESETS,
-  resolveModelSelection,
-} from '../src/ui/components/ByokSettingsModal';
+import { ByokSettingsModal, PROVIDER_PRESETS } from '../src/ui/components/ByokSettingsModal';
 
 /**
- * Choosing a model was a text input with a `datalist`. It looked like a dropdown
- * and behaved like neither: the platform draws no usable affordance, so the list
- * only surfaced if you already knew a model id and started typing it.
- *
- * Replacing it with a real select introduces a quieter hazard, which is what most
- * of these tests are about: a select cannot display a value it has no option for,
- * so a model saved by an earlier build would be swapped for whichever option comes
- * first, and the reader would analyse with a model they never picked.
+ * The model is a free-text field, not a list. A curated list rots faster than
+ * this build ships, and the reader knows their provider's catalogue better than
+ * a preset written months ago. The provider's expected id shape is shown as a
+ * greyed placeholder instead, so the field is still self-explanatory.
  */
 
-const gemini = PROVIDER_PRESETS.find((p) => p.id === 'gemini')!;
+function renderModal(): string {
+  return renderToStaticMarkup(
+    <ByokSettingsModal isOpen onClose={() => {}} onSaved={() => {}} />
+  );
+}
 
-describe('the model a reader has chosen', () => {
-  it('offers the provider catalogue as a real dropdown, not a text field', () => {
-    const markup = renderToStaticMarkup(
-      <ByokSettingsModal isOpen onClose={() => {}} onSaved={() => {}} />,
-    );
+describe('the model a reader enters', () => {
+  it('offers a free-text field with the provider’s example as a placeholder', () => {
+    const markup = renderModal();
 
-    expect(markup).toContain('<select');
-    // The escape hatch belongs in the same control, otherwise the list is closed.
-    expect(markup).toContain('Autre modèle');
-    // The old affordance must be gone, not merely supplemented.
+    expect(markup).toContain('placeholder="claude-sonnet-4-20250514"');
+    // The list affordances must be gone, not merely supplemented.
+    expect(markup).not.toContain('<select');
     expect(markup).not.toContain('datalist');
+    expect(markup).not.toContain('Autre modèle');
   });
 
-  it('lists every model the selected provider declares', () => {
-    const markup = renderToStaticMarkup(
-      <ByokSettingsModal isOpen onClose={() => {}} onSaved={() => {}} />,
-    );
-    const anthropic = PROVIDER_PRESETS.find((p) => p.id === 'anthropic')!;
-
-    for (const model of anthropic.models) {
-      expect(markup).toContain(model);
-    }
-  });
-
-  it('keeps a known model in the dropdown', () => {
-    expect(resolveModelSelection(gemini, 'gemini-2.5-pro')).toEqual({
-      model: 'gemini-2.5-pro',
-      usesCustomModel: false,
-    });
-  });
-
-  it('keeps a model this build no longer lists rather than substituting one', () => {
-    const retired = 'gemini-1.0-ultra';
-    expect(gemini.models).not.toContain(retired);
-
-    const selection = resolveModelSelection(gemini, retired);
-
-    expect(selection.model).toBe(retired);
-    expect(selection.usesCustomModel).toBe(true);
-  });
-
-  it('falls back to the provider default when nothing is stored', () => {
-    expect(resolveModelSelection(gemini, undefined)).toEqual({
-      model: gemini.defaultModel,
-      usesCustomModel: false,
-    });
-    expect(resolveModelSelection(gemini, '')).toEqual({
-      model: gemini.defaultModel,
-      usesCustomModel: false,
-    });
-  });
-
-  it('does not treat an unknown provider as a custom model choice', () => {
-    // No preset means no catalogue to contradict, and an empty model is not a
-    // choice the reader made - offering the free-text field here would be noise.
-    expect(resolveModelSelection(undefined, undefined)).toEqual({
-      model: '',
-      usesCustomModel: false,
-    });
-  });
-
-  it('declares a default that its own catalogue contains, for every provider', () => {
-    // Otherwise the dropdown opens on a value it cannot show, which is the same
-    // silent substitution by another route.
+  it('declares a distinct, non-empty placeholder for every provider', () => {
     for (const preset of PROVIDER_PRESETS) {
-      expect(preset.models, `${preset.id} default is not in its own list`).toContain(
-        preset.defaultModel,
-      );
+      expect(preset.modelPlaceholder, `${preset.id} has no example`).toBeTruthy();
+      expect(preset.keyHint, `${preset.id} has no key hint`).toBeTruthy();
+      expect(preset.keyUrl, `${preset.id} has no key url`).toBeTruthy();
     }
+    const placeholders = PROVIDER_PRESETS.map((p) => p.modelPlaceholder);
+    expect(new Set(placeholders).size).toBe(placeholders.length);
+  });
+});
+
+describe('the settings sheet order', () => {
+  it('puts the hosted sign-in above the collapsed BYOK disclosure', () => {
+    const markup = renderModal();
+
+    const hosted = markup.indexOf('Se connecter');
+    const byok = markup.indexOf('Utiliser ma propre clé');
+    expect(hosted).toBeGreaterThan(-1);
+    expect(byok).toBeGreaterThan(-1);
+    expect(hosted).toBeLessThan(byok);
   });
 
-  it('treats a model the live catalogue advertises as a known option, tilde and all', () => {
-    // OpenRouter's "latest" DeepSeek alias exists only as the tilde-prefixed
-    // id; the bare form OpenRouter rejects with "not a valid model ID".
-    const liveIds = ['~deepseek/deepseek-v4-flash-latest'];
+  it('keeps BYOK collapsed by default', () => {
+    const markup = renderModal();
 
-    const selection = resolveModelSelection(
-      PROVIDER_PRESETS.find((p) => p.id === 'openrouter')!,
-      '~deepseek/deepseek-v4-flash-latest',
-      liveIds,
-    );
+    expect(markup).toContain('<details');
+    expect(markup).not.toContain('<details open');
+  });
 
-    expect(selection.model).toBe('~deepseek/deepseek-v4-flash-latest');
-    expect(selection.usesCustomModel).toBe(false);
+  it('still offers every provider once BYOK is expanded', () => {
+    const markup = renderModal();
+
+    for (const preset of PROVIDER_PRESETS) {
+      expect(markup).toContain(preset.label);
+    }
   });
 });
