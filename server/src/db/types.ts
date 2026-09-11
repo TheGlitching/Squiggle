@@ -103,6 +103,36 @@ export interface CreateSessionArgs {
   ttlMs: number;
 }
 
+/**
+ * A short-lived manual bridge code (Firefox fallback for connecting the
+ * extension). It carries only the public key the extension sent to the web
+ * app: no extension token is minted until the code is redeemed, so no raw
+ * credential sits in the database waiting to be picked up.
+ */
+export interface BridgeCodeRow {
+  id: string;
+  /** SHA-256 hex of the 8-character code; the raw code exists only on screen. */
+  codeHash: string;
+  userId: string;
+  /** SHA-256 hex of the web session that issued it, for wrong-session refusal. */
+  sessionHash: string;
+  /** The extension's P-256 public JWK as a JSON string. */
+  publicKeyJwk: string;
+  createdAt: number;
+  expiresAt: number;
+  /** null = unused. */
+  usedAt: number | null;
+}
+
+export interface CreateBridgeCodeArgs {
+  codeHash: string;
+  userId: string;
+  sessionHash: string;
+  publicKeyJwk: string;
+  now: number;
+  ttlMs: number;
+}
+
 export interface NonceRow {
   nonce: string;
   keyId: string;
@@ -290,6 +320,15 @@ export interface Db {
   createSession(args: CreateSessionArgs): Promise<WebSessionRow>;
   findSessionByHash(sessionHash: string): Promise<WebSessionRow | null>;
   revokeSession(sessionHash: string, now: number): Promise<void>;
+
+  /** Issue a manual bridge code bound to a session and an install's public key. */
+  createBridgeCode(args: CreateBridgeCodeArgs): Promise<BridgeCodeRow>;
+  findBridgeCodeByHash(codeHash: string): Promise<BridgeCodeRow | null>;
+  /**
+   * Mark a bridge code used, atomically and only once. Returns false when it
+   * was already used, which is what stops a code redeeming twice.
+   */
+  markBridgeCodeUsed(id: string, now: number): Promise<boolean>;
 
   /**
    * Record a nonce. Returns false when it was already recorded, i.e. the

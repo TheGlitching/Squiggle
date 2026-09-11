@@ -57,7 +57,7 @@ export async function claimExtensionToken(
 }
 
 /** Accept only a structurally valid P-256 EC public JWK; strip extra members. */
-function normalizeP256Jwk(value: unknown): P256Jwk | null {
+export function normalizeP256Jwk(value: unknown): P256Jwk | null {
   if (typeof value !== 'object' || value === null) return null;
   const o = value as Record<string, unknown>;
   if (o.kty !== 'EC' || o.crv !== 'P-256') return null;
