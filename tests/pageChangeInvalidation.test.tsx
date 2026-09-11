@@ -111,6 +111,7 @@ function buildArticleText(marker: string): string {
 
 function makeFakeKeyStorage(): SecureKeyStorage {
   return {
+    getMode: vi.fn().mockResolvedValue('byok'),
     getActiveProvider: vi.fn().mockResolvedValue('openai'),
     getProviderConfig: vi.fn().mockResolvedValue({ provider: 'openai', apiKey: 'test-key', model: 'gpt-4o' }),
   } as unknown as SecureKeyStorage;

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connexion à Squiggle</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #fbfbfa;
+        color: #1c1917;
+      }
+      main {
+        max-width: 26rem;
+        padding: 2rem;
+        text-align: center;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        color: #57534e;
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }
+      body[data-state="ok"] h1 {
+        color: #15803d;
+      }
+      body[data-state="error"] h1 {
+        color: #b3402f;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="message">Connexion en cours…</h1>
+      <p id="detail">Ne fermez pas cet onglet.</p>
+    </main>
+    <script type="module" src="/src/hosted/authPage.ts"></script>
+  </body>
+</html>

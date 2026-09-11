@@ -31,6 +31,11 @@ export default defineConfig({
   // flag even inside a runtime `typeof chrome` guard.
   define: {
     __TARGET__: JSON.stringify(target),
+    // Hosted-mode origin (web app and API). A production build sets
+    // SQUIGGLE_HOSTED_ORIGIN; the placeholder is deliberately not a live host.
+    __HOSTED_ORIGIN__: JSON.stringify(
+      (process.env.SQUIGGLE_HOSTED_ORIGIN || 'https://squiggle.example').replace(/\/+$/, '')
+    ),
   },
   resolve: {
     alias: {
@@ -49,6 +54,10 @@ export default defineConfig({
       input: {
         sidepanel: resolve(__dirname, 'src/sidepanel/index.html'),
         welcome: resolve(__dirname, 'src/welcome/index.html'),
+        // The Chromium sign-in landing page. It must sit at the package root
+        // as `squiggle-auth.html` because the web app navigates to exactly that
+        // path; see web/BRIDGE.md §2.
+        'squiggle-auth': resolve(__dirname, 'squiggle-auth.html'),
       },
     },
   },

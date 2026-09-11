@@ -24,6 +24,16 @@ describe('Multi-browser Build & Packaging Verification', () => {
     // Check entry html files
     expect(fs.existsSync(path.join(chromeDist, 'src/sidepanel/index.html'))).toBe(true);
     expect(fs.existsSync(path.join(chromeDist, 'src/welcome/index.html'))).toBe(true);
+
+    // The Chromium sign-in landing page must be at the package root and
+    // web-accessible, because the web app navigates to exactly that path
+    // (web/BRIDGE.md §2). A missing file or a missing WAR entry breaks
+    // sign-in silently.
+    expect(fs.existsSync(path.join(chromeDist, 'squiggle-auth.html'))).toBe(true);
+    const chromeWar = (manifest.web_accessible_resources ?? []).flatMap(
+      (r: { resources: string[] }) => r.resources
+    );
+    expect(chromeWar).toContain('squiggle-auth.html');
   });
 
   it('generates dist/firefox distribution folder with valid MV3 manifest and gecko settings', () => {
@@ -42,6 +52,8 @@ describe('Multi-browser Build & Packaging Verification', () => {
     // Check entry html files
     expect(fs.existsSync(path.join(firefoxDist, 'src/sidepanel/index.html'))).toBe(true);
     expect(fs.existsSync(path.join(firefoxDist, 'src/welcome/index.html'))).toBe(true);
+    // Built for parity; Firefox uses the manual code path instead.
+    expect(fs.existsSync(path.join(firefoxDist, 'squiggle-auth.html'))).toBe(true);
   });
 
   /**

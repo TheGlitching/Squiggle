@@ -1,8 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { SecureKeyStorage } from '../../crypto/storage';
+import { SecureKeyStorage, type AnalysisMode } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
 import { listOpenRouterModels, OpenRouterModel } from '@squiggle/shared';
 import type { LLMProvider, ProviderConfig } from '@squiggle/shared';
+import {
+  beginHostedSignIn,
+  describeHostedAccount,
+  fetchHostedAccount,
+  HostedAuthError,
+  redeemHostedCode,
+  signOutHosted,
+  type HostedAccount,
+} from '../../hosted/session';
+import { ACCOUNT_URL, TRANSPARENCY_URL } from '../../hosted/config';
 
 /**
  * BYOK configuration surface.
@@ -124,6 +134,8 @@ export interface ByokSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved?: (provider: LLMProvider) => void;
+  /** Fired when the mode or the hosted session changes, so the panel refreshes. */
+  onHostedChanged?: () => void;
   storage?: SecureKeyStorage;
   /**
    * Injected for tests only: how the OpenRouter catalogue is fetched. Defaults
@@ -137,6 +149,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   isOpen,
   onClose,
   onSaved,
+  onHostedChanged,
   storage,
   openModelsLoader,
 }) => {
@@ -150,8 +163,31 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   /** OpenRouter models fetched live; empty means "not loaded, use the preset". */
   const [liveOpenModels, setLiveOpenModels] = useState<OpenRouterModel[]>([]);
+  /** Which engine analyses run through; hosted has its own state below. */
+  const [mode, setMode] = useState<AnalysisMode>('byok');
+  const [hostedAccount, setHostedAccount] = useState<HostedAccount | null>(null);
+  const [hostedError, setHostedError] = useState<string | null>(null);
+  const [hostedBusy, setHostedBusy] = useState(false);
+  const [code, setCode] = useState('');
+  const [showCode, setShowCode] = useState(false);
 
   const preset = PROVIDER_PRESETS.find((p) => p.id === provider) ?? PROVIDER_PRESETS[0];
+
+  /**
+   * Read the hosted account, if any. A missing sign-in is a normal state, not
+   * an error; any other failure (network, expired token) is surfaced.
+   */
+  const refreshHosted = useCallback(async () => {
+    try {
+      setHostedAccount(await fetchHostedAccount(keyStorage));
+      setHostedError(null);
+    } catch (err) {
+      setHostedAccount(null);
+      if (err instanceof HostedAuthError && err.code !== 'not_signed_in') {
+        setHostedError(err.message);
+      }
+    }
+  }, [keyStorage]);
 
   // Fetch the live catalogue when OpenRouter is the selected provider. It is
   // public and keyless; any failure leaves the static preset in charge. Once
@@ -199,12 +235,24 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       } catch {
         // First run: nothing stored yet.
       }
+
+      try {
+        const activeMode = await keyStorage.getMode();
+        if (cancelled) return;
+        setMode(activeMode);
+        setHostedError(null);
+        setCode('');
+        setShowCode(false);
+        if (activeMode === 'hosted') await refreshHosted();
+      } catch {
+        // The mode read failed; BYOK stays selected.
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, keyStorage]);
+  }, [isOpen, keyStorage, refreshHosted]);
 
   const handleProviderChange = useCallback(
     async (next: LLMProvider) => {
@@ -290,9 +338,68 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
     setValidation({ kind: 'idle' });
   }, [keyStorage, provider]);
 
+  const handleModeChange = useCallback(
+    async (next: AnalysisMode) => {
+      setMode(next);
+      setHostedError(null);
+      try {
+        await keyStorage.setMode(next);
+      } catch {
+        setHostedError('Impossible d’enregistrer votre choix.');
+      }
+      if (next === 'hosted') await refreshHosted();
+      onHostedChanged?.();
+    },
+    [keyStorage, refreshHosted, onHostedChanged]
+  );
+
+  const handleHostedSignIn = useCallback(async () => {
+    setHostedBusy(true);
+    setHostedError(null);
+    try {
+      await beginHostedSignIn(keyStorage);
+      // Firefox refuses the automatic return navigation, so the code field is
+      // the only way back from the web page.
+      if (__TARGET__ === 'firefox') setShowCode(true);
+    } catch (err) {
+      setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
+    } finally {
+      setHostedBusy(false);
+    }
+  }, [keyStorage]);
+
+  const handleRedeemCode = useCallback(async () => {
+    setHostedBusy(true);
+    setHostedError(null);
+    try {
+      const account = await redeemHostedCode(keyStorage, code);
+      setHostedAccount(account);
+      setCode('');
+      setShowCode(false);
+      onHostedChanged?.();
+    } catch (err) {
+      setHostedError(err instanceof Error ? err.message : 'La connexion a échoué.');
+    } finally {
+      setHostedBusy(false);
+    }
+  }, [code, keyStorage, onHostedChanged]);
+
+  const handleHostedSignOut = useCallback(async () => {
+    setHostedBusy(true);
+    setHostedError(null);
+    try {
+      await signOutHosted(keyStorage);
+      setHostedAccount(null);
+      onHostedChanged?.();
+    } finally {
+      setHostedBusy(false);
+    }
+  }, [keyStorage, onHostedChanged]);
+
   if (!isOpen) return null;
 
   const canSave = Boolean(apiKey.trim()) || hasStoredKey;
+  const hostedView = hostedAccount ? describeHostedAccount(hostedAccount) : null;
 
   return (
     <div
@@ -309,11 +416,11 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold font-display tracking-tight text-[#1C1917] dark:text-[#FAFAFA]">
-              Votre clé, votre modèle
+              Moteur d’analyse
             </h2>
             <p className="mt-0.5 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
-              La clé est chiffrée et stockée uniquement sur cet appareil. Aucun serveur
-              intermédiaire ne la voit.
+              Utilisez votre propre clé API, ou laissez-nous analyser via votre compte
+              Squiggle hébergé.
             </p>
           </div>
           <button
@@ -327,6 +434,40 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
         </div>
 
         <div className="mt-4 space-y-4">
+          <div>
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
+              Mode
+            </span>
+            <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Mode d’analyse">
+              <button
+                type="button"
+                onClick={() => void handleModeChange('byok')}
+                aria-pressed={mode === 'byok'}
+                className={
+                  mode === 'byok'
+                    ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
+                    : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
+                }
+              >
+                Ma clé (BYOK)
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleModeChange('hosted')}
+                aria-pressed={mode === 'hosted'}
+                className={
+                  mode === 'hosted'
+                    ? 'rounded-xl border-2 border-[#1C1917] dark:border-[#FAFAFA] px-3 py-2 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]'
+                    : 'rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-sm text-[#57534E] dark:text-[#D4D4D8] hover:border-[#A8A29E]'
+                }
+              >
+                Squiggle hébergé
+              </button>
+            </div>
+          </div>
+
+          {mode === 'byok' && (
+            <>
           <div>
             <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] dark:text-[#A1A1AA]">
               Fournisseur
@@ -479,6 +620,101 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
             >
               Supprimer la clé enregistrée pour {preset.label}
             </button>
+          )}
+            </>
+          )}
+
+          {mode === 'hosted' && (
+            <div className="space-y-3">
+              {hostedAccount && hostedView ? (
+                <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] p-3">
+                  <p className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+                    {hostedView.title}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+                    {hostedView.detail}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!hostedView.canAnalyse && (
+                      <a
+                        href={ACCOUNT_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-white dark:text-[#18181B]"
+                      >
+                        {hostedView.needsSubscription ? 'S’abonner' : 'Mon compte'}
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleHostedSignOut()}
+                      disabled={hostedBusy}
+                      className="rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2 text-xs font-semibold text-[#57534E] dark:text-[#D4D4D8] disabled:opacity-40 hover:bg-[#F5F5F4] dark:hover:bg-[#27272A]"
+                    >
+                      Se déconnecter
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-[#E7E5E4] dark:border-[#27272A] p-3">
+                  <p className="text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA]">
+                    3 analyses offertes
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-[#78716C] dark:text-[#A1A1AA]">
+                    Sans clé d’API : créez un compte Squiggle, l’analyse tourne sur nos serveurs.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleHostedSignIn()}
+                    disabled={hostedBusy}
+                    className="mt-3 w-full rounded-xl bg-[#1C1917] dark:bg-[#FAFAFA] px-3 py-2.5 text-sm font-semibold text-white dark:text-[#18181B] disabled:opacity-40"
+                  >
+                    {hostedBusy ? 'Ouverture…' : 'Se connecter'}
+                  </button>
+                </div>
+              )}
+
+              {(showCode || __TARGET__ === 'firefox') && !hostedAccount && (
+                <div className="rounded-xl bg-[#F5F5F4] dark:bg-[#27272A] p-3">
+                  <label className="block text-xs text-[#57534E] dark:text-[#D4D4D8]">
+                    Sur la page ouverte, demandez un code puis saisissez-le ici&nbsp;:
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      maxLength={8}
+                      autoComplete="off"
+                      placeholder="ABCD2345"
+                      className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] bg-white dark:bg-[#121214] px-3 py-2 text-center font-mono text-lg tracking-[0.3em] text-[#1C1917] dark:text-[#FAFAFA] outline-none focus:border-[#1C1917] dark:focus:border-[#FAFAFA]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleRedeemCode()}
+                    disabled={hostedBusy || code.trim().length < 4}
+                    className="mt-2 w-full rounded-xl border border-[#E7E5E4] dark:border-[#3F3F46] px-3 py-2.5 text-sm font-semibold text-[#1C1917] dark:text-[#FAFAFA] disabled:opacity-40 hover:bg-white dark:hover:bg-[#18181B]"
+                  >
+                    Valider le code
+                  </button>
+                </div>
+              )}
+
+              {hostedError && (
+                <div
+                  role="alert"
+                  className="rounded-xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-300"
+                >
+                  {hostedError}
+                </div>
+              )}
+
+              <p className="text-[11px] leading-snug text-[#78716C] dark:text-[#A1A1AA]">
+                Voir{' '}
+                <a href={TRANSPARENCY_URL} target="_blank" rel="noreferrer" className="underline">
+                  le trajet des données
+                </a>{' '}
+                — l’article est analysé sur nos serveurs, jamais conservé en clair.
+              </p>
+            </div>
           )}
         </div>
       </div>

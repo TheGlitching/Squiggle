@@ -2,7 +2,8 @@
 
 How a keyless reader connects the Squiggle extension to their web account. The
 web half lives here (`src/bridge.ts`, `src/pages/Pont.tsx`, `src/api.ts`); the
-extension half does not exist yet and must implement this document exactly.
+extension half is `squiggle-auth.html` (the Chromium landing page) and
+`src/hosted/session.ts` (Firefox's code redeem and the signed account read).
 The typed version of the URL shapes is `src/bridge.ts` — if this file and that
 module disagree, the module wins for the bytes and this file is the bug.
 
@@ -40,11 +41,14 @@ Both parameters are required. Missing either drops the reader on the
 4. The web app navigates to
 
    ```
-   chrome-extension://<ext>/squiggle-auth?token=<token>&pub=<pub>&keyId=<keyId>
+   chrome-extension://<ext>/squiggle-auth.html?token=<token>&pub=<pub>&keyId=<keyId>
    ```
 
    All three values are percent-encoded (`URLSearchParams`). `pub` is the exact
-   decoded string received in step 1.
+   decoded string received in step 1. The `.html` suffix is required: MV3 serves
+   extension pages by path, and `/squiggle-auth` alone resolves to nothing. The
+   page is listed in the extension's `web_accessible_resources` so this
+   navigation is allowed.
 5. The extension reads `token`, `pub`, `keyId`, stores the token against its own
    key, checks that `pub` equals the key it generated, then closes the tab.
 
