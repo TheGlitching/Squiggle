@@ -108,14 +108,14 @@ export function Connexion() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 outline-none focus:border-accent"
+              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 outline-none focus:border-accent"
               placeholder="vous@exemple.fr"
             />
           </label>
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white hover:bg-accentHover disabled:opacity-60"
+            className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
           >
             Recevoir mon code
           </button>
@@ -135,7 +135,7 @@ export function Connexion() {
               autoComplete="one-time-code"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-lg tracking-[0.3em] outline-none focus:border-accent"
+              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 font-mono text-lg tracking-[0.3em] outline-none focus:border-accent"
               placeholder="ABCD2345"
               maxLength={12}
             />
@@ -143,7 +143,7 @@ export function Connexion() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white hover:bg-accentHover disabled:opacity-60"
+            className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
           >
             {busy ? 'Connexion…' : 'Se connecter'}
           </button>

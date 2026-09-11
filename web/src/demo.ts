@@ -18,15 +18,24 @@ export type DemoVerification = 'verifiee' | 'non-sourcee' | 'douteuse' | 'non-ve
 export type SeverityLevel = 1 | 2 | 3;
 export type HighlightSeverity = 'critical' | 'warning' | 'info' | 'positive';
 
-/** The extension's own highlight palette (`shadowOverlay.ts` theme). */
-export const SEVERITY_COLORS: Record<HighlightSeverity, { color: string; tint: string }> = {
-  critical: { color: '#dc2626', tint: 'rgba(239, 68, 68, 0.18)' },
-  warning: { color: '#d97706', tint: 'rgba(245, 158, 11, 0.18)' },
-  info: { color: '#2563eb', tint: 'rgba(59, 130, 246, 0.18)' },
-  positive: { color: '#059669', tint: 'rgba(16, 185, 129, 0.18)' },
+/** The extension's own highlight palette (`shadowOverlay.ts` theme). `color` fills
+ * the bar and dot; `text` is the brighter AA tone for the category label on the
+ * dark panel (the darker fills only clear 3:1 as text: critical 3.96, info 3.70). */
+export const SEVERITY_COLORS: Record<
+  HighlightSeverity,
+  { color: string; tint: string; text: string }
+> = {
+  critical: { color: '#dc2626', tint: 'rgba(239, 68, 68, 0.18)', text: '#f87171' },
+  warning: { color: '#d97706', tint: 'rgba(245, 158, 11, 0.18)', text: '#fbbf24' },
+  info: { color: '#2563eb', tint: 'rgba(59, 130, 246, 0.18)', text: '#60a5fa' },
+  positive: { color: '#059669', tint: 'rgba(16, 185, 129, 0.18)', text: '#34d399' },
 };
 
-export function severityColor(severity: HighlightSeverity): { color: string; tint: string } {
+export function severityColor(severity: HighlightSeverity): {
+  color: string;
+  tint: string;
+  text: string;
+} {
   return SEVERITY_COLORS[severity];
 }
 
