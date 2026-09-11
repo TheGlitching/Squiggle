@@ -55,6 +55,7 @@ import {
 } from './analyze/schemas';
 
 import { claimExtensionToken } from './auth/claim';
+import { issueBridgeCode, redeemBridgeCode } from './auth/bridge';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
 import { requestMagicLink, verifyMagicLink } from './auth/magicLink';
 import { verifySignedRequest } from './auth/requestSigning';
@@ -71,7 +72,7 @@ import { handleStripeWebhook } from './billing/webhook';
 import { corsHeaders, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
 import { NeonDb } from './db/neon';
-import type { Db } from './db/types';
+import type { Db, UserRow } from './db/types';
 import type { Clock } from './lib/clock';
 import { systemClock } from './lib/clock';
 import type { EmailSender, FetchLike } from './lib/brevo';
@@ -358,6 +359,36 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     return res;
   }
 
+  // The web app's own bridge: issue a code for a signed-in reader to type
+  // into an extension that Firefox will not let us navigate to.
+  if (path === '/web/bridge/code' && method === 'POST') {
+    const user = await sessionUser({ db: s.db, clock: s.clock }, req);
+    if (!user) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
+    const sessionHash = await sha256Hex(cookieValue(req, SESSION_COOKIE) as string);
+    const body = await readJson(req);
+    const outcome = await issueBridgeCode(
+      { db: s.db, clock: s.clock, requestId },
+      { userId: user.id, sessionHash, publicKeyJwk: body.publicKeyJwk ?? null },
+    );
+    return finish(outcome);
+  }
+
+  // Redeeming a code is done by the extension, which has no session cookie:
+  // the code itself is the credential, and it is single-use and rate limited.
+  if (path === '/auth/bridge/redeem' && method === 'POST') {
+    const body = await readJson(req);
+    const rawSession = cookieValue(req, SESSION_COOKIE);
+    const outcome = await redeemBridgeCode(
+      { db: s.db, clock: s.clock, requestId },
+      {
+        code: typeof body.code === 'string' ? body.code : '',
+        ip: req.headers.get('cf-connecting-ip'),
+        sessionHash: rawSession ? await sha256Hex(rawSession) : null,
+      },
+    );
+    return finish(outcome);
+  }
+
   if (path === '/webhooks/stripe' && method === 'POST') {
     if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
     // Stripe is not a browser: it sends no Origin, and its signature is the
@@ -369,6 +400,10 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       req.headers.get('stripe-signature'),
     );
     return finish(outcome);
+  }
+
+  if (path.startsWith('/web/account')) {
+    return webAccountRoute(req, s, path, method);
   }
 
   if (path.startsWith('/v1/account')) {
@@ -411,10 +446,42 @@ async function accountRoute(
   const rawBody = method === 'GET' ? '' : await req.text();
   const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
   if (!auth.ok) return finish(auth);
-  const { user } = auth;
+  return accountForUser(s, auth.user, path, method);
+}
+
+/**
+ * The same account and billing capabilities, reached with a web session
+ * cookie instead of a P-256 signature. `lib/cors.ts` requires an Origin on
+ * every one of these, so a third-party page cannot drive them with the
+ * reader's cookie.
+ */
+async function webAccountRoute(
+  req: Request,
+  s: Services,
+  path: string,
+  method: string,
+): Promise<Response> {
+  const user = await sessionUser({ db: s.db, clock: s.clock }, req);
+  if (!user) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
+  return accountForUser(s, user, path, method);
+}
+
+/**
+ * The shared capability body. Both the signed `/v1/account*` route and the
+ * cookie-authenticated `/web/account*` route land here, so the billing logic
+ * and the response shape exist once and cannot diverge between the extension
+ * and the web app.
+ */
+async function accountForUser(
+  s: Services,
+  user: UserRow,
+  path: string,
+  method: string,
+): Promise<Response> {
   const now = s.clock.now();
 
-  if (path === '/v1/account' && method === 'GET') {
+  if (path === '/v1/account' || path === '/web/account') {
+    if (method !== 'GET') return finish(apiError('not_found', 'No such endpoint.'));
     // The panel renders its quota states from this, so it carries the
     // entitlement, not just the stored plan: an `active` row whose period has
     // ended is reported as `none`, which is what is actually true.
@@ -434,7 +501,10 @@ async function accountRoute(
     });
   }
 
-  if (path === '/v1/account/checkout' && method === 'POST') {
+  const isCheckout = path === '/v1/account/checkout' || path === '/web/account/checkout';
+  const isPortal = path === '/v1/account/portal' || path === '/web/account/portal';
+
+  if (isCheckout && method === 'POST') {
     if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
     const outcome = await createCheckoutSession({
       config: s.stripe,
@@ -447,7 +517,7 @@ async function accountRoute(
     return finish(outcome);
   }
 
-  if (path === '/v1/account/portal' && method === 'POST') {
+  if (isPortal && method === 'POST') {
     if (!s.stripe) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
     if (!user.stripeCustomerId) {
       return finish(apiError('not_found', 'Aucun abonnement à gérer pour ce compte.'));

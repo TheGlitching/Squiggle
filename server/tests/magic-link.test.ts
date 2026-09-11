@@ -12,6 +12,11 @@ describe('POST /auth/magic-link', () => {
     expect(env.email.sent).toHaveLength(1);
     expect(env.email.sent[0].to).toBe('marie@example.com');
 
+    // A typable code, and a link that lands on the web app's login page.
+    const code = env.email.lastCode()!;
+    expect(code).toMatch(/^[A-Z2-9]{8}$/);
+    expect(env.email.sent[0].html).toContain(`/connexion?code=${code}`);
+
     const link = await env.db.findMagicLinkByCodeHash(
       await import('@squiggle/shared').then((m) => m.sha256Hex(env.email.lastCode()!)),
     );

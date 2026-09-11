@@ -15,19 +15,21 @@
   "type": "module",
   "workspaces": [
     "shared",
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "dev": "vite",
     "dev:firefox": "TARGET=firefox vite",
     "build": "vite build && node scripts/build-content-script.mjs dist/chrome",
+    "build:web": "npm run build -w @squiggle/web",
     "build:chrome": "TARGET=chrome vite build && node scripts/build-content-script.mjs dist/chrome",
     "build:firefox": "TARGET=firefox vite build && node scripts/build-content-script.mjs dist/firefox",
-    "build:all": "npm run build:chrome && npm run build:firefox",
+    "build:all": "npm run build:chrome && npm run build:firefox && npm run build:web",
     "preview": "vite preview",
-    "test": "vitest run && npm run test -w @squiggle/server",
+    "test": "vitest run && npm run test -w @squiggle/server && npm run test -w @squiggle/web",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server && npm run typecheck -w @squiggle/web",
     "package": "npm run build:all && node scripts/package.mjs"
   },
   "dependencies": {

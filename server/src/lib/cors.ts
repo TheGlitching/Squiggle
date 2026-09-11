@@ -45,6 +45,13 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   { method: 'POST', path: '/auth/logout' },
   { method: 'GET', path: '/auth/claim' },
   { method: 'POST', path: '/auth/claim' },
+  // The browser-session account namespace. These carry the reader's cookie
+  // and change state (a subscription, a portal, a bridge code), so a request
+  // without an Origin is refused rather than trusted.
+  { method: 'GET', path: '/web/account' },
+  { method: 'POST', path: '/web/account/checkout' },
+  { method: 'POST', path: '/web/account/portal' },
+  { method: 'POST', path: '/web/bridge/code' },
 ];
 
 export function originRequired(method: string, path: string): boolean {

@@ -19,7 +19,9 @@ import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   AnalysisRunRow,
   Plan,
+  BridgeCodeRow,
   CreateAnalysisRunArgs,
+  CreateBridgeCodeArgs,
   CreateMagicLinkArgs,
   CreateOAuthPendingArgs,
   CreateReportArgs,
@@ -311,6 +313,50 @@ export class NeonDb implements Db {
     await this.q`UPDATE web_sessions SET revoked_at = ${now} WHERE session_hash = ${sessionHash} AND revoked_at IS NULL`;
   }
 
+  // ---- manual bridge codes ----------------------------------------------------------
+
+  async createBridgeCode(args: CreateBridgeCodeArgs): Promise<BridgeCodeRow> {
+    const id = randomToken(16);
+    const expiresAt = args.now + args.ttlMs;
+    await this.q`
+      INSERT INTO bridge_codes (id, code_hash, user_id, session_hash, public_key_jwk, created_at, expires_at, used_at)
+      VALUES (${id}, ${args.codeHash}, ${args.userId}, ${args.sessionHash}, ${args.publicKeyJwk}, ${args.now}, ${expiresAt}, NULL)
+    `;
+    return {
+      id,
+      codeHash: args.codeHash,
+      userId: args.userId,
+      sessionHash: args.sessionHash,
+      publicKeyJwk: args.publicKeyJwk,
+      createdAt: args.now,
+      expiresAt,
+      usedAt: null,
+    };
+  }
+
+  async findBridgeCodeByHash(codeHash: string): Promise<BridgeCodeRow | null> {
+    const rows = await this.q`SELECT * FROM bridge_codes WHERE code_hash = ${codeHash}`;
+    if (!rows[0]) return null;
+    const r = rows[0];
+    return {
+      id: r.id as string,
+      codeHash,
+      userId: r.user_id as string,
+      sessionHash: r.session_hash as string,
+      publicKeyJwk: r.public_key_jwk as string,
+      createdAt: num(r.created_at),
+      expiresAt: num(r.expires_at),
+      usedAt: r.used_at === null ? null : num(r.used_at),
+    };
+  }
+
+  async markBridgeCodeUsed(id: string, now: number): Promise<boolean> {
+    const rows = await this.q`
+      UPDATE bridge_codes SET used_at = ${now} WHERE id = ${id} AND used_at IS NULL RETURNING id
+    `;
+    return rows.length > 0;
+  }
+
   // ---- nonces ------------------------------------------------------------------------------
 
   async addNonce(args: NonceArgs): Promise<boolean> {
@@ -522,6 +568,7 @@ export class NeonDb implements Db {
     await this.q`DELETE FROM nonces WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM web_sessions WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM magic_links WHERE expires_at <= ${now}`;
+    await this.q`DELETE FROM bridge_codes WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now}`;
     await this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs}`;
