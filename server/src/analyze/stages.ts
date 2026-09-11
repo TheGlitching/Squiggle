@@ -2,7 +2,7 @@
  * The five analysis stage endpoints (Phase 2c).
  *
  * The extension drives the run; the server owns the result. Each call is one
- * or two Gemini calls (5–25 s), which is what makes a whole analysis fit on a
+ * or two model calls (5–25 s), which is what makes a whole analysis fit on a
  * serverless runtime that would time out on a single 3-minute request.
  *
  *   check         cache lookup only — a hit costs 0 LLM calls and 0 credits,
@@ -70,7 +70,7 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  *
  * The client drives the run, so without these the cost of an analysis is
  * whatever the client asks for: a model that returns two hundred findings, or
- * simply a client that keeps calling, would spend two hundred Gemini calls
+ * simply a client that keeps calling, would spend two hundred model calls
  * against a single credit. Both caps sit above what a real article produces —
  * a long investigation raises a handful of factual objections, and the engine's
  * own per-analysis page budget is eight — so a reader never meets them.
@@ -289,7 +289,7 @@ export async function analyzeAudit(
  * What a run has to clear to start: the reader's own entitlement, one analysis
  * in flight per account, and an hourly ceiling for the whole service. That
  * last one is the only thing standing between a mass account compromise and an
- * unbounded Gemini invoice.
+ * unbounded model invoice.
  */
 async function enforceStartCeilings(
   s: AnalyzeServices,

@@ -24,7 +24,7 @@ false disclosure in the direction that gets an extension pulled.
 | **Location** | No | No |
 | **Web history** | No | No — a URL is sent only for the article being analysed, on an explicit action, and is never retained in a browsable form |
 | **User activity** | No | No |
-| **Website content** | **Yes** — the text of the article is sent to the provider whose key the user configured | **Yes** — and in hosted mode, to our server and from there to Google |
+| **Website content** | **Yes** — the text of the article is sent to the provider whose key the user configured | **Yes** — and in hosted mode, to our server and from there to the configured model provider (OpenRouter and the model's provider by default; Google Gemini if that is the deployment setting) |
 | Certification: not sold to third parties | ✔ | ✔ |
 | Certification: not used or transferred for a purpose unrelated to the single purpose | ✔ | ✔ |
 | Certification: not used to determine creditworthiness or for lending | ✔ | ✔ |
@@ -53,7 +53,8 @@ order:
 
 1. what the extension reads (the article in the tab the user asked about),
 2. where it sends it (the provider the user configured; in hosted mode, our server and
-   Google),
+   the configured model provider — OpenRouter and the model's provider by default,
+   Google Gemini if that is the deployment setting),
 3. what is stored locally (the encrypted key; in hosted mode, also the session token
    and the install's signing key),
 4. what is stored remotely (in BYOK mode: nothing; in hosted mode: the report for 30

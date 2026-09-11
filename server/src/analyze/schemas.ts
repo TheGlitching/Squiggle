@@ -2,7 +2,7 @@
  * Payload validation for the analysis stage endpoints.
  *
  * Every field a client can set is bounded here, before a single token is paid
- * for: an unbounded `blocks` array is an unbounded Gemini bill, and an
+ * for: an unbounded `blocks` array is an unbounded model bill, and an
  * unbounded string is an unbounded prompt. The caps are generous enough for a
  * long-form investigation (roughly 200 000 characters, an order of magnitude
  * above a newspaper feature) and small enough that no single request can cost

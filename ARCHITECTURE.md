@@ -46,9 +46,12 @@ is from the reader's browser to the provider whose key they configured.
 *Under construction, not deployed. Documented here as it lands.*
 
 A reader who does not want to hold an API key can sign in and have the analysis run on
-our infrastructure instead, on our own Gemini key, against credits. It is a mode
-selector, not a replacement: BYOK is untouched, and the extraction, the prompts, the
-scoring and the reconciliation are the same code either way — that is what the
+our infrastructure instead, on our own key, against credits. The provider and the model
+are deployment settings, not a hard-coded client: `LLM_PROVIDER` selects one of the
+gateway's providers (OpenRouter by default, Gemini kept selectable), `OPENROUTER_MODEL`
+names the exact catalogue id, and the matching key lives in the secret store. It is a
+mode selector, not a replacement: BYOK is untouched, and the extraction, the prompts,
+the scoring and the reconciliation are the same code either way — that is what the
 `shared/` workspace is for.
 
 ```
@@ -59,9 +62,9 @@ scoring and the reconciliation are the same code either way — that is what the
                | signed (P-256), one call per stage
                v
 +-----------------------------+       +---------------------+
-|   Worker (Cloudflare)       |──────▶|  Google Gemini      |
-|   auth, quotas, stages      |       +---------------------+
-|   shared report cache       |
+|   Worker (Cloudflare)       |──────▶| configured provider |
+|   auth, quotas, stages      |       | OpenRouter / Gemini |
+|   shared report cache       |       +---------------------+
 +------+---------------+------+       +---------------------+
        |               |──────────────▶  the article's own  |
        v               |                 cited sources      |
@@ -75,7 +78,7 @@ scoring and the reconciliation are the same code either way — that is what the
               +----------------+
 ```
 
-Five calls make one analysis, because each is one or two Gemini calls (5-25 s) and a
+Five calls make one analysis, because each is one or two model calls (5-25 s) and a
 single 3-minute request would time out on a serverless runtime:
 
 ```

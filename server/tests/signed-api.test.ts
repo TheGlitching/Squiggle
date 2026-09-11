@@ -204,6 +204,18 @@ describe('signed /v1 requests', () => {
     );
     expect(wrong.status).toBe(401);
 
+    // A near-miss — the right token minus its last character, and with one
+    // extra — must be refused exactly like an unrelated one.
+    for (const nearMiss of ['Bearer admin-secre', 'Bearer admin-secretx']) {
+      const rejected = await env.handler(
+        new Request(`${env.webAppOrigin}/admin/migrate`, {
+          method: 'POST',
+          headers: { authorization: nearMiss },
+        }),
+      );
+      expect(rejected.status).toBe(401);
+    }
+
     const ok = await env.handler(
       new Request(`${env.webAppOrigin}/admin/migrate`, {
         method: 'POST',

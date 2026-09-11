@@ -19,7 +19,7 @@
  *
  * `invoice.payment_failed` suspending immediately is a decision, not an
  * oversight: Stripe retries a failed payment for days, and every retry costs
- * us Gemini calls if the account keeps analysing. The reader recovers the
+ * us model calls if the account keeps analysing. The reader recovers the
  * moment a retry succeeds, because that emits a `subscription.updated` with an
  * `active` status which reinstates them here.
  */
@@ -126,7 +126,16 @@ export async function handleStripeWebhook(
       // A provisional week fails loudly instead: the reader sees it, we hear
       // about it, and a correctly delivered subscription event replaces it
       // long before it matters.
-      await deps.db.setPlan(user.id, 'active', now + PROVISIONAL_ACCESS_MS, now);
+      //
+      // Stripe does not promise ordered delivery, so the subscription event can
+      // arrive before this one. The provisional is therefore only written when
+      // the account has no later expiry already on record: an out-of-order
+      // checkout must never shorten a real subscription back to a week.
+      const provisionalEnd = now + PROVISIONAL_ACCESS_MS;
+      const hasLaterExpiry = user.planExpiresAt !== null && user.planExpiresAt > provisionalEnd;
+      if (!hasLaterExpiry) {
+        await deps.db.setPlan(user.id, 'active', provisionalEnd, now);
+      }
       break;
     }
 

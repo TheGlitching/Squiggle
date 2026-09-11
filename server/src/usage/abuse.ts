@@ -3,7 +3,7 @@
  *
  * These are not the product's quotas — a reader's 3 trial analyses and 5 a day
  * live in the billing layer. These are the limits that stop a runaway or
- * hostile client from turning our Gemini bill into someone else's denial of
+ * hostile client from turning our model bill into someone else's denial of
  * service, and they sit deliberately far above anything a real reader does, so
  * a legitimate user never meets one.
  *

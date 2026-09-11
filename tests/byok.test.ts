@@ -3,9 +3,9 @@ import { encryptSecret, decryptSecret } from '../src/crypto/crypto';
 import { SecureKeyStorage } from '../src/crypto/storage';
 import { createLLMClient } from '../src/client/factory';
 import { AnthropicClient } from '../src/client/anthropic';
-import { OpenAIClient } from '../src/client/openai';
+import { OpenAIClient } from '@squiggle/shared';
 import { GeminiClient } from '@squiggle/shared';
-import { OpenRouterClient } from '../src/client/openrouter';
+import { OpenRouterClient } from '@squiggle/shared';
 
 describe('BYOK Crypto & Storage', () => {
   const testPassphrase = 'secure-master-password-123';

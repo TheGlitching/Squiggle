@@ -13,7 +13,7 @@ même trajet de données.
 |---|---|---|
 | Disponible | oui, c'est le mode actuel | **pas encore : en cours de construction** |
 | Il vous faut | une clé d'API à vous | un compte |
-| L'article part vers | le fournisseur que vous avez choisi | notre serveur, puis Google |
+| L'article part vers | le fournisseur que vous avez choisi | notre serveur, puis le fournisseur configuré |
 | Nous voyons | rien | l'article, le temps de l'analyser |
 | Ce qui est conservé chez nous | rien | le rapport, pas l'article |
 
@@ -86,14 +86,15 @@ Supprimer l'extension supprime les deux.
 > pas disponible, rien de ce qui suit ne se produit.
 
 Le mode hébergé existe pour les lecteurs qui ne veulent pas gérer une clé d'API.
-L'analyse tourne alors sur notre infrastructure, avec notre propre clé Google Gemini,
-contre des crédits. **Le choix vous appartient à chaque instant** : c'est un
+L'analyse tourne alors sur notre infrastructure, avec notre propre clé, via le
+fournisseur configuré (OpenRouter par défaut, Google Gemini en alternative), contre
+des crédits. **Le choix vous appartient à chaque instant** : c'est un
 sélecteur dans les réglages, et un compte est nécessaire pour l'activer.
 
 ## Le trajet des données
 
 ```
-votre navigateur  ──(le texte de l'article)──▶  notre serveur  ──▶  Google Gemini
+votre navigateur  ──(le texte de l'article)──▶  notre serveur  ──▶  fournisseur configuré
                   ◀──────(le rapport)──────────
 ```
 
@@ -145,7 +146,9 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 
 | Sous-traitant | Rôle | Ce qu'il voit |
 |---|---|---|
-| **Google** (Gemini) | analyse | le texte de l'article et les extraits des sources citées |
+| **OpenRouter** | passerelle d'analyse, fournisseur par défaut | le texte de l'article et les extraits des sources citées |
+| **Fournisseur du modèle** (DeepSeek pour `deepseek/deepseek-v4.1-flash`) | exécution du modèle choisi par la passerelle | idem |
+| **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |
 | **Cloudflare** (Workers) | hébergement du serveur | le trafic, sans contenu d'article dans les journaux |
 | **Neon** | base de données | tout ce que décrit le tableau ci-dessus |
@@ -172,8 +175,8 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 - Aucune donnée n'est transmise à quiconque en dehors des destinataires listés
   ci-dessus, et uniquement pour produire l'analyse que vous avez demandée.
 - Aucune donnée n'est utilisée à une fin étrangère à cette analyse. En particulier,
-  **rien n'entraîne un modèle** : nous n'avons aucun accord de ce type et l'API Gemini
-  payante n'utilise pas les requêtes pour l'entraînement.
+  **rien n'entraîne un modèle** : nous n'avons aucun accord de ce type et l'API payante
+  du fournisseur configuré n'utilise pas les requêtes pour l'entraînement.
 - Aucune donnée n'est utilisée pour évaluer une solvabilité ni pour un prêt.
 - Aucune publicité, aucun traceur, aucun mouchard analytique.
 - Aucun code n'est téléchargé ni exécuté depuis l'extérieur : tout ce qui s'exécute

@@ -123,7 +123,8 @@ extension does with no account at all.
 
 What changes, stated plainly, because it is the whole trade:
 
-- the article text goes to our server, and from there to Google. It is used for the
+- the article text goes to our server, and from there to the configured model provider
+  (OpenRouter by default; Gemini is a deployment setting away). It is used for the
   audit call and dropped when that request ends; no table in our database holds it.
 - the finished report is cached and shared, so a second reader of the same article
   gets it for free and never sends the article anywhere.
@@ -166,13 +167,14 @@ src/                  the extension
 
 shared/src/           imported by BOTH the extension and the server
   engine/             criteria, prompts, research, reconciliation, scoring
-  client/             provider clients (Anthropic, OpenAI, OpenRouter, Gemini)
+  client/             provider clients (OpenAI, OpenRouter, Gemini)
   auth/signing.ts     the request-signing protocol for hosted mode
 
 server/src/           the hosted backend (Cloudflare Workers + Neon)
   auth/               magic link, Google OAuth, extension tokens, signature checks
   analyze/            the five analysis stage endpoints and the shared cache
   billing/            Stripe checkout, portal, webhook, quotas
+  index.ts            the config-driven LLM provider gateway (LLM_PROVIDER)
 ```
 
 `shared/` is not a convenience. The moment the same analysis can run in two places, a

@@ -254,4 +254,46 @@ describe('a checkout that is never confirmed', () => {
     // It lapses on its own instead of lasting for ever unnoticed.
     expect(effectivePlan(user!, env.clock.now() + 8 * 24 * 60 * 60 * 1000)).toBe('none');
   });
+
+  it('does not let a late checkout overwrite a real subscription expiry', async () => {
+    const env = makeTestEnv();
+    const who = await signedIn(env, 'marie@example.org');
+
+    // Stripe does not promise ordered delivery. The subscription event arrives
+    // first here and carries the real period end.
+    const periodEndSec = Math.floor(env.clock.now() / 1000) + 30 * 24 * 60 * 60;
+    await postStripeEvent(env, {
+      id: 'evt_sub_first',
+      type: 'customer.subscription.created',
+      data: {
+        object: {
+          id: 'sub_1',
+          customer: 'cus_1',
+          status: 'active',
+          current_period_end: periodEndSec,
+          metadata: { user_id: who.userId },
+        },
+      },
+    });
+    expect((await env.db.getUserById(who.userId))!.planExpiresAt).toBe(periodEndSec * 1000);
+
+    // The checkout session is delivered afterwards. Its provisional 7-day
+    // expiry must not shorten the month the subscription actually bought.
+    await postStripeEvent(env, {
+      id: 'evt_checkout_late',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_1',
+          customer: 'cus_1',
+          subscription: 'sub_1',
+          metadata: { user_id: who.userId },
+        },
+      },
+    });
+
+    const after = await env.db.getUserById(who.userId);
+    expect(after!.plan).toBe('active');
+    expect(after!.planExpiresAt).toBe(periodEndSec * 1000);
+  });
 });

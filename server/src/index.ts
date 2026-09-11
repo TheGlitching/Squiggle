@@ -32,7 +32,12 @@
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
 import { neon } from '@neondatabase/serverless';
-import { GeminiClient, PROMPT_VERSION, type BaseLLMClient } from '@squiggle/shared';
+import {
+  GeminiClient,
+  OpenRouterClient,
+  PROMPT_VERSION,
+  type BaseLLMClient,
+} from '@squiggle/shared';
 
 import {
   analyzeAudit,
@@ -74,6 +79,7 @@ import { BrevoEmailSender } from './lib/brevo';
 import { apiError, errorResponse, type Outcome } from './lib/errors';
 import { sha256Hex } from '@squiggle/shared';
 import { migrate, type SqlQuery } from './migrations';
+import { secureEquals } from './lib/secureCompare';
 
 export interface Env {
   // Non-secret (wrangler.jsonc vars)
@@ -91,10 +97,16 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET: string;
   /** Non-secret: the `price_…` the subscription is sold at (wrangler.jsonc var). */
   STRIPE_PRICE_ID: string;
-  /** Our own Gemini key. Hosted mode runs on it; BYOK never touches it. */
-  GEMINI_API_KEY: string;
-  /** Non-secret: the exact model id analyses run on (wrangler.jsonc var). */
-  GEMINI_MODEL: string;
+  /** Non-secret: which provider hosted analyses run on. Defaults to `openrouter`. */
+  LLM_PROVIDER?: string;
+  /** Our own OpenRouter key. Hosted mode runs on it; BYOK never touches it. */
+  OPENROUTER_API_KEY?: string;
+  /** Non-secret: the exact OpenRouter model id (wrangler.jsonc var). */
+  OPENROUTER_MODEL?: string;
+  /** The switchable alternative provider, used only when `LLM_PROVIDER` is `gemini`. */
+  GEMINI_API_KEY?: string;
+  /** Non-secret: the exact Gemini model id, used only for the `gemini` selection. */
+  GEMINI_MODEL?: string;
 }
 
 export interface Services {
@@ -119,6 +131,57 @@ export interface Services {
   stripe?: StripeConfig;
   /** Apply pending migrations; only present in the live (Neon) deployment. */
   runMigrations?: (now: number) => Promise<string[]>;
+}
+
+/**
+ * The model hosted analyses default to when the deployment names none. The id
+ * is the exact OpenRouter catalogue id, tilde-free: OpenRouter ids are not
+ * predictable from the model name, and the API rejects anything that is not
+ * exactly right.
+ */
+export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash';
+
+/** The deployment settings the provider gateway reads. */
+export interface LlmEnv {
+  LLM_PROVIDER?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+}
+
+/**
+ * Builds the hosted LLM client from deployment config, so the provider and the
+ * model are settings rather than something baked into a build. OpenRouter is
+ * the default; `gemini` is kept selectable.
+ *
+ * A provider whose key is absent yields `undefined` rather than throwing at
+ * request time or silently falling back to a provider the deployment did not
+ * choose. `undefined` is what the analyze route already turns into the existing
+ * "mode hébergé n'est pas configuré" refusal.
+ */
+export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
+  const provider = (env.LLM_PROVIDER || 'openrouter').trim().toLowerCase();
+
+  if (provider === 'gemini') {
+    if (!env.GEMINI_API_KEY) return undefined;
+    return new GeminiClient({
+      provider: 'gemini',
+      apiKey: env.GEMINI_API_KEY,
+      model: env.GEMINI_MODEL || 'gemini-2.5-flash',
+    });
+  }
+
+  if (provider === 'openrouter') {
+    if (!env.OPENROUTER_API_KEY) return undefined;
+    return new OpenRouterClient({
+      provider: 'openrouter',
+      apiKey: env.OPENROUTER_API_KEY,
+      model: env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
+    });
+  }
+
+  return undefined;
 }
 
 /** Build the request handler from dependencies (the testable core). */
@@ -317,8 +380,11 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   }
 
   if (path === '/admin/migrate' && method === 'POST') {
-    const header = req.headers.get('authorization');
-    if (!s.adminToken || header !== `Bearer ${s.adminToken}`) {
+    // Constant-time: a plain `!==` short-circuits at the first differing byte,
+    // which lets an attacker recover the admin token one character at a time.
+    const header = req.headers.get('authorization') ?? '';
+    const expected = s.adminToken ? `Bearer ${s.adminToken}` : '';
+    if (!s.adminToken || !(await secureEquals(header, expected))) {
       return finish(apiError('invalid_token', 'Invalid admin token.'));
     }
     if (!s.runMigrations) {
@@ -500,6 +566,12 @@ let live: Services | null = null;
 function servicesFromEnv(env: Env): Services {
   if (live) return live;
   const sql = neon(env.DATABASE_URL);
+  // The provider is a deployment setting. When its key is missing this is
+  // `undefined`, and the analyze route refuses — it never picks a provider the
+  // deployment did not configure. Our own key is read from the Workers secret
+  // store and never leaves this process; a BYOK user's key is a different thing
+  // entirely and never reaches this server at all.
+  const hostedLlm = createHostedLlm(env);
   live = {
     db: new NeonDb(env.DATABASE_URL),
     clock: systemClock,
@@ -513,15 +585,7 @@ function servicesFromEnv(env: Env): Services {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,
-    // Our own key, read from the Workers secret store and never leaving this
-    // process. A BYOK user's key is a different thing entirely: it stays in
-    // their browser and never reaches this server at all.
-    llm: () =>
-      new GeminiClient({
-        provider: 'gemini',
-        apiKey: env.GEMINI_API_KEY,
-        model: env.GEMINI_MODEL,
-      }),
+    llm: hostedLlm ? () => hostedLlm : undefined,
     promptVersion: PROMPT_VERSION,
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY,
