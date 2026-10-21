@@ -54,7 +54,10 @@ instead of on a key you hold. What that means concretely:
   the account and the clock. Nonces are single-use (an atomic check-and-set) and
   timestamps must be within five minutes.
 - **Origin policy.** The cookie-authenticated endpoints refuse a request with a
-  wrong `Origin` *or with none at all*. The OAuth redirects are exempt because a
+  wrong `Origin` *or with none at all*, unless the browser vouches that it is
+  same-origin with `Sec-Fetch-Site: same-origin` (a browser sends no `Origin` on
+  a same-origin `GET`, and page script cannot set that header). `cross-site`,
+  `same-site`, `none` and an absent header are refused. The OAuth redirects are exempt because a
   top-level navigation carries no `Origin` by design; their anti-forgery control
   is the OAuth `state`. `/v1/*` is exempt because the signature is strictly
   stronger evidence than a header — and a mismatched origin is still refused
