@@ -4,6 +4,10 @@
   "main": "src/index.ts",
   // Bump when the runtime gains new features we start relying on.
   "compatibility_date": "2025-01-01",
+  // Retention sweeps (see runScheduled): hourly, and daily at DAILY_CRON.
+  "triggers": {
+    "crons": ["0 * * * *", "17 3 * * *"]
+  },
   "observability": {
     "enabled": true
   },
