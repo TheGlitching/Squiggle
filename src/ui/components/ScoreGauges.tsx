@@ -134,7 +134,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
   return (
     <div
-      className={`p-3 rounded border border-line bg-panel transition-colors ${className}`}
+      className={`p-3 rounded-sm border border-line bg-panel transition-colors ${className}`}
     >
       <div
         className="flex items-start justify-between cursor-pointer select-none"
@@ -144,7 +144,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
           {/* The side panel is narrow and these labels are long: the label owns
               the slack and wraps, the mark stays on one line and never shrinks. */}
           <div className="flex items-baseline justify-between gap-2 text-xs mb-1">
-            <span className="font-sans font-bold text-ink min-w-0 break-words leading-snug">
+            <span className="font-sans font-bold text-ink min-w-0 wrap-break-word leading-snug">
               {def.label}
             </span>
             <span className="font-mono font-semibold text-muted shrink-0 whitespace-nowrap tabular-nums">
