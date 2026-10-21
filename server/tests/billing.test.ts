@@ -336,4 +336,52 @@ describe('quotas', () => {
       expect({ status, plan: (await env.db.getUserById(who.userId))!.plan }).toEqual({ status, plan: expected });
     }
   });
+
+  describe('subscription period', () => {
+    const periodAt = (env: TestEnv, days: number) => Math.floor((env.clock.now() + days * DAY_MS) / 1000);
+
+    it('reads the period end from the items (API 2025-03-31 and later)', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      await postStripeEvent(
+        env,
+        subscriptionEvent('customer.subscription.created', who.userId, {
+          items: { data: [{ current_period_end: periodAt(env, 30) }, { current_period_end: periodAt(env, 60) }] },
+        }),
+      );
+      const row = (await env.db.getUserById(who.userId))!;
+      expect(row.plan).toBe('active');
+      expect(row.planExpiresAt).toBe(periodAt(env, 30) * 1000);
+    });
+
+    it('still reads the legacy subscription-level field', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      await postStripeEvent(
+        env,
+        subscriptionEvent('customer.subscription.updated', who.userId, { current_period_end: periodAt(env, 30) }),
+      );
+      expect((await env.db.getUserById(who.userId))!.planExpiresAt).toBe(periodAt(env, 30) * 1000);
+    });
+
+    it('keeps the provisional expiry when an entitled event carries no period', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      const provisional = env.clock.now() + 7 * DAY_MS;
+      await env.db.setPlan(who.userId, 'active', provisional, env.clock.now());
+      await postStripeEvent(env, subscriptionEvent('customer.subscription.updated', who.userId));
+      const row = (await env.db.getUserById(who.userId))!;
+      expect(row.plan).toBe('active');
+      expect(row.planExpiresAt).toBe(provisional);
+    });
+
+    it('never records an unbounded plan when there is no period and no expiry on record', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      await postStripeEvent(env, subscriptionEvent('customer.subscription.created', who.userId));
+      const row = (await env.db.getUserById(who.userId))!;
+      expect(row.plan).toBe('active');
+      expect(row.planExpiresAt).toBe(env.clock.now() + 7 * DAY_MS);
+    });
+  });
 });
