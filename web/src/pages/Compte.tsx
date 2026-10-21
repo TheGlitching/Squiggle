@@ -84,8 +84,9 @@ export function Compte() {
 
       {payment === 'ok' ? (
         <p className="mt-6 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
-          Merci ! Votre abonnement est en cours d’activation. Cette page se met à jour dans un
-          instant.
+          {account.plan === 'active'
+            ? 'Merci ! Votre abonnement est actif.'
+            : 'Merci ! Votre abonnement est en cours d’activation. Actualisez cette page dans un instant.'}
         </p>
       ) : null}
       {payment === 'annule' ? (
@@ -120,14 +121,17 @@ export function Compte() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {view.needsSubscription ? (
-            <button
-              onClick={subscribe}
-              disabled={busy}
-              className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
-            >
-              S’abonner — 10 analyses / jour
-            </button>
+          {view.canSubscribe ? (
+            <div>
+              <button
+                onClick={subscribe}
+                disabled={busy}
+                className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
+              >
+                S’abonner : 4,99 €/mois
+              </button>
+              <p className="mt-2 text-xs text-muted">10 analyses par jour, sans engagement.</p>
+            </div>
           ) : null}
           {view.state === 'active' || view.state === 'quota_exhausted' ? (
             <button
