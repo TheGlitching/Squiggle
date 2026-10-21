@@ -29,7 +29,11 @@ export interface LogFields {
     | 'analysis_finalized'
     | 'cache_hit'
     | 'provider_failed'
-    | 'unhandled_error';
+    | 'unhandled_error'
+    | 'account_deleted'
+    | 'email_changed'
+    | 'install_revoked'
+    | 'stripe_email_sync_failed';
   requestId: string;
   method?: string;
   /** The route pattern, never the query string (which carries the article URL). */

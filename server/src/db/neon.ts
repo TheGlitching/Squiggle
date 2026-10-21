@@ -15,6 +15,7 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { randomToken } from '@squiggle/shared';
 
+import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   AnalysisRunRow,
@@ -31,6 +32,7 @@ import type {
   CreateUsageLogArgs,
   Db,
   ExtensionKeyRow,
+  InstallRow,
   MagicLinkRow,
   NonceArgs,
   OAuthPendingRow,
@@ -135,6 +137,39 @@ export class NeonDb implements Db {
     await this.q`UPDATE users SET google_sub = ${googleSub}, updated_at = ${now} WHERE id = ${userId}`;
   }
 
+  async setEmail(userId: string, email: string, now: number): Promise<boolean> {
+    try {
+      const rows = await this.q`
+        UPDATE users SET email = ${email}, email_verified = true, updated_at = ${now}
+        WHERE id = ${userId}
+        RETURNING id
+      `;
+      return rows.length > 0;
+    } catch (err) {
+      // 23505 is Postgres' unique_violation: the address belongs to another account.
+      if ((err as { code?: unknown }).code === '23505') return false;
+      throw err;
+    }
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    // One transaction. Everything with a foreign key to `users` cascades from
+    // the last statement (migrations 001-007 all say ON DELETE CASCADE, and
+    // migrations.test.ts keeps it that way); the three before it are the rows
+    // that name the account by address or by key instead of by id, and they
+    // have to be read while the user row and its keys still exist.
+    await this.q.transaction((t) => [
+      t`DELETE FROM nonces WHERE key_id IN (SELECT id FROM extension_keys WHERE user_id = ${userId})`,
+      t`DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = ${userId})`,
+      t`
+        DELETE FROM rate_limits
+        WHERE (scope = 'magic_link:email' AND key = (SELECT email FROM users WHERE id = ${userId}))
+           OR (scope = ${EMAIL_CHANGE_RATE_SCOPE} AND key = ${userId})
+      `,
+      t`DELETE FROM users WHERE id = ${userId}`,
+    ]);
+  }
+
   // ---- extension signing keys ----------------------------------------------
 
   async getUserByStripeCustomerId(customerId: string): Promise<UserRow | null> {
@@ -200,6 +235,31 @@ export class NeonDb implements Db {
 
   // ---- extension tokens --------------------------------------------------------
 
+  async listInstalls(userId: string, now: number): Promise<InstallRow[]> {
+    const rows = await this.q`
+      SELECT k.id AS id, k.created_at AS created_at, MAX(t.expires_at) AS expires_at
+      FROM extension_keys k
+      JOIN tokens t ON t.key_id = k.id
+      WHERE k.user_id = ${userId} AND t.revoked_at IS NULL AND t.expires_at > ${now}
+      GROUP BY k.id, k.created_at
+      ORDER BY k.created_at DESC
+    `;
+    return rows.map((r) => ({
+      id: r.id as string,
+      createdAt: num(r.created_at),
+      expiresAt: num(r.expires_at),
+    }));
+  }
+
+  async revokeInstall(userId: string, keyId: string, now: number): Promise<boolean> {
+    const rows = await this.q`
+      UPDATE tokens SET revoked_at = ${now}
+      WHERE user_id = ${userId} AND key_id = ${keyId} AND revoked_at IS NULL
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
+
   async createToken(args: CreateTokenArgs): Promise<TokenRow> {
     const id = randomToken(16);
     const expiresAt = args.now + args.ttlMs;
@@ -243,14 +303,15 @@ export class NeonDb implements Db {
     const id = randomToken(16);
     const expiresAt = args.now + args.ttlMs;
     await this.q`
-      INSERT INTO magic_links (id, email, code_hash, ip, created_at, expires_at, used_at)
-      VALUES (${id}, ${args.email}, ${args.codeHash}, ${args.ip}, ${args.now}, ${expiresAt}, NULL)
+      INSERT INTO magic_links (id, email, code_hash, ip, change_user_id, created_at, expires_at, used_at)
+      VALUES (${id}, ${args.email}, ${args.codeHash}, ${args.ip}, ${args.changeUserId ?? null}, ${args.now}, ${expiresAt}, NULL)
     `;
     return {
       id,
       email: args.email,
       codeHash: args.codeHash,
       ip: args.ip,
+      changeUserId: args.changeUserId ?? null,
       createdAt: args.now,
       expiresAt,
       usedAt: null,
@@ -266,6 +327,7 @@ export class NeonDb implements Db {
       email: r.email as string,
       codeHash,
       ip: (r.ip as string | null) ?? null,
+      changeUserId: (r.change_user_id as string | null) ?? null,
       createdAt: num(r.created_at),
       expiresAt: num(r.expires_at),
       usedAt: r.used_at === null ? null : num(r.used_at),

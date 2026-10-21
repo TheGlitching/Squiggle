@@ -8,6 +8,7 @@
 
 export const ErrorCodes = {
   invalid_email: 'invalid_email',
+  email_taken: 'email_taken',
   invalid_code: 'invalid_code',
   expired_link: 'expired_link',
   link_already_used: 'link_already_used',
@@ -48,6 +49,7 @@ export interface ApiError {
 
 const DEFAULT_STATUS: Record<ErrorCode, number> = {
   invalid_email: 400,
+  email_taken: 409,
   invalid_code: 400,
   expired_link: 410,
   link_already_used: 400,
