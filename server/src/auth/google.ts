@@ -19,6 +19,7 @@ import type { FetchLike } from '../lib/brevo';
 import { apiError, type Outcome } from '../lib/errors';
 import { verifyGoogleIdToken } from '../lib/jwt';
 import type { Db } from '../db/types';
+import { sanitizeNext } from './next';
 import { createWebSession } from './session';
 
 /** A handshake stops being valid 10 minutes after it started. */
@@ -45,7 +46,7 @@ export interface StartedGoogleAuth {
   state: string;
 }
 
-export async function startGoogleAuth(deps: GoogleDeps): Promise<StartedGoogleAuth> {
+export async function startGoogleAuth(deps: GoogleDeps, input: { next?: unknown } = {}): Promise<StartedGoogleAuth> {
   const now = deps.clock.now();
   const codeVerifier = randomToken(32);
   const digest = await crypto.subtle.digest(
@@ -62,6 +63,7 @@ export async function startGoogleAuth(deps: GoogleDeps): Promise<StartedGoogleAu
     codeVerifier,
     nonce,
     redirectUri,
+    next: sanitizeNext(input.next),
     now,
     ttlMs: OAUTH_PENDING_TTL_MS,
   });
@@ -83,7 +85,7 @@ export async function startGoogleAuth(deps: GoogleDeps): Promise<StartedGoogleAu
 export async function completeGoogleAuth(
   deps: GoogleDeps,
   input: { state?: string; code?: string },
-): Promise<Outcome<{ userId: string; email: string | null; sessionToken: string }>> {
+): Promise<Outcome<{ userId: string; email: string | null; sessionToken: string; next: string | null }>> {
   const { state, code } = input;
   if (!state || !code) return apiError('invalid_state', 'Missing OAuth state or code.');
 
@@ -160,5 +162,5 @@ export async function completeGoogleAuth(
   }
 
   const sessionToken = await createWebSession({ db: deps.db, clock: deps.clock }, user.id);
-  return { ok: true, userId: user.id, email: claims.email ?? null, sessionToken };
+  return { ok: true, userId: user.id, email: claims.email ?? null, sessionToken, next: pending.next };
 }

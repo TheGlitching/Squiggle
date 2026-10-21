@@ -10,7 +10,8 @@ function searchOf(path: string): URLSearchParams {
 export function Connexion() {
   const path = usePath();
   const params = searchOf(path);
-  const next = params.get('next') ?? '/compte';
+  const requestedNext = params.get('next');
+  const next = requestedNext ?? '/compte';
   const linkCode = params.get('code');
 
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -25,9 +26,11 @@ export function Connexion() {
     let cancelled = false;
     setBusy(true);
     setError(null);
+    // The emailed link opens in a new tab that has lost the page which asked
+    // for the sign-in, so the destination comes back from the server.
     verifyMagicLink(linkCode)
-      .then(() => {
-        if (!cancelled) navigate(next);
+      .then((result) => {
+        if (!cancelled) navigate(result.next ?? next);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -58,7 +61,7 @@ export function Connexion() {
     setBusy(true);
     setError(null);
     try {
-      await requestMagicLink(email);
+      await requestMagicLink(email, requestedNext ?? undefined);
       setStep('code');
     } catch (err) {
       setError(messageForError(err));
@@ -72,8 +75,8 @@ export function Connexion() {
     setBusy(true);
     setError(null);
     try {
-      await verifyMagicLink(code);
-      navigate(next);
+      const result = await verifyMagicLink(code);
+      navigate(result.next ?? next);
     } catch (err) {
       setError(messageForError(err));
       setBusy(false);
@@ -167,7 +170,7 @@ export function Connexion() {
       </div>
 
       <a
-        href={googleSignInUrl()}
+        href={googleSignInUrl(requestedNext ?? undefined)}
         className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 font-medium hover:border-accent hover:text-accentInk"
       >
         Continuer avec Google

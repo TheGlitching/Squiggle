@@ -33,6 +33,13 @@ Both parameters are required. Missing either drops the reader on the
 1. If not signed in, the web app sends the reader to
    `/connexion?next=<encoded /pont… URL>`; after login it resumes the bridge.
    The bridge query survives in `next`.
+   Google and the emailed link cross a hop that drops the page, so `next` is
+   also sent to `GET /auth/google?next=…` and `POST /auth/magic-link`
+   (`{ email, next }`) and kept server-side with the OAuth state or the code.
+   The Google callback redirects to it, and `/auth/magic-link/verify` returns
+   it as `next` for the page to follow. Only `/compte` and `/pont` with both
+   `ext` and `pub` are accepted (`server/src/auth/next.ts`); anything else
+   falls back to `/compte`.
 2. The web app `POST`s `/auth/claim` with `credentials: 'include'` and body
    `{ "publicKeyJwk": { "kty": "EC", "crv": "P-256", "x": …, "y": … } }`.
    The endpoint requires the session cookie and a matching `Origin`.
