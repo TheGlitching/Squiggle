@@ -63,11 +63,13 @@ export async function getAccount(): Promise<Account | null> {
   }
 }
 
-export function requestMagicLink(email: string): Promise<{ sent: true }> {
-  return call('/auth/magic-link', { method: 'POST', body: JSON.stringify({ email }) });
+/** `next` is only a request: the server keeps it if it is an internal destination it allows. */
+export function requestMagicLink(email: string, next?: string): Promise<{ sent: true }> {
+  return call('/auth/magic-link', { method: 'POST', body: JSON.stringify({ email, next }) });
 }
 
-export function verifyMagicLink(code: string): Promise<{ userId: string; email: string }> {
+/** `next` is the destination the server stored with the code, if any. */
+export function verifyMagicLink(code: string): Promise<{ userId: string; email: string; next: string | null }> {
   return call('/auth/magic-link/verify', { method: 'POST', body: JSON.stringify({ code }) });
 }
 
@@ -97,8 +99,8 @@ export function issueBridgeCode(publicKeyJwk: unknown): Promise<{ code: string; 
   return call('/web/bridge/code', { method: 'POST', body: JSON.stringify({ publicKeyJwk }) });
 }
 
-export function googleSignInUrl(): string {
-  return `${API_BASE}/auth/google`;
+export function googleSignInUrl(next?: string): string {
+  return `${API_BASE}/auth/google${next ? `?${new URLSearchParams({ next })}` : ''}`;
 }
 
 /**

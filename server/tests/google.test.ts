@@ -65,7 +65,7 @@ describe('GET /auth/google/callback', () => {
     const { res, fake, env2 } = await happyPath();
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`${env2.webAppOrigin}/account`);
+    expect(res.headers.get('location')).toBe(`${env2.webAppOrigin}/compte`);
     const setCookie = res.headers.get('set-cookie');
     expect(setCookie).toContain('squiggle_session=');
 

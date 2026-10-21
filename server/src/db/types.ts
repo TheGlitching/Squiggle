@@ -75,12 +75,15 @@ export interface MagicLinkRow {
   expiresAt: number;
   /** null = unused. */
   usedAt: number | null;
+  /** Sanitised internal destination after sign-in (auth/next.ts); null = the account page. */
+  next: string | null;
 }
 
 export interface CreateMagicLinkArgs {
   email: string;
   codeHash: string;
   ip: string | null;
+  next: string | null;
   now: number;
   ttlMs: number;
 }
@@ -154,6 +157,8 @@ export interface OAuthPendingRow {
   redirectUri: string;
   createdAt: number;
   expiresAt: number;
+  /** Sanitised internal destination after sign-in (auth/next.ts); null = the account page. */
+  next: string | null;
 }
 
 export interface CreateOAuthPendingArgs {
@@ -161,6 +166,7 @@ export interface CreateOAuthPendingArgs {
   codeVerifier: string;
   nonce: string;
   redirectUri: string;
+  next: string | null;
   now: number;
   ttlMs: number;
 }
