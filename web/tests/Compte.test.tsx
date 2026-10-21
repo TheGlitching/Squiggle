@@ -13,12 +13,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderWith(account: ReturnType<typeof makeAccount>) {
+/** The account read, plus an empty installs list for the data section. */
+function installAccountFetch(account: ReturnType<typeof makeAccount>) {
   installFetch((call) =>
     call.url.endsWith('/web/account/installs')
       ? jsonResponse({ ok: true, installs: [] })
       : jsonResponse({ ok: true, ...account }),
   );
+}
+
+function renderWith(account: ReturnType<typeof makeAccount>) {
+  installAccountFetch(account);
   window.history.pushState({}, '', '/compte');
   return render(<Compte />);
 }
@@ -67,16 +72,13 @@ describe('Compte', () => {
 
   it('shows the activation banner only until the plan is active', async () => {
     window.history.pushState({}, '', '/compte?paiement=ok');
-    installFetch(() => jsonResponse({ ok: true, ...makeAccount() }));
+    installAccountFetch(makeAccount());
     const pending = render(<Compte />);
     expect(await screen.findByText(/en cours d’activation/)).toBeInTheDocument();
     pending.unmount();
 
-    installFetch(() =>
-      jsonResponse({
-        ok: true,
-        ...makeAccount({ plan: 'active', usage: { used: 0, limit: 10, remaining: 10, resetsAt: null } }),
-      }),
+    installAccountFetch(
+      makeAccount({ plan: 'active', usage: { used: 0, limit: 10, remaining: 10, resetsAt: null } }),
     );
     window.history.pushState({}, '', '/compte?paiement=ok');
     render(<Compte />);
