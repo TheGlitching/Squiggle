@@ -173,7 +173,7 @@ export class AnalysisPipeline {
     this.lastProgress = 0;
 
     try {
-      this.reportProgress('preparing_prompt', 'Application de la grille des Fourches Caudines...', 10);
+      this.reportProgress('preparing_prompt', 'Application de la grille de lecture Squiggle...', 10);
 
       const now = input.now ?? new Date();
 
@@ -322,7 +322,7 @@ export class AnalysisPipeline {
     this.reportProgress('extracting', 'Extraction des arguments du texte...', 20);
     await new Promise((r) => setTimeout(r, 80));
 
-    this.reportProgress('preparing_prompt', 'Application de la grille Fourches Caudines...', 40);
+    this.reportProgress('preparing_prompt', 'Application de la grille de lecture Squiggle...', 40);
     await new Promise((r) => setTimeout(r, 80));
 
     this.reportProgress('calling_provider', 'Audit critique en cours (mode démo)...', 70);
@@ -337,7 +337,7 @@ export class AnalysisPipeline {
     const report: AnalysisReport = JSON.parse(JSON.stringify(DEMO_FOURCHES_CAUDINES_REPORT));
     report.meta.model = 'exemple de démonstration (aucune analyse réelle)';
 
-    this.reportProgress('success', 'Audit Fourches Caudines finalisé', 100);
+    this.reportProgress('success', 'Analyse Squiggle finalisée', 100);
     return report;
   }
 }

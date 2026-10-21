@@ -80,7 +80,7 @@ export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
     title: 'Ce que Squiggle regarde pour vous',
     badge: 'Lecture critique',
     placement: 'center',
-    content: 'Squiggle lit l’article ouvert dans l’onglet actif et le passe à la grille des Fourches Caudines : la solidité des faits avancés, la tenue du raisonnement, et les tournures qui orientent votre jugement sans rien démontrer.',
+    content: 'Squiggle lit l’article ouvert dans l’onglet actif et le passe à sa grille de lecture : la solidité des faits avancés, la tenue du raisonnement, et les tournures qui orientent votre jugement sans rien démontrer.',
     methodologyTip: 'La méthode porte sur le texte publié, jamais sur les intentions qu’on pourrait lui prêter. Chaque remarque renvoie à un passage précis, que vous pouvez relire et juger par vous-même.',
   },
   {
