@@ -290,6 +290,53 @@ export interface CreateAnalysisRunArgs {
   ttlMs: number;
 }
 
+/**
+ * The closed set of events counted for the launch metrics. A name is a fixed
+ * identifier from the code: the counter has no way to carry a user or an article.
+ */
+export const METRIC_NAMES = [
+  'check',
+  'cache_hit',
+  'audit',
+  'audit_failed',
+  'research',
+  'research_failed',
+  'source_check',
+  'source_check_failed',
+] as const;
+export type MetricName = (typeof METRIC_NAMES)[number];
+
+export interface CollectMetricsArgs {
+  now: number;
+  /** How many whole weeks back the windowed figures reach. */
+  weeks: number;
+  /** Analyses that make up a completed trial. */
+  trialAnalyses: number;
+}
+
+/** Counts only. Every figure here is a number over accounts or events, never a row. */
+export interface MetricsRaw {
+  accountsTotal: number;
+  /** Accounts created in each of the last `weeks` weeks, oldest first. */
+  accountsPerWeek: number[];
+  /** Accounts that ever finalized an analysis. */
+  accountsFinalized: number;
+  /** Accounts that ran at least `trialAnalyses` analyses. */
+  trialCompleted: number;
+  /** Of those, the accounts that have ever paid (a Stripe customer exists). */
+  trialCompletedPaid: number;
+  /** Accounts on an unexpired paid plan right now. */
+  activeSubscribers: number;
+  /** `checkout.session.completed` events in the window. */
+  subscriptionsStarted: number;
+  /** `customer.subscription.deleted` events in the window. */
+  subscriptionsCancelled: number;
+  /** Analyses finalized in the window. */
+  finalizes: number;
+  /** Event counters over the window. */
+  counters: Record<MetricName, number>;
+}
+
 export interface RateCheckArgs {
   /** What is being limited, e.g. `magic_link:email` or `magic_link:ip`. */
   scope: string;
@@ -462,6 +509,12 @@ export interface Db {
    * writing a second report or consuming a second credit.
    */
   finalizeAnalysisRun(id: string, now: number): Promise<boolean>;
+
+  /** Count one occurrence of a fixed event on the UTC day of `now`. */
+  bumpMetric(name: MetricName, now: number): Promise<void>;
+
+  /** The aggregate figures behind `GET /admin/metrics`. Counts only. */
+  collectMetrics(args: CollectMetricsArgs): Promise<MetricsRaw>;
 
   /**
    * Remove short-lived rows whose TTL has lapsed (nonces, web sessions,

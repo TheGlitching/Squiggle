@@ -21,6 +21,7 @@ const RETENTION = [
   ['Session web', 'Base de données, en empreinte SHA-256', '30 jours'],
   ['Code de connexion', 'Base de données, en empreinte SHA-256', '10 minutes'],
   ['Identifiants Stripe (client, abonnement)', 'Base de données', 'Tant que le compte existe'],
+  ['Compteurs de fonctionnement : réponses du cache, échecs par étape d’analyse', 'Base de données', 'Un nombre par jour et par nom d’événement, sans compte et sans article'],
   ['Journaux techniques', 'Cloudflare', 'Aucun texte d’article, aucune adresse d’article en clair'],
 ] as const;
 
@@ -116,6 +117,14 @@ export function Transparence() {
             opaque ou l’empreinte d’une adresse : il n’existe aucun champ de texte libre où écrire un
             paragraphe, même par accident. Une requête refusée est journalisée par le nom du champ,
             jamais par sa valeur.
+          </p>
+          <p className="mt-4 text-sm text-muted">
+            Nous mesurons le lancement avec ce que le serveur détient déjà, jamais avec un traceur
+            dans l’extension ou sur le site : nombre de comptes par semaine, part de comptes ayant
+            terminé une analyse, essais menés à leur terme, abonnements et résiliations (d’après
+            Stripe), réponses du cache, échecs par étape, coût moyen d’une analyse. Ce sont des
+            totaux : aucun ne désigne un lecteur ou un article, et ils ne sont consultables que par
+            nous.
           </p>
         </section>
 

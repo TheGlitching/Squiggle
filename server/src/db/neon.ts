@@ -16,7 +16,8 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
+import { REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
   Plan,
@@ -37,6 +38,9 @@ import type {
   NonceArgs,
   OAuthPendingRow,
   PurgeReportsResult,
+  CollectMetricsArgs,
+  MetricName,
+  MetricsRaw,
   RateCheckArgs,
   RateCheckResult,
   ReportRow,
@@ -635,6 +639,65 @@ export class NeonDb implements Db {
       RETURNING id
     `;
     return rows.length > 0;
+  }
+
+  async bumpMetric(name: MetricName, now: number): Promise<void> {
+    await this.q`
+      INSERT INTO metric_counters (day, name, count) VALUES (${utcDayOf(now)}, ${name}, 1)
+      ON CONFLICT (day, name) DO UPDATE SET count = metric_counters.count + 1
+    `;
+  }
+
+  async collectMetrics({ now, weeks, trialAnalyses }: CollectMetricsArgs): Promise<MetricsRaw> {
+    const since = now - weeks * WEEK_MS;
+    const sinceDay = utcDayOf(since);
+    const [accounts, weekly, perAccount, events, finalized, counted] = await Promise.all([
+      this.q`
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE plan = 'active' AND plan_expires_at > ${now}) AS active
+        FROM users
+      `,
+      this.q`
+        SELECT LEAST((created_at - ${since}::bigint) / ${WEEK_MS}::bigint, ${weeks - 1}::bigint) AS week, COUNT(*) AS n
+        FROM users WHERE created_at >= ${since} GROUP BY week
+      `,
+      this.q`
+        SELECT COUNT(*) FILTER (WHERE total > 0) AS finalized,
+               COUNT(*) FILTER (WHERE total >= ${trialAnalyses}) AS trial_done,
+               COUNT(*) FILTER (WHERE total >= ${trialAnalyses} AND paid) AS trial_paid
+        FROM (
+          SELECT COALESCE(SUM(d.analyses), 0) AS total, u.stripe_customer_id IS NOT NULL AS paid
+          FROM users u LEFT JOIN usage_daily d ON d.user_id = u.id
+          GROUP BY u.id
+        ) per_account
+      `,
+      this.q`
+        SELECT type, COUNT(*) AS n FROM stripe_events
+        WHERE received_at >= ${since}
+          AND type IN ('checkout.session.completed', 'customer.subscription.deleted')
+        GROUP BY type
+      `,
+      this.q`SELECT COALESCE(SUM(analyses), 0) AS n FROM usage_daily WHERE day >= ${sinceDay}`,
+      this.q`SELECT name, SUM(count) AS n FROM metric_counters WHERE day >= ${sinceDay} GROUP BY name`,
+    ]);
+    const accountsPerWeek = new Array<number>(weeks).fill(0);
+    for (const row of weekly) accountsPerWeek[num(row.week)] = num(row.n);
+    const eventCount = (type: string) => num(events.find((row) => row.type === type)?.n);
+    const counters = Object.fromEntries(
+      METRIC_NAMES.map((name) => [name, num(counted.find((row) => row.name === name)?.n)]),
+    ) as Record<MetricName, number>;
+    return {
+      accountsTotal: num(accounts[0].total),
+      accountsPerWeek,
+      accountsFinalized: num(perAccount[0].finalized),
+      trialCompleted: num(perAccount[0].trial_done),
+      trialCompletedPaid: num(perAccount[0].trial_paid),
+      activeSubscribers: num(accounts[0].active),
+      subscriptionsStarted: eventCount('checkout.session.completed'),
+      subscriptionsCancelled: eventCount('customer.subscription.deleted'),
+      finalizes: num(finalized[0].n),
+      counters,
+    };
   }
 
   async purgeExpired(now: number, usageLogRetentionMs: number): Promise<number> {

@@ -58,6 +58,7 @@ import type { Db, UserRow } from '../db/types';
 import { entitlementOf, refusalFor } from '../billing/quota';
 import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
+import { countMetric } from '../metrics';
 import { sanitizeReport } from '../lib/sanitize';
 import { REPORT_MAX_BYTES, REPORT_TTL_MS } from '../usage/limits';
 import {
@@ -110,6 +111,10 @@ export interface AnalyzeServices {
  * one, never the extension's: here a "cited source" is a URL chosen by
  * whoever wrote the article, executed from inside our own network.
  */
+/** Count a metric at the clock of the request being served. */
+const count = (s: AnalyzeServices, name: Parameters<typeof countMetric>[1]) =>
+  countMetric(s.db, name, s.clock.now(), s.requestId);
+
 function serverPageFetcher(s: AnalyzeServices): PageFetcher {
   return (url, timeoutMs) => safeFetchPageText(url, timeoutMs, { fetchImpl: s.fetchImpl });
 }
@@ -147,10 +152,12 @@ export async function analyzeCheck(
   if (!urlHash) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
 
   const model = modelIdOf(s.llm());
+  await count(s, 'check');
   const cached = await s.db.findReport(urlHash, textHash, model, s.promptVersion);
   if (!cached || cached.expiresAt <= s.clock.now()) return { ok: true, hit: false };
 
   logEvent({ event: 'cache_hit', requestId: s.requestId, urlHash });
+  await count(s, 'cache_hit');
   // Sanitized again on the way out. It was sanitized before it was stored, so
   // this is redundant for anything this build wrote — and it is what makes
   // "no reader is ever served unsanitized text" true of rows an older build
@@ -237,6 +244,7 @@ export async function analyzeAudit(
 
   const startedAt = Date.now();
   let raw: string;
+  await count(s, 'audit');
   try {
     const completion = await client.complete({
       systemPrompt: FOURCHES_CAUDINES_SYSTEM_PROMPT,
@@ -254,6 +262,7 @@ export async function analyzeAudit(
     // Close the reservation: an audit that never produced anything must not
     // hold the account's single slot for the next five minutes.
     await s.db.finalizeAnalysisRun(run.id, now);
+    await count(s, 'audit_failed');
     return apiError('provider_unavailable', "Le modèle n'a pas répondu. Réessayez dans un instant.");
   }
 
@@ -266,6 +275,7 @@ export async function analyzeAudit(
     });
   } catch {
     await s.db.finalizeAnalysisRun(run.id, now);
+    await count(s, 'audit_failed');
     return apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
   }
 
@@ -414,6 +424,7 @@ export async function analyzeResearch(
 
   const client = s.llm();
   let result;
+  await count(s, 'research');
   try {
     result = await researchFindings({
       client,
@@ -429,6 +440,7 @@ export async function analyzeResearch(
   } catch {
     // A failed research call degrades one finding, never the run: the client
     // moves on to the next one and the report says the claim is unverified.
+    await count(s, 'research_failed');
     return apiError('provider_unavailable', "La vérification de ce constat n'a pas abouti.");
   }
 
@@ -477,6 +489,7 @@ export async function analyzeSourceCheck(
 
   const client = s.llm();
   let result;
+  await count(s, 'source_check');
   try {
     result = await verifyCitedSources({
       client,
@@ -490,6 +503,7 @@ export async function analyzeSourceCheck(
       fetchPage: serverPageFetcher(s),
     });
   } catch {
+    await count(s, 'source_check_failed');
     return apiError('provider_unavailable', "La lecture de cette source n'a pas abouti.");
   }
 

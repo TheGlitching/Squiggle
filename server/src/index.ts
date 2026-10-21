@@ -34,6 +34,7 @@
  *   POST   /v1/analyze/research        (signed) check one factual finding
  *   POST   /v1/analyze/source-check    (signed) read one link the article cites
  *   POST   /v1/analyze/finalize        (signed) reconcile, cache, consume 1 credit
+ *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
 import { neon } from '@neondatabase/serverless';
@@ -95,6 +96,7 @@ import { BrevoEmailSender } from './lib/brevo';
 import { apiError, errorResponse, type Outcome } from './lib/errors';
 import { HOSTED_ANALYSIS, sha256Hex } from '@squiggle/shared';
 import { migrate, type SqlQuery } from './migrations';
+import { collectLaunchMetrics } from './metrics';
 import { secureEquals } from './lib/secureCompare';
 
 export interface Env {
@@ -433,14 +435,24 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     return analyzeRoute(req, url, s, path, method, requestId);
   }
 
-  if (path === '/admin/migrate' && method === 'POST') {
-    // Constant-time: a plain `!==` short-circuits at the first differing byte,
-    // which lets an attacker recover the admin token one character at a time.
-    const header = req.headers.get('authorization') ?? '';
-    const expected = s.adminToken ? `Bearer ${s.adminToken}` : '';
-    if (!s.adminToken || !(await secureEquals(header, expected))) {
-      return finish(apiError('invalid_token', 'Invalid admin token.'));
+  if (path === '/admin/metrics' && method === 'GET') {
+    if (!(await adminAuthorized(req, s))) return finish(apiError('invalid_token', 'Invalid admin token.'));
+    const weeks = Number(url.searchParams.get('weeks') ?? DEFAULT_METRICS_WEEKS);
+    const costParam = url.searchParams.get('costUsd');
+    const cost = costParam === null ? undefined : Number(costParam);
+    if (
+      !Number.isInteger(weeks) ||
+      weeks < 1 ||
+      weeks > MAX_METRICS_WEEKS ||
+      (cost !== undefined && !(Number.isFinite(cost) && cost >= 0))
+    ) {
+      return finish(apiError('invalid_payload', 'weeks is a whole number of weeks, costUsd a non-negative number.'));
     }
+    return finish({ ok: true, metrics: await collectLaunchMetrics(s.db, s.clock.now(), weeks, cost) });
+  }
+
+  if (path === '/admin/migrate' && method === 'POST') {
+    if (!(await adminAuthorized(req, s))) return finish(apiError('invalid_token', 'Invalid admin token.'));
     if (!s.runMigrations) {
       return finish(apiError('internal', 'Migrations are unavailable in this environment.'));
     }
@@ -454,6 +466,19 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
 
   return finish(apiError('not_found', 'No such endpoint.'));
 }
+
+/**
+ * Constant-time: a plain `!==` short-circuits at the first differing byte,
+ * which lets an attacker recover the admin token one character at a time.
+ */
+async function adminAuthorized(req: Request, s: Services): Promise<boolean> {
+  const header = req.headers.get('authorization') ?? '';
+  const expected = s.adminToken ? `Bearer ${s.adminToken}` : '';
+  return Boolean(s.adminToken) && (await secureEquals(header, expected));
+}
+
+const DEFAULT_METRICS_WEEKS = 4;
+const MAX_METRICS_WEEKS = 52;
 
 /** The account and billing endpoints, all behind the signed-request gate. */
 async function accountRoute(

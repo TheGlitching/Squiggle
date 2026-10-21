@@ -142,6 +142,7 @@ servi qu'à un lecteur dont la page donne le même texte.
 | Session web | base de données, **en empreinte SHA-256** | 30 jours |
 | Lien de connexion par e-mail | base de données, **en empreinte SHA-256** | 10 minutes |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
+| Compteurs de fonctionnement : combien de fois le cache a répondu, combien de fois une étape d'analyse a échoué, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |
 
 Les journaux techniques méritent une précision, parce que c'est là que ce genre de

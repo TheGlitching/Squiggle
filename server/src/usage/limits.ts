@@ -9,6 +9,8 @@
  */
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+export const WEEK_MS = 7 * DAY_MS;
+
 /** A cached report is valid for 30 days, then it is purged. */
 export const REPORT_TTL_MS = 30 * DAY_MS;
 

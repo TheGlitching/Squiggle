@@ -34,7 +34,8 @@ export interface LogFields {
     | 'account_deleted'
     | 'email_changed'
     | 'install_revoked'
-    | 'stripe_email_sync_failed';
+    | 'stripe_email_sync_failed'
+    | 'metric_failed';
   requestId: string;
   method?: string;
   /** The route pattern, never the query string (which carries the article URL). */
