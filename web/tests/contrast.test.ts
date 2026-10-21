@@ -6,10 +6,16 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import config from '../tailwind.config';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { SEVERITY_COLORS } from '../src/demo';
 
-const colors = config.theme.extend.colors as Record<string, string>;
+// The tokens are the `--color-*` declarations of the Tailwind 4 `@theme` block.
+const css = readFileSync(resolve(__dirname, '../src/index.css'), 'utf8');
+const colors = Object.fromEntries(
+  [...css.matchAll(/--color-(\w+):\s*(#[0-9a-f]{6});/gi)].map((m) => [m[1], m[2]]),
+);
 
 function luminance(hex: string): number {
   const h = hex.replace('#', '');

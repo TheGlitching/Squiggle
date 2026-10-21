@@ -92,7 +92,7 @@ export const EditorialReviewCard: React.FC<EditorialReviewCardProps> = ({
           <span className="font-serif font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">
             Fiche Éditoriale Export
           </span>
-          <span className="text-xs px-2 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
+          <span className="text-xs px-2 py-0.5 rounded-sm bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
             2x Retina
           </span>
         </div>
@@ -155,7 +155,7 @@ export const EditorialReviewCard: React.FC<EditorialReviewCardProps> = ({
             height: `${logicalHeight}px`,
             transition: 'transform 0.15s ease-out',
           }}
-          className="shadow-2xl rounded-sm overflow-hidden"
+          className="shadow-2xl rounded-xs overflow-hidden"
         >
           <canvas ref={canvasRef} />
         </div>
@@ -167,7 +167,7 @@ export const EditorialReviewCard: React.FC<EditorialReviewCardProps> = ({
           type="button"
           onClick={handleCopyClipboard}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 font-medium text-sm hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-50 transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 font-medium text-sm hover:bg-stone-50 dark:hover:bg-stone-700 disabled:opacity-50 transition shadow-xs"
         >
           {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
           <span>{copied ? 'Copié dans le presse-papier !' : 'Copier l’image'}</span>
@@ -177,7 +177,7 @@ export const EditorialReviewCard: React.FC<EditorialReviewCardProps> = ({
           type="button"
           onClick={handleDownload}
           disabled={isExporting}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-red-800 hover:bg-red-900 text-white font-medium text-sm disabled:opacity-50 transition shadow-sm"
+          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-red-800 hover:bg-red-900 text-white font-medium text-sm disabled:opacity-50 transition shadow-xs"
         >
           <Download className="w-4 h-4" />
           <span>Télécharger PNG (2x)</span>

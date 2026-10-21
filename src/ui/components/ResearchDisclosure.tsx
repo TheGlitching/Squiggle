@@ -164,7 +164,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                 >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`font-mono text-[10px] font-semibold uppercase tracking-wider border rounded px-1 py-0.5 ${relationTone}`}
+                      className={`font-mono text-[10px] font-semibold uppercase tracking-wider border rounded-sm px-1 py-0.5 ${relationTone}`}
                     >
                       {relationLabel[check.relation]}
                     </span>
@@ -176,7 +176,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                     href={check.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 block text-xs font-medium text-ink underline decoration-line-heavy decoration-dotted hover:decoration-solid break-words"
+                    className="mt-1 block text-xs font-medium text-ink underline decoration-line-heavy decoration-dotted hover:decoration-solid wrap-break-word"
                   >
                     {check.title}
                   </a>
