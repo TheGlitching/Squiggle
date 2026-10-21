@@ -8,7 +8,7 @@ import { TypedMessageBus } from '../messaging/messageBus';
 import { TabStateManager } from './tabStateManager';
 import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 import { LLMClientFactory } from '../client/factory';
-import { AnalysisPipeline } from '@squiggle/shared';
+import { AnalysisPipeline, HostedApiError } from '@squiggle/shared';
 import { HostedRunner, type AnalysisRunner } from '../hosted/runner';
 // `PipelineProgressEvent` is exported by BOTH engine/types.ts ({step,progress})
 // and engine/pipeline.ts ({status,stage,message,progress}). The star barrel makes
@@ -496,7 +496,14 @@ export class BackgroundServiceWorker {
       if (this.navigationAbortedTabIds.delete(tabId)) {
         return { success: false, error: 'Analyse interrompue : la page a changé.' };
       }
-      const errorMsg = err instanceof Error ? err.message : 'Erreur lors de l’analyse critique';
+      let errorMsg = err instanceof Error ? err.message : 'Erreur lors de l’analyse critique';
+      // The install was revoked, or its account deleted, from the account page:
+      // the token is dead for good. Forget it so the panel falls back to the
+      // sign-in state instead of failing the same way on the next analysis.
+      if (err instanceof HostedApiError && err.code === 'invalid_token') {
+        await this.keyStorage.clearHostedSession();
+        errorMsg = 'Votre connexion a expiré. Reconnectez-vous depuis les réglages.';
+      }
       this.stateManager.updateTabState(tabId, {
         status: 'error',
         error: errorMsg,
