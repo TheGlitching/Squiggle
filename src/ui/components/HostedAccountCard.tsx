@@ -24,6 +24,8 @@ export interface HostedAccountCardProps {
   onSignOut: () => void;
   /** Offered beside sign-out when signed in, entitled, and not the active engine. */
   onUseHosted?: () => void;
+  /** The signed-out card's secondary path: a text link to the BYOK section. */
+  onUseOwnKey?: () => void;
 }
 
 export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
@@ -36,6 +38,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
   onRedeem,
   onSignOut,
   onUseHosted,
+  onUseOwnKey,
 }) => {
   const [code, setCode] = useState('');
   const view = account ? describeHostedAccount(account) : null;
@@ -113,6 +116,15 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
           >
             {busy ? 'Ouverture…' : 'Se connecter'}
           </button>
+          {onUseOwnKey && (
+            <button
+              type="button"
+              onClick={onUseOwnKey}
+              className="mt-1 w-full py-1.5 text-center text-xs text-muted underline hover:text-ink"
+            >
+              Utiliser plutôt ma propre clé API
+            </button>
+          )}
         </>
       )}
 

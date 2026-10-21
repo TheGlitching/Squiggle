@@ -73,6 +73,8 @@ export interface ByokSettingsModalProps {
   onSaved?: (provider: LLMProvider) => void;
   /** Fired when the mode or the hosted session changes, so the panel refreshes. */
   onHostedChanged?: () => void;
+  /** Open with the advanced own-key section already unfolded. */
+  startOnOwnKey?: boolean;
   storage?: SecureKeyStorage;
 }
 
@@ -81,6 +83,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   onClose,
   onSaved,
   onHostedChanged,
+  startOnOwnKey,
   storage,
 }) => {
   const [keyStorage] = useState(() => storage ?? new SecureKeyStorage());
@@ -364,7 +367,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
           </section>
 
           {/* BYOK below, collapsed by default: the advanced path. */}
-          <details className="rounded-xl border border-line">
+          <details open={startOnOwnKey || undefined} className="rounded-xl border border-line">
             <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-ink">
               Utiliser ma propre clé{' '}
               <span className="font-normal text-muted">(avancé)</span>
