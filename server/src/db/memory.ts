@@ -354,9 +354,19 @@ export class MemoryDb implements Db {
 
   // ---- shared report cache ---------------------------------------------------
 
-  async findReport(urlHash: string, model: string, promptVersion: string): Promise<ReportRow | null> {
+  async findReport(
+    urlHash: string,
+    textHash: string,
+    model: string,
+    promptVersion: string,
+  ): Promise<ReportRow | null> {
     for (const report of this.reports.values()) {
-      if (report.urlHash === urlHash && report.model === model && report.promptVersion === promptVersion) {
+      if (
+        report.urlHash === urlHash &&
+        report.textHash === textHash &&
+        report.model === model &&
+        report.promptVersion === promptVersion
+      ) {
         return report;
       }
     }
@@ -365,12 +375,13 @@ export class MemoryDb implements Db {
 
   async createReport(args: CreateReportArgs): Promise<ReportRow> {
     if (args.sizeBytes > REPORT_MAX_BYTES) throw new Error('report exceeds the size cap');
-    if (await this.findReport(args.urlHash, args.model, args.promptVersion)) {
+    if (await this.findReport(args.urlHash, args.textHash, args.model, args.promptVersion)) {
       throw new Error('a report is already cached for this key');
     }
     const row: ReportRow = {
       id: randomToken(16),
       urlHash: args.urlHash,
+      textHash: args.textHash,
       model: args.model,
       promptVersion: args.promptVersion,
       report: args.report,

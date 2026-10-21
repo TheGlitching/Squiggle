@@ -205,6 +205,12 @@ export interface ReportRow {
   id: string;
   /** SHA-256 hex of the canonical article URL (the extension computed it). */
   urlHash: string;
+  /**
+   * SHA-256 hex of the normalised article text the report was built from,
+   * computed by the server from the text it received. A report is only served
+   * to a reader whose page yields the same hash.
+   */
+  textHash: string;
   /** The model that produced the report (transparency: shown to readers). */
   model: string;
   /** The prompt version that produced it (cache invalidation key). */
@@ -218,6 +224,7 @@ export interface ReportRow {
 
 export interface CreateReportArgs {
   urlHash: string;
+  textHash: string;
   model: string;
   promptVersion: string;
   report: string;
@@ -371,12 +378,12 @@ export interface Db {
   /** Ledger rows still on file for the user (the ledger is pruned by retention, the daily counter is not). */
   countUsageLog(userId: string): Promise<number>;
 
-  /** The cached report for this exact (url, model, prompt version), if any. */
-  findReport(urlHash: string, model: string, promptVersion: string): Promise<ReportRow | null>;
+  /** The cached report for this exact (url, text, model, prompt version), if any. */
+  findReport(urlHash: string, textHash: string, model: string, promptVersion: string): Promise<ReportRow | null>;
 
   /**
    * Store a report in the shared cache. Rejects payloads over the size cap
-   * and a second report for the same (url, model, prompt version): the
+   * and a second report for the same (url, text, model, prompt version): the
    * caller is expected to `findReport` first.
    */
   createReport(args: CreateReportArgs): Promise<ReportRow>;

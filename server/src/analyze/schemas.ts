@@ -40,6 +40,15 @@ export const CitedSourceSchema = z.object({
   blockId: z.string().max(64).optional(),
 });
 
+/**
+ * The part of the cache preflight that is not the address: the fingerprint of
+ * the text the reader's page yields (see `articleTextHash`). The address itself
+ * is judged by `analyzeCheck`, which answers `invalid_url`.
+ */
+export const CheckQuerySchema = z.object({
+  text: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
 export const AuditRequestSchema = z
   .object({
     url,

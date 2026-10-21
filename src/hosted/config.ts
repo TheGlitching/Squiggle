@@ -33,17 +33,3 @@ export const TRANSPARENCY_URL = `${HOSTED_WEB_APP}/transparence`;
 
 /** The account page, where a reader subscribes or manages a plan. */
 export const ACCOUNT_URL = `${HOSTED_WEB_APP}/compte`;
-
-/** The host the extension names in the standing disclosure. */
-export function hostedProviderDomain(): string {
-  try {
-    return new URL(HOSTED_ORIGIN).host;
-  } catch {
-    return HOSTED_ORIGIN;
-  }
-}
-
-/** "Analyse effectuée via <domain> — <model>, prompts v<version>", as required. */
-export function disclosureText(model: string, promptVersion: string): string {
-  return `Analyse effectuée via ${hostedProviderDomain()} — ${model}, prompts v${promptVersion}`;
-}

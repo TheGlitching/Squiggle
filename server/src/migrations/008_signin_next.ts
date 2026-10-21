@@ -1,5 +1,5 @@
 /**
- * Migration 007 - the destination of a sign-in.
+ * Migration 008 - the destination of a sign-in.
  *
  * The extension bridge sends a signed-out reader to sign in and expects them
  * back on the bridge page. Both the Google handshake and the emailed link
@@ -8,7 +8,7 @@
  * auth/next.ts) or NULL, meaning the account page.
  */
 
-export const name = '007_signin_next';
+export const name = '008_signin_next';
 
 export const sql = `
 ALTER TABLE magic_links ADD COLUMN IF NOT EXISTS next_path TEXT;

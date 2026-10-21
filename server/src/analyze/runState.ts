@@ -27,6 +27,11 @@ export interface AnalysisRunState {
   /** `provider/model` that ran the audit; also part of the cache key. */
   model: string;
   promptVersion: string;
+  /**
+   * Fingerprint of the article text the audit ran on, computed by the server
+   * from that text. Part of the cache key; empty on a run that predates it.
+   */
+  textHash: string;
   /** Wall time of the audit call, reported in the finished report's meta. */
   auditDurationMs: number;
   /** When the run was reserved, before the audit call was made. */

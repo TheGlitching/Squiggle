@@ -11,6 +11,29 @@
 
 import { ArticleMetadata, CitedSource, ExtractedArticle, TextBlock } from './types';
 
+// Subtrees a reader never sees. With scripting on, a <noscript> fallback is parsed as
+// raw markup text, so its textContent is HTML source ("<img src=...>"), not prose.
+const NON_CONTENT_SELECTOR = 'noscript, script, template, style';
+const NON_CONTENT_TAGS = new Set(['noscript', 'script', 'template', 'style']);
+
+// Matched against whole words of an id/class, never substrings: "ad" must not catch
+// "lead", "heading", "headline" or "thread", which are the standfirst and the title.
+const NOISE_WORD =
+  /^(ads?|banner|share|sharing|promo|promoted|related|teasers?|disclaimer|copyright|signin|signup|login|subscribe|newsletter|comments?|breadcrumbs?|outbrain|taboola)$|^(advert|sponsor|cookie|consent)/;
+
+// Short blocks that are page furniture whatever their markup: "related article" lead-ins,
+// sign-in prompts, comment widgets. French first, English for the sites that mix both.
+const BOILERPLATE_LEAD_IN =
+  /^(à lire aussi|lire aussi|lire également|voir aussi|sur le même sujet|en savoir plus|read more|related articles?)\s*([:\-–—]|$)/i;
+const BOILERPLATE_PROMPT =
+  /^(abonnez-vous|connectez-vous|créez un compte|j['’]ai déjà un compte|je n['’]ai pas de compte|signaler un abus|article rédigé par|sign in|log in|subscribe)\b/i;
+const BOILERPLATE_MAX_CHARS = 300;
+
+// A block this made of links is navigation (a menu, a card, a list of headlines).
+const LINK_DENSITY_LIMIT = 0.8;
+const CARD_LIST_ITEM_DENSITY = 0.5;
+const CARD_LIST_SHARE = 0.6;
+
 export class ArticleExtractor {
   private doc: Document;
 
@@ -38,7 +61,7 @@ export class ArticleExtractor {
 
     let blockIdx = 0;
     for (const el of candidateElements) {
-      const rawText = el.textContent || '';
+      const rawText = this.visibleText(el);
       const trimmedText = rawText.replace(/\s+/g, ' ').trim();
 
       // Skip empty or trivial noise
@@ -405,11 +428,76 @@ export class ArticleExtractor {
   }
 
   /**
-   * Collect sequential textual content elements (p, h1-h6, blockquote, li)
+   * textContent without the non-content subtrees (<noscript>, <script>, <template>, <style>).
+   */
+  private visibleText(el: Element): string {
+    let text = '';
+    const walk = (node: Node): void => {
+      for (let child = node.firstChild; child; child = child.nextSibling) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          text += child.nodeValue ?? '';
+        } else if (
+          child.nodeType === Node.ELEMENT_NODE &&
+          !NON_CONTENT_TAGS.has((child as Element).tagName.toLowerCase())
+        ) {
+          walk(child);
+        }
+      }
+    };
+    walk(el);
+    return text;
+  }
+
+  private hasNoiseName(el: Element): boolean {
+    const raw = `${el.id} ${typeof el.className === 'string' ? el.className : ''}`;
+    // Split camelCase before lowercasing: "shareBar" is two words.
+    const words = raw.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/);
+    return words.some(w => NOISE_WORD.test(w));
+  }
+
+  private linkDensity(el: Element, text: string): number {
+    if (!text) return 0;
+    let linked = 0;
+    for (const a of Array.from(el.querySelectorAll('a'))) {
+      if (a.closest(NON_CONTENT_SELECTOR)) continue;
+      linked += this.visibleText(a).replace(/\s+/g, ' ').trim().length;
+    }
+    return linked / text.length;
+  }
+
+  /**
+   * Collect sequential textual content elements (p, h1-h6, blockquote, li), leaving out
+   * the page furniture that surrounds an article: hidden nodes, fallbacks, promos,
+   * comment widgets, link cards and link lists.
    */
   private collectContentElements(container: HTMLElement): HTMLElement[] {
     const selector = 'p, h1, h2, h3, h4, h5, h6, blockquote, li';
     const elements = Array.from(container.querySelectorAll(selector)) as HTMLElement[];
+    const baseUrl = this.resolveArticleBaseUrl();
+    const articleHost = baseUrl ? this.safeHostname(baseUrl) : null;
+    const cardLists = new Map<Element, boolean>();
+
+    // Links to the publisher itself are navigation; a block that cites only other
+    // domains is a sources list and stays even when it is all links.
+    const citesOnlyElsewhere = (el: HTMLElement): boolean => {
+      const links = this.extractBlockLinks(el, baseUrl);
+      return links.length > 0 && links.every(l => this.safeHostname(l.href) !== articleHost);
+    };
+
+    const isCardList = (list: Element | null): boolean => {
+      if (!list || !/^(ul|ol)$/i.test(list.tagName)) return false;
+      let verdict = cardLists.get(list);
+      if (verdict === undefined) {
+        const items = Array.from(list.children).filter(c => c.tagName.toLowerCase() === 'li');
+        const dense = items.filter(li => {
+          const text = this.visibleText(li).replace(/\s+/g, ' ').trim();
+          return this.linkDensity(li, text) > CARD_LIST_ITEM_DENSITY;
+        });
+        verdict = items.length >= 2 && dense.length / items.length >= CARD_LIST_SHARE;
+        cardLists.set(list, verdict);
+      }
+      return verdict;
+    };
 
     return elements.filter(el => {
       // Filter out hidden elements
@@ -424,16 +512,33 @@ export class ArticleExtractor {
         }
       }
 
-      // Filter out elements with noise classes
-      const idAndClass = `${el.id} ${el.className}`.toLowerCase();
-      if (/ad|banner|share|promo|sponsor|cookie|disclaimer|copyright/i.test(idAndClass)) {
-        return false;
+      // Filter out fallbacks and markup that is not prose
+      if (el.closest(NON_CONTENT_SELECTOR)) return false;
+
+      // Filter out elements, or wrappers up to the article container, with noise names
+      for (let node: HTMLElement | null = el; node && node !== container; node = node.parentElement) {
+        if (this.hasNoiseName(node)) return false;
       }
 
       // Filter out parent link if element is purely inside a promotional widget
       if (el.closest('header, footer, nav, aside')) {
         return false;
       }
+
+      const text = this.visibleText(el).replace(/\s+/g, ' ').trim();
+      if (text.length <= BOILERPLATE_MAX_CHARS && (BOILERPLATE_LEAD_IN.test(text) || BOILERPLATE_PROMPT.test(text))) {
+        return false;
+      }
+
+      // A block wrapped in a link is a card; a block that is mostly link text, or a
+      // list of such blocks, is navigation. Quotes are the author's words, never cards.
+      const tag = el.tagName.toLowerCase();
+      const navigationLike =
+        tag !== 'blockquote' &&
+        (!!el.closest('a') ||
+          this.linkDensity(el, text) >= LINK_DENSITY_LIMIT ||
+          (tag === 'li' && isCardList(el.parentElement)));
+      if (navigationLike && !citesOnlyElsewhere(el)) return false;
 
       return true;
     });

@@ -3,9 +3,10 @@
  * funnel rests on are pinned: the tagline, the free-forever promise, the
  * subscription price, the perks, and both ways to reach a store.
  */
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { CONTACT_URL } from '../src/components/Layout';
 import { Accueil } from '../src/pages/Accueil';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 
@@ -23,23 +24,36 @@ describe('Accueil', () => {
     );
   });
 
-  it('states the price, the free-forever key line and the perks', () => {
+  it('states the monthly price first, the free analyses and verifiable perks', () => {
     render(<Accueil />);
-    expect(screen.getByRole('link', { name: /S’abonner : 0,16 €\/jour/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'S’abonner : 4,99 €/mois' })).toHaveAttribute(
       'href',
       '/connexion',
     );
-    expect(screen.getByText('soit 4,99 €/mois, sans engagement')).toBeInTheDocument();
-    expect(screen.getByText('Gratuit à vie avec votre propre clé API.')).toBeInTheDocument();
+    expect(screen.queryByText(/€\/jour/)).toBeNull();
+    expect(screen.getByText('3 analyses offertes à l’inscription')).toBeInTheDocument();
     for (const perk of [
-      '10 analyses par jour',
-      'Aucune publicité',
-      'Aucun traceur',
-      'Tout reste privé',
-      'Sécurisé',
+      '10 analyses par jour avec l’abonnement',
+      'Aucune publicité, aucun traceur',
+      'Code source ouvert',
+      'Le texte de l’article n’est jamais conservé',
     ]) {
       expect(screen.getByText(perk)).toBeInTheDocument();
     }
+  });
+
+  it('makes no privacy promise that hosted mode cannot keep', () => {
+    render(<Accueil />);
+    expect(screen.queryByText(/tout reste privé/i)).toBeNull();
+    expect(screen.queryByText(/^sécurisé$/i)).toBeNull();
+  });
+
+  it('links the transparency page, the legal page and a contact route', () => {
+    render(<Accueil />);
+    const footer = within(screen.getByRole('navigation', { name: 'Navigation de pied de page' }));
+    expect(footer.getByRole('link', { name: 'Transparence' })).toHaveAttribute('href', '/transparence');
+    expect(footer.getByRole('link', { name: 'Légal' })).toHaveAttribute('href', '/legal');
+    expect(footer.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', CONTACT_URL);
   });
 
   it('offers an install route that is never dead', () => {
