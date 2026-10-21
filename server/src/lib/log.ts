@@ -29,6 +29,7 @@ export interface LogFields {
     | 'analysis_finalized'
     | 'cache_hit'
     | 'provider_failed'
+    | 'retention_purge'
     | 'unhandled_error';
   requestId: string;
   method?: string;
