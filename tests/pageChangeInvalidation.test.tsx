@@ -160,7 +160,6 @@ describe('page-change invalidation', () => {
           }),
         },
         getURL: vi.fn((path: string) => `chrome-extension://mock-id/${path}`),
-        getManifest: vi.fn(() => ({ content_scripts: [{ js: ['content.js'] }] })),
         lastError: null,
       },
       tabs: {
