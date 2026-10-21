@@ -119,13 +119,13 @@ export function Accueil() {
         </div>
 
         <figure className="m-0 mx-auto w-full max-w-[26rem] lg:mx-0">
-          <div className="relative max-h-[34rem] overflow-hidden rounded-card border border-border bg-surface lg:max-h-[44rem]">
+          <div className="relative h-[34rem] overflow-hidden rounded-card border border-border bg-surface lg:h-[40rem]">
             <img
               src="/landing/rapport.png"
               width={800}
               height={2756}
               alt="Capture du panneau Squiggle : une note de 61 sur 100, « article fragile », les cinq domaines notés, puis deux constats qui citent chacun la phrase de l’article concernée."
-              className="block h-auto w-full"
+              className="block h-full w-full object-cover object-top"
             />
             <div
               aria-hidden="true"
@@ -156,7 +156,7 @@ export function Accueil() {
             ))}
           </ol>
 
-          <div className="self-start">
+          <div className="self-start lg:sticky lg:top-8">
             <Demo />
             <DemoText />
           </div>
