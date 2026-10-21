@@ -1,31 +1,49 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
+@theme {
+  --color-background: #0a0a0b;
+  --color-surface: #0f0f11;
+  --color-muted: #948f88;
+  --color-faint: #938e86;
+  --color-border: #2a2a2f;
+  --color-borderControl: #66666f;
+  --color-lineSoft: #1b1b1f;
+  --color-foreground: #ece9e3;
+  --color-accent: #e0483f;
+  --color-accentForeground: #0a0a0b;
+  --color-accentHover: #ef7268;
+  --color-accentSoft: #251010;
+  --color-accentInk: #f08a80;
+
+  --font-display: Bricolage Grotesque, system-ui, sans-serif;
+  --font-sans: Bricolage Grotesque, system-ui, sans-serif;
+  --font-serif: Newsreader, Georgia, serif;
+  --font-mono: IBM Plex Mono, monospace;
+
+  --container-prose: 42rem;
+  --container-hero: 22.5rem;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --radius-card: 14px;
+  --radius-control: 10px;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
 @layer base {
-  html {
-    scroll-behavior: smooth;
-    -webkit-text-size-adjust: 100%;
-  }
-
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    text-rendering: optimizeLegibility;
-  }
-
-  ::selection {
-    background: theme('colors.accent');
-    color: theme('colors.accentForeground');
-  }
-
-  :focus-visible {
-    @apply outline-none ring-2 ring-accentHover ring-offset-2 ring-offset-background;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    html {
-      scroll-behavior: auto;
-    }
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
   }
 }
 
@@ -72,7 +90,7 @@
     height: 1.05em;
     margin-left: 2px;
     vertical-align: -2px;
-    background: theme('colors.accent');
+    background: var(--color-accent);
     animation: caret 1.1s steps(1) infinite;
   }
 
@@ -103,5 +121,32 @@
   50%,
   100% {
     opacity: 0;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-accentForeground);
+  }
+
+  :focus-visible {
+    @apply outline-hidden ring-2 ring-accentHover ring-offset-2 ring-offset-background;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 }
