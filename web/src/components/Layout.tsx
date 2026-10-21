@@ -62,7 +62,7 @@ export function Page({ title, lead, children }: { title: string; lead?: string; 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-12">
       <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-      {lead ? <p className="mt-4 max-w-prose text-lg text-muted">{lead}</p> : null}
+      {lead ? <p className="mt-4 max-w-2xl text-lg text-muted">{lead}</p> : null}
       <div className="mt-10">{children}</div>
     </div>
   );

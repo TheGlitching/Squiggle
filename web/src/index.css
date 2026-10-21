@@ -20,7 +20,6 @@
   --font-serif: Newsreader, Georgia, serif;
   --font-mono: IBM Plex Mono, monospace;
 
-  --container-prose: 42rem;
   --container-hero: 22.5rem;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -37,6 +36,14 @@
   If we ever want to remove these styles, we need to add an explicit border
   color utility to any element that depends on these defaults.
 */
+/* Tailwind 3 painted placeholders gray-400; 4 fades the text colour instead. */
+@layer base {
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+}
+
 @layer base {
   *,
   ::after,
