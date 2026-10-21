@@ -6,6 +6,7 @@ import { sql as usageSql } from '../src/migrations/002_usage_reports';
 import { sql as runsSql } from '../src/migrations/003_analysis_runs';
 import { sql as billingSql } from '../src/migrations/004_billing';
 import { sql as ledgerSql } from '../src/migrations/005_usage_log_no_article';
+import { sql as changeSql } from '../src/migrations/007_email_change';
 import { T0 } from './helpers';
 
 /** A recording fake that answers the schema_migrations bookkeeping. */
@@ -119,5 +120,25 @@ describe('migration runner', () => {
   it('the ledger stops naming the article', () => {
     // Forward-only: 002 is amended, never edited.
     expect(ledgerSql).toContain('ALTER TABLE usage_log DROP COLUMN IF EXISTS report_id');
+  });
+
+  it('everything that names an account goes when the account does', () => {
+    // `Db.deleteUser` removes the user row and relies on the schema for every
+    // table that points at it. A new table with a `user_id` that forgot the
+    // cascade would survive an erasure, so the schema is checked, not trusted.
+    const all = MIGRATIONS.map((m) => m.sql).join('\n');
+    const references = all.match(/REFERENCES users \(id\)[^,\n]*/g) ?? [];
+    expect(references.length).toBeGreaterThanOrEqual(7);
+    for (const ref of references) expect(ref).toContain('ON DELETE CASCADE');
+
+    // Every column called user_id (or change_user_id) is such a reference.
+    const userColumns = all.match(/(?:^\s*|ADD COLUMN IF NOT EXISTS )(?:change_)?user_id TEXT[^\n]*/gm) ?? [];
+    expect(userColumns.length).toBe(references.length);
+    for (const column of userColumns) expect(column).toContain('REFERENCES users (id) ON DELETE CASCADE');
+  });
+
+  it('an email-change code is tied to its account and dies with it', () => {
+    expect(changeSql).toContain('ALTER TABLE magic_links ADD COLUMN IF NOT EXISTS change_user_id TEXT');
+    expect(changeSql).toContain('REFERENCES users (id) ON DELETE CASCADE');
   });
 });

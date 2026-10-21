@@ -127,7 +127,7 @@ export async function requestEmailChange(
     now,
     ttlMs: MAGIC_LINK_TTL_MS,
   });
-  const linkUrl = `${deps.webAppOrigin}/compte?nouvel-email=${encodeURIComponent(code)}`;
+  const linkUrl = `${deps.webAppOrigin}/compte?email-code=${encodeURIComponent(code)}`;
   try {
     await deps.email.send({
       to: email,
