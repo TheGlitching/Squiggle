@@ -9,7 +9,7 @@ export const CONTACT_URL = 'https://github.com/TheGlitching/Squiggle/issues';
 export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border bg-surface/80 backdrop-blur">
+      <header className="border-b border-border bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-4">
           <Link to="/" className="flex items-center" aria-label="Squiggle, accueil">
             <BrandLockup />
@@ -65,7 +65,7 @@ export function Page({ title, lead, children }: { title: string; lead?: string; 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-12">
       <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-      {lead ? <p className="mt-4 max-w-prose text-lg text-muted">{lead}</p> : null}
+      {lead ? <p className="mt-4 max-w-2xl text-lg text-muted">{lead}</p> : null}
       <div className="mt-10">{children}</div>
     </div>
   );
