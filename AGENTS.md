@@ -33,7 +33,7 @@ logic and palette (`web/src/demo.ts` mirrors `src/adapters/findingAdapters.ts`
 `severityToHighlightSeverity` and `src/content/shadowOverlay.ts`'s colours), and the
 R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBadge.tsx`,
 plus the PNGs in `src/assets/`). The design tokens themselves live in
-`web/tailwind.config.ts` and `web/src/index.css`. The dark theme's WCAG AA
+`web/src/index.css` (the `@theme` block). The dark theme's WCAG AA
 contract is pinned by `web/tests/contrast.test.ts`: primary buttons carry
 `accentForeground` (near-black) on `accent`, and demo severity labels use the
 bright `text` tone, not the darker fill that only clears 3:1 as text.
@@ -44,7 +44,7 @@ The extension sidepanel is **dark-only**, like the landing: there is no light th
 no `prefers-color-scheme` branch. Colour carries exactly one kind of meaning — severity
 (critical/warning/info/positive) — so a finding *category* is identified by its label and
 glyph, never by a hue of its own. The single token source is `src/ui/tokens/colors.ts`,
-mirrored by the Tailwind palette in `tailwind.config.ts` and the CSS variables in
+mirrored by the Tailwind palette (the `@theme` block) and the CSS variables in
 `src/index.css`; the in-page overlay's severity palette in `src/content/shadowOverlay.ts`
 is the reference for tints and borders. A primary button on the accent uses the dark ink
 (`accentForeground`), not white, to pass AA.

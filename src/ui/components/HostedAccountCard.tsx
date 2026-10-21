@@ -139,7 +139,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
               autoComplete="off"
               placeholder="ABCD2345"
               aria-label="Code de connexion"
-              className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-center font-mono text-lg tracking-[0.3em] text-ink outline-none focus:border-accent"
+              className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-center font-mono text-lg tracking-[0.3em] text-ink outline-hidden focus:border-accent"
             />
           </label>
           <button

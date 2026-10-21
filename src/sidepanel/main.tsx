@@ -551,7 +551,7 @@ function SidepanelApp() {
 
         {report && (
           <>
-            <section className="p-4 rounded-xl bg-panel border border-line shadow-sm">
+            <section className="p-4 rounded-xl bg-panel border border-line shadow-xs">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
                 Évaluation globale
               </h2>
