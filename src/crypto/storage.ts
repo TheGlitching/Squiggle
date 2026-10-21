@@ -267,6 +267,21 @@ export class SecureKeyStorage {
   }
 
   /**
+   * Call `listener` whenever the stored config changes, from any extension page:
+   * the mode, a key, or the hosted session (a sign-in completes in a tab of its
+   * own). Returns the unsubscribe. A no-op outside an extension context.
+   */
+  public onChanged(listener: () => void): () => void {
+    const onChanged = typeof chrome !== 'undefined' ? chrome.storage?.onChanged : undefined;
+    if (!onChanged) return () => {};
+    const callback = (changes: Record<string, unknown>, area: string) => {
+      if (area === 'local' && STORAGE_KEY in changes) listener();
+    };
+    onChanged.addListener(callback);
+    return () => onChanged.removeListener(callback);
+  }
+
+  /**
    * The install's P-256 keypair, created and encrypted on first call. A stored
    * pair that can no longer be decrypted is worthless (the server only knows
    * its public half, and the token that used it is cleared too), so it is

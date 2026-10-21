@@ -78,6 +78,7 @@ function SidepanelApp() {
   const [hoveredFindingId, setHoveredFindingId] = useState<string | null>(null);
   const [expandedDomain, setExpandedDomain] = useState<ScoreDomainKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOnOwnKey, setSettingsOnOwnKey] = useState(false);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   /** Hosted mode state: which engine, and the account behind it when signed in. */
   const [mode, setMode] = useState<AnalysisMode>('byok');
@@ -86,7 +87,8 @@ function SidepanelApp() {
   const [hostedBusy, setHostedBusy] = useState(false);
   const [showHostedCode, setShowHostedCode] = useState(false);
   // The visit earns its keep on the very first run, when the panel is empty and
-  // nothing on screen says what the extension does or why it wants a key.
+  // nothing on screen says what the extension does. It opens only while it has
+  // never been completed; the "?" button is the way back to it afterwards.
   const [tourOpen, setTourOpen] = useState(() => !getTourCompletionStatus().completed);
 
   const refreshKeyPresence = useCallback(async () => {
@@ -139,6 +141,10 @@ function SidepanelApp() {
     setHostedBusy(true);
     setHostedError(null);
     try {
+      // A keyless reader is still in the default BYOK mode: signing in is the
+      // choice of the hosted engine, so the panel follows once they return.
+      await keyStorageRef.current!.setMode('hosted');
+      setMode('hosted');
       await beginHostedSignIn(keyStorageRef.current!);
       if (__TARGET__ === 'firefox') setShowHostedCode(true);
     } catch (err) {
@@ -252,13 +258,21 @@ function SidepanelApp() {
     };
   }, [bus, refreshKeyPresence, refreshHostedState, hydrateTabState]);
 
-  // The Chromium sign-in finishes in a tab of its own; coming back to the panel
-  // is the moment to notice the token it stored.
+  // The Chromium sign-in finishes in a tab of its own: the token it stores is
+  // seen the moment it lands (`onChanged`), and coming back to the panel
+  // (`focus`) is the fallback for a browser that reports neither promptly.
   useEffect(() => {
-    const onFocus = () => void refreshHostedState();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [refreshHostedState]);
+    const refresh = () => {
+      void refreshKeyPresence();
+      void refreshHostedState();
+    };
+    window.addEventListener('focus', refresh);
+    const offChanged = keyStorageRef.current!.onChanged(refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      offChanged();
+    };
+  }, [refreshKeyPresence, refreshHostedState]);
 
   /**
    * Keep the panel pointed at the page the reader is actually looking at.
@@ -300,10 +314,6 @@ function SidepanelApp() {
       offUpdated();
     };
   }, [hydrateTabState, resetForNewPage]);
-
-  useEffect(() => {
-    if (mode === 'byok' && hasKey === false && !report) setTourOpen(true);
-  }, [hasKey, mode, report]);
 
   // Live analysis events from the background worker, filtered to the
   // currently tracked tab: an event addressed to a tab the reader has since
@@ -423,6 +433,13 @@ function SidepanelApp() {
   const hosted = mode === 'hosted';
   const hostedCanAnalyse = hostedAccount ? describeHostedAccount(hostedAccount).canAnalyse : false;
   const canRun = hosted ? hostedCanAnalyse : hasKey !== false;
+  // Hosted mode always has its card; BYOK has one only until a key is saved.
+  const showHostedCard = hosted || hasKey === false;
+
+  const openSettings = useCallback((onOwnKey: boolean) => {
+    setSettingsOnOwnKey(onOwnKey);
+    setSettingsOpen(true);
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen p-4 font-sans bg-ground text-ink">
@@ -450,7 +467,7 @@ function SidepanelApp() {
           <button
             data-tour="settings"
             type="button"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => openSettings(false)}
             aria-label="Configurer la clé API"
             className="rounded-lg px-2 py-1.5 text-sm text-muted hover:bg-panel-muted hover:text-ink"
           >
@@ -460,7 +477,9 @@ function SidepanelApp() {
       </header>
 
       <main className="flex-1 py-4 space-y-5">
-        {hosted ? (
+        {/* A reader with no key is offered the hosted engine, not a dead end:
+            sign-in is the one primary, the own-key path a text link beneath. */}
+        {showHostedCard && (
           <HostedAccountCard
             account={hostedAccount}
             error={hostedError}
@@ -469,26 +488,8 @@ function SidepanelApp() {
             onSignIn={() => void handleHostedSignIn()}
             onRedeem={(code) => void handleHostedRedeem(code)}
             onSignOut={() => void handleHostedSignOut()}
+            onUseOwnKey={() => openSettings(true)}
           />
-        ) : (
-          hasKey === false && (
-            <div className="rounded-xl border border-line bg-panel p-4">
-              <h2 className="text-sm font-semibold text-ink">
-                Configurez votre clé pour commencer
-              </h2>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                L’extension fonctionne avec votre propre clé API. Sans clé, aucune analyse ne peut
-                être lancée.
-              </p>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="mt-3 w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover"
-              >
-                Configurer ma clé
-              </button>
-            </div>
-          )
         )}
 
         <button
@@ -496,7 +497,11 @@ function SidepanelApp() {
           data-tour="run-analysis"
           onClick={runAnalysis}
           disabled={busy || !canRun}
-          className="w-full rounded-xl bg-accent px-3 py-3 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+          className={`w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-50 ${
+            canRun
+              ? 'bg-accent text-accent-foreground hover:bg-accent-hover'
+              : 'border border-line text-ink/80'
+          }`}
         >
           {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse critique'}
         </button>
@@ -657,6 +662,7 @@ function SidepanelApp() {
       <ByokSettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        startOnOwnKey={settingsOnOwnKey}
         storage={keyStorageRef.current!}
         onSaved={() => void refreshKeyPresence()}
         onHostedChanged={() => void refreshHostedState()}
