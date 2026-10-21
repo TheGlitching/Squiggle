@@ -3,6 +3,9 @@ import type { ReactNode } from 'react';
 import { BrandLockup } from './Brand';
 import { Link } from '../router';
 
+/** Where a reader reaches us: the public issue tracker. */
+export const CONTACT_URL = 'https://github.com/TheGlitching/Squiggle/issues';
+
 export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
@@ -44,7 +47,7 @@ export function Layout({ children }: { children: ReactNode }) {
               Confidentialité et conditions
             </Link>
             <a
-              href="https://github.com/TheGlitching/Squiggle/issues"
+              href={CONTACT_URL}
               className="hover:text-foreground"
               rel="noreferrer noopener"
               target="_blank"
