@@ -61,7 +61,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
                   }`}
                 />
               ))}
-              <span className="ml-1 font-mono text-[10px] text-muted">
+              <span className="ml-1 font-mono text-xs text-muted">
                 {account.usage.remaining} / {account.usage.limit}
               </span>
             </div>

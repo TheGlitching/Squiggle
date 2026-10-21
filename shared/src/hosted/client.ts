@@ -245,18 +245,28 @@ export class HostedAnalysisClient {
     if (rawBody !== undefined) headers['content-type'] = 'application/json';
 
     const fetchImpl = this.config.fetchImpl ?? fetch;
-    const response = await fetchImpl(`${this.config.baseUrl}${path}`, {
-      method,
-      headers,
-      body: rawBody,
-      signal: this.controller?.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetchImpl(`${this.config.baseUrl}${path}`, {
+        method,
+        headers,
+        body: rawBody,
+        signal: this.controller?.signal,
+      });
+    } catch (err) {
+      this.rethrowIfAborted(err);
+      // No response at all: the server was never reached, which is neither the
+      // model's doing nor something the reader can fix by waiting on it.
+      throw new HostedApiError('network', 'Impossible de joindre le serveur Squiggle. Vérifiez votre connexion, puis réessayez.', 0);
+    }
 
     let parsed: unknown;
     try {
       parsed = await response.json();
     } catch {
-      throw new HostedApiError('internal', 'Réponse illisible du serveur.', response.status);
+      // A body that is not our JSON envelope came from something between the
+      // reader and the application (a gateway, an outage page).
+      throw new HostedApiError('server_unavailable', 'Le serveur Squiggle ne répond pas correctement pour le moment. Réessayez dans un instant.', response.status);
     }
 
     const payload = parsed as { ok?: boolean; error?: string; message?: string };

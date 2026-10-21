@@ -393,7 +393,7 @@ export function TabSwitcher<T extends string = string>({
             {tab.badge !== undefined && (
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: '12px',
                   padding: '1px 5px',
                   borderRadius: '9999px',
                   backgroundColor: isActive ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.04)',
