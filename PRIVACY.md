@@ -122,8 +122,9 @@ pages que notre serveur va chercher sont **les sources citées par l'article**.
 même rapport, et c'est ce qui rend le service abordable : le second ne consomme aucun
 crédit et son navigateur n'envoie même pas l'article. **Un rapport contient des extraits
 de l'article** (la citation de chaque constat) et un résumé ; il ne contient jamais le
-texte intégral. La clé du cache est l'adresse
-canonique de l'article, plus le modèle et la version des consignes.
+texte intégral. La clé du cache est l'adresse canonique de l'article, plus l'empreinte
+(SHA-256) de son texte, plus le modèle et la version des consignes : un rapport n'est
+servi qu'à un lecteur dont la page donne le même texte.
 
 ## Ce que nous conservons, et combien de temps
 

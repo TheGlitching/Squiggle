@@ -27,6 +27,7 @@ import {
 import type { CitedSource } from '../engine/research';
 import type { AnalysisReport, FactualClaim, TextBlock } from '../engine/types';
 import type { PipelineProgressEvent } from '../engine/pipeline';
+import { articleTextHash } from './textHash';
 
 /** An error the server named. The panel branches on `code`, never on the text. */
 export class HostedApiError extends Error {
@@ -126,7 +127,14 @@ export class HostedAnalysisClient {
       // 1. The preflight is the whole point of the shared cache: on a hit the
       //    article is never sent anywhere and no credit is spent.
       this.report('preparing_prompt', 'Recherche d’une analyse déjà publiée...', 5);
-      const check = await this.call<CheckResponse>('GET', `/v1/analyze/check?url=${encodeURIComponent(input.url)}`);
+      //    A report is only served to a reader whose page yields the same text
+      //    it was built from, so the check carries the fingerprint of the text
+      //    (not the text) beside the address.
+      const textHash = await articleTextHash(input.blocks);
+      const check = await this.call<CheckResponse>(
+        'GET',
+        `/v1/analyze/check?url=${encodeURIComponent(input.url)}&text=${textHash}`,
+      );
       if (check.hit && check.report) {
         this.note('Analyse déjà disponible : aucun nouvel appel au modèle.');
         this.report('success', 'Analyse récupérée sans nouvel appel au modèle', 100);
@@ -237,18 +245,28 @@ export class HostedAnalysisClient {
     if (rawBody !== undefined) headers['content-type'] = 'application/json';
 
     const fetchImpl = this.config.fetchImpl ?? fetch;
-    const response = await fetchImpl(`${this.config.baseUrl}${path}`, {
-      method,
-      headers,
-      body: rawBody,
-      signal: this.controller?.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetchImpl(`${this.config.baseUrl}${path}`, {
+        method,
+        headers,
+        body: rawBody,
+        signal: this.controller?.signal,
+      });
+    } catch (err) {
+      this.rethrowIfAborted(err);
+      // No response at all: the server was never reached, which is neither the
+      // model's doing nor something the reader can fix by waiting on it.
+      throw new HostedApiError('network', 'Impossible de joindre le serveur Squiggle. Vérifiez votre connexion, puis réessayez.', 0);
+    }
 
     let parsed: unknown;
     try {
       parsed = await response.json();
     } catch {
-      throw new HostedApiError('internal', 'Réponse illisible du serveur.', response.status);
+      // A body that is not our JSON envelope came from something between the
+      // reader and the application (a gateway, an outage page).
+      throw new HostedApiError('server_unavailable', 'Le serveur Squiggle ne répond pas correctement pour le moment. Réessayez dans un instant.', response.status);
     }
 
     const payload = parsed as { ok?: boolean; error?: string; message?: string };

@@ -73,6 +73,7 @@ function mapReport(r: RawRow): ReportRow {
   return {
     id: r.id as string,
     urlHash: r.url_hash as string,
+    textHash: r.text_hash as string,
     model: r.model as string,
     promptVersion: r.prompt_version as string,
     report: typeof reportValue === 'string' ? reportValue : JSON.stringify(reportValue),
@@ -453,10 +454,16 @@ export class NeonDb implements Db {
 
   // ---- shared report cache ---------------------------------------------------
 
-  async findReport(urlHash: string, model: string, promptVersion: string): Promise<ReportRow | null> {
+  async findReport(
+    urlHash: string,
+    textHash: string,
+    model: string,
+    promptVersion: string,
+  ): Promise<ReportRow | null> {
     const rows = await this.q`
       SELECT * FROM reports
-      WHERE url_hash = ${urlHash} AND model = ${model} AND prompt_version = ${promptVersion}
+      WHERE url_hash = ${urlHash} AND text_hash = ${textHash}
+        AND model = ${model} AND prompt_version = ${promptVersion}
     `;
     return rows[0] ? mapReport(rows[0]) : null;
   }
@@ -465,17 +472,18 @@ export class NeonDb implements Db {
     if (args.sizeBytes > REPORT_MAX_BYTES) throw new Error('report exceeds the size cap');
     const id = randomToken(16);
     const expiresAt = args.now + args.ttlMs;
-    // The UNIQUE (url_hash, model, prompt_version) key makes a duplicate
+    // The UNIQUE (url_hash, text_hash, model, prompt_version) key makes a duplicate
     // insert a hard error: callers must findReport first (and a cache hit
     // must never overwrite an existing report).
     await this.q`
-      INSERT INTO reports (id, url_hash, model, prompt_version, report, size_bytes, created_at, expires_at)
-      VALUES (${id}, ${args.urlHash}, ${args.model}, ${args.promptVersion},
+      INSERT INTO reports (id, url_hash, text_hash, model, prompt_version, report, size_bytes, created_at, expires_at)
+      VALUES (${id}, ${args.urlHash}, ${args.textHash}, ${args.model}, ${args.promptVersion},
               ${args.report}::jsonb, ${args.sizeBytes}, ${args.now}, ${expiresAt})
     `;
     return {
       id,
       urlHash: args.urlHash,
+      textHash: args.textHash,
       model: args.model,
       promptVersion: args.promptVersion,
       report: args.report,

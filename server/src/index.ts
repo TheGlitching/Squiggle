@@ -24,7 +24,7 @@
  *   POST   /v1/account/checkout        (signed) open a Stripe Checkout session
  *   POST   /v1/account/portal          (signed) open the Stripe customer portal
  *   POST   /webhooks/stripe            (Stripe-signed) the only writer of a plan
- *   GET    /v1/analyze/check           (signed) shared-cache preflight, 0 credits
+ *   GET    /v1/analyze/check           (signed) shared-cache preflight (url + text hash), 0 credits
  *   POST   /v1/analyze/audit           (signed) audit the article, opens a run
  *   POST   /v1/analyze/research        (signed) check one factual finding
  *   POST   /v1/analyze/source-check    (signed) read one link the article cites
@@ -49,6 +49,7 @@ import {
 } from './analyze/stages';
 import {
   AuditRequestSchema,
+  CheckQuerySchema,
   FinalizeRequestSchema,
   ResearchRequestSchema,
   SourceCheckRequestSchema,
@@ -205,7 +206,14 @@ async function handle(
   // A wrong origin is refused everywhere; a MISSING one is refused on the
   // endpoints that a page could otherwise drive with the reader's own cookie.
   // See lib/cors.ts for why the list is a list and not "every POST".
-  if ((origin !== null && !originAllowed) || (!originAllowed && originRequired(req.method, url.pathname))) {
+  // A browser sends no Origin on a same-origin GET (web app and API share one
+  // origin), so `Sec-Fetch-Site: same-origin` stands in for it when Origin is
+  // absent. The browser sets that header and page script cannot.
+  const sameOrigin = origin === null && req.headers.get('sec-fetch-site') === 'same-origin';
+  if (
+    (origin !== null && !originAllowed) ||
+    (!originAllowed && !sameOrigin && originRequired(req.method, url.pathname))
+  ) {
     logEvent({ event: 'origin_rejected', requestId, method: req.method, path: url.pathname });
     return withRequestId(
       errorResponse(apiError('origin_not_allowed', 'This origin is not allowed to call this API.')),
@@ -563,7 +571,9 @@ async function analyzeRoute(
 
   if (path === '/v1/analyze/check' && method === 'GET') {
     const target = url.searchParams.get('url') ?? '';
-    return finish(await analyzeCheck(analyze, target));
+    const query = CheckQuerySchema.safeParse({ text: url.searchParams.get('text') ?? '' });
+    if (!query.success) return finish(invalidPayload(query.error, requestId, auth.user.id));
+    return finish(await analyzeCheck(analyze, target, query.data.text));
   }
 
   if (path === '/v1/analyze/audit' && method === 'POST') {
