@@ -61,6 +61,26 @@ describe('/auth/claim', () => {
     expect(body.token).toBeTruthy();
   });
 
+  it('serves a same-origin browser GET, which carries no Origin, and refuses other fetch sites', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+    const key = await generateSigningKeyPair();
+    const jwk = await exportP256Jwk(key.publicKey);
+    const get = (secFetchSite?: string) =>
+      env.handler(
+        new Request(`${env.webAppOrigin}/auth/claim?key=${encodeURIComponent(JSON.stringify(jwk))}`, {
+          headers: { cookie: sessionCookie, ...(secFetchSite ? { 'sec-fetch-site': secFetchSite } : {}) },
+        }),
+      );
+
+    expect((await get('same-origin')).status).toBe(200);
+    for (const site of [undefined, 'cross-site', 'same-site', 'none']) {
+      const res = await get(site);
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toBe('origin_not_allowed');
+    }
+  });
+
   it('rejects keys that are not usable P-256 public JWKs', async () => {
     const env = makeTestEnv();
     const { sessionCookie } = await magicLogin(env, 'marie@example.com');
