@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { generateSigningKeyPair } from '@squiggle/shared';
+import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
 
 import {
   claim as claimToken,
@@ -70,6 +70,17 @@ async function call(
   return { status: res.status, json: (await res.json()) as Record<string, unknown> };
 }
 
+/** The cache preflight, asked the way the extension asks it. */
+async function check(
+  env: TestEnv,
+  who: { key: CryptoKeyPair; token: string },
+  url = ARTICLE_URL,
+  blocks: ReadonlyArray<{ text: string }> = BLOCKS,
+) {
+  const text = await articleTextHash(blocks);
+  return call(env, who, `/v1/analyze/check?url=${encodeURIComponent(url)}&text=${text}`);
+}
+
 /** The whole run, the way the extension walks it. */
 async function runAnalysis(env: TestEnv, who: { key: CryptoKeyPair; token: string }, url = ARTICLE_URL) {
   const audit = await call(env, who, '/v1/analyze/audit', {
@@ -123,7 +134,7 @@ describe('analysis stages', () => {
     const env = makeTestEnv({ fetchImpl: pageFetch() });
     const who = await signedIn(env, 'marie@example.org');
 
-    const miss = await call(env, who, `/v1/analyze/check?url=${encodeURIComponent(ARTICLE_URL)}`);
+    const miss = await check(env, who);
     expect(miss.json.hit).toBe(false);
 
     const { finalized, researchable, claims } = await runAnalysis(env, who);
@@ -155,11 +166,7 @@ describe('analysis stages', () => {
     const before = { ...env.llm.calls };
     const second = await signedIn(env, 'paul@example.org');
     // A different reader, arriving with campaign parameters on the same article.
-    const hit = await call(
-      env,
-      second,
-      `/v1/analyze/check?url=${encodeURIComponent(`${ARTICLE_URL}?utm_source=twitter`)}`,
-    );
+    const hit = await check(env, second, `${ARTICLE_URL}?utm_source=twitter`);
 
     expect(hit.json.hit).toBe(true);
     expect((hit.json.report as { score: number }).score).toBeTypeOf('number');
@@ -167,6 +174,73 @@ describe('analysis stages', () => {
 
     const paul = await env.db.getUserByEmail('paul@example.org');
     expect(await env.db.countUsageLog(paul!.id)).toBe(0);
+  });
+
+  it('serves the cache only to a reader whose page yields the same text', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const first = await signedIn(env, 'marie@example.org');
+    await runAnalysis(env, first);
+
+    const second = await signedIn(env, 'paul@example.org');
+    const before = { ...env.llm.calls };
+
+    // The same address, but a page that says something else.
+    const other = [{ ...BLOCKS[0], text: 'Le chômage a baissé de 2 % en un an.' }, BLOCKS[1]];
+    const miss = await check(env, second, ARTICLE_URL, other);
+    expect(miss.json.hit).toBe(false);
+    expect(miss.json.report).toBeUndefined();
+
+    // A hit still costs nothing, and a miss does not call the provider either:
+    // only the audit does.
+    expect(env.llm.calls).toEqual(before);
+  });
+
+  it('files a report under the text the server was given, not a hash the client declares', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const forger = await signedIn(env, 'forger@example.org');
+    const forged = [{ ...BLOCKS[0], text: 'Un texte inventé pour cette adresse.' }];
+
+    // The audit payload has no field for a hash: the schema strips anything
+    // extra, so there is nothing for a client to declare.
+    const audit = await call(env, forger, '/v1/analyze/audit', {
+      url: ARTICLE_URL,
+      title: 'T',
+      blocks: forged,
+      textHash: await articleTextHash(BLOCKS),
+    });
+    await call(env, forger, '/v1/analyze/finalize', { runId: audit.json.runId as string });
+
+    const reader = await signedIn(env, 'reader@example.org');
+    // The honest page misses; the forged one is the only text the report answers.
+    expect((await check(env, reader, ARTICLE_URL, BLOCKS)).json.hit).toBe(false);
+    expect((await check(env, reader, ARTICLE_URL, forged)).json.hit).toBe(true);
+  });
+
+  it('keeps the same hit across what a reload changes without the article changing', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const first = await signedIn(env, 'marie@example.org');
+    await runAnalysis(env, first);
+
+    const second = await signedIn(env, 'paul@example.org');
+    const reloaded = [
+      // Other block ids and offsets, curly typography, a non-breaking space,
+      // a zero-width space and different casing.
+      { id: 'x9', type: 'heading' as const, text: 'LE  CHÔMAGE a baissé de 12\u00a0%\u200b en un an !', charStart: 3 },
+      { id: 'x10', type: 'quote' as const, text: ' Tout le monde le sait. ', charStart: 90 },
+    ];
+    expect((await check(env, second, ARTICLE_URL, reloaded)).json.hit).toBe(true);
+  });
+
+  it('refuses a preflight without a well-formed text hash', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+    const url = encodeURIComponent(ARTICLE_URL);
+
+    for (const query of ['', '&text=', '&text=abc', `&text=${'G'.repeat(64)}`, `&text=${'a'.repeat(65)}`]) {
+      const res = await call(env, who, `/v1/analyze/check?url=${url}${query}`);
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('invalid_payload');
+    }
   });
 
   it('degrades a single failing finding instead of the whole run', async () => {

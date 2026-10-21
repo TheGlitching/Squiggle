@@ -106,9 +106,13 @@ request ends.
 subscribed; whether an account is active is a fact Stripe reports, not a claim
 anybody makes.
 
-The cache key is the canonical article URL plus the model plus the prompt version, so
-changing either invalidates every stored report — the same article judged by a
-different model is a different report.
+The cache key is the canonical article URL plus a fingerprint of the article's text plus
+the model plus the prompt version, so changing any of them invalidates the stored
+report (the same article judged by a different model is a different report). The
+fingerprint (`articleTextHash` in `shared/`) is computed by the extension to ask the
+cache and by the server, from the text it was given, to file a report: a client cannot
+declare the hash a report is stored under, so text invented for a real article's
+address is never served to a reader whose page says something else.
 
 `SECURITY.md` has the controls and the residual risks; `PRIVACY.md` has the retention
 table and the subprocessors.

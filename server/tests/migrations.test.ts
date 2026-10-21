@@ -6,6 +6,7 @@ import { sql as usageSql } from '../src/migrations/002_usage_reports';
 import { sql as runsSql } from '../src/migrations/003_analysis_runs';
 import { sql as billingSql } from '../src/migrations/004_billing';
 import { sql as ledgerSql } from '../src/migrations/005_usage_log_no_article';
+import { sql as textHashSql } from '../src/migrations/007_reports_text_hash';
 import { T0 } from './helpers';
 
 /** A recording fake that answers the schema_migrations bookkeeping. */
@@ -79,6 +80,16 @@ describe('migration runner', () => {
     expect(authSql).toContain('session_hash TEXT UNIQUE NOT NULL');
     expect(authSql).toContain('code_hash TEXT UNIQUE NOT NULL');
     expect(authSql).toContain('expires_at BIGINT NOT NULL');
+  });
+
+  it('the report cache is keyed on the article text as well as its address', () => {
+    // The old key let a text invented for a real address be served to everyone.
+    expect(usageSql).toContain('UNIQUE (url_hash, model, prompt_version)');
+    expect(textHashSql).toContain('DROP CONSTRAINT IF EXISTS reports_url_hash_model_prompt_version_key');
+    expect(textHashSql).toContain('UNIQUE (url_hash, text_hash, model, prompt_version)');
+    // Reports filed under the old key cannot prove which text they came from.
+    expect(textHashSql.indexOf('DELETE FROM reports')).toBeLessThan(textHashSql.indexOf('ADD COLUMN'));
+    expect(textHashSql).toContain('text_hash TEXT NOT NULL');
   });
 
   it('the usage schema adds the quota, ledger and cache tables', () => {

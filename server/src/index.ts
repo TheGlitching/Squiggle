@@ -24,7 +24,7 @@
  *   POST   /v1/account/checkout        (signed) open a Stripe Checkout session
  *   POST   /v1/account/portal          (signed) open the Stripe customer portal
  *   POST   /webhooks/stripe            (Stripe-signed) the only writer of a plan
- *   GET    /v1/analyze/check           (signed) shared-cache preflight, 0 credits
+ *   GET    /v1/analyze/check           (signed) shared-cache preflight (url + text hash), 0 credits
  *   POST   /v1/analyze/audit           (signed) audit the article, opens a run
  *   POST   /v1/analyze/research        (signed) check one factual finding
  *   POST   /v1/analyze/source-check    (signed) read one link the article cites
@@ -49,6 +49,7 @@ import {
 } from './analyze/stages';
 import {
   AuditRequestSchema,
+  CheckQuerySchema,
   FinalizeRequestSchema,
   ResearchRequestSchema,
   SourceCheckRequestSchema,
@@ -570,7 +571,9 @@ async function analyzeRoute(
 
   if (path === '/v1/analyze/check' && method === 'GET') {
     const target = url.searchParams.get('url') ?? '';
-    return finish(await analyzeCheck(analyze, target));
+    const query = CheckQuerySchema.safeParse({ text: url.searchParams.get('text') ?? '' });
+    if (!query.success) return finish(invalidPayload(query.error, requestId, auth.user.id));
+    return finish(await analyzeCheck(analyze, target, query.data.text));
   }
 
   if (path === '/v1/analyze/audit' && method === 'POST') {

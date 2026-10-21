@@ -18,3 +18,4 @@ export * from './client/openrouter';
 export * from './types/byok';
 export * from './auth/signing';
 export * from './hosted/client';
+export * from './hosted/textHash';

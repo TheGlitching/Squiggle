@@ -11,7 +11,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { generateSigningKeyPair } from '@squiggle/shared';
+import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
 
 import {
   CHROME_ORIGIN,
@@ -191,7 +191,8 @@ describe('report sanitization', () => {
     await call(env, first, '/v1/analyze/finalize', { runId: audit.json.runId as string });
 
     const second = await signedIn(env, 'paul@example.org');
-    const hit = await call(env, second, `/v1/analyze/check?url=${encodeURIComponent(ARTICLE_URL)}`);
+    const text = await articleTextHash(BLOCKS);
+    const hit = await call(env, second, `/v1/analyze/check?url=${encodeURIComponent(ARTICLE_URL)}&text=${text}`);
     expect(hit.json.hit).toBe(true);
 
     // What the second reader is served carries none of it, and still reads.
@@ -339,7 +340,11 @@ describe('logs and correlation', () => {
         blocks: [{ id: 'b1', type: 'nope', text: secret, charStart: 0 }],
       });
       // And a valid call, whose query string is the article being read.
-      await call(env, who, `/v1/analyze/check?url=${encodeURIComponent(`${ARTICLE_URL}?q=${secret}`)}`);
+      await call(
+        env,
+        who,
+        `/v1/analyze/check?url=${encodeURIComponent(`${ARTICLE_URL}?q=${secret}`)}&text=${'a'.repeat(64)}`,
+      );
 
       expect(lines.length).toBeGreaterThan(0);
       for (const line of lines) {

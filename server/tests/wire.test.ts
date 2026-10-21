@@ -117,6 +117,41 @@ describe('extension client against the real server', () => {
     expect(await env.db.countUsageLog(paul!.id)).toBe(0);
   });
 
+  it('never serves one account\'s forged text to a reader whose page says something else', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
+    const forger = await hostedClient(env, 'forger@example.org');
+
+    // Account A files an invented article under the address of a real one.
+    const llm = env.llm;
+    const honest = llm.auditJson;
+    llm.auditJson = JSON.stringify({ ...JSON.parse(honest), summary: 'RAPPORT FABRIQUE A PARTIR D UN FAUX TEXTE' });
+    const forgedBlocks = [
+      { id: 'b1', type: 'paragraph' as const, text: 'Le chomage a bondi de 80 % en un an.', charStart: 0 },
+      { id: 'b2', type: 'paragraph' as const, text: 'Le gouvernement a menti.', charStart: 40 },
+    ];
+    const forged = await forger.analyze({ url: ARTICLE_URL, title: 'T', blocks: forgedBlocks, citedSources: CITED });
+    expect(forged.summary).toContain('FABRIQUE');
+
+    // Account B reads the real article, whose extraction differs. It gets a
+    // miss and its own analysis: the provider is called, and the forged
+    // report never comes back.
+    llm.auditJson = honest;
+    const callsBefore = llm.calls.complete;
+    const reader = await hostedClient(env, 'reader@example.org');
+    const own = await reader.analyze({ url: ARTICLE_URL, title: 'T', blocks: BLOCKS, citedSources: CITED });
+    expect(llm.calls.complete).toBeGreaterThan(callsBefore);
+    expect(own.summary).not.toContain('FABRIQUE');
+    const readerRow = await env.db.getUserByEmail('reader@example.org');
+    expect(await env.db.countUsageLog(readerRow!.id)).toBe(1);
+
+    // A third reader of the real article is now served B's report, and the
+    // forger's text keeps answering only to the page that carries it.
+    const third = await hostedClient(env, 'third@example.org');
+    const served = await third.analyze({ url: ARTICLE_URL, title: 'T', blocks: BLOCKS, citedSources: CITED });
+    expect(served.summary).toBe(own.summary);
+    expect(served.summary).not.toContain('FABRIQUE');
+  });
+
   it('surfaces a billing refusal as a code the panel can branch on', async () => {
     const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
     const client = await hostedClient(env, 'marie@example.org');
