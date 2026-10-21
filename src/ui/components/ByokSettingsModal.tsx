@@ -3,6 +3,7 @@ import { SecureKeyStorage, type AnalysisMode } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
 import type { LLMProvider, ProviderConfig } from '@squiggle/shared';
 import { HostedAccountCard } from './HostedAccountCard';
+import { SiteAccessCard } from './SiteAccessCard';
 import {
   beginHostedSignIn,
   fetchHostedAccount,
@@ -489,6 +490,8 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               )}
             </div>
           </details>
+
+          <SiteAccessCard />
         </div>
       </div>
     </div>

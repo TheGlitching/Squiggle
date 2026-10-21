@@ -28,7 +28,6 @@ describe('analysis with a configured key', () => {
         sendMessage: vi.fn(),
         onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
         getURL: vi.fn((p: string) => `chrome-extension://mock/${p}`),
-        getManifest: vi.fn(() => ({ content_scripts: [{ js: ['content-script.js'] }] })),
         lastError: null,
       },
       tabs: {

@@ -3,7 +3,7 @@
  * Cross-browser MV3 background script for Chrome (chrome.sidePanel) and Firefox (browser.sidebarAction).
  */
 
-import { UnifiedRuntime } from '../messaging/runtime';
+import { CONTENT_SCRIPT_FILE, UnifiedRuntime } from '../messaging/runtime';
 import { TypedMessageBus } from '../messaging/messageBus';
 import { TabStateManager } from './tabStateManager';
 import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
@@ -297,10 +297,12 @@ export class BackgroundServiceWorker {
   /**
    * Ask the page's content script for the article.
    *
-   * A content script declared in the manifest is only injected into pages loaded
-   * *after* the extension was installed or reloaded, so any tab already open at
-   * that moment has no receiver and every analysis on it fails. Rather than
-   * blaming the article, inject the script on demand and ask again.
+   * The manifest declares no content script: the script is injected into the tab
+   * the reader asked about, which `activeTab` authorises for the page they
+   * invoked the extension on. So the first read of any page finds no receiver,
+   * and a page that was already open when the extension loaded looks the same.
+   * Ask first (a tab that already holds the script answers), inject on a miss,
+   * ask again.
    */
   private async extractArticle(tabId: number): Promise<ExtractedArticle | undefined> {
     const ask = async (): Promise<ExtractedArticle | undefined> => {
@@ -317,11 +319,8 @@ export class BackgroundServiceWorker {
       // No receiver in the page. Fall through to injection.
     }
 
-    const files = UnifiedRuntime.getManifest()?.content_scripts?.[0]?.js ?? [];
-    if (!files.length) return undefined;
-
     try {
-      await UnifiedRuntime.injectScript(tabId, files);
+      await UnifiedRuntime.injectScript(tabId, [CONTENT_SCRIPT_FILE]);
     } catch (err) {
       console.warn('Could not inject the content script into the tab:', err);
       return undefined;
@@ -368,7 +367,9 @@ export class BackgroundServiceWorker {
           'l’article lui-même.'
         : 'Impossible de lire cette page. Le navigateur interdit aux extensions ' +
           'd’accéder à certaines pages (ses réglages, un PDF, la galerie ' +
-          'd’extensions). Sur un site de presse, rechargez la page puis relancez.';
+          'd’extensions). Sur un site de presse, cliquez sur l’icône Squiggle depuis la ' +
+          'page de l’article, ou autorisez l’accès à tous les sites dans les réglages, ' +
+          'puis relancez.';
       this.stateManager.updateTabState(tabId, { status: 'error', error: err });
       return { success: false, error: err };
     }

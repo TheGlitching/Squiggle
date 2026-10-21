@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BackgroundServiceWorker } from '../src/background';
 
 /**
- * A manifest-declared content script is only injected into pages that load
- * after the extension does, so any tab already open when the extension is
- * installed has no receiver. Analysis on such a tab used to fail with
+ * The manifest declares no content script: it is injected into the tab the reader
+ * asked about, so the first read of any page, and any tab already open when the
+ * extension is installed, has no receiver. Analysis on such a tab used to fail with
  * "Impossible de récupérer le contenu de l'article pour analyse.", which blamed
  * the article for a wiring problem and gave the user nothing to act on.
  */
@@ -33,7 +33,6 @@ describe('article extraction recovery', () => {
       sendMessage: vi.fn(),
       onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
       getURL: vi.fn((p: string) => `chrome-extension://mock/${p}`),
-      getManifest: vi.fn(() => ({ content_scripts: [{ js: ['content-script.js'] }] })),
       lastError: null as { message: string } | null,
     };
 
@@ -98,7 +97,9 @@ describe('article extraction recovery', () => {
     const res = await sw.runAnalysisForTab(TAB);
 
     expect(res.success).toBe(false);
-    expect(res.error).toContain('rechargez la page');
+    // Both ways back are named: invoke the extension on the page, or grant all sites.
+    expect(res.error).toContain('cliquez sur l’icône Squiggle');
+    expect(res.error).toContain('autorisez l’accès à tous les sites');
   });
 
   it('declines a paywalled teaser instead of scoring it as the article', async () => {

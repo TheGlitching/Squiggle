@@ -177,6 +177,10 @@ sourced, and would overwrite the observation.
 ## Subsystems
 
 ### Content script
+Built to `content-script.js` and injected by the background into the tab the reader
+invoked the extension on (`activeTab` and `scripting`); the manifests declare no
+content script, and a second injection into the same tab is a no-op.
+
 - **`ArticleExtractor`** - JSON-LD (`schema.org/NewsArticle`), semantic `<article>`,
   then text-density heuristics. Emits character offsets and XPath coordinates per
   block, plus the article's own citations.

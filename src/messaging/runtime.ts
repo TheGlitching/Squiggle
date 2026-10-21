@@ -40,6 +40,14 @@ export type RuntimeMessageListener = (
   sendResponse: MessageResponseCallback
 ) => boolean | void | Promise<unknown>;
 
+/**
+ * The built content script, at the package root. The manifest declares no static
+ * content script, so this is the only way the page-side code gets in: the
+ * background injects it into the tab the reader asked about. The file is written
+ * by scripts/build-content-script.mjs, which owns the same name.
+ */
+export const CONTENT_SCRIPT_FILE = 'content-script.js';
+
 interface BrowserNamespace {
   runtime?: typeof chrome.runtime;
   tabs?: typeof chrome.tabs;
@@ -71,18 +79,6 @@ export class UnifiedRuntime {
 
   public static getURL(path: string): string {
     return this.getRuntime().getURL(path);
-  }
-
-  /**
-   * The parsed extension manifest. Used to discover the content-script files
-   * rather than hardcoding a bundled filename that changes every build.
-   */
-  public static getManifest(): chrome.runtime.Manifest | undefined {
-    try {
-      return this.getRuntime().getManifest() as chrome.runtime.Manifest;
-    } catch {
-      return undefined;
-    }
   }
 
   /**
