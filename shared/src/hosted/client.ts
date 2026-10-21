@@ -27,6 +27,7 @@ import {
 import type { CitedSource } from '../engine/research';
 import type { AnalysisReport, FactualClaim, TextBlock } from '../engine/types';
 import type { PipelineProgressEvent } from '../engine/pipeline';
+import { articleTextHash } from './textHash';
 
 /** An error the server named. The panel branches on `code`, never on the text. */
 export class HostedApiError extends Error {
@@ -126,7 +127,14 @@ export class HostedAnalysisClient {
       // 1. The preflight is the whole point of the shared cache: on a hit the
       //    article is never sent anywhere and no credit is spent.
       this.report('preparing_prompt', 'Recherche d’une analyse déjà publiée...', 5);
-      const check = await this.call<CheckResponse>('GET', `/v1/analyze/check?url=${encodeURIComponent(input.url)}`);
+      //    A report is only served to a reader whose page yields the same text
+      //    it was built from, so the check carries the fingerprint of the text
+      //    (not the text) beside the address.
+      const textHash = await articleTextHash(input.blocks);
+      const check = await this.call<CheckResponse>(
+        'GET',
+        `/v1/analyze/check?url=${encodeURIComponent(input.url)}&text=${textHash}`,
+      );
       if (check.hit && check.report) {
         this.note('Analyse déjà disponible : aucun nouvel appel au modèle.');
         this.report('success', 'Analyse récupérée sans nouvel appel au modèle', 100);

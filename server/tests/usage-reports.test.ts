@@ -9,6 +9,7 @@ const DAY = DAY_MS;
 function makeReport(db: MemoryDb, id: number, now: number = T0, ttlMs: number = REPORT_TTL_MS) {
   return db.createReport({
     urlHash: `url-${id}`,
+    textHash: `text-${id}`,
     model: 'gemini-3.5-flash',
     promptVersion: 'v1',
     report: JSON.stringify({ id, title: `report ${id}` }),
@@ -53,21 +54,23 @@ describe('usage: ledger + daily counter', () => {
 });
 
 describe('the shared report cache', () => {
-  it('serves a hit only for the exact (url, model, prompt version) key', async () => {
+  it('serves a hit only for the exact (url, text, model, prompt version) key', async () => {
     const db = new MemoryDb();
-    expect(await db.findReport('url-1', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1')).toBeNull();
 
     const created = await makeReport(db, 1);
     expect(created.expiresAt).toBe(T0 + REPORT_TTL_MS);
 
-    const hit = await db.findReport('url-1', 'gemini-3.5-flash', 'v1');
+    const hit = await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1');
     expect(hit).not.toBeNull();
     expect(hit!.report).toBe(created.report);
     expect(hit!.id).toBe(created.id);
 
     // A prompt-version bump is a cache miss by design (invalidation rule).
-    expect(await db.findReport('url-1', 'gemini-3.5-flash', 'v2')).toBeNull();
-    expect(await db.findReport('url-2', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v2')).toBeNull();
+    expect(await db.findReport('url-2', 'text-2', 'gemini-3.5-flash', 'v1')).toBeNull();
+    // The same address with a different text is a different article to the cache.
+    expect(await db.findReport('url-1', 'text-other', 'gemini-3.5-flash', 'v1')).toBeNull();
   });
 
   it('rejects oversized payloads and duplicate cache keys', async () => {
@@ -77,6 +80,7 @@ describe('the shared report cache', () => {
     await expect(
       db.createReport({
         urlHash: 'url-big',
+        textHash: 'text-big',
         model: 'gemini-3.5-flash',
         promptVersion: 'v1',
         report: 'x'.repeat(REPORT_MAX_BYTES + 1),
@@ -88,7 +92,7 @@ describe('the shared report cache', () => {
 
     await expect(makeReport(db, 1, T0 + 1000)).rejects.toThrow(/already cached/);
     // The original report is untouched by the rejected insert.
-    expect((await db.findReport('url-1', 'gemini-3.5-flash', 'v1'))!.createdAt).toBe(T0);
+    expect((await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1'))!.createdAt).toBe(T0);
   });
 });
 
@@ -100,8 +104,8 @@ describe('cache purge (TTL + size cap)', () => {
 
     const result = await db.purgeReports(T0 + 2000, 500);
     expect(result).toEqual({ expired: 1, overCap: 0 });
-    expect(await db.findReport('url-1', 'gemini-3.5-flash', 'v1')).toBeNull();
-    expect(await db.findReport('url-2', 'gemini-3.5-flash', 'v1')).not.toBeNull();
+    expect(await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-2', 'text-2', 'gemini-3.5-flash', 'v1')).not.toBeNull();
   });
 
   it('evicts the oldest reports only until the cache is back under the cap', async () => {
@@ -112,10 +116,10 @@ describe('cache purge (TTL + size cap)', () => {
     expect(result).toEqual({ expired: 0, overCap: 2 });
 
     // The two oldest (t = T0+1, T0+2) are gone; the three newest remain.
-    expect(await db.findReport('url-1', 'gemini-3.5-flash', 'v1')).toBeNull();
-    expect(await db.findReport('url-2', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-2', 'text-2', 'gemini-3.5-flash', 'v1')).toBeNull();
     for (const i of [3, 4, 5]) {
-      expect(await db.findReport(`url-${i}`, 'gemini-3.5-flash', 'v1')).not.toBeNull();
+      expect(await db.findReport(`url-${i}`, `text-${i}`, 'gemini-3.5-flash', 'v1')).not.toBeNull();
     }
   });
 
@@ -123,7 +127,7 @@ describe('cache purge (TTL + size cap)', () => {
     const db = new MemoryDb();
     await makeReport(db, 1);
     expect(await db.purgeReports(T0, 500)).toEqual({ expired: 0, overCap: 0 });
-    expect(await db.findReport('url-1', 'gemini-3.5-flash', 'v1')).not.toBeNull();
+    expect(await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1')).not.toBeNull();
   });
 
   it('applies the TTL and the cap in one pass', async () => {
@@ -135,10 +139,10 @@ describe('cache purge (TTL + size cap)', () => {
 
     const result = await db.purgeReports(T0 + 2000, 2);
     expect(result).toEqual({ expired: 1, overCap: 1 }); // expired first, then oldest
-    expect(await db.findReport('url-1', 'gemini-3.5-flash', 'v1')).toBeNull();
-    expect(await db.findReport('url-2', 'gemini-3.5-flash', 'v1')).toBeNull();
-    expect(await db.findReport('url-3', 'gemini-3.5-flash', 'v1')).not.toBeNull();
-    expect(await db.findReport('url-4', 'gemini-3.5-flash', 'v1')).not.toBeNull();
+    expect(await db.findReport('url-1', 'text-1', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-2', 'text-2', 'gemini-3.5-flash', 'v1')).toBeNull();
+    expect(await db.findReport('url-3', 'text-3', 'gemini-3.5-flash', 'v1')).not.toBeNull();
+    expect(await db.findReport('url-4', 'text-4', 'gemini-3.5-flash', 'v1')).not.toBeNull();
   });
 });
 

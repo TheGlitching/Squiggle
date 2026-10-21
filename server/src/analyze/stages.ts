@@ -7,6 +7,7 @@
  *
  *   check         cache lookup only — a hit costs 0 LLM calls and 0 credits,
  *                 and the article's text never leaves the reader's machine
+ *                 (only its fingerprint does)
  *   audit         the article, once, in one strict-JSON call
  *   research      one factual finding, checked against evidence
  *   source-check  one link the article cites, fetched and read
@@ -26,9 +27,16 @@
  *     hands; a client names a run, a finding, a claim, and never their
  *     content. That is what stops one reader's poisoned article from planting
  *     text in the shared cache that a different reader would be served.
+ *
+ *  3. **A cached report is only served to a reader whose page yields the same
+ *     text.** The cache key is the address AND the fingerprint of the text.
+ *     The server files a report under the fingerprint it computed itself from
+ *     the text it was given, never one a client declared, so text invented for
+ *     a real article's address lands under a key no honest reader asks for.
  */
 import {
   AnalysisReport,
+  articleTextHash,
   buildFourchesCaudinesUserPrompt,
   computeFourchesCaudinesScore,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
@@ -121,15 +129,25 @@ export interface CheckResult {
 }
 
 /**
- * Cache preflight. Takes the URL and nothing else — on a hit the reader gets
- * a full report without the article ever being sent anywhere.
+ * Cache preflight. Takes the URL and the fingerprint of the text the reader's
+ * page yields: on a hit the reader gets a full report without the article
+ * ever being sent anywhere.
+ *
+ * The fingerprint is the reader's own claim and is not verified, which is
+ * safe: a reader who lies about it asks for a report built from a text that is
+ * not theirs, and the report they are handed is only ever one the server
+ * itself filed under that fingerprint.
  */
-export async function analyzeCheck(s: AnalyzeServices, rawUrl: string): Promise<Outcome<CheckResult>> {
+export async function analyzeCheck(
+  s: AnalyzeServices,
+  rawUrl: string,
+  textHash: string,
+): Promise<Outcome<CheckResult>> {
   const urlHash = await articleUrlHash(rawUrl);
   if (!urlHash) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
 
   const model = modelIdOf(s.llm());
-  const cached = await s.db.findReport(urlHash, model, s.promptVersion);
+  const cached = await s.db.findReport(urlHash, textHash, model, s.promptVersion);
   if (!cached || cached.expiresAt <= s.clock.now()) return { ok: true, hit: false };
 
   logEvent({ event: 'cache_hit', requestId: s.requestId, urlHash });
@@ -259,6 +277,9 @@ export async function analyzeAudit(
     partialAccess: payload.partialAccess,
     model: modelIdOf(client),
     promptVersion: s.promptVersion,
+    // From the blocks the audit was just run on, not from anything the client
+    // declared: this is the key the finished report will be filed under.
+    textHash: await articleTextHash(payload.blocks),
     auditDurationMs: audited.meta.durationMs,
     textLengthChars: audited.meta.textLengthChars ?? 0,
     blocksCount: audited.meta.blocksCount ?? payload.blocks.length,
@@ -523,10 +544,13 @@ export async function analyzeFinalize(
   const serialized = JSON.stringify(report);
   const sizeBytes = new TextEncoder().encode(serialized).length;
   let cached = false;
-  if (sizeBytes <= REPORT_MAX_BYTES) {
+  // A run opened before runs recorded a text fingerprint has nothing to file
+  // its report under. It is still this reader's result; it is just not shared.
+  if (sizeBytes <= REPORT_MAX_BYTES && state.textHash) {
     try {
       await s.db.createReport({
         urlHash,
+        textHash: state.textHash,
         model: state.model,
         promptVersion: state.promptVersion,
         report: serialized,
@@ -561,6 +585,7 @@ function pendingState(now: number): AnalysisRunState {
     partialAccess: false,
     model: '',
     promptVersion: '',
+    textHash: '',
     auditDurationMs: 0,
     textLengthChars: 0,
     blocksCount: 0,
