@@ -118,7 +118,7 @@ function DemoBody({ example, active, revealed, instant = false, onTyped }: BodyP
         className="relative m-0 min-h-[4em] font-serif text-[1.02rem] leading-[1.65] text-[#cdc8c0]"
       >
         <span ref={layerRef} aria-hidden="true" className="pointer-events-none absolute inset-0 z-0" />
-        <span className="relative z-[1]">
+        <span className="relative z-1">
           {pre}
           <mark ref={markRef} className="bg-transparent px-[3px] py-px text-inherit">
             {marked}
@@ -129,7 +129,7 @@ function DemoBody({ example, active, revealed, instant = false, onTyped }: BodyP
       </p>
 
       <div
-        className={`mt-4 grid min-h-[5rem] gap-1.5 transition-[opacity,transform] duration-[220ms] ease-out motion-reduce:transition-none ${
+        className={`mt-4 grid min-h-20 gap-1.5 transition-[opacity,transform] duration-220 ease-out motion-reduce:transition-none ${
           revealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'
         }`}
       >
