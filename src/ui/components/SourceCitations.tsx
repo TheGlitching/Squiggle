@@ -31,12 +31,12 @@ export const SourceCitations: React.FC<SourceCitationsProps> = ({
 
   return (
     <div className="mt-2" data-tour="finding-sources">
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted">
+      <span className="font-mono text-xs font-semibold uppercase tracking-wider text-muted">
         {label}
       </span>
       <ul className="mt-1 space-y-1.5">
         {sources.map((source, index) => (
-          <li key={`${source.url}-${index}`} className="text-[11px] leading-snug">
+          <li key={`${source.url}-${index}`} className="text-xs leading-snug">
             <a
               href={source.url}
               target="_blank"
@@ -52,7 +52,7 @@ export const SourceCitations: React.FC<SourceCitationsProps> = ({
               {' · '}
               {source.title || source.url}
             </a>
-            <span className="block text-[10px] text-faint">
+            <span className="block text-xs text-faint">
               {ORIGIN_LABELS[source.origin]}
             </span>
             {source.quote && (

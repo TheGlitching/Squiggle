@@ -354,7 +354,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               onSignOut={() => void handleHostedSignOut()}
               onUseHosted={() => void handleUseHosted()}
             />
-            <p className="mt-2 text-[11px] leading-snug text-muted">
+            <p className="mt-2 text-xs leading-snug text-muted">
               Voir{' '}
               <a href={TRANSPARENCY_URL} target="_blank" rel="noreferrer" className="underline">
                 le trajet des données
@@ -372,7 +372,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
 
             <div className="space-y-4 border-t border-line p-3">
               <div>
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <span className="block text-xs font-semibold uppercase tracking-wider text-muted">
                   Fournisseur
                 </span>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -395,7 +395,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               </div>
 
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <span className="block text-xs font-semibold uppercase tracking-wider text-muted">
                   Modèle
                 </span>
                 <input
@@ -409,21 +409,21 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   placeholder={preset.modelPlaceholder}
                   className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-hidden focus:border-accent"
                 />
-                <span className="mt-1 block text-[11px] leading-snug text-muted">
+                <span className="mt-1 block text-xs leading-snug text-muted">
                   Identifiant exact du modèle chez le fournisseur.
                 </span>
               </label>
 
               <label className="block">
                 <span className="flex items-baseline justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                     Clé API
                   </span>
                   <a
                     href={preset.keyUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] font-medium text-accent-hover hover:underline"
+                    className="text-xs font-medium text-accent-hover hover:underline"
                   >
                     Obtenir une clé ↗
                   </a>

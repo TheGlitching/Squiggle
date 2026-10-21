@@ -554,7 +554,7 @@ export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
 
   const labelStyle: CSSProperties = {
     fontFamily: 'IBM Plex Mono, monospace',
-    fontSize: '11px',
+    fontSize: '12px',
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: '0.08em',

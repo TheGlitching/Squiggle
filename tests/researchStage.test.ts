@@ -104,6 +104,16 @@ function makeFinding(overrides: Partial<Finding> & Pick<Finding, 'category'>): F
   };
 }
 
+/**
+ * What a reader may see in `rationale`: a sentence about the evidence. Enum
+ * values, the word "rejeté" and the engine's reasoning belong in the log, which
+ * is why every case below also checks the diagnostic channel.
+ */
+function expectReaderText(rationale: string | undefined): void {
+  expect(rationale).toBeTruthy();
+  expect(rationale).not.toMatch(/rejeté|non-verifiable|verifiee|douteuse|Verdict|'|StubClient/);
+}
+
 describe('researchFindings', () => {
   it('researches only the externally-researchable factual findings, and marks research unperformed with all-non-verifiable claims when the client cannot search', async () => {
     const findings = [
@@ -160,12 +170,20 @@ describe('researchFindings', () => {
       canSearch: true
     });
 
-    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+    const diagnostics: string[] = [];
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
 
     expect(result.claims).toHaveLength(1);
     expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
-    expect(result.claims[0].rationale).toMatch(/rejeté/i);
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toContain(`Verdict '${verdict}' rejeté`);
     expect(result.claims[0].findingId).toBe(finding.id);
   });
 
@@ -293,11 +311,19 @@ describe('researchFindings', () => {
       groundedImpl: async () => ({ content: judgement, citations: [] })
     });
 
-    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+    const diagnostics: string[] = [];
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
 
     expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
-    expect(result.claims[0].rationale).toMatch(/aucune source n'a été consultée/);
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toMatch(/aucune source n'a été consultée/);
   });
 
   it('credits only the retrieved urls when the model names more sources than were fetched', async () => {
@@ -338,11 +364,19 @@ describe('researchFindings', () => {
       groundedImpl: async () => ({ content: judgement, citations: [] })
     });
 
-    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+    const diagnostics: string[] = [];
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
 
     expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
-    expect(result.claims[0].rationale).toMatch(/rejeté/i);
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toMatch(/rejeté/);
   });
 
   it('propagates an aborted grounded call instead of silently degrading the finding to non-verifiable', async () => {
@@ -379,11 +413,19 @@ describe('researchFindings', () => {
       searchImpl: async () => [{ title: 'Un article', url: 'https://news.example/blank', snippet: '' }]
     });
 
-    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+    const diagnostics: string[] = [];
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
 
     expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
-    expect(result.claims[0].rationale).toMatch(/texte source lisible/i);
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toMatch(/texte source lisible/i);
   });
 
   it('never lets a blank-snippet search result back a verdict, while a real-snippet result can', async () => {
@@ -484,6 +526,7 @@ describe('researchFindings', () => {
       searchImpl: async () => [{ title: 'x', url: 'https://n.example/a', snippet: '' }]
     });
 
+    const diagnostics: string[] = [];
     const result = await researchFindings({
       client,
       input: sampleInput,
@@ -491,12 +534,14 @@ describe('researchFindings', () => {
       citedSources: [{ href: 'https://src.example/p', domain: 'src.example', text: 'cette étude', blockId: 'b1' }],
       fetchImpl: async () => {
         throw new Error('should not fetch: agent never chose read_source');
-      }
+      },
+      onDiagnostic: (note) => diagnostics.push(note)
     });
 
     expect(result.claims[0].verification).toBe('non-verifiable');
     expect(result.claims[0].sources).toEqual([]);
-    expect(result.claims[0].rationale).toMatch(/texte source lisible/i);
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toMatch(/texte source lisible/i);
   });
 
   it('respects the agent step cap by forcing conclusion before a runaway loop can continue', async () => {
@@ -513,13 +558,21 @@ describe('researchFindings', () => {
       searchImpl: async () => [{ title: 'r', url: 'https://n.example/r', snippet: 'preuve' }]
     });
 
-    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+    const diagnostics: string[] = [];
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
 
     // The agent was forced to conclude when it hit the step ceiling; it never
     // returned a verdict, so the run degrades to non-verifiable rather than
     // looping forever.
     expect(result.claims[0].verification).toBe('non-verifiable');
-    expect(result.claims[0].rationale).toMatch(/étapes/i);
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toMatch(/step limit/i);
     expect(client.searches.length).toBeLessThan(8);
   });
 });
@@ -586,5 +639,53 @@ describe('RESEARCH_AGENT_SYSTEM_PROMPT', () => {
     expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain('CONTRADICTION');
     expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain('read_source');
     expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain("Une URL que tu n'as pas réellement lue ne prouve rien");
+  });
+  it('names no provider and no engine reasoning when the client cannot search the web', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    const client = new StubClient({ completions: [], canSearch: false });
+
+    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+
+    expectReaderText(result.claims[0].rationale);
+    expect(result.claims[0].rationale).not.toMatch(/anthropic/i);
+    expect(result.research.skippedReason).not.toMatch(/anthropic/i);
+  });
+
+  it('keeps a provider error out of the claim and sends it to the diagnostic channel', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => {
+        throw new Error('HTTP 503 upstream connect error');
+      }
+    });
+    const diagnostics: string[] = [];
+
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
+
+    expect(result.claims[0].verification).toBe('non-verifiable');
+    expect(result.claims[0].rationale).not.toContain('503');
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toContain('HTTP 503 upstream connect error');
+  });
+
+  it('does not require a diagnostic listener: the reader text is the same without one', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => ({ content: JSON.stringify({ verification: 'verifiee', sources: [] }), citations: [] })
+    });
+
+    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+
+    expectReaderText(result.claims[0].rationale);
   });
 });

@@ -62,7 +62,7 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
   {
     id: 'framing',
     label: 'Biased Framing',
-    frenchLabel: 'Biais de cadrage',
+    frenchLabel: 'Cadrage',
     shortCode: 'CADR',
     icon: '⧉',
   },

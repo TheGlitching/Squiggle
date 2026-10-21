@@ -22,7 +22,7 @@ import {
   signOutHosted,
   type HostedAccount,
 } from '../hosted/session';
-import { disclosureText, hostedProviderDomain, TRANSPARENCY_URL } from '../hosted/config';
+import { TRANSPARENCY_URL } from '../hosted/config';
 import type { AnalysisMode } from '../crypto/storage';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
@@ -636,9 +636,7 @@ function SidepanelApp() {
       <footer className="pt-3 border-t border-line-soft text-center text-xs text-faint">
         {hosted ? (
           <p className="leading-relaxed">
-            {report?.meta
-              ? disclosureText(report.meta.model, report.meta.promptVersion)
-              : `Analyse via ${hostedProviderDomain()}`}
+            Analyse assistée par IA
             {' · '}
             <a
               href={TRANSPARENCY_URL}
@@ -652,7 +650,7 @@ function SidepanelApp() {
         ) : report?.meta?.model ? (
           `Modèle : ${report.meta.model}`
         ) : (
-          'Analyse assistée par IA · MV3'
+          'Analyse assistée par IA'
         )}
       </footer>
 

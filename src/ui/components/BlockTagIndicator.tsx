@@ -29,7 +29,7 @@ export const BlockTagIndicator: React.FC<BlockTagIndicatorProps> = ({ blockId, s
   return (
     <span
       title={label}
-      className="inline-flex items-center gap-1 rounded-md bg-panel-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-muted"
+      className="inline-flex items-center gap-1 rounded-md bg-panel-muted px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-muted"
     >
       {short}
       {showLabel && <span className="font-sans font-normal">{label}</span>}
