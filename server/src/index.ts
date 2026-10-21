@@ -205,7 +205,14 @@ async function handle(
   // A wrong origin is refused everywhere; a MISSING one is refused on the
   // endpoints that a page could otherwise drive with the reader's own cookie.
   // See lib/cors.ts for why the list is a list and not "every POST".
-  if ((origin !== null && !originAllowed) || (!originAllowed && originRequired(req.method, url.pathname))) {
+  // A browser sends no Origin on a same-origin GET (web app and API share one
+  // origin), so `Sec-Fetch-Site: same-origin` stands in for it when Origin is
+  // absent. The browser sets that header and page script cannot.
+  const sameOrigin = origin === null && req.headers.get('sec-fetch-site') === 'same-origin';
+  if (
+    (origin !== null && !originAllowed) ||
+    (!originAllowed && !sameOrigin && originRequired(req.method, url.pathname))
+  ) {
     logEvent({ event: 'origin_rejected', requestId, method: req.method, path: url.pathname });
     return withRequestId(
       errorResponse(apiError('origin_not_allowed', 'This origin is not allowed to call this API.')),

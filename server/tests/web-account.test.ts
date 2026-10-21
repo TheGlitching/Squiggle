@@ -16,6 +16,8 @@ interface WebCall {
   cookie?: string | null;
   /** `null` sends no Origin header at all. */
   origin?: string | null;
+  /** The `Sec-Fetch-Site` header a browser would send; absent when omitted. */
+  secFetchSite?: string;
   body?: unknown;
 }
 
@@ -24,6 +26,7 @@ function web(env: TestEnv, path: string, opts: WebCall = {}): Promise<Response> 
   const headers: Record<string, string> = {};
   if (opts.origin !== null) headers.origin = opts.origin ?? env.webAppOrigin;
   if (opts.cookie) headers.cookie = opts.cookie;
+  if (opts.secFetchSite) headers['sec-fetch-site'] = opts.secFetchSite;
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   return env.handler(
     new Request(`${env.webAppOrigin}${path}`, {
@@ -67,6 +70,40 @@ describe('GET /web/account', () => {
     const res = await web(env, '/web/account', { cookie: sessionCookie, origin: null });
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe('origin_not_allowed');
+  });
+
+  it('serves a same-origin browser GET, which carries no Origin', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+    const res = await web(env, '/web/account', {
+      cookie: sessionCookie,
+      origin: null,
+      secFetchSite: 'same-origin',
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).email).toBe('marie@example.com');
+  });
+
+  it.each(['cross-site', 'same-site', 'none'])(
+    'refuses a request with no Origin and Sec-Fetch-Site: %s',
+    async (secFetchSite) => {
+      const env = makeTestEnv();
+      const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+      const res = await web(env, '/web/account', { cookie: sessionCookie, origin: null, secFetchSite });
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toBe('origin_not_allowed');
+    },
+  );
+
+  it('still refuses a wrong Origin that claims Sec-Fetch-Site: same-origin', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+    const res = await web(env, '/web/account', {
+      cookie: sessionCookie,
+      origin: 'https://evil.example',
+      secFetchSite: 'same-origin',
+    });
+    expect(res.status).toBe(403);
   });
 
   it('refuses a request from another origin', async () => {
