@@ -265,8 +265,8 @@ export const STRIPE_WEBHOOK_SECRET = 'whsec_test_placeholder';
 
 export interface FakeStripe {
   fetchImpl: FetchLike;
-  /** Every request the server made, as (path, form) pairs. */
-  calls: Array<{ path: string; form: Record<string, string> }>;
+  /** Every request the server made, as (method, path, form) triples. */
+  calls: Array<{ method: string; path: string; form: Record<string, string> }>;
   /** Fail the next API call, to exercise the degraded path. */
   failNext: boolean;
 }
@@ -279,7 +279,7 @@ export function makeFakeStripe(): FakeStripe {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       const path = url.replace('https://api.stripe.com/v1', '');
       const form = Object.fromEntries(new URLSearchParams(typeof init?.body === 'string' ? init.body : ''));
-      state.calls.push({ path, form });
+      state.calls.push({ method: init?.method ?? 'GET', path, form });
       if (state.failNext) {
         state.failNext = false;
         return Response.json({ error: { message: 'boom' } }, { status: 400 });
@@ -289,6 +289,12 @@ export function makeFakeStripe(): FakeStripe {
       }
       if (path === '/billing_portal/sessions') {
         return Response.json({ id: 'bps_test_1', url: 'https://billing.stripe.example/bps_test_1' });
+      }
+      if (init?.method === 'DELETE' && path.startsWith('/subscriptions/')) {
+        return Response.json({ id: path.slice('/subscriptions/'.length), status: 'canceled' });
+      }
+      if (init?.method === 'POST' && path.startsWith('/customers/')) {
+        return Response.json({ id: path.slice('/customers/'.length) });
       }
       return new Response('not found', { status: 404 });
     },

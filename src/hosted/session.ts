@@ -231,7 +231,7 @@ function openTab(url: string): void {
   if (typeof window !== 'undefined') window.open(url, '_blank');
 }
 
-/** Forget the local token. A server-side revoke endpoint does not exist yet. */
+/** Forget the local token. The server keeps honouring it until it is revoked from the account page. */
 export async function signOutHosted(storage: SecureKeyStorage): Promise<void> {
   await storage.clearHostedSession();
 }

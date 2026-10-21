@@ -43,6 +43,18 @@ export interface ExtensionKeyRow {
   createdAt: number;
 }
 
+/**
+ * One connected install, as the account page lists it: an extension key with a
+ * token that still works. The key is the unit of revocation.
+ */
+export interface InstallRow {
+  /** The extension key id. */
+  id: string;
+  createdAt: number;
+  /** When its token stops working on its own. */
+  expiresAt: number;
+}
+
 export interface TokenRow {
   id: string;
   /** SHA-256 hex of the opaque token. The raw token is never stored. */
@@ -71,6 +83,11 @@ export interface MagicLinkRow {
   codeHash: string;
   /** Client IP of the request that triggered the email (rate limiting). */
   ip: string | null;
+  /**
+   * Set when the code confirms an email change for this account instead of
+   * logging anyone in. Such a code is refused by the login endpoint.
+   */
+  changeUserId: string | null;
   createdAt: number;
   expiresAt: number;
   /** null = unused. */
@@ -83,6 +100,8 @@ export interface CreateMagicLinkArgs {
   email: string;
   codeHash: string;
   ip: string | null;
+  /** Issue the code as an email-change confirmation for this account. */
+  changeUserId?: string | null;
   next: string | null;
   now: number;
   ttlMs: number;
@@ -296,6 +315,21 @@ export interface Db {
   markEmailVerified(userId: string, now: number): Promise<void>;
   attachGoogleSub(userId: string, googleSub: string, now: number): Promise<void>;
 
+  /**
+   * Replace the account's address with a verified one. Returns false when
+   * another account already holds it (the address is unique).
+   */
+  setEmail(userId: string, email: string, now: number): Promise<boolean>;
+
+  /**
+   * Erase the account and everything that references it: keys, tokens, web
+   * sessions, bridge codes, analysis runs, the daily counter and the usage
+   * ledger, plus the rows keyed by its address or its keys rather than by its
+   * id (login codes and rate-limit counters for the address, replay nonces for
+   * its keys). All or nothing.
+   */
+  deleteUser(userId: string): Promise<void>;
+
   /** The account a Stripe customer belongs to, or null. Webhook routing. */
   getUserByStripeCustomerId(customerId: string): Promise<UserRow | null>;
 
@@ -321,6 +355,17 @@ export interface Db {
 
   createExtensionKey(userId: string, publicKeyJwk: string, now: number): Promise<ExtensionKeyRow>;
   getExtensionKey(id: string): Promise<ExtensionKeyRow | null>;
+
+  /** The account's installs whose token is neither revoked nor expired, newest first. */
+  listInstalls(userId: string, now: number): Promise<InstallRow[]>;
+
+  /**
+   * Revoke every token of one of the account's extension keys. Returns false
+   * when the account has no live install by that id (unknown, someone else's,
+   * or already revoked), which is how a caller tells "done" from "nothing
+   * there" without learning anything about other accounts.
+   */
+  revokeInstall(userId: string, keyId: string, now: number): Promise<boolean>;
 
   createToken(args: CreateTokenArgs): Promise<TokenRow>;
   findTokenByHash(tokenHash: string): Promise<TokenRow | null>;

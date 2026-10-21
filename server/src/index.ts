@@ -23,6 +23,11 @@
  *   GET    /v1/account                 (signed) who am I, plan and usage
  *   POST   /v1/account/checkout        (signed) open a Stripe Checkout session
  *   POST   /v1/account/portal          (signed) open the Stripe customer portal
+ *   GET    /web/account/installs       (session) the installs whose token still works
+ *   POST   /web/account/installs/revoke (session) revoke one install
+ *   POST   /web/account/email          (session) send a code to a new address
+ *   POST   /web/account/email/confirm  (session) switch to that address
+ *   POST   /web/account/delete         (session) erase the account
  *   POST   /webhooks/stripe            (Stripe-signed) the only writer of a plan
  *   GET    /v1/analyze/check           (signed) shared-cache preflight (url + text hash), 0 credits
  *   POST   /v1/analyze/audit           (signed) audit the article, opens a run
@@ -55,6 +60,13 @@ import {
   SourceCheckRequestSchema,
 } from './analyze/schemas';
 
+import {
+  confirmEmailChange,
+  deleteAccount,
+  listInstalls,
+  requestEmailChange,
+  revokeInstall,
+} from './account/manage';
 import { claimExtensionToken } from './auth/claim';
 import { issueBridgeCode, redeemBridgeCode } from './auth/bridge';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
@@ -416,7 +428,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   }
 
   if (path.startsWith('/web/account')) {
-    return webAccountRoute(req, s, path, method);
+    return webAccountRoute(req, s, path, method, requestId);
   }
 
   if (path.startsWith('/v1/account')) {
@@ -473,10 +485,59 @@ async function webAccountRoute(
   s: Services,
   path: string,
   method: string,
+  requestId: string,
 ): Promise<Response> {
   const user = await sessionUser({ db: s.db, clock: s.clock }, req);
   if (!user) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
-  return accountForUser(s, user, path, method);
+  return (await accountDataRoute(req, s, user, path, method, requestId)) ?? accountForUser(s, user, path, method);
+}
+
+/**
+ * The account-data actions. They exist only here, behind the browser session:
+ * `/v1/account*` is reached with an install's signature, and an install must
+ * not be able to change the address or delete the account it merely serves.
+ * Returns `null` for a path that is not one of them.
+ */
+async function accountDataRoute(
+  req: Request,
+  s: Services,
+  user: UserRow,
+  path: string,
+  method: string,
+  requestId: string,
+): Promise<Response | null> {
+  const deps = { db: s.db, clock: s.clock, requestId };
+
+  if (path === '/web/account/installs' && method === 'GET') {
+    return finish(await listInstalls(deps, user));
+  }
+
+  if (method !== 'POST') return null;
+  const body = () => readJson(req);
+
+  switch (path) {
+    case '/web/account/installs/revoke':
+      return finish(await revokeInstall(deps, user, (await body()).id));
+    case '/web/account/email':
+      return finish(
+        await requestEmailChange(
+          { ...deps, email: s.email, webAppOrigin: s.webAppOrigin },
+          user,
+          (await body()).email,
+          req.headers.get('cf-connecting-ip'),
+        ),
+      );
+    case '/web/account/email/confirm':
+      return finish(await confirmEmailChange({ ...deps, stripe: s.stripe }, user, (await body()).code));
+    case '/web/account/delete': {
+      const outcome = await deleteAccount({ ...deps, stripe: s.stripe }, user, (await body()).confirm);
+      // The session row is gone with the account; the cookie in the browser
+      // would only point at nothing, so it is cleared with the same response.
+      return finish(outcome, outcome.ok ? sessionClearCookie() : null);
+    }
+    default:
+      return null;
+  }
 }
 
 /**

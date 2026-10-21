@@ -9,6 +9,7 @@
  */
 import { randomToken } from '@squiggle/shared';
 
+import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
 import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
 import type {
   AnalysisRunRow,
@@ -25,6 +26,7 @@ import type {
   CreateUsageLogArgs,
   Db,
   ExtensionKeyRow,
+  InstallRow,
   MagicLinkRow,
   NonceArgs,
   NonceRow,
@@ -113,6 +115,68 @@ export class MemoryDb implements Db {
     }
   }
 
+  async setEmail(userId: string, email: string, now: number): Promise<boolean> {
+    const user = this.users.get(userId);
+    if (!user) return false;
+    for (const other of this.users.values()) {
+      if (other.id !== userId && other.email === email) return false;
+    }
+    user.email = email;
+    user.emailVerified = true;
+    user.updatedAt = now;
+    return true;
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    const user = this.users.get(userId);
+    const keyIds = new Set<string>();
+    for (const [id, key] of this.keys) {
+      if (key.userId === userId) {
+        keyIds.add(id);
+        this.keys.delete(id);
+      }
+    }
+    for (const [nonce, row] of this.nonces) if (keyIds.has(row.keyId)) this.nonces.delete(nonce);
+    for (const [hash, row] of this.tokens) if (row.userId === userId) this.tokens.delete(hash);
+    for (const [hash, row] of this.sessions) if (row.userId === userId) this.sessions.delete(hash);
+    for (const [hash, row] of this.bridgeCodes) if (row.userId === userId) this.bridgeCodes.delete(hash);
+    for (const [id, row] of this.runs) if (row.userId === userId) this.runs.delete(id);
+    for (const [k, row] of this.usageDaily) if (row.userId === userId) this.usageDaily.delete(k);
+    for (const [id, row] of this.usageLog) if (row.userId === userId) this.usageLog.delete(id);
+    for (const [hash, row] of this.magicLinks) {
+      if (row.changeUserId === userId || (user?.email && row.email === user.email)) this.magicLinks.delete(hash);
+    }
+    for (const k of this.rates.keys()) {
+      const [scope, key] = k.split('\u0000');
+      if ((scope === 'magic_link:email' && key === user?.email) || (scope === EMAIL_CHANGE_RATE_SCOPE && key === userId)) {
+        this.rates.delete(k);
+      }
+    }
+    this.users.delete(userId);
+  }
+
+  /** Test probe: how many stored rows still point at this account (by id, key or address). */
+  countRowsFor(userId: string, email: string | null): number {
+    const keyIds = new Set([...this.keys.values()].filter((k) => k.userId === userId).map((k) => k.id));
+    let n = this.users.has(userId) ? 1 : 0;
+    n += keyIds.size;
+    for (const row of this.nonces.values()) if (keyIds.has(row.keyId)) n += 1;
+    for (const row of this.tokens.values()) if (row.userId === userId) n += 1;
+    for (const row of this.sessions.values()) if (row.userId === userId) n += 1;
+    for (const row of this.bridgeCodes.values()) if (row.userId === userId) n += 1;
+    for (const row of this.runs.values()) if (row.userId === userId) n += 1;
+    for (const row of this.usageDaily.values()) if (row.userId === userId) n += 1;
+    for (const row of this.usageLog.values()) if (row.userId === userId) n += 1;
+    for (const row of this.magicLinks.values()) {
+      if (row.changeUserId === userId || (email !== null && row.email === email)) n += 1;
+    }
+    for (const k of this.rates.keys()) {
+      const [scope, key] = k.split('\u0000');
+      if ((scope === 'magic_link:email' && key === email) || (scope === EMAIL_CHANGE_RATE_SCOPE && key === userId)) n += 1;
+    }
+    return n;
+  }
+
   // ---- extension signing keys ----------------------------------------------
 
   async getUserByStripeCustomerId(customerId: string): Promise<UserRow | null> {
@@ -158,6 +222,31 @@ export class MemoryDb implements Db {
     return this.keys.get(id) ?? null;
   }
 
+  async listInstalls(userId: string, now: number): Promise<InstallRow[]> {
+    const installs: InstallRow[] = [];
+    for (const key of this.keys.values()) {
+      if (key.userId !== userId) continue;
+      let expiresAt: number | null = null;
+      for (const token of this.tokens.values()) {
+        if (token.keyId !== key.id || token.revokedAt !== null || token.expiresAt <= now) continue;
+        expiresAt = Math.max(expiresAt ?? 0, token.expiresAt);
+      }
+      if (expiresAt !== null) installs.push({ id: key.id, createdAt: key.createdAt, expiresAt });
+    }
+    return installs.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async revokeInstall(userId: string, keyId: string, now: number): Promise<boolean> {
+    let revoked = false;
+    for (const token of this.tokens.values()) {
+      if (token.userId === userId && token.keyId === keyId && token.revokedAt === null) {
+        token.revokedAt = now;
+        revoked = true;
+      }
+    }
+    return revoked;
+  }
+
   // ---- extension tokens ------------------------------------------------------
 
   async createToken(args: CreateTokenArgs): Promise<TokenRow> {
@@ -191,6 +280,7 @@ export class MemoryDb implements Db {
       email: args.email,
       codeHash: args.codeHash,
       ip: args.ip,
+      changeUserId: args.changeUserId ?? null,
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
       usedAt: null,
