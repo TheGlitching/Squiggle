@@ -78,7 +78,7 @@ export function Compte() {
       <div className="mx-auto w-full max-w-md px-5 py-16">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Mon compte</h1>
         <p className="mt-3 text-muted">Connectez-vous pour voir votre abonnement et votre usage.</p>
-        {error ? <p role="alert" className="mt-4 text-sm text-accent">{error}</p> : null}
+        {error ? <p role="alert" className="mt-4 text-sm text-criticalInk">{error}</p> : null}
         <Link
           to="/connexion?next=/compte"
           className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover"
@@ -111,7 +111,7 @@ export function Compte() {
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
+        <p role="alert" className="mt-6 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
           {error}
         </p>
       ) : null}

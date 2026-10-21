@@ -29,7 +29,7 @@ describe('Editorial Design System & Tokens', () => {
   // theme, and it exposes four severity tones and no category hues at all.
   it('defines the single dark theme with severity as the only colour channel', () => {
     expect(darkTheme.bg).toBe('#0a0a0b');
-    expect(darkTheme.accent).toBe('#e0483f');
+    expect(darkTheme.accent).toBe('#9061f0');
 
     expect(darkTheme.severity.critical.fill).toBe('#dc2626');
     expect(darkTheme.severity.warning.fill).toBe('#d97706');
@@ -46,6 +46,34 @@ describe('Editorial Design System & Tokens', () => {
   // label is the dark ground instead; this is the arithmetic that guards it.
   it('passes AA for the primary button label on the accent', () => {
     expect(contrastRatio(darkTheme.accentForeground, darkTheme.accent)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the hover accent and the logo marks readable on the accent', () => {
+    expect(contrastRatio(darkTheme.accentForeground, darkTheme.accentHover)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio('#faf9f5', darkTheme.accent)).toBeGreaterThanOrEqual(3);
+    for (const ground of [darkTheme.bg, darkTheme.surface]) {
+      expect(contrastRatio(darkTheme.accent, ground)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(darkTheme.accentHover, ground)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  // Colour carries exactly one meaning, severity: no reader-facing control may
+  // share a hue with a verdict, which is what the old #e0483f did against #dc2626.
+  it('keeps the brand accent at least 30 degrees from every severity hue', () => {
+    const hue = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const max = Math.max(r, g, b);
+      const d = max - Math.min(r, g, b);
+      const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      return (h * 60 + 360) % 360;
+    };
+    const gap = (a: string, b: string) => Math.min(Math.abs(hue(a) - hue(b)), 360 - Math.abs(hue(a) - hue(b)));
+    for (const tone of Object.values(darkTheme.severity)) {
+      for (const accent of [darkTheme.accent, darkTheme.accentHover]) {
+        expect(gap(accent, tone.fill)).toBeGreaterThanOrEqual(30);
+        expect(gap(accent, tone.text)).toBeGreaterThanOrEqual(30);
+      }
+    }
   });
 
   it('configures typography tokens for Bricolage Grotesque, Newsreader, and IBM Plex Mono', () => {
