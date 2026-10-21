@@ -4,7 +4,7 @@ import { Page } from '../components/Layout';
 import { Link } from '../router';
 
 function Todo({ children }: { children: ReactNode }) {
-  return <span className="rounded bg-accentSoft px-1.5 py-0.5 font-mono text-xs text-accentInk">{children}</span>;
+  return <span className="rounded-sm bg-accentSoft px-1.5 py-0.5 font-mono text-xs text-accentInk">{children}</span>;
 }
 
 export function Legal() {

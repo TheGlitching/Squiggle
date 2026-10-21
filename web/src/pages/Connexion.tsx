@@ -108,7 +108,7 @@ export function Connexion() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 outline-none focus:border-accent"
+              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 outline-hidden focus:border-accent"
               placeholder="vous@exemple.fr"
             />
           </label>
@@ -135,7 +135,7 @@ export function Connexion() {
               autoComplete="one-time-code"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 font-mono text-lg tracking-[0.3em] outline-none focus:border-accent"
+              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 font-mono text-lg tracking-[0.3em] outline-hidden focus:border-accent"
               placeholder="ABCD2345"
               maxLength={12}
             />
