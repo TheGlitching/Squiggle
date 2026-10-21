@@ -144,7 +144,7 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-3 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
+        <p role="alert" className="mt-3 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
           {error}
         </p>
       ) : null}
@@ -267,7 +267,7 @@ function InstallsBlock() {
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-3 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
+        <p role="alert" className="mt-3 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
           {error}
         </p>
       ) : null}
@@ -332,15 +332,15 @@ function DeleteBlock({ onDeleted }: { onDeleted: () => void }) {
   }
 
   return (
-    <div className="mt-8 rounded-xl border border-accent p-5">
-      <h3 className="text-sm font-semibold text-accentInk">Supprimer mon compte</h3>
+    <div className="mt-8 rounded-xl border border-critical p-5">
+      <h3 className="text-sm font-semibold text-criticalInk">Supprimer mon compte</h3>
 
       {!open ? (
         <>
           <p className="mt-1 text-sm text-muted">Efface votre compte et les données qui y sont rattachées.</p>
           <button
             onClick={() => setOpen(true)}
-            className="mt-4 rounded-lg border border-accent px-4 py-2 text-sm font-medium text-accentInk hover:bg-accentSoft"
+            className="mt-4 rounded-lg border border-critical px-4 py-2 text-sm font-medium text-criticalInk hover:bg-criticalSoft"
           >
             Supprimer mon compte…
           </button>
@@ -365,7 +365,7 @@ function DeleteBlock({ onDeleted }: { onDeleted: () => void }) {
           {error ? (
             <p
               role="alert"
-              className="mt-4 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk"
+              className="mt-4 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk"
             >
               {error}
             </p>

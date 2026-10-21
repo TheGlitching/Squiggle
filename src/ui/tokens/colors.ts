@@ -41,7 +41,7 @@ export interface ThemeColors {
   textFaint: string;
   textInverted: string;
 
-  // The one accent
+  // The one accent: violet, a hue no severity tone uses, so the brand never reads as a verdict
   accent: string;
   accentSubtle: string;
   accentHover: string;
@@ -76,7 +76,7 @@ export const darkTheme: ThemeColors = {
 
   border: '#2a2a2f',
   borderSubtle: '#1b1b1f',
-  borderFocus: '#e0483f',
+  borderFocus: '#9061f0',
   borderHeavy: '#3a3a40',
 
   text: '#ece9e3', // 16.3:1 on ground
@@ -84,10 +84,10 @@ export const darkTheme: ThemeColors = {
   textFaint: '#938e86', //  6.1:1 on ground
   textInverted: '#0a0a0b',
 
-  accent: '#e0483f',
-  accentSubtle: 'rgba(224, 72, 63, 0.12)',
-  accentHover: '#ef7268',
-  accentForeground: '#0a0a0b', // 4.87:1 on the accent - AA
+  accent: '#9061f0',
+  accentSubtle: 'rgba(144, 97, 240, 0.12)',
+  accentHover: '#b196f7',
+  accentForeground: '#0a0a0b', // 4.86:1 on the accent - AA
 
   severity: {
     critical: {

@@ -9,11 +9,19 @@
   --color-borderControl: #66666f;
   --color-lineSoft: #1b1b1f;
   --color-foreground: #ece9e3;
-  --color-accent: #e0483f;
+  --color-accent: #9061f0;
   --color-accentForeground: #0a0a0b;
-  --color-accentHover: #ef7268;
-  --color-accentSoft: #251010;
-  --color-accentInk: #f08a80;
+  --color-accentHover: #b196f7;
+  --color-accentSoft: #1a1330;
+  --color-accentInk: #cdbdfb;
+  /* Severity tones for the few non-demo surfaces that carry a verdict: an error
+     or a destructive action is critical, an unconfirmed notice is a warning. */
+  --color-critical: #dc2626;
+  --color-criticalSoft: #251010;
+  --color-criticalInk: #f08a80;
+  --color-warning: #d97706;
+  --color-warningSoft: #1f1608;
+  --color-warningInk: #fbbf24;
 
   --font-display: Bricolage Grotesque, system-ui, sans-serif;
   --font-sans: Bricolage Grotesque, system-ui, sans-serif;
