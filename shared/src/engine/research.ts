@@ -48,6 +48,15 @@ export interface ResearchFindingsArgs {
    * (query issued, cited source read, verdict reached), for the live feed.
    */
   onActivity?: (note: string) => void;
+  /**
+   * Receives the technical reason behind a verdict the stage had to override
+   * or a check that could not run (a rejected verdict, a provider error). It
+   * is for the developer's log and never reaches the report: the reader gets
+   * plain sentences in `rationale`, not enum values or engine reasoning. The
+   * hosted server leaves it unset on purpose, because its log has no free-text
+   * field.
+   */
+  onDiagnostic?: (note: string) => void;
   /** Injectable fetcher for reading a cited source the agent decides to read. */
   fetchImpl?: typeof fetch;
   /**
@@ -113,6 +122,16 @@ function parseLooseJson(rawText: string): unknown {
 type JudgementRoute = 'grounded' | 'search';
 
 /**
+ * What the reader sees when a claim could not be settled. These are sentences
+ * about the evidence, not about the engine: the reason the stage refused a
+ * verdict (an enum value, a missing citation) goes to `onDiagnostic` instead.
+ */
+const READER_NO_SOURCE = 'Aucune source consultée ne permet de confirmer ou d’infirmer ce point.';
+const READER_INCONCLUSIVE = 'Les recherches menées n’ont pas fourni de preuve suffisante pour trancher.';
+const READER_CHECK_FAILED = 'La vérification de ce point n’a pas pu aboutir.';
+const READER_NO_WEB_SEARCH = 'La recherche web n’est pas disponible avec le modèle choisi : ce point n’a pas été vérifié.';
+
+/**
  * Stage-wide ceiling on the total number of web searches the search route may
  * issue across all claims, so a long article with many findings cannot run up
  * an unbounded bill. Each claim is handed a fair share of whatever remains.
@@ -144,7 +163,8 @@ const MIN_FAIR_SHARE = 1;
 function enforceSourcedVerdict(
   judgement: z.infer<typeof JudgementSchema>,
   route: JudgementRoute,
-  evidencedUrls: Set<string>
+  evidencedUrls: Set<string>,
+  onDiagnostic?: (note: string) => void
 ): z.infer<typeof JudgementSchema> {
   if (judgement.verification === 'non-verifiable') {
     return judgement;
@@ -153,15 +173,12 @@ function enforceSourcedVerdict(
   const sources = route === 'search' ? judgement.sources.filter((s) => evidencedUrls.has(s.url)) : judgement.sources;
 
   if (sources.length === 0) {
-    const reason =
+    onDiagnostic?.(
       route === 'search'
         ? `Verdict '${judgement.verification}' rejeté : aucune source fournie ne contenait de texte source lisible, une URL nue ne peut jamais justifier un verdict.`
-        : `Verdict '${judgement.verification}' rejeté : aucune source fournie à l'appui.`;
-    return {
-      verification: 'non-verifiable',
-      sources: [],
-      rationale: `${reason} ${judgement.rationale ?? ''}`.trim()
-    };
+        : `Verdict '${judgement.verification}' rejeté : aucune source fournie à l'appui.`
+    );
+    return { verification: 'non-verifiable', sources: [], rationale: READER_NO_SOURCE };
   }
 
   return { ...judgement, sources };
@@ -262,13 +279,14 @@ async function researchClaimViaAgent(
   opts: {
     searchesBudget: number;
     onActivity?: (note: string) => void;
+    onDiagnostic?: (note: string) => void;
     fetchImpl?: typeof fetch;
     fetchPage?: PageFetcher;
     fetchTimeoutMs?: number;
     abortSignal?: AbortSignal;
   }
 ): Promise<{ verdict: AgentVerdict; queries: string[] }> {
-  const { searchesBudget, onActivity, fetchImpl = fetch, fetchTimeoutMs = AGENT_FETCH_TIMEOUT_MS, abortSignal } = opts;
+  const { searchesBudget, onActivity, onDiagnostic, fetchImpl = fetch, fetchTimeoutMs = AGENT_FETCH_TIMEOUT_MS, abortSignal } = opts;
   const fetchPage: PageFetcher = opts.fetchPage ?? ((url, timeoutMs) => fetchPageText(url, timeoutMs, fetchImpl));
 
   const seenUrls = new Set<string>();
@@ -328,8 +346,9 @@ async function researchClaimViaAgent(
         // Nothing was ever gathered and no step can be parsed: this is not a
         // claim to adjudicate, it is a broker failure. Degrade to non-verifiable
         // and stop rather than loop against a broken completion.
+        onDiagnostic?.(`Research agent step unusable: ${(err as Error).message}`);
         return {
-          verdict: { verification: 'non-verifiable', sources: [], rationale: `Vérification impossible : ${(err as Error).message}` },
+          verdict: { verification: 'non-verifiable', sources: [], rationale: READER_CHECK_FAILED },
           queries
         };
       }
@@ -348,7 +367,7 @@ async function researchClaimViaAgent(
         sources: action.sources ?? [],
         rationale: action.rationale
       });
-      return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls), queries };
+      return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls, onDiagnostic), queries };
     }
 
     if (mustConclude) {
@@ -361,9 +380,10 @@ async function researchClaimViaAgent(
       const parsed = JudgementSchema.parse({
         verification: 'non-verifiable',
         sources: [],
-        rationale: searchesLeft <= 0 ? 'Budget de recherche épuisé sans preuve suffisante.' : 'Nombre maximal d’étapes atteint sans preuve suffisante.'
+        rationale: READER_INCONCLUSIVE
       });
-      return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls), queries };
+      onDiagnostic?.(searchesLeft <= 0 ? 'Search budget spent without enough evidence.' : 'Agent step limit reached without enough evidence.');
+      return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls, onDiagnostic), queries };
     }
 
     if (action.action === 'search') {
@@ -416,9 +436,10 @@ async function researchClaimViaAgent(
   const parsed = JudgementSchema.parse({
     verification: 'non-verifiable',
     sources: [],
-    rationale: 'Investigation terminée sans verdict explicite.'
+    rationale: READER_INCONCLUSIVE
   });
-  return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls), queries };
+  onDiagnostic?.('Agent loop ended without an explicit verdict.');
+  return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls, onDiagnostic), queries };
 }
 
 /**
@@ -436,7 +457,8 @@ async function judgeClaimGrounded(
   articleSources: CitedSource[],
   maxSearches: number | undefined,
   now: Date,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  onDiagnostic?: (note: string) => void
 ): Promise<{ verification: FactualClaim['verification']; sources: EvidenceSource[]; rationale?: string }> {
   const answer = await client.groundedAnswer({
     systemPrompt: FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT,
@@ -457,13 +479,8 @@ async function judgeClaimGrounded(
   // were ever fetched; either way an unfetched url is a recollection, and a
   // recollection is what makes a true, sourced claim get called false.
   if (answer.citations.length === 0) {
-    return {
-      verification: 'non-verifiable',
-      sources: [],
-      rationale:
-        `Verdict '${parsed.verification}' rejeté : aucune source n'a été consultée, ` +
-        `le modèle a répondu sans effectuer de recherche. ${parsed.rationale ?? ''}`.trim()
-    };
+    onDiagnostic?.(`Verdict '${parsed.verification}' rejeté : aucune source n'a été consultée, le modèle a répondu sans effectuer de recherche.`);
+    return { verification: 'non-verifiable', sources: [], rationale: READER_NO_SOURCE };
   }
 
   const quoteByUrl = new Map(parsed.sources.filter((s) => s.url).map((s) => [s.url, s]));
@@ -480,7 +497,7 @@ async function judgeClaimGrounded(
   }
 
   const merged = { ...parsed, sources: Array.from(evidenceByUrl.values()) };
-  return enforceSourcedVerdict(merged, 'grounded', new Set(evidenceByUrl.keys()));
+  return enforceSourcedVerdict(merged, 'grounded', new Set(evidenceByUrl.keys()), onDiagnostic);
 }
 
 /**
@@ -508,7 +525,7 @@ async function judgeClaimGrounded(
  * all of them.
  */
 export async function researchFindings(args: ResearchFindingsArgs): Promise<ResearchFindingsResult> {
-  const { client, input, findings, citedSources, maxSearches, onProgress, onActivity, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal } = args;
+  const { client, input, findings, citedSources, maxSearches, onProgress, onActivity, onDiagnostic, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal } = args;
   const now = args.now ?? new Date();
   void input; // kept in the signature for parity with the prompt builders and future per-article context
 
@@ -538,7 +555,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         claim: f.quote,
         verification: 'non-verifiable',
         sources: [],
-        rationale: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web ; constat non vérifié.`
+        rationale: READER_NO_WEB_SEARCH
       })
     );
     return {
@@ -547,7 +564,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         performed: false,
         provider: client.getProvider(),
         queries: [],
-        skippedReason: `Le fournisseur ${client.getProvider()} ne prend pas en charge la recherche web.`,
+        skippedReason: 'La recherche web n’est pas disponible avec le modèle choisi.',
         withdrawn: []
       }
     };
@@ -571,7 +588,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
 
     if (groundedCapable) {
       try {
-        const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, now, abortSignal);
+        const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, now, abortSignal, onDiagnostic);
         queries.push(finding.quote);
         claims.push(
           FactualClaimSchema.parse({
@@ -586,6 +603,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         );
       } catch (err) {
         rethrowIfAborted(err, abortSignal);
+        onDiagnostic?.(`Grounded check failed: ${(err as Error).message}`);
         claims.push(
           FactualClaimSchema.parse({
             findingId: finding.id,
@@ -594,7 +612,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
             claim: finding.quote,
             verification: 'non-verifiable',
             sources: [],
-            rationale: `Vérification impossible pour ce constat : ${(err as Error).message}`
+            rationale: READER_CHECK_FAILED
           })
         );
       }
@@ -611,7 +629,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         claimUnderTest,
         articleSourcesForBlock,
         now,
-        { searchesBudget: fairShare, onActivity, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal }
+        { searchesBudget: fairShare, onActivity, onDiagnostic, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal }
       );
       totalSearchesLeft = Math.max(0, totalSearchesLeft - claimQueries.length);
       queries.push(...claimQueries);
@@ -628,6 +646,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
       );
     } catch (err) {
       rethrowIfAborted(err, abortSignal);
+      onDiagnostic?.(`Search check failed: ${(err as Error).message}`);
       claims.push(
         FactualClaimSchema.parse({
           findingId: finding.id,
@@ -636,7 +655,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
           claim: finding.quote,
           verification: 'non-verifiable',
           sources: [],
-          rationale: `Vérification impossible pour ce constat : ${(err as Error).message}`
+          rationale: READER_CHECK_FAILED
         })
       );
     }
