@@ -18,6 +18,7 @@ import { logEvent } from '../lib/log';
 import type { EmailSender } from '../lib/brevo';
 import type { Db } from '../db/types';
 import { HOUR_MS, MAGIC_LINK_VERIFY_PER_IP_PER_HOUR } from '../usage/abuse';
+import { sanitizeNext } from './next';
 import { createWebSession } from './session';
 
 export interface MagicLinkRequestDeps {
@@ -55,7 +56,7 @@ export function normalizeEmail(raw: string): string {
 
 export async function requestMagicLink(
   deps: MagicLinkRequestDeps,
-  input: { email: string; ip?: string | null },
+  input: { email: string; ip?: string | null; next?: unknown },
 ): Promise<Outcome<{ sent: true }>> {
   const email = normalizeEmail(input.email);
   if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
@@ -101,6 +102,9 @@ export async function requestMagicLink(
     email,
     codeHash: await sha256Hex(code),
     ip,
+    // Stored with the row, not put in the link: the link opens in a fresh tab
+    // that has lost the page which asked for the sign-in.
+    next: sanitizeNext(input.next),
     now,
     ttlMs: MAGIC_LINK_TTL_MS,
   });
@@ -136,7 +140,7 @@ export async function verifyMagicLink(
   deps: MagicLinkVerifyDeps,
   code: string,
   ip?: string | null,
-): Promise<Outcome<{ userId: string; email: string; sessionToken: string }>> {
+): Promise<Outcome<{ userId: string; email: string; sessionToken: string; next: string | null }>> {
   const normalized = normalizeHumanCode(code);
   if (!normalized) return apiError('invalid_code', 'The code is missing.');
 
@@ -172,5 +176,5 @@ export async function verifyMagicLink(
   }
 
   const sessionToken = await createWebSession(deps, user.id);
-  return { ok: true, userId: user.id, email: link.email, sessionToken };
+  return { ok: true, userId: user.id, email: link.email, sessionToken, next: link.next };
 }

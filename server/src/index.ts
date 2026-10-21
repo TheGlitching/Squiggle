@@ -58,6 +58,7 @@ import {
 import { claimExtensionToken } from './auth/claim';
 import { issueBridgeCode, redeemBridgeCode } from './auth/bridge';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
+import { DEFAULT_NEXT } from './auth/next';
 import { requestMagicLink, verifyMagicLink } from './auth/magicLink';
 import { verifySignedRequest } from './auth/requestSigning';
 import {
@@ -283,7 +284,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     const ip = req.headers.get('cf-connecting-ip');
     const outcome = await requestMagicLink(
       { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin, requestId },
-      { email, ip },
+      { email, ip, next: body.next },
     );
     return finish(outcome);
   }
@@ -300,14 +301,17 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   }
 
   if (path === '/auth/google' && method === 'GET') {
-    const started = await startGoogleAuth({
-      db: s.db,
-      clock: s.clock,
-      webAppOrigin: s.webAppOrigin,
-      clientId: s.googleClientId,
-      clientSecret: s.googleClientSecret,
-      fetchImpl: s.fetchImpl,
-    });
+    const started = await startGoogleAuth(
+      {
+        db: s.db,
+        clock: s.clock,
+        webAppOrigin: s.webAppOrigin,
+        clientId: s.googleClientId,
+        clientSecret: s.googleClientSecret,
+        fetchImpl: s.fetchImpl,
+      },
+      { next: url.searchParams.get('next') },
+    );
     return new Response(null, { status: 302, headers: { location: started.redirectUrl } });
   }
 
@@ -329,7 +333,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     if (outcome.ok) {
       const res = new Response(null, {
         status: 302,
-        headers: { location: `${s.webAppOrigin}/account` },
+        headers: { location: `${s.webAppOrigin}${outcome.next ?? DEFAULT_NEXT}` },
       });
       res.headers.set('set-cookie', sessionSetCookie(outcome.sessionToken));
       return res;

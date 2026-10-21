@@ -156,13 +156,14 @@ describe('purgeExpired (retention sweep)', () => {
     await db.addNonce({ keyId: 'k', nonce: 'n-new', now: T0 + 1000, ttlMs: REPORT_TTL_MS });
     const sOld = await db.createSession({ userId: user.id, sessionHash: 's-old', now: T0, ttlMs: 1000 });
     const sNew = await db.createSession({ userId: user.id, sessionHash: 's-new', now: T0 + 1000, ttlMs: REPORT_TTL_MS });
-    await db.createMagicLink({ email: 'a@b.c', codeHash: 'c-old', ip: null, now: T0, ttlMs: 1000 });
-    await db.createMagicLink({ email: 'a@b.c', codeHash: 'c-new', ip: null, now: T0 + 1000, ttlMs: REPORT_TTL_MS });
+    await db.createMagicLink({ email: 'a@b.c', codeHash: 'c-old', ip: null, next: null, now: T0, ttlMs: 1000 });
+    await db.createMagicLink({ email: 'a@b.c', codeHash: 'c-new', ip: null, next: null, now: T0 + 1000, ttlMs: REPORT_TTL_MS });
     await db.createOAuthPending({
       state: 'st-old',
       codeVerifier: 'v',
       nonce: 'n',
       redirectUri: 'https://squiggle.fr/auth/google/callback',
+      next: null,
       now: T0,
       ttlMs: 1000,
     });
@@ -171,6 +172,7 @@ describe('purgeExpired (retention sweep)', () => {
       codeVerifier: 'v',
       nonce: 'n',
       redirectUri: 'https://squiggle.fr/auth/google/callback',
+      next: null,
       now: T0 + 1000,
       ttlMs: REPORT_TTL_MS,
     });

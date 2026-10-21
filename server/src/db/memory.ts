@@ -194,6 +194,7 @@ export class MemoryDb implements Db {
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
       usedAt: null,
+      next: args.next,
     };
     this.magicLinks.set(row.codeHash, row);
     return row;
@@ -285,6 +286,7 @@ export class MemoryDb implements Db {
       redirectUri: args.redirectUri,
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
+      next: args.next,
     });
   }
 
