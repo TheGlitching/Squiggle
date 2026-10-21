@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +22,7 @@ describe('scheduled retention sweeps', () => {
     const report = (id: number) =>
       db.createReport({
         urlHash: `url-${id}`,
+        textHash: 't',
         model: 'm',
         promptVersion: 'v1',
         report: '{}',
@@ -44,9 +46,9 @@ describe('scheduled retention sweeps', () => {
     clock.set(T0 + USAGE_LOG_RETENTION_MS);
     await runScheduled(env.services, '0 * * * *');
     expect(await db.countUsageLog(user.id)).toBe(0);
-    expect(await db.findReport('url-1', 'm', 'v1')).not.toBeNull();
+    expect(await db.findReport('url-1', 't', 'm', 'v1')).not.toBeNull();
     await runScheduled(env.services, DAILY_CRON);
-    expect(await db.findReport('url-1', 'm', 'v1')).toBeNull();
+    expect(await db.findReport('url-1', 't', 'm', 'v1')).toBeNull();
 
     // counts only: no free text in the line.
     const lines = log.mock.calls.map((c) => JSON.parse(c[0] as string));
@@ -59,6 +61,7 @@ describe('scheduled retention sweeps', () => {
     for (let i = 0; i < REPORT_MAX_COUNT + 2; i++) {
       await db.createReport({
         urlHash: `url-${i}`,
+        textHash: 't',
         model: 'm',
         promptVersion: 'v1',
         report: '{}',
@@ -69,9 +72,9 @@ describe('scheduled retention sweeps', () => {
     }
     vi.spyOn(console, 'log').mockImplementation(() => {});
     await runScheduled(env.services, DAILY_CRON);
-    expect(await db.findReport('url-0', 'm', 'v1')).toBeNull();
-    expect(await db.findReport('url-1', 'm', 'v1')).toBeNull();
-    expect(await db.findReport('url-2', 'm', 'v1')).not.toBeNull();
+    expect(await db.findReport('url-0', 't', 'm', 'v1')).toBeNull();
+    expect(await db.findReport('url-1', 't', 'm', 'v1')).toBeNull();
+    expect(await db.findReport('url-2', 't', 'm', 'v1')).not.toBeNull();
   });
 });
 
