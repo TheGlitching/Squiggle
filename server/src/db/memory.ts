@@ -284,6 +284,7 @@ export class MemoryDb implements Db {
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
       usedAt: null,
+      next: args.next,
     };
     this.magicLinks.set(row.codeHash, row);
     return row;
@@ -375,6 +376,7 @@ export class MemoryDb implements Db {
       redirectUri: args.redirectUri,
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
+      next: args.next,
     });
   }
 
@@ -544,14 +546,24 @@ export class MemoryDb implements Db {
     return true;
   }
 
-  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
-    for (const [nonce, row] of this.nonces) if (row.expiresAt <= now) this.nonces.delete(nonce);
-    for (const [hash, row] of this.sessions) if (row.expiresAt <= now) this.sessions.delete(hash);
-    for (const [hash, row] of this.magicLinks) if (row.expiresAt <= now) this.magicLinks.delete(hash);
-    for (const [hash, row] of this.bridgeCodes) if (row.expiresAt <= now) this.bridgeCodes.delete(hash);
-    for (const [state, row] of this.oauth) if (row.expiresAt <= now) this.oauth.delete(state);
-    for (const [id, row] of this.runs) if (row.expiresAt <= now) this.runs.delete(id);
+  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<number> {
+    let removed = 0;
+    const sweep = <K, V>(m: Map<K, V>, lapsed: (row: V) => boolean) => {
+      for (const [k, row] of m) {
+        if (lapsed(row)) {
+          m.delete(k);
+          removed++;
+        }
+      }
+    };
+    sweep(this.nonces, (r) => r.expiresAt <= now);
+    sweep(this.sessions, (r) => r.expiresAt <= now);
+    sweep(this.magicLinks, (r) => r.expiresAt <= now);
+    sweep(this.bridgeCodes, (r) => r.expiresAt <= now);
+    sweep(this.oauth, (r) => r.expiresAt <= now);
+    sweep(this.runs, (r) => r.expiresAt <= now);
     const cutoff = now - usageLogRetentionMs;
-    for (const [id, row] of this.usageLog) if (row.createdAt <= cutoff) this.usageLog.delete(id);
+    sweep(this.usageLog, (r) => r.createdAt <= cutoff);
+    return removed;
   }
 }

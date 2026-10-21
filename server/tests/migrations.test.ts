@@ -7,7 +7,7 @@ import { sql as runsSql } from '../src/migrations/003_analysis_runs';
 import { sql as billingSql } from '../src/migrations/004_billing';
 import { sql as ledgerSql } from '../src/migrations/005_usage_log_no_article';
 import { sql as textHashSql } from '../src/migrations/007_reports_text_hash';
-import { sql as changeSql } from '../src/migrations/008_email_change';
+import { sql as changeSql } from '../src/migrations/009_email_change';
 import { T0 } from './helpers';
 
 /** A recording fake that answers the schema_migrations bookkeeping. */

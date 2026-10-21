@@ -18,7 +18,8 @@ import { name as billingName, sql as billingSql } from './004_billing';
 import { name as ledgerName, sql as ledgerSql } from './005_usage_log_no_article';
 import { name as bridgeName, sql as bridgeSql } from './006_bridge_codes';
 import { name as textHashName, sql as textHashSql } from './007_reports_text_hash';
-import { name as emailChangeName, sql as emailChangeSql } from './008_email_change';
+import { name as nextName, sql as nextSql } from './008_signin_next';
+import { name as emailChangeName, sql as emailChangeSql } from './009_email_change';
 
 export interface Migration {
   name: string;
@@ -38,6 +39,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { name: ledgerName, sql: ledgerSql },
   { name: bridgeName, sql: bridgeSql },
   { name: textHashName, sql: textHashSql },
+  { name: nextName, sql: nextSql },
   { name: emailChangeName, sql: emailChangeSql },
 ];
 

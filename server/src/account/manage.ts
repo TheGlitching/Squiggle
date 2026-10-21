@@ -124,6 +124,7 @@ export async function requestEmailChange(
     codeHash: await sha256Hex(code),
     ip,
     changeUserId: user.id,
+    next: null,
     now,
     ttlMs: MAGIC_LINK_TTL_MS,
   });

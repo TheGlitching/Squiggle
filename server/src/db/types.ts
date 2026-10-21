@@ -92,6 +92,8 @@ export interface MagicLinkRow {
   expiresAt: number;
   /** null = unused. */
   usedAt: number | null;
+  /** Sanitised internal destination after sign-in (auth/next.ts); null = the account page. */
+  next: string | null;
 }
 
 export interface CreateMagicLinkArgs {
@@ -100,6 +102,7 @@ export interface CreateMagicLinkArgs {
   ip: string | null;
   /** Issue the code as an email-change confirmation for this account. */
   changeUserId?: string | null;
+  next: string | null;
   now: number;
   ttlMs: number;
 }
@@ -173,6 +176,8 @@ export interface OAuthPendingRow {
   redirectUri: string;
   createdAt: number;
   expiresAt: number;
+  /** Sanitised internal destination after sign-in (auth/next.ts); null = the account page. */
+  next: string | null;
 }
 
 export interface CreateOAuthPendingArgs {
@@ -180,6 +185,7 @@ export interface CreateOAuthPendingArgs {
   codeVerifier: string;
   nonce: string;
   redirectUri: string;
+  next: string | null;
   now: number;
   ttlMs: number;
 }
@@ -460,7 +466,8 @@ export interface Db {
   /**
    * Remove short-lived rows whose TTL has lapsed (nonces, web sessions,
    * magic links, OAuth handshakes, analysis runs) plus ledger rows older than
-   * `usageLogRetentionMs`. Called by a periodic job, not per request.
+   * `usageLogRetentionMs`. Called by the scheduled handler, not per request.
+   * Resolves to how many rows were removed.
    */
-  purgeExpired(now: number, usageLogRetentionMs: number): Promise<void>;
+  purgeExpired(now: number, usageLogRetentionMs: number): Promise<number>;
 }

@@ -304,8 +304,8 @@ export class NeonDb implements Db {
     const id = randomToken(16);
     const expiresAt = args.now + args.ttlMs;
     await this.q`
-      INSERT INTO magic_links (id, email, code_hash, ip, change_user_id, created_at, expires_at, used_at)
-      VALUES (${id}, ${args.email}, ${args.codeHash}, ${args.ip}, ${args.changeUserId ?? null}, ${args.now}, ${expiresAt}, NULL)
+      INSERT INTO magic_links (id, email, code_hash, ip, change_user_id, created_at, expires_at, used_at, next_path)
+      VALUES (${id}, ${args.email}, ${args.codeHash}, ${args.ip}, ${args.changeUserId ?? null}, ${args.now}, ${expiresAt}, NULL, ${args.next})
     `;
     return {
       id,
@@ -316,6 +316,7 @@ export class NeonDb implements Db {
       createdAt: args.now,
       expiresAt,
       usedAt: null,
+      next: args.next,
     };
   }
 
@@ -332,6 +333,7 @@ export class NeonDb implements Db {
       createdAt: num(r.created_at),
       expiresAt: num(r.expires_at),
       usedAt: r.used_at === null ? null : num(r.used_at),
+      next: (r.next_path as string | null) ?? null,
     };
   }
 
@@ -439,8 +441,8 @@ export class NeonDb implements Db {
 
   async createOAuthPending(args: CreateOAuthPendingArgs): Promise<void> {
     await this.q`
-      INSERT INTO oauth_pending (state, code_verifier, nonce, redirect_uri, created_at, expires_at)
-      VALUES (${args.state}, ${args.codeVerifier}, ${args.nonce}, ${args.redirectUri}, ${args.now}, ${args.now + args.ttlMs})
+      INSERT INTO oauth_pending (state, code_verifier, nonce, redirect_uri, created_at, expires_at, next_path)
+      VALUES (${args.state}, ${args.codeVerifier}, ${args.nonce}, ${args.redirectUri}, ${args.now}, ${args.now + args.ttlMs}, ${args.next})
     `;
   }
 
@@ -455,6 +457,7 @@ export class NeonDb implements Db {
       redirectUri: r.redirect_uri as string,
       createdAt: num(r.created_at),
       expiresAt: num(r.expires_at),
+      next: (r.next_path as string | null) ?? null,
     };
   }
 
@@ -634,13 +637,16 @@ export class NeonDb implements Db {
     return rows.length > 0;
   }
 
-  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
-    await this.q`DELETE FROM nonces WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM web_sessions WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM magic_links WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM bridge_codes WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs}`;
+  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<number> {
+    const swept = await Promise.all([
+      this.q`DELETE FROM nonces WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM web_sessions WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM magic_links WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM bridge_codes WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs} RETURNING 1`,
+    ]);
+    return swept.reduce((n, rows) => n + rows.length, 0);
   }
 }
