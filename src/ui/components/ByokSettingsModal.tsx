@@ -310,7 +310,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 backdrop-blur-sm"
+      className="fixed inset-0 z-60 flex items-end justify-center bg-black/45 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-label="Configuration du fournisseur IA"
@@ -407,7 +407,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   autoComplete="off"
                   spellCheck={false}
                   placeholder={preset.modelPlaceholder}
-                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-none focus:border-accent"
+                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-hidden focus:border-accent"
                 />
                 <span className="mt-1 block text-xs leading-snug text-muted">
                   Identifiant exact du modèle chez le fournisseur.
@@ -437,7 +437,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                     setApiKey(e.target.value);
                     setValidation({ kind: 'idle' });
                   }}
-                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-none focus:border-accent"
+                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-hidden focus:border-accent"
                 />
               </label>
 

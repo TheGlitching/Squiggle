@@ -76,7 +76,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
       onMouseLeave={() => onHover?.(null)}
       className={`rounded-lg border border-l-[3px] p-3.5 transition-all cursor-pointer bg-panel ${TONE_LEFT_BAR[tone]} ${
         isSelected
-          ? 'border-accent shadow-sm'
+          ? 'border-accent shadow-xs'
           : isHovered
           ? 'border-line-heavy'
           : 'border-line'
@@ -86,7 +86,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         <span
           className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold uppercase tracking-wider ${TONE_EYEBROW[tone]}`}
         >
-          <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-sm ${TONE_DOT[tone]}`} />
+          <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-xs ${TONE_DOT[tone]}`} />
           {CATEGORY_LABELS_FR[finding.category] ?? finding.category}
         </span>
         {/* Meaning-carrying badges are 14 px, so they get their own row instead of
