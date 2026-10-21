@@ -12,7 +12,7 @@ extension storage; it leaves your machine only as an `Authorization` header on a
 request to the provider you chose, and only when you ask for an analysis.
 
 A hosted mode is being built alongside it, for readers who do not want to hold
-an API key. It is opt-in, it requires signing in, and it changes the data flow —
+an API key. It is opt-in, it requires signing in, and it changes the data flow,
 so it has its own section below. **BYOK is unaffected by any of it: a
 bring-your-own-key user's key never reaches our server, and never leaves their
 browser.**
@@ -24,24 +24,35 @@ your provider so it can be analysed. During the research stage it also asks your
 provider to search the web for the factual claims the audit questioned. That is
 the whole data flow: your page, your provider, your key.
 
-It requests `activeTab` rather than blanket host permissions, so it can only read a
-page you have deliberately asked it to analyse.
+It requests access to every http and https site (`https://*/*`, `http://*/*`) and
+registers its content script on `<all_urls>`, because an article can be on any
+domain and the extension cannot know in advance which one you will open. Being
+present on a page is not reading it: the content script only extracts text when
+you ask for an analysis, and nothing leaves the browser before that. Hosted mode
+adds no permission.
 
 ## Hosted mode
 
 *This section describes the server that is being built. It is not deployed yet;
 it is documented here as it lands, not after.*
 
-In hosted mode the analysis runs on our infrastructure, on our own Gemini key,
-instead of on a key you hold. What that means concretely:
+In hosted mode the analysis runs on our infrastructure, on our own OpenRouter key,
+instead of on a key you hold. The model is DeepSeek V4.1 Flash, an open-weight
+model, served by inference hosts that OpenRouter chooses (pinning a closed list of
+hosts is tracked separately). Squiggle only processes public articles: the text of
+the page being read, its URL and the pages it cites. No reader identity is sent
+with a request. What that means concretely:
 
 - **the article text you are reading is sent to our server**, and from there to
-  Google. It is not stored: the audit call is the only thing that needs it, and
-  it is dropped when that request ends. No table in our database holds it.
-- **the finished report is cached and shared.** Two readers of the same article
-  get the same report, which is what makes the service affordable. The cache
-  key is the canonical URL, computed on the server, plus a fingerprint of the
-  article's text, plus the model and the prompt version.
+  OpenRouter and the inference host that runs the model. It is not stored: the
+  audit call is the only thing that needs it, and it is dropped when that request
+  ends. No table in our database holds it.
+- **the finished report is cached and shared, and it contains excerpts.** Each
+  finding carries a verbatim quote of the article, and the report carries a
+  summary. Two readers of the same article get the same report, which is what
+  makes the service affordable. The cache key is the canonical URL, computed on
+  the server, plus a fingerprint of the article's text, plus the model and the
+  prompt version.
 - **our server never fetches the article itself.** It only ever fetches pages
   the article cites, and only through an SSRF-hardened fetcher.
 
@@ -60,7 +71,7 @@ instead of on a key you hold. What that means concretely:
   `same-site`, `none` and an absent header are refused. The OAuth redirects are exempt because a
   top-level navigation carries no `Origin` by design; their anti-forgery control
   is the OAuth `state`. `/v1/*` is exempt because the signature is strictly
-  stronger evidence than a header — and a mismatched origin is still refused
+  stronger evidence than a header, and a mismatched origin is still refused
   there.
 - **Ceilings, not just quotas.** One analysis in flight per account, an hourly
   per-account ceiling, and an hourly ceiling for the whole service. The last one
@@ -81,15 +92,15 @@ instead of on a key you hold. What that means concretely:
   who never chose to trust its author. Every report is stripped of control and
   bidirectional-override characters, capped per field and per array, and refused
   by the cache entirely if it is still over the size cap.
-- **Logs carry no article.** The log record has no free-text field at all — only
+- **Logs carry no article.** The log record has no free-text field at all, only
   fixed event names, numbers, our own opaque ids, and the SHA-256 of the article
   URL. A rejected payload is logged by the *name* of the field that failed,
   never by its value. Every response carries an opaque `X-Squiggle-Request-Id`
   you can quote in a report.
-- **Secrets.** Our Gemini key, the database URL, the mail and billing keys live
-  in the Cloudflare secret store. None of them is in this repository, in any
-  example, or in any test. The Gemini key travels in a request header rather
-  than a query string, so it cannot end up in a URL log or a devtools panel —
+- **Secrets.** Our OpenRouter key, the database URL, the mail and billing keys
+  live in the Cloudflare secret store. None of them is in this repository, in any
+  example, or in any test. The provider key travels in a request header rather
+  than a query string, so it cannot end up in a URL log or a devtools panel,
   which is also true of *your* key in BYOK mode.
 
 ### Residual risks, stated plainly
@@ -102,11 +113,13 @@ instead of on a key you hold. What that means concretely:
 - **A stolen extension token plus its key is a full compromise of that
   account.** Both live in the extension's encrypted storage, which protects
   against casual inspection, not against someone already inside your browser
-  profile. Revoking the key from the account page is the remedy.
+  profile. Signing out in the extension discards the session on that device. Revoking
+  an install from the account page is not available yet; until it is, a stolen
+  token stays valid until it expires (90 days).
 - **The cache answers "has anyone analysed this page?"** Any signed-in account
   can call the preflight for an arbitrary URL and learn whether a report exists
-  for it. That is inherent to a shared cache — the saving comes precisely from
-  one reader's analysis being visible to the next — and it discloses nothing
+  for it. That is inherent to a shared cache, since the saving comes precisely from
+  one reader's analysis being visible to the next, and it discloses nothing
   about *who* ran it, since the usage ledger deliberately does not record which
   article an analysis was of. It is still a corpus-level signal, and it is
   named here rather than left to be discovered.
@@ -115,8 +128,8 @@ instead of on a key you hold. What that means concretely:
   is why the sanitizer exists. What it does mean: a report is not private to the
   reader who produced it.
 - **We see which articles are analysed.** The URL is hashed in the logs, but the
-  cache necessarily holds a report per article, and our Gemini calls necessarily
-  reach Google. Hosted mode is a trade: you stop needing an API key, and you
+  cache necessarily holds a report per article, with excerpts of it, and our
+  model calls necessarily reach OpenRouter and the host that runs the model. Hosted mode is a trade: you stop needing an API key, and you
   start trusting us with the article. BYOK exists precisely for people who would
   rather not.
 
