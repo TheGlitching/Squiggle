@@ -1,8 +1,17 @@
 import { Page } from '../components/Layout';
+import { HOSTED_ANALYSIS } from '../../../shared/src/hosted/disclosure';
+
+const { modelLabel, inferenceHosts } = HOSTED_ANALYSIS;
+
+/** Who runs the model: the pinned hosts by name, or, until they are pinned, OpenRouter's choice. */
+export const INFERENCE_HOSTS_TEXT =
+  inferenceHosts.length > 0
+    ? inferenceHosts.join(', ')
+    : 'des hébergeurs d’inférence choisis par OpenRouter parmi ceux qui servent ce modèle';
 
 const RETENTION = [
   ['Texte de l’article', 'Mémoire, le temps de l’appel d’audit', 'Jamais écrit'],
-  ['Rapport d’analyse (cache partagé)', 'Base de données', '30 jours, 500 rapports au plus'],
+  ['Rapport d’analyse, avec extraits de l’article (cache partagé)', 'Base de données', '30 jours, 500 rapports au plus'],
   ['Analyse en cours (constats, sans l’article)', 'Base de données', '1 heure'],
   ['Journal d’usage : qu’un compte a lancé une analyse, et quand', 'Base de données', '12 mois, sans contenu et sans nommer l’article'],
   ['Adresse e-mail', 'Base de données', 'Tant que le compte existe'],
@@ -16,11 +25,16 @@ const RETENTION = [
 ] as const;
 
 const SUBPROCESSORS = [
-  ['Google (Gemini)', 'Analyse de l’article et des sources citées', 'Le texte de l’article et les extraits des sources citées'],
+  ['OpenRouter', `Passerelle d’analyse : route chaque requête vers le modèle ${modelLabel}`, 'Le texte de l’article et les extraits des sources citées, sans identité de lecteur'],
+  [
+    inferenceHosts.length > 0 ? `Hébergeurs d’inférence : ${INFERENCE_HOSTS_TEXT}` : 'Hébergeurs d’inférence (choisis via OpenRouter)',
+    `Exécution du modèle ${modelLabel}, un modèle à poids ouverts`,
+    'Le texte de l’article et les extraits des sources citées, sans identité de lecteur',
+  ],
   ['Google (connexion)', 'Authentification, si vous choisissez « continuer avec Google »', 'Votre identité Google'],
   ['Cloudflare (Workers)', 'Hébergement du serveur', 'Le trafic, sans contenu d’article dans les journaux'],
   ['Neon', 'Base de données', 'Ce que décrit le tableau de conservation'],
-  ['Stripe', 'Paiement', 'Votre e-mail et vos données de paiement — nous ne voyons aucun numéro de carte'],
+  ['Stripe', 'Paiement', 'Votre e-mail et vos données de paiement ; nous ne voyons aucun numéro de carte'],
   ['Brevo', 'Envoi des e-mails de connexion', 'Votre adresse e-mail'],
 ] as const;
 
@@ -36,9 +50,18 @@ export function Transparence() {
           <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface p-6">
             <p className="font-mono text-sm">
               votre navigateur <span className="text-accent">──(le texte de l’article)──▶</span> notre
-              serveur <span className="text-accent">──▶</span> Google Gemini
+              serveur <span className="text-accent">──▶</span> OpenRouter{' '}
+              <span className="text-accent">──▶</span> {modelLabel}
             </p>
           </div>
+          <p className="mt-4 text-sm text-muted">
+            L’analyse tourne sur {modelLabel}, un modèle à poids ouverts, choisi pour le meilleur
+            équilibre entre vitesse, qualité de raisonnement et coût. Il est exécuté par{' '}
+            {INFERENCE_HOSTS_TEXT}. Utiliser un modèle à poids ouverts ne signifie pas envoyer le
+            texte vers des serveurs en Chine. Squiggle ne traite que des articles publics : le texte
+            de la page que vous lisez, son adresse et les pages qu’elle cite. Aucune donnée privée
+            ne part vers le modèle, et aucune identité de lecteur n’accompagne une requête.
+          </p>
           <dl className="mt-5 space-y-3 text-sm">
             <div>
               <dt className="font-medium">Nous voyons l’article, le temps de l’analyser.</dt>
@@ -60,7 +83,7 @@ export function Transparence() {
               <dt className="font-medium">Le rapport est mis en cache et partagé.</dt>
               <dd className="text-muted">
                 Deux lecteurs du même article obtiennent le même rapport, et le second ne consomme
-                aucun crédit. La cache est un index de l’adresse de l’article, pas de son contenu.
+                aucun crédit. Le rapport contient des extraits de l’article (la citation de chaque constat) et un résumé. Ce que nous ne gardons jamais, c’est le texte intégral.
               </dd>
             </div>
           </dl>
@@ -125,6 +148,11 @@ export function Transparence() {
           <ul className="mt-4 space-y-2 text-sm text-muted">
             <li>Aucune donnée n’est vendue.</li>
             <li>Aucune donnée n’est utilisée pour entraîner un modèle.</li>
+            <li>
+              Les données reçues du navigateur ne servent qu’à fournir l’analyse demandée : elles ne
+              sont ni transférées ni utilisées pour autre chose, ni pour de la publicité, ni pour
+              évaluer une solvabilité (exigence « Limited Use » du Chrome Web Store).
+            </li>
             <li>Aucune publicité, aucun traceur, aucun mouchard analytique.</li>
             <li>Aucun code n’est téléchargé ni exécuté depuis l’extérieur.</li>
           </ul>

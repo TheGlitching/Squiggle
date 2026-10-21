@@ -1,6 +1,6 @@
 # Politique de confidentialité
 
-*Dernière mise à jour : 7 septembre 2026*
+*Dernière mise à jour : 20 octobre 2026*
 
 Squiggle est une extension de navigateur qui analyse la rigueur d'un article de presse.
 Cette page décrit exactement ce qu'elle lit, ce qu'elle envoie, à qui, et ce qu'elle
@@ -15,7 +15,7 @@ même trajet de données.
 | Il vous faut | une clé d'API à vous | un compte |
 | L'article part vers | le fournisseur que vous avez choisi | notre serveur, puis le fournisseur configuré |
 | Nous voyons | rien | l'article, le temps de l'analyser |
-| Ce qui est conservé chez nous | rien | le rapport, pas l'article |
+| Ce qui est conservé chez nous | rien | le rapport, avec des extraits de l'article, pas l'article entier |
 
 Le mode « clé personnelle » ne change pas et ne changera pas. Il reste le mode par
 défaut, et rien de ce qui suit sur le mode hébergé ne s'y applique.
@@ -88,7 +88,13 @@ Supprimer l'extension supprime les deux.
 Le mode hébergé existe pour les lecteurs qui ne veulent pas gérer une clé d'API.
 L'analyse tourne alors sur notre infrastructure, avec notre propre clé, via le
 fournisseur configuré (OpenRouter par défaut, Google Gemini en alternative), contre
-des crédits. **Le choix vous appartient à chaque instant** : c'est un
+des crédits. Par défaut, l'analyse tourne sur **DeepSeek V4.1 Flash**, un modèle à poids
+ouverts, via OpenRouter : il a été retenu pour le meilleur équilibre entre vitesse,
+qualité de raisonnement et coût. Un modèle à poids ouverts est servi par plusieurs
+hébergeurs d'inférence, choisis via OpenRouter ; l'utiliser ne signifie pas envoyer le
+texte vers des serveurs en Chine. Squiggle ne traite que des **articles publics** : le
+texte de la page que vous lisez, son adresse et les pages qu'elle cite. Aucune donnée
+privée ne part vers le modèle, et aucune identité de lecteur n'accompagne une requête. **Le choix vous appartient à chaque instant** : c'est un
 sélecteur dans les réglages, et un compte est nécessaire pour l'activer.
 
 ## Le trajet des données
@@ -114,7 +120,9 @@ pages que notre serveur va chercher sont **les sources citées par l'article**.
 
 **Le rapport est mis en cache et partagé.** Deux lecteurs du même article obtiennent le
 même rapport, et c'est ce qui rend le service abordable : le second ne consomme aucun
-crédit et son navigateur n'envoie même pas l'article. La clé du cache est l'adresse
+crédit et son navigateur n'envoie même pas l'article. **Un rapport contient des extraits
+de l'article** (la citation de chaque constat) et un résumé ; il ne contient jamais le
+texte intégral. La clé du cache est l'adresse
 canonique de l'article, plus le modèle et la version des consignes.
 
 ## Ce que nous conservons, et combien de temps
@@ -122,7 +130,7 @@ canonique de l'article, plus le modèle et la version des consignes.
 | Donnée | Où | Durée |
 |---|---|---|
 | Texte de l'article | mémoire, le temps de l'appel d'audit | **jamais écrit** |
-| Rapport d'analyse (cache partagé) | base de données | 30 jours, 500 rapports au plus |
+| Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
 | Analyse en cours (constats, sans l'article) | base de données | 1 heure |
 | Journal d'usage : qu'un compte a lancé une analyse, et quand | base de données | 12 mois, **sans aucun contenu et sans dire de quel article** |
 | Compteur d'analyses du jour | base de données | tant que le compte existe |
@@ -147,7 +155,7 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 | Sous-traitant | Rôle | Ce qu'il voit |
 |---|---|---|
 | **OpenRouter** | passerelle d'analyse, fournisseur par défaut | le texte de l'article et les extraits des sources citées |
-| **Fournisseur du modèle** (DeepSeek pour `deepseek/deepseek-v4.1-flash`) | exécution du modèle choisi par la passerelle | idem |
+| **Hébergeurs d'inférence** (choisis via OpenRouter ; modèle `deepseek/deepseek-v4.1-flash`, DeepSeek V4.1 Flash) | exécution du modèle à poids ouverts | idem, sans identité de lecteur |
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |
 | **Cloudflare** (Workers) | hébergement du serveur | le trafic, sans contenu d'article dans les journaux |
@@ -172,6 +180,13 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 ## Ce qui n'est jamais fait, dans les deux modes
 
 - Aucune donnée n'est vendue.
+- **Limited Use.** L'utilisation par Squiggle des informations reçues depuis le
+  navigateur respecte la politique « Chrome Web Store User Data Policy », y compris ses
+  exigences d'utilisation limitée (« Limited Use ») : ces informations ne servent qu'à
+  fournir l'analyse que vous demandez, elles ne sont ni transférées à des tiers (hors
+  sous-traitants nécessaires à cette analyse, listés ci-dessus), ni utilisées pour de la
+  publicité, ni lues par des personnes (sauf avec votre accord, pour la sécurité, ou si
+  la loi l'exige), ni utilisées pour évaluer une solvabilité.
 - Aucune donnée n'est transmise à quiconque en dehors des destinataires listés
   ci-dessus, et uniquement pour produire l'analyse que vous avez demandée.
 - Aucune donnée n'est utilisée à une fin étrangère à cette analyse. En particulier,
@@ -187,17 +202,19 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 
 ## Les autorisations, une par une
 
-- **`activeTab`** — lire l'article de l'onglet où vous cliquez, et seulement à ce
-  moment-là.
+- **`activeTab`** — lire l'article de l'onglet où vous cliquez, au moment où vous le
+  demandez.
 - **`scripting`** — insérer le lecteur d'article dans cet onglet pour en extraire le
   texte, les liens et les emplacements à surligner.
 - **`storage`** — conserver votre clé chiffrée, pour ne pas la redemander. En mode
   hébergé, conserver de la même façon le jeton de session et la clé de signature de
   l'installation.
 - **`sidePanel`** — afficher le résultat dans le panneau latéral, à côté de l'article.
-- **accès aux sites** — les articles se trouvent sur n'importe quel domaine, et
-  l'extension ne peut pas savoir à l'avance lequel vous lirez. Cet accès sert à lire
-  la page que vous analysez et à joindre le fournisseur que vous avez choisi.
+- **accès aux sites** (`https://*/*`, `http://*/*`) et script de contenu sur toutes les
+  pages : les articles se trouvent sur n'importe quel domaine, et l'extension ne peut
+  pas savoir à l'avance lequel vous lirez. Le script est présent sur la page mais n'en
+  extrait le texte que lorsque vous lancez une analyse ; cet accès sert à lire la page
+  que vous analysez et à joindre le fournisseur que vous avez choisi.
 
 Le mode hébergé **ne demande aucune autorisation supplémentaire**.
 

@@ -43,7 +43,7 @@ export function hostedProviderDomain(): string {
   }
 }
 
-/** "Analyse effectuée via <domain> — <model>, prompts v<version>", as required. */
+/** "Analyse effectuée via <domain>, <model>, prompts v<version>", as required. */
 export function disclosureText(model: string, promptVersion: string): string {
-  return `Analyse effectuée via ${hostedProviderDomain()} — ${model}, prompts v${promptVersion}`;
+  return `Analyse effectuée via ${hostedProviderDomain()}, ${model}, prompts v${promptVersion}`;
 }
