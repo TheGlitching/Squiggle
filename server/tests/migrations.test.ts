@@ -8,6 +8,7 @@ import { sql as billingSql } from '../src/migrations/004_billing';
 import { sql as ledgerSql } from '../src/migrations/005_usage_log_no_article';
 import { sql as textHashSql } from '../src/migrations/007_reports_text_hash';
 import { sql as changeSql } from '../src/migrations/009_email_change';
+import { sql as metricsSql } from '../src/migrations/010_metric_counters';
 import { T0 } from './helpers';
 
 /** A recording fake that answers the schema_migrations bookkeeping. */
@@ -151,5 +152,11 @@ describe('migration runner', () => {
   it('an email-change code is tied to its account and dies with it', () => {
     expect(changeSql).toContain('ALTER TABLE magic_links ADD COLUMN IF NOT EXISTS change_user_id TEXT');
     expect(changeSql).toContain('REFERENCES users (id) ON DELETE CASCADE');
+  });
+
+  it('the metric counters carry a day, a fixed name and a number, and nothing else', () => {
+    // No user and no article column: the table cannot become a browsing history.
+    expect(metricsSql).toContain('CREATE TABLE IF NOT EXISTS metric_counters');
+    expect(metricsSql).not.toMatch(/user_id|url|email|article/i);
   });
 });

@@ -40,7 +40,7 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the Google OAuth client |
    | `OPENROUTER_API_KEY` | the key hosted analyses run on |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
-   | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate`; any long random string |
+   | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate` and `GET /admin/metrics`; any long random string |
 
    `GEMINI_API_KEY` is only needed to select Gemini with `LLM_PROVIDER=gemini`.
 5. **The other side of each integration**, all pointing at the environment's origin:
@@ -101,3 +101,20 @@ they are additive and the previous version keeps working on the newer schema.
 The extension is built against an origin with `SQUIGGLE_HOSTED_ORIGIN` (see
 `vite.config.ts`). A release build has to be given the production origin; a staging
 build, the staging one.
+
+## Launch metrics
+
+`GET /admin/metrics` answers with aggregate counts and ratios, read with the same admin
+token. It is the only source of launch metrics: the extension and the site carry no
+telemetry. The figures come from rows the server already keeps, plus one small table of
+daily event counters (cache checks and hits, calls and failures per model stage).
+
+```bash
+curl -H "authorization: Bearer $ADMIN_TOKEN" "https://<origin>/admin/metrics?weeks=4&costUsd=12.40"
+```
+
+`weeks` (1 to 52, default 4) sets the window of the event figures; account figures
+(activation, trial completion, trial to paid) cover every account. `costUsd` is what the
+provider invoiced over the same window, which the server cannot know: pass it and the
+answer carries the cost per analysis (invoice divided by analyses finalized). Counters
+written between a deploy and its migration are dropped, never an error for the reader.

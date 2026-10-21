@@ -10,7 +10,8 @@
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { REPORT_MAX_BYTES, utcDayOf } from '../usage/limits';
+import { REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
   Plan,
@@ -32,6 +33,9 @@ import type {
   NonceRow,
   OAuthPendingRow,
   PurgeReportsResult,
+  CollectMetricsArgs,
+  MetricName,
+  MetricsRaw,
   RateCheckArgs,
   RateCheckResult,
   ReportRow,
@@ -56,7 +60,8 @@ export class MemoryDb implements Db {
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
   private readonly runs = new Map<string, AnalysisRunRow>();
-  private readonly stripeEvents = new Set<string>();
+  private readonly stripeEvents = new Map<string, { type: string; receivedAt: number }>();
+  private readonly metrics = new Map<string, number>();
 
   // ---- users ---------------------------------------------------------------
 
@@ -206,9 +211,9 @@ export class MemoryDb implements Db {
     user.updatedAt = now;
   }
 
-  async recordStripeEvent(id: string, _type: string, _now: number): Promise<boolean> {
+  async recordStripeEvent(id: string, type: string, now: number): Promise<boolean> {
     if (this.stripeEvents.has(id)) return false;
-    this.stripeEvents.add(id);
+    this.stripeEvents.set(id, { type, receivedAt: now });
     return true;
   }
 
@@ -544,6 +549,57 @@ export class MemoryDb implements Db {
     row.finalizedAt = now;
     row.updatedAt = now;
     return true;
+  }
+
+  async bumpMetric(name: MetricName, now: number): Promise<void> {
+    const key = `${utcDayOf(now)}:${name}`;
+    this.metrics.set(key, (this.metrics.get(key) ?? 0) + 1);
+  }
+
+  async collectMetrics({ now, weeks, trialAnalyses }: CollectMetricsArgs): Promise<MetricsRaw> {
+    const since = now - weeks * WEEK_MS;
+    const sinceDay = utcDayOf(since);
+    const accountsPerWeek = new Array<number>(weeks).fill(0);
+    const totals = new Map<string, number>();
+    let finalizes = 0;
+    for (const daily of this.usageDaily.values()) {
+      totals.set(daily.userId, (totals.get(daily.userId) ?? 0) + daily.analyses);
+      if (daily.day >= sinceDay) finalizes += daily.analyses;
+    }
+    let accountsFinalized = 0;
+    let trialCompleted = 0;
+    let trialCompletedPaid = 0;
+    let activeSubscribers = 0;
+    for (const user of this.users.values()) {
+      // The newest week is closed on `now`, so an account made this instant belongs to it.
+      if (user.createdAt >= since) accountsPerWeek[Math.min(weeks - 1, Math.floor((user.createdAt - since) / WEEK_MS))]++;
+      const total = totals.get(user.id) ?? 0;
+      if (total > 0) accountsFinalized++;
+      if (total >= trialAnalyses) {
+        trialCompleted++;
+        if (user.stripeCustomerId !== null) trialCompletedPaid++;
+      }
+      if (user.plan === 'active' && user.planExpiresAt !== null && user.planExpiresAt > now) activeSubscribers++;
+    }
+    const events = (type: string) =>
+      [...this.stripeEvents.values()].filter((e) => e.type === type && e.receivedAt >= since).length;
+    const counters = Object.fromEntries(METRIC_NAMES.map((name) => [name, 0])) as Record<MetricName, number>;
+    for (const [key, count] of this.metrics) {
+      const [day, name] = key.split(':') as [string, MetricName];
+      if (Number(day) >= sinceDay) counters[name] += count;
+    }
+    return {
+      accountsTotal: this.users.size,
+      accountsPerWeek,
+      accountsFinalized,
+      trialCompleted,
+      trialCompletedPaid,
+      activeSubscribers,
+      subscriptionsStarted: events('checkout.session.completed'),
+      subscriptionsCancelled: events('customer.subscription.deleted'),
+      finalizes,
+      counters,
+    };
   }
 
   async purgeExpired(now: number, usageLogRetentionMs: number): Promise<number> {
