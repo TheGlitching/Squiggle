@@ -179,6 +179,44 @@ describe('verifyCitedSources - fetch, judge, reconcile', () => {
     expect(client.completeCalls).toHaveLength(0);
   });
 
+  it('keeps the fetch error out of the check the reader sees and reports it as a diagnostic', async () => {
+    const diagnostics: string[] = [];
+
+    const result = await verifyCitedSources({
+      ...verifyOptions(),
+      client: new ScriptedClient([]),
+      fetchImpl: async () => {
+        throw new Error('getaddrinfo ENOTFOUND source.example');
+      },
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
+
+    expect(result.checks[0].reason).not.toContain('ENOTFOUND');
+    expect(diagnostics.join('\n')).toContain('ENOTFOUND');
+  });
+
+  it('describes a page\'s reliability in words, never as an enum value', async () => {
+    const dubious = await verifyCitedSources({
+      ...verifyOptions(),
+      client: new ScriptedClient([
+        JSON.stringify({ relation: 'supporte', fiabilite: 'douteuse', passage: 'X est vrai.', raison: 'Site anonyme.' })
+      ]),
+      fetchImpl
+    });
+    const trusted = await verifyCitedSources({
+      ...verifyOptions(),
+      client: new ScriptedClient([
+        JSON.stringify({ relation: 'supporte', fiabilite: 'fiable', passage: 'X est vrai.', raison: 'Publication officielle.' })
+      ]),
+      fetchImpl
+    });
+
+    expect(dubious.claims[0].rationale).toContain('(source douteuse)');
+    expect(dubious.claims[0].rationale).not.toMatch(/\(douteuse\)/);
+    expect(trusted.claims[0].rationale).toContain('(source fiable)');
+    expect(trusted.claims[0].rationale).not.toContain('fiabilité :');
+  });
+
   it('drops a verified claim whose only backers were dead or unrelated pages', async () => {
     const verifiedClaim: FactualClaim = {
       ...claim,

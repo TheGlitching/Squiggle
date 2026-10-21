@@ -82,18 +82,22 @@ export const FindingCard: React.FC<FindingCardProps> = ({
           : 'border-line'
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
+      <div className="mb-1.5 flex flex-col items-start gap-1.5">
         <span
           className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold uppercase tracking-wider ${TONE_EYEBROW[tone]}`}
         >
           <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-sm ${TONE_DOT[tone]}`} />
           {CATEGORY_LABELS_FR[finding.category] ?? finding.category}
         </span>
-        <span className="flex flex-wrap items-center justify-end gap-1.5">
-          {finding.verification && <VerificationBadge verification={finding.verification} />}
-          {/* A strength is not graded: "Mineur" beside "Point fort" reads as a fault. */}
-          {finding.category !== 'point-fort' && <SeverityBadge severity={finding.severity} />}
-        </span>
+        {/* Meaning-carrying badges are 14 px, so they get their own row instead of
+            squeezing the category label. A strength is not graded: "Mineur" beside
+            "Point fort" reads as a fault. */}
+        {(finding.verification || finding.category !== 'point-fort') && (
+          <span className="flex flex-wrap items-center gap-1.5">
+            {finding.verification && <VerificationBadge verification={finding.verification} />}
+            {finding.category !== 'point-fort' && <SeverityBadge severity={finding.severity} />}
+          </span>
+        )}
       </div>
       <h4 className="font-serif font-bold text-sm text-ink mb-1">
         {finding.label}

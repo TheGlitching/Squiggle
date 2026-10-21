@@ -640,4 +640,52 @@ describe('RESEARCH_AGENT_SYSTEM_PROMPT', () => {
     expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain('read_source');
     expect(RESEARCH_AGENT_SYSTEM_PROMPT).toContain("Une URL que tu n'as pas réellement lue ne prouve rien");
   });
+  it('names no provider and no engine reasoning when the client cannot search the web', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    const client = new StubClient({ completions: [], canSearch: false });
+
+    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+
+    expectReaderText(result.claims[0].rationale);
+    expect(result.claims[0].rationale).not.toMatch(/anthropic/i);
+    expect(result.research.skippedReason).not.toMatch(/anthropic/i);
+  });
+
+  it('keeps a provider error out of the claim and sends it to the diagnostic channel', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => {
+        throw new Error('HTTP 503 upstream connect error');
+      }
+    });
+    const diagnostics: string[] = [];
+
+    const result = await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [finding],
+      citedSources: [],
+      onDiagnostic: (note) => diagnostics.push(note)
+    });
+
+    expect(result.claims[0].verification).toBe('non-verifiable');
+    expect(result.claims[0].rationale).not.toContain('503');
+    expectReaderText(result.claims[0].rationale);
+    expect(diagnostics.join('\n')).toContain('HTTP 503 upstream connect error');
+  });
+
+  it('does not require a diagnostic listener: the reader text is the same without one', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee' });
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => ({ content: JSON.stringify({ verification: 'verifiee', sources: [] }), citations: [] })
+    });
+
+    const result = await researchFindings({ client, input: sampleInput, findings: [finding], citedSources: [] });
+
+    expectReaderText(result.claims[0].rationale);
+  });
 });

@@ -61,7 +61,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
         data-tour="research-disclosure"
         className="mt-3 rounded-lg border border-dashed border-severity-warning/50 bg-severity-warning/10 p-2.5"
       >
-        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-severity-warning-ink">
+        <span className="block font-mono text-xs font-semibold uppercase tracking-wider text-severity-warning-ink">
           Vérification factuelle non effectuée
         </span>
         <p className="mt-1 text-xs leading-relaxed text-ink/80">
@@ -78,7 +78,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
       data-tour="research-disclosure"
       className="mt-3 rounded-lg border border-line bg-panel p-2.5"
     >
-      <span className="font-mono text-xs font-semibold uppercase tracking-wider text-muted">
+      <span className="block font-mono text-xs font-semibold uppercase tracking-wider text-muted">
         Vérification factuelle
       </span>
       <p className="mt-1 text-xs leading-relaxed text-ink/80">
