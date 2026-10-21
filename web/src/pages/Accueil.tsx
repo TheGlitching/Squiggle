@@ -1,16 +1,17 @@
 import { BrandLockup } from '../components/Brand';
 import { Demo, DemoText } from '../components/Demo';
+import { CONTACT_URL } from '../components/Layout';
 import { CHROME_URL, FIREFOX_URL, installUrlFor } from '../install';
 import { Link } from '../router';
 
 const GITHUB_URL = 'https://github.com/TheGlitching/Squiggle';
 
 const PERKS = [
-  '10 analyses par jour',
-  'Aucune publicité',
-  'Aucun traceur',
-  'Tout reste privé',
-  'Sécurisé',
+  '3 analyses offertes à l’inscription',
+  '10 analyses par jour avec l’abonnement',
+  'Aucune publicité, aucun traceur',
+  'Code source ouvert',
+  'Le texte de l’article n’est jamais conservé',
 ];
 
 const PRIMARY_BUTTON =
@@ -62,16 +63,16 @@ export function Accueil() {
               </p>
             )}
             <p className="m-0 text-center text-[12.5px] leading-[1.4] text-faint">
-              Gratuit à vie avec votre propre clé API.
+              Gratuit aussi avec votre propre clé d’API.
             </p>
           </div>
 
           <Link to="/connexion" className={SECONDARY_BUTTON}>
-            S’abonner : 0,16 €/jour
+            S’abonner : 4,99 €/mois
           </Link>
         </div>
         <p className="mt-2.5 text-center text-[12.5px] leading-[1.4] text-faint">
-          soit 4,99 €/mois, sans engagement
+          Sans engagement, résiliable à tout moment.
         </p>
 
         <ul className="mt-[18px] grid list-none gap-[9px] p-0 pl-0.5">
@@ -83,19 +84,27 @@ export function Accueil() {
           ))}
         </ul>
 
-        <p className="mt-[34px] border-t border-lineSoft pt-5 text-[13px] text-faint">
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            className={QUIET_LINK}
-          >
-            Tout est ouvert. Le code source est sur GitHub{' '}
-            <span aria-hidden="true" className="font-mono">
-              ↗
-            </span>
-          </a>
-        </p>
+        <footer className="mt-[34px] grid gap-3 border-t border-lineSoft pt-5 text-[13px] text-faint">
+          <nav aria-label="Navigation de pied de page" className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link to="/transparence" className={QUIET_LINK}>
+              Transparence
+            </Link>
+            <Link to="/legal" className={QUIET_LINK}>
+              Légal
+            </Link>
+            <a href={CONTACT_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+              Contact
+            </a>
+          </nav>
+          <p className="m-0">
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+              Tout est ouvert. Le code source est sur GitHub{' '}
+              <span aria-hidden="true" className="font-mono">
+                ↗
+              </span>
+            </a>
+          </p>
+        </footer>
       </main>
     </div>
   );

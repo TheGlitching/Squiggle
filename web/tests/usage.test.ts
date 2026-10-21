@@ -14,6 +14,7 @@ describe('describeAccount', () => {
     expect(view.state).toBe('trial');
     expect(view.canAnalyse).toBe(true);
     expect(view.needsSubscription).toBe(false);
+    expect(view.canSubscribe).toBe(true);
   });
 
   it('reports an exhausted trial as needing a subscription', () => {
@@ -36,6 +37,7 @@ describe('describeAccount', () => {
     expect(view.state).toBe('active');
     expect(view.canAnalyse).toBe(true);
     expect(view.detail).toContain('4');
+    expect(view.canSubscribe).toBe(false);
   });
 
   it('reports an active plan whose daily quota is exhausted', () => {
@@ -45,6 +47,7 @@ describe('describeAccount', () => {
     expect(view.state).toBe('quota_exhausted');
     expect(view.canAnalyse).toBe(false);
     expect(view.needsSubscription).toBe(false);
+    expect(view.canSubscribe).toBe(false);
   });
 
   it('reports a lapsed plan as needing a subscription', () => {
@@ -54,5 +57,6 @@ describe('describeAccount', () => {
     expect(view.state).toBe('lapsed');
     expect(view.canAnalyse).toBe(false);
     expect(view.needsSubscription).toBe(true);
+    expect(view.canSubscribe).toBe(true);
   });
 });
