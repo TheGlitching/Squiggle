@@ -26,31 +26,65 @@ export interface StripeConfig {
   fetchImpl?: typeof fetch;
 }
 
-async function stripePost(
+async function stripeRequest(
   config: StripeConfig,
+  method: 'POST' | 'DELETE',
   path: string,
   form: Record<string, string>,
+  opts: { missingIsFine?: boolean } = {},
 ): Promise<Outcome<{ data: Record<string, unknown> }>> {
   const fetchImpl = config.fetchImpl ?? fetch;
   let res: Response;
   try {
     res = await fetchImpl(`${STRIPE_API}${path}`, {
-      method: 'POST',
+      method,
       headers: {
         authorization: `Bearer ${config.secretKey}`,
         'content-type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams(form).toString(),
+      body: method === 'POST' ? new URLSearchParams(form).toString() : undefined,
     });
   } catch {
     return apiError('billing_unavailable', 'Le service de paiement est momentanément indisponible.');
   }
+  // A resource that is already gone is the state a delete is after.
+  if (res.status === 404 && opts.missingIsFine) return { ok: true, data: {} };
   if (!res.ok) {
     // Stripe's error body can echo the parameters we sent; it is never
     // forwarded to the caller and never logged.
     return apiError('billing_unavailable', 'Le service de paiement a refusé la demande.');
   }
   return { ok: true, data: (await res.json()) as Record<string, unknown> };
+}
+
+function stripePost(config: StripeConfig, path: string, form: Record<string, string>) {
+  return stripeRequest(config, 'POST', path, form);
+}
+
+/**
+ * End a subscription now. Account deletion calls this before it erases
+ * anything, so a failure leaves the account (and the way to retry) intact
+ * instead of a reader who is gone from our database and still being billed.
+ * A subscription Stripe no longer knows is treated as already ended.
+ */
+export async function cancelSubscription(
+  config: StripeConfig,
+  subscriptionId: string,
+): Promise<Outcome<object>> {
+  const res = await stripeRequest(config, 'DELETE', `/subscriptions/${encodeURIComponent(subscriptionId)}`, {}, {
+    missingIsFine: true,
+  });
+  return res.ok ? { ok: true } : res;
+}
+
+/** Keep the address on Stripe's receipts in step with the account's. */
+export async function updateCustomerEmail(
+  config: StripeConfig,
+  customerId: string,
+  email: string,
+): Promise<Outcome<object>> {
+  const res = await stripePost(config, `/customers/${encodeURIComponent(customerId)}`, { email });
+  return res.ok ? { ok: true } : res;
 }
 
 export interface CheckoutArgs {

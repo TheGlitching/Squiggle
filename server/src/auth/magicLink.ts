@@ -162,7 +162,9 @@ export async function verifyMagicLink(
     }
   }
   const link = await deps.db.findMagicLinkByCodeHash(await sha256Hex(normalized));
-  if (!link) return apiError('invalid_code', 'This code is not valid.');
+  // An email-change code confirms an address for one account; it must never
+  // open a session, so as a login code it simply does not exist.
+  if (!link || link.changeUserId !== null) return apiError('invalid_code', 'This code is not valid.');
   if (link.usedAt !== null) return apiError('link_already_used', 'This code has already been used.');
   if (link.expiresAt <= now) return apiError('expired_link', 'This code has expired. Request a new one.');
 

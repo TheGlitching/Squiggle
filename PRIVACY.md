@@ -161,13 +161,20 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 
 - **Accès et portabilité** — la page de compte affiche votre plan, votre usage et vos
   installations ; le rapport d'une analyse est le fichier que le panneau vous montre.
-- **Suppression** — supprimer le compte efface le compte, ses clés, ses jetons, ses
-  sessions et son journal d'usage. Un rapport déjà présent dans le cache partagé n'est
-  pas rattaché à vous : il ne porte que l'empreinte de l'adresse de l'article, et il
-  expire de lui-même sous 30 jours. Rien nulle part ne relie un compte à un article :
-  le journal d'usage note qu'une analyse a eu lieu, jamais laquelle.
+- **Suppression** — « Supprimer mon compte », dans la page de compte, efface le compte,
+  ses clés, ses jetons, ses sessions et son journal d'usage, ainsi que les codes de
+  connexion et les compteurs de limite liés à votre adresse. Un abonnement en cours est
+  d'abord résilié chez Stripe ; si Stripe ne répond pas, rien n'est supprimé et vous pouvez
+  réessayer. Un rapport déjà présent dans le cache partagé n'est pas rattaché à vous : il
+  ne porte que l'empreinte de l'adresse de l'article, et il expire de lui-même sous 30
+  jours. Rien nulle part ne relie un compte à un article : le journal d'usage note qu'une
+  analyse a eu lieu, jamais laquelle. La suppression n'efface pas, chez Stripe, le client
+  et ses factures : ce sont des pièces de facturation qui relèvent de Stripe.
 - **Rectification** — l'adresse e-mail est la seule donnée personnelle que vous nous
-  confiez ; elle se change depuis la page de compte.
+  confiez ; elle se change depuis la page de compte, en confirmant un code envoyé à la
+  nouvelle adresse. L'adresse portée par Stripe sur vos reçus suit ce changement.
+- **Révocation d'une installation** — la page de compte liste les extensions connectées
+  et permet d'en révoquer une : sa clé cesse aussitôt d'être acceptée.
 - Pour tout le reste : [ouvrez un ticket](https://github.com/TheGlitching/Squiggle/issues)
   ou utilisez l'adresse de contact publiée sur le site.
 

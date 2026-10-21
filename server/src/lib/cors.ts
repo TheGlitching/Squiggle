@@ -59,6 +59,13 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   { method: 'POST', path: '/web/account/checkout' },
   { method: 'POST', path: '/web/account/portal' },
   { method: 'POST', path: '/web/bridge/code' },
+  // Account data: erasing the account, changing its address, listing and
+  // revoking installs. Web-session only, never reachable with an install key.
+  { method: 'POST', path: '/web/account/delete' },
+  { method: 'POST', path: '/web/account/email' },
+  { method: 'POST', path: '/web/account/email/confirm' },
+  { method: 'GET', path: '/web/account/installs' },
+  { method: 'POST', path: '/web/account/installs/revoke' },
 ];
 
 export function originRequired(method: string, path: string): boolean {
