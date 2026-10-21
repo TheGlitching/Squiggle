@@ -85,7 +85,7 @@ import { createCheckoutSession, createPortalSession, type StripeConfig } from '.
 import { handleStripeWebhook } from './billing/webhook';
 import { corsHeaders, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
-import { REPORT_MAX_COUNT, USAGE_LOG_RETENTION_MS } from './usage/limits';
+import { DAILY_CRON, REPORT_MAX_COUNT, USAGE_LOG_RETENTION_MS } from './usage/limits';
 import { NeonDb } from './db/neon';
 import type { Db, UserRow } from './db/types';
 import type { Clock } from './lib/clock';
@@ -149,14 +149,6 @@ export interface Services {
   runMigrations?: (now: number) => Promise<string[]>;
 }
 
-/**
- * The model hosted analyses default to when the deployment names none. The id
- * is the exact OpenRouter catalogue id, tilde-free: OpenRouter ids are not
- * predictable from the model name, and the API rejects anything that is not
- * exactly right.
- */
-export const DEFAULT_OPENROUTER_MODEL: string = HOSTED_ANALYSIS.model;
-
 /** The deployment settings the provider gateway reads. */
 export interface LlmEnv {
   LLM_PROVIDER?: string;
@@ -193,7 +185,9 @@ export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
     return new OpenRouterClient({
       provider: 'openrouter',
       apiKey: env.OPENROUTER_API_KEY,
-      model: env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
+      // The default is the exact OpenRouter catalogue id, tilde-free: the API
+      // rejects anything that is not exactly right.
+      model: env.OPENROUTER_MODEL || HOSTED_ANALYSIS.model,
     });
   }
 
@@ -755,8 +749,6 @@ function servicesFromEnv(env: Env): Services {
  * ledger rows past 12 months; the daily one drops expired and over-cap reports.
  * Logs counts only.
  */
-export const DAILY_CRON = '17 3 * * *';
-
 export async function runScheduled(s: Services, cron: string): Promise<void> {
   const now = s.clock.now();
   if (cron === DAILY_CRON) {

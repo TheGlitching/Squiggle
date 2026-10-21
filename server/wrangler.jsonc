@@ -4,48 +4,91 @@
   "main": "src/index.ts",
   // Bump when the runtime gains new features we start relying on.
   "compatibility_date": "2025-01-01",
-  // Retention sweeps (see runScheduled): hourly, and daily at DAILY_CRON.
-  "triggers": {
-    "crons": ["0 * * * *", "17 3 * * *"]
-  },
   "observability": {
     "enabled": true
   },
+  // One Worker serves the API and the web app, so the app and the API share an
+  // origin (see web/src/api.ts). `web/dist` is built by `npm run build:web`
+  // before every deploy. Only the API namespaces below reach the Worker; every
+  // other path is a static file, or index.html when no file matches, which is
+  // what lets the client-side router own /compte, /pont and the rest. A new
+  // top-level route in src/index.ts has to be added here, and a web route must
+  // not start with one of these prefixes; tests/deploy.test.ts checks both.
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/health", "/auth/*", "/v1/*", "/web/*", "/webhooks/*", "/admin/*"]
+  },
+  // Deploy with --env (`npm run deploy:staging`, `npm run deploy:production`).
+  // Wrangler does not inherit `vars`, so each environment carries the full set,
+  // and tests/deploy.test.ts keeps the two key sets identical.
+  //
   // Non-secret configuration only. Everything sensitive (DATABASE_URL,
   // BREVO_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPENROUTER_API_KEY,
-  // GEMINI_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) is set
-  // per-environment with `wrangler secret put` and lives in the Cloudflare
-  // secret store — never in this file, never in the repo (see AGENTS.md).
-  "vars": {
-    // Origin of the hosted web app; used to build magic-link / OAuth URLs.
-    "WEB_APP_ORIGIN": "https://squiggle.fr",
-    // Origins of our two store listings, pinned for CORS. A page on any other
-    // origin cannot read our responses, which is what keeps a malicious web
-    // page from burning our model quota even if it steals a token.
-    "EXTENSION_CHROME_ORIGIN": "chrome-extension://PENDING_CHROME_ID",
-    "EXTENSION_FIREFOX_ORIGIN": "moz-extension://PENDING_FIREFOX_ID",
-    // Verified sender address in the Brevo account (not a secret).
-    "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr",
-    // Which provider hosted analyses run on. `openrouter` is the default and
-    // `gemini` is kept selectable; an unknown value leaves the client unset,
-    // and the analyze route refuses rather than silently picking a provider.
-    // The matching API key is an `OPENROUTER_API_KEY` / `GEMINI_API_KEY`
-    // secret, and the provider's key must be present or hosted mode refuses.
-    "LLM_PROVIDER": "openrouter",
-    // The exact OpenRouter model id hosted analyses run on. It is part of the
-    // shared cache key, so changing it invalidates every cached report — which
-    // is the intent: the same article judged by a different model is a
-    // different report. OpenRouter ids are not predictable from the model
-    // name, so this one is copied verbatim from the live catalogue.
-    "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
-    // The exact Gemini model id, used only when `LLM_PROVIDER` is `gemini`.
-    // Kept documented so the provider can be switched without a code change;
-    // the real id is filled in from the GCP console (issue #5).
-    "GEMINI_MODEL": "PENDING_MODEL_ID",
-    // The recurring price the subscription is sold at. A `price_…` id is not
-    // a secret (it is visible in any Checkout URL), but it is environment
-    // specific, so it lives here rather than in code. Filled in from the
-    // Stripe dashboard (issue #5).
-    "STRIPE_PRICE_ID": "PENDING_PRICE_ID"
+  // GEMINI_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, ADMIN_TOKEN) is
+  // set per environment with `wrangler secret put --env <name>` and lives in
+  // the Cloudflare secret store, never in this file, never in the repo (see
+  // AGENTS.md). `GEMINI_MODEL` is an optional var, set only to select Gemini.
+  //
+  // A value that is not decided yet is a PENDING_… placeholder, and
+  // `npm run deploy:production` refuses to ship one (scripts/deploy.mjs).
+  "env": {
+    "staging": {
+      "name": "squiggle-server-staging",
+      "workers_dev": true,
+      // Retention sweeps (see runScheduled): hourly, and daily at DAILY_CRON.
+      "triggers": {
+        "crons": ["0 * * * *", "17 3 * * *"]
+      },
+      "vars": {
+        // The staging Worker's own address; the workers.dev subdomain is the
+        // account's, so it is filled in once the account exists.
+        "WEB_APP_ORIGIN": "https://squiggle-server-staging.PENDING_WORKERS_SUBDOMAIN.workers.dev",
+        "EXTENSION_CHROME_ORIGIN": "chrome-extension://PENDING_CHROME_ID",
+        "EXTENSION_FIREFOX_ORIGIN": "moz-extension://PENDING_FIREFOX_ID",
+        "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr",
+        "LLM_PROVIDER": "openrouter",
+        "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
+        // The Stripe test-mode price: staging never talks to live billing.
+        "STRIPE_PRICE_ID": "PENDING_TEST_PRICE_ID"
+      }
+    },
+    "production": {
+      "name": "squiggle-server-production",
+      "workers_dev": false,
+      "routes": [{ "pattern": "squiggle.fr", "custom_domain": true }],
+      // Retention sweeps (see runScheduled): hourly, and daily at DAILY_CRON.
+      "triggers": {
+        "crons": ["0 * * * *", "17 3 * * *"]
+      },
+      "vars": {
+        // Origin of the hosted web app; used to build magic-link / OAuth URLs.
+        "WEB_APP_ORIGIN": "https://squiggle.fr",
+        // Origins of our two store listings, pinned for CORS. A page on any other
+        // origin cannot read our responses, which is what keeps a malicious web
+        // page from burning our model quota even if it steals a token.
+        "EXTENSION_CHROME_ORIGIN": "chrome-extension://PENDING_CHROME_ID",
+        "EXTENSION_FIREFOX_ORIGIN": "moz-extension://PENDING_FIREFOX_ID",
+        // Verified sender address in the Brevo account (not a secret).
+        "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr",
+        // Which provider hosted analyses run on. `openrouter` is the default and
+        // `gemini` is kept selectable; an unknown value leaves the client unset,
+        // and the analyze route refuses rather than silently picking a provider.
+        // The matching API key is an `OPENROUTER_API_KEY` / `GEMINI_API_KEY`
+        // secret, and the provider's key must be present or hosted mode refuses.
+        "LLM_PROVIDER": "openrouter",
+        // The exact OpenRouter model id hosted analyses run on. It is part of the
+        // shared cache key, so changing it invalidates every cached report, which
+        // is the intent: the same article judged by a different model is a
+        // different report. OpenRouter ids are not predictable from the model
+        // name, so this one is copied verbatim from the live catalogue.
+        "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
+        // The recurring price the subscription is sold at. A `price_…` id is not
+        // a secret (it is visible in any Checkout URL), but it is environment
+        // specific, so it lives here rather than in code. Filled in from the
+        // Stripe dashboard (issue #5).
+        "STRIPE_PRICE_ID": "PENDING_PRICE_ID"
+      }
+    }
   }
 }
