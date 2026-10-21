@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { CONTENT_SCRIPT_FILE } from '../src/messaging/runtime';
+import { ALL_SITES } from '../src/permissions/siteAccess';
 
 describe('Multi-browser Build & Packaging Verification', () => {
   const chromeDist = path.resolve(__dirname, '../dist/chrome');
@@ -139,5 +141,76 @@ describe('Multi-browser Build & Packaging Verification', () => {
     ) as { permissions: string[] };
 
     expect(manifest.permissions).toEqual(expected);
+  });
+
+  /**
+   * What the stores review hardest is reach: a static `<all_urls>` content script
+   * and all-sites host access trigger an in-depth review, and the permission
+   * prompt a reader sees at install says "read and change all your data". The
+   * extension reads the page it was invoked on (`activeTab`), so the broad
+   * patterns are optional and the content script is injected, never declared.
+   */
+  describe.each([
+    ['chrome', chromeDist],
+    ['firefox', firefoxDist],
+  ])('%s reach', (_target, dist) => {
+    const manifest = () =>
+      JSON.parse(fs.readFileSync(path.join(dist, 'manifest.json'), 'utf-8')) as {
+        host_permissions?: string[];
+        optional_host_permissions?: string[];
+        content_scripts?: unknown[];
+      };
+
+    it('declares no static content script', () => {
+      expect(manifest().content_scripts).toBeUndefined();
+    });
+
+    it('ships the injectable content script as a classic script', () => {
+      const file = path.join(dist, CONTENT_SCRIPT_FILE);
+      expect(fs.existsSync(file), `${CONTENT_SCRIPT_FILE} is missing`).toBe(true);
+      const code = fs.readFileSync(file, 'utf-8');
+      // An injected file runs as a classic script, so a module statement would be a syntax error.
+      expect(code).not.toMatch(/^\s*(import|export)\s/m);
+    });
+
+    it('requests host access only for the model providers', () => {
+      expect(manifest().host_permissions).toEqual([
+        'https://api.anthropic.com/*',
+        'https://api.openai.com/*',
+        'https://openrouter.ai/*',
+        'https://generativelanguage.googleapis.com/*',
+      ]);
+    });
+
+    it('offers every site as an optional permission, matching what the settings ask for', () => {
+      expect(manifest().optional_host_permissions).toEqual(ALL_SITES);
+    });
+  });
+
+  /** The store listing's summary line is the manifest description, and the store caps it. */
+  it.each([
+    ['chrome', chromeDist],
+    ['firefox', firefoxDist],
+  ])('%s description fits the 132 characters a store listing allows', (_target, dist) => {
+    const { description } = JSON.parse(
+      fs.readFileSync(path.join(dist, 'manifest.json'), 'utf-8'),
+    ) as { description: string };
+
+    expect(description.length).toBeLessThanOrEqual(132);
+  });
+
+  /**
+   * `data_collection_permissions` is understood from Firefox 140. An older minimum
+   * is rejected by the AMO validator, and a browser that does not know the key
+   * installs the extension without ever showing the reader the disclosure.
+   */
+  it('firefox requires a release that understands data_collection_permissions', () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(firefoxDist, 'manifest.json'), 'utf-8'),
+    ) as { browser_specific_settings: { gecko: { strict_min_version: string; data_collection_permissions?: unknown } } };
+    const { strict_min_version, data_collection_permissions } = manifest.browser_specific_settings.gecko;
+
+    expect(data_collection_permissions).toBeDefined();
+    expect(parseInt(strict_min_version, 10)).toBeGreaterThanOrEqual(140);
   });
 });
