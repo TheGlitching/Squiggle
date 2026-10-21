@@ -564,13 +564,16 @@ export class NeonDb implements Db {
     return rows.length > 0;
   }
 
-  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<void> {
-    await this.q`DELETE FROM nonces WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM web_sessions WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM magic_links WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM bridge_codes WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now}`;
-    await this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs}`;
+  async purgeExpired(now: number, usageLogRetentionMs: number): Promise<number> {
+    const swept = await Promise.all([
+      this.q`DELETE FROM nonces WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM web_sessions WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM magic_links WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM bridge_codes WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now} RETURNING 1`,
+      this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs} RETURNING 1`,
+    ]);
+    return swept.reduce((n, rows) => n + rows.length, 0);
   }
 }

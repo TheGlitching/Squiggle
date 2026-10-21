@@ -71,6 +71,7 @@ import { createCheckoutSession, createPortalSession, type StripeConfig } from '.
 import { handleStripeWebhook } from './billing/webhook';
 import { corsHeaders, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
+import { REPORT_MAX_COUNT, USAGE_LOG_RETENTION_MS } from './usage/limits';
 import { NeonDb } from './db/neon';
 import type { Db, UserRow } from './db/types';
 import type { Clock } from './lib/clock';
@@ -673,8 +674,30 @@ function servicesFromEnv(env: Env): Services {
   return live;
 }
 
+/**
+ * The retention sweeps `PRIVACY.md` promises. Cron triggers (`wrangler.jsonc`):
+ * the hourly one drops lapsed short-lived rows (analysis runs live one hour) and
+ * ledger rows past 12 months; the daily one drops expired and over-cap reports.
+ * Logs counts only.
+ */
+export const DAILY_CRON = '17 3 * * *';
+
+export async function runScheduled(s: Services, cron: string): Promise<void> {
+  const now = s.clock.now();
+  if (cron === DAILY_CRON) {
+    const { expired, overCap } = await s.db.purgeReports(now, REPORT_MAX_COUNT);
+    logEvent({ event: 'retention_purge', requestId: newRequestId(), scope: 'reports', count: expired + overCap });
+    return;
+  }
+  const count = await s.db.purgeExpired(now, USAGE_LOG_RETENTION_MS);
+  logEvent({ event: 'retention_purge', requestId: newRequestId(), scope: 'expired', count });
+}
+
 export default {
   fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     return createWorker(servicesFromEnv(env)).fetch(request);
+  },
+  scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    ctx.waitUntil(runScheduled(servicesFromEnv(env), event.cron));
   },
 } satisfies ExportedHandler<Env>;
