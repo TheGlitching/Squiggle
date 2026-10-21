@@ -9,6 +9,14 @@ import {
 import type { CitedSource } from './research';
 import { fetchPageText, fetchableUrl, type PageFetcher } from './sourceFetch';
 
+/** How a page's reliability reads to a reader, so an enum value never reaches the report. */
+export const FIABILITE_LABELS_FR: Record<SourceCheck['fiabilite'], string> = {
+  fiable: 'source fiable',
+  partielle: 'fiabilité partielle',
+  douteuse: 'source douteuse',
+  indeterminee: 'fiabilité indéterminée'
+};
+
 /**
  * Inspection of the pages an article actually cites - the half of factual
  * verification that no amount of searching can replace. A web search finds
@@ -77,6 +85,8 @@ export interface VerifyCitedSourcesArgs {
   fetchPage?: PageFetcher;
   /** Emits a human-readable line each time a cited page is fetched, for the live activity feed. */
   onActivity?: (note: string) => void;
+  /** The technical reason a page could not be read or judged; for the log, never the report. */
+  onDiagnostic?: (note: string) => void;
 }
 
 export interface VerifyCitedSourcesResult {
@@ -160,7 +170,8 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
     maxPages = DEFAULT_MAX_PAGES,
     fetchTimeoutMs = FETCH_TIMEOUT_MS,
     fetchImpl = fetch,
-    onActivity
+    onActivity,
+    onDiagnostic
   } = args;
   const fetchPage: PageFetcher = args.fetchPage ?? ((url, timeoutMs) => fetchPageText(url, timeoutMs, fetchImpl));
 
@@ -211,13 +222,14 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
         pageText = await fetchPage(url, fetchTimeoutMs);
       } catch (err) {
         rethrowIfAborted(err, abortSignal);
+        onDiagnostic?.(`Cited page fetch failed: ${(err as Error).message}`);
         claimChecks.push({
           claimId: claim.id,
           url,
           title: candidate.text || candidate.domain || url,
           relation: 'inaccessible',
           fiabilite: 'indeterminee',
-          reason: `page inaccessible : ${(err as Error).message}`
+          reason: 'la page n’a pas pu être ouverte'
         });
         continue;
       }
@@ -248,6 +260,7 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
         );
       } catch (err) {
         rethrowIfAborted(err, abortSignal);
+        onDiagnostic?.(`Cited page judgement failed: ${(err as Error).message}`);
         // A judge that fails on one page is a failed check, not a failed claim:
         // the article's citation was still not verified, and saying so is honest.
         claimChecks.push({
@@ -256,7 +269,7 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
           title: candidate.text || candidate.domain || url,
           relation: 'inaccessible',
           fiabilite: 'indeterminee',
-          reason: `la page a été lue mais son évaluation a échoué : ${(err as Error).message}`
+          reason: 'la page a été lue mais son évaluation n’a pas pu aboutir'
         });
       }
     }
@@ -341,7 +354,7 @@ export function reconcileSourceChecks(claims: FactualClaim[], checks: SourceChec
       }
       rationale = [
         rationale,
-        `La seule source citée à l'appui (« ${unreliableSupport.title} », ${unreliableSupport.url}) a été lue et jugée non fiable (${unreliableSupport.fiabilite}); elle ne peut pas certifier l'affirmation.`
+        `La seule source citée à l'appui (« ${unreliableSupport.title} », ${unreliableSupport.url}) a été lue et jugée non fiable (${FIABILITE_LABELS_FR[unreliableSupport.fiabilite]}) ; elle ne peut pas certifier l'affirmation.`
       ]
         .filter(Boolean)
         .join(' ');
@@ -350,7 +363,7 @@ export function reconcileSourceChecks(claims: FactualClaim[], checks: SourceChec
         verification = 'verifiee';
         rationale = [
           rationale,
-          `La source citée par l'article (« ${trustedSupport.title} », ${trustedSupport.url}) a été lue et confirme explicitement l'affirmation (fiabilité : ${trustedSupport.fiabilite}).`
+          `La source citée par l'article (« ${trustedSupport.title} », ${trustedSupport.url}) a été lue et confirme explicitement l'affirmation (${FIABILITE_LABELS_FR[trustedSupport.fiabilite]}).`
         ]
           .filter(Boolean)
           .join(' ');

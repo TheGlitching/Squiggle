@@ -36,6 +36,13 @@
  *    against a browser attacker and would risk breaking extension-initiated
  *    requests, whose `Origin` handling differs between Chrome and Firefox.
  *    A *mismatched* origin is still refused everywhere.
+ *
+ * **A same-origin GET has no `Origin`.** The web app and the API share one
+ * origin, and a browser omits `Origin` on a same-origin `GET`. So on the
+ * endpoints above, a request with no `Origin` is also accepted when it carries
+ * `Sec-Fetch-Site: same-origin`. The browser sets that header and page script
+ * cannot, which makes it the same class of evidence as `Origin`. `cross-site`,
+ * `same-site`, `none` or an absent header are still refused.
  */
 
 /** Endpoints where a request must prove it came from one of our own surfaces. */

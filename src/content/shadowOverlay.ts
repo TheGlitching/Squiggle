@@ -10,6 +10,7 @@
  */
 
 import { AnchoredHighlight, OverlayTheme } from './types';
+import { HIGHLIGHT_CATEGORY_LABELS_FR } from '../adapters/findingAdapters';
 
 export const DEFAULT_OVERLAY_THEME: OverlayTheme = {
   criticalColor: '#dc2626',
@@ -375,17 +376,8 @@ export class ShadowHighlightOverlay {
   // the second turned an unsupported statement into an established error. The
   // verification state carries that judgement, and it is shown in the panel.
   private formatCategoryLabel(cat: string): string {
-    const labels: Record<string, string> = {
-      logical_fallacy: 'Sophisme',
-      unverified_source: 'Source absente',
-      factual_error: 'Affirmation non étayée',
-      manipulation: 'Manipulation Rhétorique',
-      editorial_bias: 'Biais Éditorial',
-      missing_context: 'Contexte Manquant',
-      methodological_flaw: 'Défaut Méthodologique',
-      rigorous_journalism: 'Rigueur Journalistique',
-    };
-    return labels[cat] || 'Point d’Attention';
+    // The panel's own labels, so one category never has two names.
+    return HIGHLIGHT_CATEGORY_LABELS_FR[cat as keyof typeof HIGHLIGHT_CATEGORY_LABELS_FR] ?? 'Point d’attention';
   }
 
   private computeBoundingBox(rects: Array<{ top: number; left: number; width: number; height: number }>) {
@@ -471,7 +463,7 @@ export class ShadowHighlightOverlay {
         pointer-events: auto;
         cursor: pointer;
         padding: 1px 6px;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;

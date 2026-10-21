@@ -16,6 +16,8 @@ export interface AccountView {
   canAnalyse: boolean;
   /** True when paying is the next step. */
   needsSubscription: boolean;
+  /** True when the subscribe action is on offer: any plan but an active one. */
+  canSubscribe: boolean;
 }
 
 export function describeAccount(account: Account): AccountView {
@@ -32,6 +34,7 @@ export function describeAccount(account: Account): AccountView {
             : `Il vous reste ${usage.remaining} analyses offertes.`,
         canAnalyse: true,
         needsSubscription: false,
+        canSubscribe: true,
       };
     }
     return {
@@ -40,6 +43,7 @@ export function describeAccount(account: Account): AccountView {
       detail: 'Vos analyses offertes sont utilisées. Un abonnement les débloque à nouveau.',
       canAnalyse: false,
       needsSubscription: true,
+      canSubscribe: true,
     };
   }
 
@@ -51,6 +55,7 @@ export function describeAccount(account: Account): AccountView {
         detail: `Il vous reste ${usage.remaining} analyse${usage.remaining > 1 ? 's' : ''} aujourd’hui.`,
         canAnalyse: true,
         needsSubscription: false,
+        canSubscribe: false,
       };
     }
     return {
@@ -59,6 +64,7 @@ export function describeAccount(account: Account): AccountView {
       detail: 'Vos analyses du jour sont utilisées. Le compteur repart à minuit UTC.',
       canAnalyse: false,
       needsSubscription: false,
+      canSubscribe: false,
     };
   }
 
@@ -68,5 +74,6 @@ export function describeAccount(account: Account): AccountView {
     detail: 'Abonnez-vous pour lancer de nouvelles analyses.',
     canAnalyse: false,
     needsSubscription: true,
+    canSubscribe: true,
   };
 }

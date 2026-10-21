@@ -40,8 +40,8 @@ instead of on a key you hold. What that means concretely:
   it is dropped when that request ends. No table in our database holds it.
 - **the finished report is cached and shared.** Two readers of the same article
   get the same report, which is what makes the service affordable. The cache
-  key is the canonical URL, computed on the server, plus the model and the
-  prompt version.
+  key is the canonical URL, computed on the server, plus a fingerprint of the
+  article's text, plus the model and the prompt version.
 - **our server never fetches the article itself.** It only ever fetches pages
   the article cites, and only through an SSRF-hardened fetcher.
 
@@ -54,7 +54,10 @@ instead of on a key you hold. What that means concretely:
   the account and the clock. Nonces are single-use (an atomic check-and-set) and
   timestamps must be within five minutes.
 - **Origin policy.** The cookie-authenticated endpoints refuse a request with a
-  wrong `Origin` *or with none at all*. The OAuth redirects are exempt because a
+  wrong `Origin` *or with none at all*, unless the browser vouches that it is
+  same-origin with `Sec-Fetch-Site: same-origin` (a browser sends no `Origin` on
+  a same-origin `GET`, and page script cannot set that header). `cross-site`,
+  `same-site`, `none` and an absent header are refused. The OAuth redirects are exempt because a
   top-level navigation carries no `Origin` by design; their anti-forgery control
   is the OAuth `state`. `/v1/*` is exempt because the signature is strictly
   stronger evidence than a header — and a mismatched origin is still refused
@@ -63,6 +66,15 @@ instead of on a key you hold. What that means concretely:
   per-account ceiling, and an hourly ceiling for the whole service. The last one
   is what bounds the worst case: every account compromised at once still cannot
   spend more than one hour of that ceiling.
+- **The cache is bound to the text, not only the address.** The server never
+  fetches the article, so the text it analyses is whatever the client sent. A
+  report is filed under the SHA-256 of the normalised text (letters and digits
+  only, lowercased, Unicode-normalised) that the server computed itself from
+  that text, never a hash the client declared, and a preflight only hits when
+  the reader's own page yields the same hash. Text invented for a real
+  article's address therefore sits under a key no honest reader asks for. The
+  same rule stops a corrected article from being served its old report. The
+  title, author and outlet are not part of the fingerprint.
 - **Report sanitization.** A cached report is written by one reader's analysis
   and served to every later reader of the same article, which makes the cache
   the one place where text derived from a hostile article could reach someone

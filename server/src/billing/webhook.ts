@@ -53,6 +53,21 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/**
+ * The end of the paid period. Since Stripe API 2025-03-31 (Basil) it lives on
+ * each subscription item, not on the subscription; older endpoint versions
+ * still send the subscription-level field. The smallest item value wins, so a
+ * multi-item subscription never outlives its shortest-paid item.
+ */
+function periodEndOf(object: Record<string, unknown>): number | null {
+  const items = (object.items as { data?: unknown } | undefined)?.data;
+  const ends = Array.isArray(items)
+    ? items.map((item) => sec((item as Record<string, unknown> | null)?.current_period_end))
+    : [];
+  const itemEnds = ends.filter((end): end is number => end !== null);
+  return itemEnds.length > 0 ? Math.min(...itemEnds) : sec(object.current_period_end);
+}
+
 function sec(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) * 1000 : null;
 }
@@ -142,12 +157,21 @@ export async function handleStripeWebhook(
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const status = str(object.status);
-      const periodEnd = sec(object.current_period_end);
+      const periodEnd = periodEndOf(object);
       await deps.db.setStripeIds(user.id, { customerId: str(object.customer), subId: str(object.id) }, now);
       // `active` and `trialing` are the two statuses that entitle a reader.
       // past_due, unpaid, incomplete, paused and canceled all do not.
       const entitled = status === 'active' || status === 'trialing';
-      await deps.db.setPlan(user.id, entitled ? 'active' : 'none', entitled ? periodEnd : null, now);
+      if (!entitled) {
+        await deps.db.setPlan(user.id, 'none', null, now);
+      } else if (periodEnd !== null) {
+        await deps.db.setPlan(user.id, 'active', periodEnd, now);
+      } else if (user.planExpiresAt === null) {
+        // An entitled event with no period anywhere in it must not clear the
+        // expiry (null means "never expires"). Keep what is on record; if
+        // nothing is, fall back to the same provisional week as a checkout.
+        await deps.db.setPlan(user.id, 'active', now + PROVISIONAL_ACCESS_MS, now);
+      }
       break;
     }
 

@@ -6,6 +6,7 @@ import {
   determineScoreBand,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
   parseAndValidateLlmOutput,
+  PROMPT_VERSION,
   SCORE_DOMAINS
 } from '@squiggle/shared';
 
@@ -38,13 +39,20 @@ describe('Fourches Caudines Engine', () => {
     expect(Object.keys(SCORE_DOMAINS)).toHaveLength(5);
   });
 
-  it('builds prompts with Fourches Caudines criteria', () => {
-    expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).toContain('Fourches Caudines');
+  it('builds prompts with Squiggle criteria', () => {
+    expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).toContain('Squiggle');
     const userPrompt = buildFourchesCaudinesUserPrompt(sampleInput);
     expect(userPrompt).toContain(sampleInput.title);
     expect(userPrompt).toContain('[Bloc ID: b1');
     expect(userPrompt).toContain('solidite_logique');
     expect(userPrompt).toContain('robustesse_factuelle');
+  });
+
+  it('keeps the borrowed method name out of reader-facing text', () => {
+    // The prompt version is shown to readers and is part of the cache key.
+    expect(PROMPT_VERSION).toBe('1.0.0');
+    expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).not.toMatch(/fourches|caudines/i);
+    expect(buildFourchesCaudinesUserPrompt(sampleInput)).not.toMatch(/fourches|caudines/i);
   });
 
   it('calculates score and bands correctly', () => {

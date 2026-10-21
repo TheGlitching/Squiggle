@@ -24,10 +24,10 @@ function renderWith(account: ReturnType<typeof makeAccount>) {
 }
 
 describe('Compte', () => {
-  it('shows an unused trial and no way to pay', async () => {
+  it('lets a reader subscribe during the trial, before the free analyses run out', async () => {
     renderWith(makeAccount({ usage: { used: 1, limit: 3, remaining: 2, resetsAt: null } }));
     expect(await screen.findByText('Analyse d’essai')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /s’abonner/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /s’abonner : 4,99 €\/mois/i })).toBeInTheDocument();
   });
 
   it('shows an exhausted trial and a subscribe action', async () => {
@@ -63,6 +63,25 @@ describe('Compte', () => {
     );
     expect(await screen.findByText('Aucun abonnement actif')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /s’abonner/i })).toBeInTheDocument();
+  });
+
+  it('shows the activation banner only until the plan is active', async () => {
+    window.history.pushState({}, '', '/compte?paiement=ok');
+    installFetch(() => jsonResponse({ ok: true, ...makeAccount() }));
+    const pending = render(<Compte />);
+    expect(await screen.findByText(/en cours d’activation/)).toBeInTheDocument();
+    pending.unmount();
+
+    installFetch(() =>
+      jsonResponse({
+        ok: true,
+        ...makeAccount({ plan: 'active', usage: { used: 0, limit: 10, remaining: 10, resetsAt: null } }),
+      }),
+    );
+    window.history.pushState({}, '', '/compte?paiement=ok');
+    render(<Compte />);
+    expect(await screen.findByText('Merci ! Votre abonnement est actif.')).toBeInTheDocument();
+    expect(screen.queryByText(/en cours d’activation/)).toBeNull();
   });
 
   it('invites a signed-out reader to sign in', async () => {
