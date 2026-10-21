@@ -22,6 +22,14 @@ export const REPORT_MAX_BYTES = 256 * 1024;
 export const USAGE_LOG_RETENTION_MS = 365 * DAY_MS;
 
 /**
+ * The cron trigger (`wrangler.jsonc`) that runs the daily report sweep; any
+ * other trigger runs the hourly one. It lives here, not in `index.ts`, because
+ * the Workers runtime reads every named export of the entry module as an
+ * entrypoint and refuses to start on one that is not a function.
+ */
+export const DAILY_CRON = '17 3 * * *';
+
+/**
  * The UTC day containing the given epoch milliseconds, expressed as the
  * epoch milliseconds of that day's midnight. The daily quota is a
  * UTC-day concept on purpose: there is no timezone surface anywhere.

@@ -195,7 +195,8 @@ mode is the deliberate exception, and it is opt-in and account-gated.
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the build, the gates and the conventions.
-Releases are documented in [docs/RELEASING.md](docs/RELEASING.md).
+Releases are documented in [docs/RELEASING.md](docs/RELEASING.md). Deploying the hosted backend and the web app is documented in
+[docs/DEPLOYING.md](docs/DEPLOYING.md).
 
 ## Licence
 

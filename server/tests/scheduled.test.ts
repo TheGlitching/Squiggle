@@ -2,9 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DAILY_CRON, runScheduled } from '../src/index';
+import { runScheduled } from '../src/index';
 import { RUN_TTL_MS } from '../src/analyze/stages';
-import { DAY_MS, REPORT_MAX_COUNT, REPORT_TTL_MS, USAGE_LOG_RETENTION_MS } from '../src/usage/limits';
+import { DAILY_CRON, DAY_MS, REPORT_MAX_COUNT, REPORT_TTL_MS, USAGE_LOG_RETENTION_MS } from '../src/usage/limits';
 import { T0, makeTestEnv } from './helpers';
 
 afterEach(() => vi.restoreAllMocks());

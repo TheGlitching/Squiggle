@@ -30,7 +30,9 @@
     "test": "vitest run && npm run test -w @squiggle/server && npm run test -w @squiggle/web",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server && npm run typecheck -w @squiggle/web",
-    "package": "npm run build:all && node scripts/package.mjs"
+    "package": "npm run build:all && node scripts/package.mjs",
+    "deploy:staging": "npm run build:web && npm run deploy -w @squiggle/server -- staging",
+    "deploy:production": "npm run build:web && npm run deploy -w @squiggle/server -- production"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",

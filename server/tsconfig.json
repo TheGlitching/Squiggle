@@ -8,6 +8,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "allowJs": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -18,5 +19,5 @@
       "@squiggle/shared": ["../shared/src/index.ts"]
     }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "scripts"]
 }

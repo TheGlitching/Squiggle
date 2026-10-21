@@ -54,6 +54,10 @@ mode selector, not a replacement: BYOK is untouched, and the extraction, the pro
 the scoring and the reconciliation are the same code either way — that is what the
 `shared/` workspace is for.
 
+The same Worker serves the web app (`web/dist`) as static assets, so the app and the API
+share one origin; only the API paths reach the Worker code. See
+[docs/DEPLOYING.md](docs/DEPLOYING.md).
+
 ```
 +-----------------------------+
 |         Extension           |

@@ -22,3 +22,7 @@ digest.md
 Copie de Fourches Caudines Automatisées.pdf
 pdf_extracted.txt
 packages/
+
+# Cloudflare Workers local state and dev secrets
+.wrangler/
+.dev.vars
