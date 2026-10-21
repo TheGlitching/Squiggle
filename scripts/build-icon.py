@@ -17,11 +17,15 @@ import zlib
 GRID = 128  # the single coordinate space the mark is authored in
 SS = 4      # supersample factor, averaged away before writing
 
-PAPER = (251, 249, 245)  # the panel's newsprint
-CARMINE = (158, 42, 43)  # the editorial red pen
+PAPER = (250, 249, 245)  # the panel's newsprint, #faf9f5
+# The brand accent, #9061f0: `darkTheme.accent` in src/ui/tokens/colors.ts. It is
+# violet because no severity tone is, so the mark never reads as a verdict; the
+# paper marks on it hold 3.87:1, above the 3:1 a graphic needs.
+ACCENT = (144, 97, 240)
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src/assets")
 STORE_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "store")
+WEB_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web/public")
 
 # The store shows the 128px icon from the package, and asks for the artwork to
 # occupy 96x96 with transparent padding around it and no edge of its own, so it
@@ -30,24 +34,65 @@ STORE_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 # only the 128 is inset.
 STORE_ICON_ARTWORK = 96
 
-# A carmine badge carries the bars and the wave in paper, so the icon keeps its
-# contrast on a light and a dark toolbar alike; a dark mark on a pale badge
-# dissolves into one of the two.
+# A violet badge carries two lines of text and the proofreader's wave under them,
+# all in paper, so the icon keeps its contrast on a light and a dark toolbar
+# alike; a dark mark on a pale badge dissolves into one of the two. The same
+# geometry is inlined by `src/ui/components/SquiggleBadge.tsx` and
+# `web/src/components/Brand.tsx`, and `tests/brandMark.test.ts` fails when a copy
+# drifts from what this script writes.
 BADGE = (4, 4, 124, 124, 30)  # x0, y0, x1, y1, corner radius
-BARS = ((30, 42, 98, 54), (30, 64, 78, 76))
-WAVE = dict(x0=28, x1=100, y=99, amplitude=8, stroke=10, cycles=1.5)
+BARS = ((30, 30, 98, 43), (30, 52, 80, 65))
+WAVE = dict(x0=35, x1=95, y=87, amplitude=7, stroke=10, halves=3)
 
 
-def wave_points(samples=320):
-    """The proofreader's wave, as a dense polyline in grid units."""
-    span = WAVE["x1"] - WAVE["x0"]
-    return [
-        (
-            WAVE["x0"] + span * (i / samples),
-            WAVE["y"] + WAVE["amplitude"] * math.sin((i / samples) * WAVE["cycles"] * 2 * math.pi),
-        )
-        for i in range(samples + 1)
-    ]
+def wave_halves():
+    """The wave as quadratic half-cycles: (control x, control y, end x, end y).
+
+    The first half rises, then they alternate. A quadratic peaks at half its
+    control offset, so the control sits at twice the amplitude.
+    """
+    half = (WAVE["x1"] - WAVE["x0"]) / WAVE["halves"]
+    out, x = [], WAVE["x0"]
+    for i in range(WAVE["halves"]):
+        swing = -2 * WAVE["amplitude"] if i % 2 == 0 else 2 * WAVE["amplitude"]
+        out.append((x + half / 2, WAVE["y"] + swing, x + half, WAVE["y"]))
+        x += half
+    return out
+
+
+def wave_path():
+    """The same curve as an SVG path, so the vector and the raster cannot differ."""
+    num = lambda v: ("%.2f" % v).rstrip("0").rstrip(".")
+    d = f'M{num(WAVE["x0"])} {num(WAVE["y"])}'
+    for (cx, cy, ex, ey) in wave_halves():
+        d += f" Q{num(cx)} {num(cy)} {num(ex)} {num(ey)}"
+    return d
+
+
+def wave_points(per_half=120):
+    """The wave as a dense polyline in grid units, sampled from the quadratics."""
+    pts, x0, y0 = [], WAVE["x0"], WAVE["y"]
+    for (cx, cy, ex, ey) in wave_halves():
+        for i in range(per_half + 1):
+            t = i / per_half
+            pts.append(
+                (
+                    (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t**2 * ex,
+                    (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t**2 * ey,
+                )
+            )
+        x0, y0 = ex, ey
+    return pts
+
+
+def inside_bar(x, y, bar):
+    """Pill test in grid units: a bar is as round-ended as its SVG rx says."""
+    x0, y0, x1, y1 = bar
+    r = (y1 - y0) / 2
+    if not (x0 <= x <= x1 and y0 <= y <= y1):
+        return False
+    cx = x0 + r if x < x0 + r else (x1 - r if x > x1 - r else x)
+    return math.hypot(x - cx, y - (y0 + r)) <= r
 
 
 def inside_badge(x, y):
@@ -76,11 +121,13 @@ def render(size):
             if inside_badge((px + 0.5) / scale, gy):
                 badge[row + px] = 1
 
-    for (bx0, by0, bx1, by1) in BARS:
+    for bar in BARS:
+        bx0, by0, bx1, by1 = bar
         for py in range(max(0, int(by0 * scale)), min(hi, int(by1 * scale) + 1)):
             row = py * hi
             for px in range(max(0, int(bx0 * scale)), min(hi, int(bx1 * scale) + 1)):
-                marks[row + px] = 1
+                if inside_bar((px + 0.5) / scale, (py + 0.5) / scale, bar):
+                    marks[row + px] = 1
 
     # Stamp a disc along the wave: the curve has a few hundred samples, the
     # canvas has far more, so walking the curve is the cheaper direction.
@@ -117,9 +164,9 @@ def render(size):
             t = mark / cover
             out.append(
                 (
-                    int(CARMINE[0] * (1 - t) + PAPER[0] * t),
-                    int(CARMINE[1] * (1 - t) + PAPER[1] * t),
-                    int(CARMINE[2] * (1 - t) + PAPER[2] * t),
+                    int(ACCENT[0] * (1 - t) + PAPER[0] * t),
+                    int(ACCENT[1] * (1 - t) + PAPER[1] * t),
+                    int(ACCENT[2] * (1 - t) + PAPER[2] * t),
                     int(255 * cover / area),
                 )
             )
@@ -152,31 +199,33 @@ def write_png(path, pixels, width, height=None):
         )
 
 
-def write_svg(path):
-    """The vector source, so the mark can be re-scaled without re-authoring."""
+def svg_markup(crop=False):
+    """The vector source. `crop` trims the padding so the tile is the whole image.
+
+    The store icon is inset inside the 128 grid; every in-product use wants the
+    tile flush to its box, which is the 4..124 window of the same grid.
+    """
     x0, y0, x1, y1, r = BADGE
-    paper = "#%02X%02X%02X" % PAPER
+    paper = "#%02x%02x%02x" % PAPER
+    accent = "#%02x%02x%02x" % ACCENT
     bars = "".join(
-        f'<rect x="{a}" y="{b}" width="{c - a}" height="{d - b}" rx="{(d - b) / 2}" fill="{paper}"/>'
+        f'<rect x="{a}" y="{b}" width="{c - a}" height="{d - b}" rx="{(d - b) / 2:g}" fill="{paper}"/>'
         for (a, b, c, d) in BARS
     )
-    # The wave is drawn as a chain of quadratic half-cycles, so a fractional
-    # cycle count is expressed as an odd number of halves.
-    halves = round(WAVE["cycles"] * 2)
-    half = (WAVE["x1"] - WAVE["x0"]) / halves
-    swing = WAVE["amplitude"] * 2
-    path_d = f'M{WAVE["x0"]} {WAVE["y"]} ' + " ".join(
-        f'q{half / 2} {-swing if i % 2 == 0 else swing} {half} 0' for i in range(halves)
+    view = f"{x0} {y0} {x1 - x0} {y1 - y0}" if crop else f"0 0 {GRID} {GRID}"
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}" role="img" aria-label="Squiggle">'
+        f"<title>Squiggle</title>"
+        f'<rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" rx="{r}" fill="{accent}"/>'
+        + bars
+        + f'<path d="{wave_path()}" fill="none" stroke="{paper}" '
+        f'stroke-width="{WAVE["stroke"]}" stroke-linecap="round" stroke-linejoin="round"/></svg>\n'
     )
+
+
+def write_svg(path, crop=False):
     with open(path, "w") as fh:
-        fh.write(
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {GRID} {GRID}">'
-            f'<rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" rx="{r}" '
-            f'fill="#%02X%02X%02X"/>' % CARMINE
-            + bars
-            + f'<path d="{path_d}" fill="none" stroke="{paper}" '
-            f'stroke-width="{WAVE["stroke"]}" stroke-linecap="round"/></svg>\n'
-        )
+        fh.write(svg_markup(crop))
 
 
 def inset(pixels, artwork_size, canvas_size):
@@ -196,7 +245,7 @@ def inset(pixels, artwork_size, canvas_size):
 
 
 def render_promo(width, height, mark_height):
-    """A promotional tile: the mark in paper, on a full bleed of carmine.
+    """A promotional tile: the mark in paper, on a full bleed of the accent.
 
     The store's guidance for these is to communicate the brand rather than show
     the interface, to avoid text, to fill the region, and to survive being halved.
@@ -211,13 +260,14 @@ def render_promo(width, height, mark_height):
 
     marks = bytearray(hi_w * hi_h)
 
-    for (bx0, by0, bx1, by1) in BARS:
+    for bar in BARS:
+        bx0, by0, bx1, by1 = bar
         for py in range(int(off_y + by0 * scale), int(off_y + by1 * scale) + 1):
             if not 0 <= py < hi_h:
                 continue
             row = py * hi_w
             for px in range(int(off_x + bx0 * scale), int(off_x + bx1 * scale) + 1):
-                if 0 <= px < hi_w:
+                if 0 <= px < hi_w and inside_bar((px + 0.5 - off_x) / scale, (py + 0.5 - off_y) / scale, bar):
                     marks[row + px] = 1
 
     radius = (WAVE["stroke"] / 2) * scale
@@ -247,9 +297,9 @@ def render_promo(width, height, mark_height):
             t = mark / area
             out.append(
                 (
-                    int(CARMINE[0] * (1 - t) + PAPER[0] * t),
-                    int(CARMINE[1] * (1 - t) + PAPER[1] * t),
-                    int(CARMINE[2] * (1 - t) + PAPER[2] * t),
+                    int(ACCENT[0] * (1 - t) + PAPER[0] * t),
+                    int(ACCENT[1] * (1 - t) + PAPER[1] * t),
+                    int(ACCENT[2] * (1 - t) + PAPER[2] * t),
                     255,
                 )
             )
@@ -269,8 +319,14 @@ if __name__ == "__main__":
         inset(render(STORE_ICON_ARTWORK), STORE_ICON_ARTWORK, 128),
         128,
     )
-    write_svg(os.path.join(OUT, "icon.svg"))
+    write_svg(os.path.join(OUT, "icon.svg"), crop=True)
     print("wrote", ", ".join(f"icon-{s}.png" for s in (16, 32, 48, 128)), "and icon.svg")
+
+    # The website's favicons are the same mark, flush to the box like the 16/32/48.
+    os.makedirs(WEB_OUT, exist_ok=True)
+    write_svg(os.path.join(WEB_OUT, "favicon.svg"), crop=True)
+    write_png(os.path.join(WEB_OUT, "favicon-32.png"), render(32), 32)
+    print("wrote web/public/favicon.svg and favicon-32.png")
 
     for (w, h, mark, name) in ((440, 280, 205, "promo-small-440x280"), (1400, 560, 410, "promo-marquee-1400x560")):
         write_png(os.path.join(STORE_OUT, f"{name}.png"), render_promo(w, h, mark), w, h)

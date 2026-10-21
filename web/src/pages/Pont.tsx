@@ -132,7 +132,7 @@ export function Pont() {
       )}
 
       {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-accent bg-accentSoft px-4 py-3 text-sm text-accentInk">
+        <p role="alert" className="mt-6 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
           {error}
         </p>
       ) : null}

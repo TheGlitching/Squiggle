@@ -10,12 +10,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   GeminiClient,
+  HOSTED_ANALYSIS,
   OpenRouterClient,
   researchFindings,
   type Finding,
 } from '@squiggle/shared';
 
-import { createHostedLlm, DEFAULT_OPENROUTER_MODEL } from '../src/index';
+import { createHostedLlm } from '../src/index';
 
 describe('createHostedLlm', () => {
   it('defaults to OpenRouter on the DeepSeek v4.1 Flash catalogue id', () => {
@@ -24,7 +25,7 @@ describe('createHostedLlm', () => {
     expect(client!.getProvider()).toBe('openrouter');
     // The id is exact and tilde-free: OpenRouter rejects anything else.
     expect(client!.getModel()).toBe('deepseek/deepseek-v4.1-flash');
-    expect(DEFAULT_OPENROUTER_MODEL).toBe('deepseek/deepseek-v4.1-flash');
+    expect(HOSTED_ANALYSIS.model).toBe('deepseek/deepseek-v4.1-flash');
   });
 
   it('lets the deployment name both the provider and the model', () => {
@@ -98,7 +99,7 @@ describe('the research stage on OpenRouter', () => {
     const client = new OpenRouterClient({
       provider: 'openrouter',
       apiKey: 'test-key',
-      model: DEFAULT_OPENROUTER_MODEL,
+      model: HOSTED_ANALYSIS.model,
     });
 
     const finding: Finding = {
@@ -123,7 +124,7 @@ describe('the research stage on OpenRouter', () => {
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(requestInit.body as string);
     // OpenRouter searches via the web_search server tool, not a model suffix.
-    expect(body.model).toBe(DEFAULT_OPENROUTER_MODEL);
+    expect(body.model).toBe(HOSTED_ANALYSIS.model);
     expect(body.model).not.toContain(':online');
     expect(body.tools).toEqual([
       {

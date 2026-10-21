@@ -20,8 +20,8 @@
 
   --color-stroke: #4a4742;
 
-  --color-accent: #e0483f;
-  --color-accent-hover: #ef7268;
+  --color-accent: #9061f0;
+  --color-accent-hover: #b196f7;
   --color-accent-foreground: #0a0a0b;
 
   --color-severity-critical: #dc2626;
@@ -80,8 +80,8 @@
     --line: #2a2a2f;
     --line-soft: #1b1b1f;
     --stroke: #4a4742;
-    --accent: #e0483f;
-    --accent-hover: #ef7268;
+    --accent: #9061f0;
+    --accent-hover: #b196f7;
     --accent-foreground: #0a0a0b;
 
     --sev-critical: #dc2626;
