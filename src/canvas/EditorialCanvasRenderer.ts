@@ -761,7 +761,7 @@ export class EditorialCanvasRenderer {
     ctx.font = `600 9px ${this.fontMono}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('SQUIGGLE • MÉTHODE DES FOURCHES CAUDINES', x, y + 18);
+    ctx.fillText('SQUIGGLE • GRILLE DE LECTURE', x, y + 18);
 
     // Cryptographic / Review Stamp ID
     const hash = Math.abs(

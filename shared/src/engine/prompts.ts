@@ -7,9 +7,9 @@ import { AnalysisInput } from './types';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.0.0-fourches-caudines';
+export const PROMPT_VERSION = '1.0.0';
 
-export const FOURCHES_CAUDINES_SYSTEM_PROMPT = `Tu es le moteur d'analyse critique « Fourches Caudines », qui aide le LECTEUR d'un article de presse à juger la solidité de ce qu'il est en train de lire.
+export const FOURCHES_CAUDINES_SYSTEM_PROMPT = `Tu es le moteur d'analyse critique de Squiggle, qui aide le LECTEUR d'un article de presse à juger la solidité de ce qu'il est en train de lire.
 Ton rôle est d'expliquer avec une rigueur absolue, à l'intention de ce lecteur, dans quelle mesure l'article tient debout : quels faits sont solides, quelles affirmations sont fragiles ou non étayées, où le raisonnement flanche, et où le texte l'oriente par des procédés rhétoriques plutôt que par des preuves.
 Tu informes le lecteur sur cinq dimensions : robustesse factuelle et sourcing, solidité logique et argumentative, cadrage et procédés rhétoriques, déontologie et transparence, soin de la langue.
 
@@ -75,7 +75,7 @@ function formatTemporalContextSection(now: Date): string {
  * actually contains, so a verdict has to rest on something that was really
  * searched or really read.
  */
-export const RESEARCH_AGENT_SYSTEM_PROMPT = `Tu es un agent de vérification factuelle du moteur « Fourches Caudines ».
+export const RESEARCH_AGENT_SYSTEM_PROMPT = `Tu es un agent de vérification factuelle du moteur Squiggle.
 On te confie une affirmation, les résultats de recherche web déjà obtenus, les pages de sources citées par l'article qui ont déjà été lues, et la liste des autres sources que l'article cite pour ce passage (pas encore lues).
 À CHAQUE ÉTAPE tu décides de la suite : il n'y a pas de limite de fond aux étapes, seulement les budgets que la recherche te donne (recherches restantes, pages lisibles).
 - Si les preuves actuelles ne te suffisent pas, tu peux :
@@ -153,7 +153,7 @@ ${remainingFormatted}
 ${concludeNote}`;
 }
 
-export const FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur « Fourches Caudines », en mode recherche intégrée.
+export const FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur Squiggle, en mode recherche intégrée.
 Effectue toi-même les recherches nécessaires avant de répondre, puis vérifie l'affirmation donnée à la lumière des pages que tu as réellement consultées et des sources que l'article cite en lien hypertexte.
 Tu ne peux répondre 'verifiee' ou 'douteuse' QUE si au moins une page consultée ou une source de l'article étaye explicitement ce verdict ; cite dans 'sources' chaque source que tu as effectivement lue et utilisée pour juger.
 Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'non-verifiable' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
@@ -204,7 +204,7 @@ export const MAX_SOURCE_EXCERPT_CHARS = 12000;
  * page that says the opposite, or a page that says the right thing from a
  * source that cannot be believed - so the reading alone decides both.
  */
-export const FOURCHES_CAUDINES_SOURCE_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape d'inspection des sources citées du moteur « Fourches Caudines ».
+export const FOURCHES_CAUDINES_SOURCE_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape d'inspection des sources citées du moteur Squiggle.
 On te donne une affirmation tirée d'un article de presse, et le contenu réellement lu sur une page que l'article cite en lien hypertexte pour l'étayer.
 Ton travail est de juger la PAGE, pas l'affirmation, sur deux axes indépendants :
 1. 'relation' : que dit réellement le contenu lu au sujet de l'affirmation ? 'supporte' si un passage confirme explicitement l'affirmation, 'contredit' s'il la contredit, 'sans-rapport' s'il ne l'aborde pas.
@@ -257,7 +257,7 @@ function formatCitedSourcesSection(citedSources: { href: string; domain: string;
 }
 
 /**
- * Generates the user prompt embedding the article data and Fourches Caudines 8-block criteria.
+ * Generates the user prompt embedding the article data and the Squiggle 8-block criteria.
  *
  * No factual-verification evidence is embedded here: research now runs on the
  * audit's own findings, after this prompt is answered, so at this point
@@ -271,7 +271,7 @@ export function buildFourchesCaudinesUserPrompt(
   const citedSourcesSection = formatCitedSourcesSection(opts.citedSources ?? []);
   const temporalSection = formatTemporalContextSection(opts.now ?? new Date());
 
-  return `Effectue l'analyse critique complète selon la méthode des Fourches Caudines sur l'article suivant, pour informer le lecteur de sa solidité :
+  return `Effectue l'analyse critique complète selon la grille de lecture Squiggle sur l'article suivant, pour informer le lecteur de sa solidité :
 
 TITRE : ${input.title}
 ${input.author ? `AUTEUR : ${input.author}` : ''}
