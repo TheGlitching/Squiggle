@@ -274,7 +274,8 @@ describe('Research disclosure', () => {
     // two would claim the audit checked things it never looked at.
     expect(markup).toContain('2 affirmations sur 4 confrontées à une source');
     expect(markup).toContain('2 recherches menées');
-    expect(markup).toContain('via anthropic');
+    // The provider is a developer detail: the reader is told what was checked, not which vendor ran it.
+    expect(markup).not.toContain('anthropic');
     expect(markup).not.toContain('non effectuée');
     expect(markup).not.toContain('4 affirmations sur 4');
 

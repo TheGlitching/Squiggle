@@ -80,7 +80,7 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
         <span className="font-mono text-2xl font-black text-ink tracking-tight leading-none">
           {Math.round(clampedScore)}
         </span>
-        <span className="font-sans text-[10px] text-muted font-semibold uppercase tracking-widest mt-0.5">
+        <span className="font-sans text-xs text-muted font-semibold uppercase tracking-widest mt-0.5">
           / 100
         </span>
       </div>
@@ -179,7 +179,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
           {def.criteria && def.criteria.length > 0 && (
             <div className="mt-2">
-              <div className="font-sans uppercase text-[10px] font-bold text-muted tracking-wider mb-1">
+              <div className="font-sans uppercase text-xs font-bold text-muted tracking-wider mb-1">
                 Critères vérifiés
               </div>
               {/* Outside markers: at side-panel width most of these wrap, and an
@@ -194,7 +194,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
           {strengths.length > 0 && (
             <div className="mt-2 text-severity-positive-ink">
-              <span className="font-bold text-[11px] uppercase tracking-wide">Points forts :</span>
+              <span className="font-bold text-xs uppercase tracking-wide">Points forts :</span>
               <ul className="list-disc list-outside pl-4 text-[12px] space-y-0.5 mt-0.5">
                 {strengths.map((s, idx) => (
                   <li key={idx}>{s}</li>
@@ -205,7 +205,7 @@ export const DomainScoreGauge: React.FC<DomainGaugeProps> = ({
 
           {weaknesses.length > 0 && (
             <div className="mt-2 text-severity-critical-ink">
-              <span className="font-bold text-[11px] uppercase tracking-wide">Faiblesses relevées :</span>
+              <span className="font-bold text-xs uppercase tracking-wide">Faiblesses relevées :</span>
               <ul className="list-disc list-outside pl-4 text-[12px] space-y-0.5 mt-0.5">
                 {weaknesses.map((w, idx) => (
                   <li key={idx}>{w}</li>

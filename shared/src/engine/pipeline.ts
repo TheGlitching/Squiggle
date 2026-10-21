@@ -258,6 +258,7 @@ export class AnalysisPipeline {
         onProgress: (message, pct) =>
           this.reportProgress('researching', message, placeInWindow(pct, RESEARCH_WINDOW)),
         onActivity: (note) => this.noteActivity(note),
+        onDiagnostic: (note) => console.debug('[squiggle] research:', note),
         abortSignal: this.abortController?.signal,
       });
 
@@ -278,6 +279,7 @@ export class AnalysisPipeline {
         citedSources,
         now,
         onActivity: (note) => this.noteActivity(note),
+        onDiagnostic: (note) => console.debug('[squiggle] research:', note),
         abortSignal: this.abortController?.signal,
       });
       const resolvedClaims = sourceVerification.claims;

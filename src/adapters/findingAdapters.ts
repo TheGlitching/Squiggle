@@ -59,6 +59,20 @@ export const CATEGORY_LABELS_FR: Record<EngineCategory, string> = {
   'point-fort': 'Point fort',
 };
 
+/**
+ * The same labels keyed by the page overlay's category. A category is named
+ * once, here, so the panel and the badge on the article cannot drift into two
+ * names for one thing. Highlight categories no engine category maps to carry no
+ * label and fall back to the overlay's generic one.
+ */
+export const HIGHLIGHT_CATEGORY_LABELS_FR: Partial<Record<FindingHighlightTarget['category'], string>> =
+  Object.fromEntries(
+    (Object.keys(ENGINE_TO_HIGHLIGHT) as EngineCategory[]).map((engine) => [
+      ENGINE_TO_HIGHLIGHT[engine],
+      CATEGORY_LABELS_FR[engine],
+    ])
+  );
+
 export function engineCategoryToFilter(category: EngineCategory): Exclude<FilterCategory, 'all'> {
   return ENGINE_TO_FILTER[category] ?? 'sophisme';
 }

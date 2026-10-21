@@ -91,7 +91,8 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         </span>
         <span className="flex flex-wrap items-center justify-end gap-1.5">
           {finding.verification && <VerificationBadge verification={finding.verification} />}
-          <SeverityBadge severity={finding.severity} />
+          {/* A strength is not graded: "Mineur" beside "Point fort" reads as a fault. */}
+          {finding.category !== 'point-fort' && <SeverityBadge severity={finding.severity} />}
         </span>
       </div>
       <h4 className="font-serif font-bold text-sm text-ink mb-1">

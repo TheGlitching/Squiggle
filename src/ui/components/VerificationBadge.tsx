@@ -90,7 +90,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({ verificati
     <span
       title={style.hint}
       aria-label={`${style.label}. ${style.hint}`}
-      className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${style.className}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded text-sm font-mono font-semibold border ${style.className}`}
     >
       {style.label}
     </span>

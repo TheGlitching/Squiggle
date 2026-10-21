@@ -1,5 +1,5 @@
 import React from 'react';
-import { FactualClaim, ResearchRecord, SourceCheck, VerificationState } from '@squiggle/shared';
+import { FactualClaim, FIABILITE_LABELS_FR, ResearchRecord, SourceCheck, VerificationState } from '@squiggle/shared';
 import { VerificationBadge, VERIFICATION_COUNT_LABELS_FR } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
 
@@ -61,7 +61,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
         data-tour="research-disclosure"
         className="mt-3 rounded-lg border border-dashed border-severity-warning/50 bg-severity-warning/10 p-2.5"
       >
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-severity-warning-ink">
+        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-severity-warning-ink">
           Vérification factuelle non effectuée
         </span>
         <p className="mt-1 text-xs leading-relaxed text-ink/80">
@@ -78,14 +78,13 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
       data-tour="research-disclosure"
       className="mt-3 rounded-lg border border-line bg-panel p-2.5"
     >
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted">
+      <span className="font-mono text-xs font-semibold uppercase tracking-wider text-muted">
         Vérification factuelle
       </span>
       <p className="mt-1 text-xs leading-relaxed text-ink/80">
         {confrontedCount} affirmation{confrontedCount > 1 ? 's' : ''} sur {claims.length}{' '}
         confrontée{confrontedCount > 1 ? 's' : ''} à une source, {queryCount} recherche
-        {queryCount > 1 ? 's' : ''} menée{queryCount > 1 ? 's' : ''}
-        {research.provider ? ` via ${research.provider}` : ''}.
+        {queryCount > 1 ? 's' : ''} menée{queryCount > 1 ? 's' : ''}.
         {research.skippedReason ? ` Limite : ${research.skippedReason}` : ''}
       </p>
       {claims.length > 0 && (
@@ -96,7 +95,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
 
       {examined.length > 0 && (
         <details className="mt-2">
-          <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-wider text-muted hover:text-ink">
+          <summary className="cursor-pointer font-mono text-xs font-semibold uppercase tracking-wider text-muted hover:text-ink">
             {examined.length > 1
               ? `Voir les ${examined.length} affirmations examinées`
               : 'Voir l’affirmation examinée'}
@@ -107,14 +106,14 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                 key={claim.id}
                 className="border-l-2 border-line pl-2.5"
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
                   <p className="text-xs text-ink leading-snug">
                     {claim.claim}
                   </p>
                   <VerificationBadge verification={claim.verification} />
                 </div>
                 {claim.rationale && (
-                  <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                  <p className="mt-0.5 text-xs text-muted leading-snug">
                     {claim.rationale}
                   </p>
                 )}
@@ -127,12 +126,12 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
 
       {research.sourceChecks && research.sourceChecks.length > 0 && (
         <details className="mt-2 border-t border-line-soft pt-2">
-          <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-wider text-muted hover:text-ink">
+          <summary className="cursor-pointer font-mono text-xs font-semibold uppercase tracking-wider text-muted hover:text-ink">
             {research.sourceChecks.length} page{research.sourceChecks.length > 1 ? 's' : ''} citée
             {research.sourceChecks.length > 1 ? 's' : ''} par l’article inspectée
             {research.sourceChecks.length > 1 ? 's' : ''}
           </summary>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+          <p className="mt-1.5 text-xs leading-relaxed text-muted">
             Les liens que l’article donne à l’appui de ses affirmations ont été ouverts et lus.
             « Contredit » signifie que la page citée dit le contraire de ce que l’article
             prétend qu’elle dit.
@@ -144,12 +143,6 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                 contredit: 'Contredit l’affirmation',
                 'sans-rapport': 'Sans rapport avec elle',
                 inaccessible: 'Page inaccessible'
-              };
-              const fiabiliteLabel: Record<SourceCheck['fiabilite'], string> = {
-                fiable: 'Source fiable',
-                partielle: 'Fiabilité partielle',
-                douteuse: 'Source douteuse',
-                indeterminee: 'Fiabilité indéterminée'
               };
               const risk = check.relation === 'contredit' || check.fiabilite === 'douteuse';
               const relationTone = risk
@@ -164,12 +157,12 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                 >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`font-mono text-[10px] font-semibold uppercase tracking-wider border rounded px-1 py-0.5 ${relationTone}`}
+                      className={`font-mono text-sm font-semibold uppercase tracking-wider border rounded px-1.5 py-0.5 ${relationTone}`}
                     >
                       {relationLabel[check.relation]}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
-                      {fiabiliteLabel[check.fiabilite]}
+                    <span className="font-mono text-xs uppercase tracking-wider text-faint">
+                      {FIABILITE_LABELS_FR[check.fiabilite]}
                     </span>
                   </div>
                   <a
@@ -181,17 +174,17 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                     {check.title}
                   </a>
                   {check.discordance && (
-                    <p className="mt-1 text-[11px] leading-snug text-severity-critical-ink">
+                    <p className="mt-1 text-xs leading-snug text-severity-critical-ink">
                       Ce que dit la page : {check.discordance}
                     </p>
                   )}
                   {check.passage && !check.discordance && (
-                    <p className="mt-1 text-[11px] leading-snug text-muted">
+                    <p className="mt-1 text-xs leading-snug text-muted">
                       Extrait : « {check.passage} »
                     </p>
                   )}
                   {check.reason && (
-                    <p className="mt-0.5 text-[11px] text-faint italic">
+                    <p className="mt-0.5 text-xs text-faint italic">
                       {check.reason}
                     </p>
                   )}
@@ -204,11 +197,11 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
 
       {withdrawn.length > 0 && (
         <details className="mt-2 border-t border-line-soft pt-2">
-          <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-wider text-severity-positive-ink hover:text-severity-positive-ink/80">
+          <summary className="cursor-pointer font-mono text-xs font-semibold uppercase tracking-wider text-severity-positive-ink hover:text-severity-positive-ink/80">
             {withdrawn.length} objection{withdrawn.length > 1 ? 's' : ''} écartée
             {withdrawn.length > 1 ? 's' : ''} après vérification
           </summary>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+          <p className="mt-1.5 text-xs leading-relaxed text-muted">
             L’analyse mettait ce{withdrawn.length > 1 ? 's' : ''} passage
             {withdrawn.length > 1 ? 's' : ''} en doute, mais les sources consultées confirment
             l’article. Le doute n’est donc pas retenu contre lui, et la note l’ignore : elle ne
@@ -223,7 +216,7 @@ export const ResearchDisclosure: React.FC<ResearchDisclosureProps> = ({ research
                 <p className="text-xs italic text-ink leading-snug">
                   « {objection.quote} »
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                <p className="mt-0.5 text-xs text-muted leading-snug">
                   {objection.reason}
                 </p>
                 <SourceCitations sources={objection.sources} label="Sources" />
