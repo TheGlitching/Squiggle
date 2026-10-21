@@ -11,7 +11,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
+import { articleTextHash, generateSigningKeyPair, SigningHeaders } from '@squiggle/shared';
 
 import {
   CHROME_ORIGIN,
@@ -136,6 +136,34 @@ describe('origin policy', () => {
       }),
     );
     expect(forged.status).toBe(403);
+  });
+
+  /**
+   * The extension declares no host permission for our origin, so the browser holds
+   * its calls to the CORS answer. A header the client sends and the preflight does
+   * not allow would fail every hosted analysis, with nothing wrong on either side
+   * of the wire protocol.
+   */
+  it('allows, to the extension, every header its signed client sends', async () => {
+    const env = makeTestEnv();
+    const sent = [...Object.values(SigningHeaders), 'content-type'];
+
+    const res = await env.handler(
+      new Request(`${env.webAppOrigin}/v1/account`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: CHROME_ORIGIN,
+          'access-control-request-method': 'GET',
+          'access-control-request-headers': sent.join(', '),
+        },
+      }),
+    );
+
+    expect(res.headers.get('access-control-allow-origin')).toBe(CHROME_ORIGIN);
+    const allowed = (res.headers.get('access-control-allow-headers') ?? '')
+      .split(',')
+      .map((h) => h.trim().toLowerCase());
+    expect(allowed).toEqual(expect.arrayContaining(sent));
   });
 });
 

@@ -24,12 +24,16 @@ your provider so it can be analysed. During the research stage it also asks your
 provider to search the web for the factual claims the audit questioned. That is
 the whole data flow: your page, your provider, your key.
 
-It requests access to every http and https site (`https://*/*`, `http://*/*`) and
-registers its content script on `<all_urls>`, because an article can be on any
-domain and the extension cannot know in advance which one you will open. Being
-present on a page is not reading it: the content script only extracts text when
-you ask for an analysis, and nothing leaves the browser before that. Hosted mode
-adds no permission.
+It declares no content script. The reader that extracts the article is injected into
+the tab you invoke the extension on (`activeTab` and `scripting`), when you ask for an
+analysis, so nothing runs on a page you have not pointed it at. Its only host access
+is the four model providers it can call with your key (`api.anthropic.com`,
+`api.openai.com`, `openrouter.ai`, `generativelanguage.googleapis.com`).
+
+Access to every http and https site is an optional permission, off until you grant it
+in the settings and withdrawable there. It lets you analyse a page after changing site
+without invoking the extension again and, with your own key, lets the extension fetch
+the sources an article cites. Hosted mode adds no permission.
 
 ## Hosted mode
 

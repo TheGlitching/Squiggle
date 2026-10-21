@@ -44,12 +44,12 @@ export const SiteAccessCard: React.FC = () => {
         avec votre propre clé, de vérifier les sources citées par l’article.
       </p>
       {granted ? (
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-semibold text-severity-positive-ink">Tous les sites autorisés</span>
           <button
             type="button"
             onClick={() => void revoke()}
-            className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-ink/80 hover:bg-panel-muted"
+            className="whitespace-nowrap rounded-xl border border-line px-3 py-2 text-xs font-semibold text-ink/80 hover:bg-panel-muted"
           >
             Retirer l’autorisation
           </button>

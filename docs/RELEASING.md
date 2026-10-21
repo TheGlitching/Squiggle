@@ -148,3 +148,66 @@ The Firefox zip is built, tested and attached to each release, but is not submit
 automatically: AMO uses separate credentials and its own review flow. Upload
 `packages/squiggle-firefox-<version>.zip` at
 [addons.mozilla.org](https://addons.mozilla.org/developers/) when you want it there.
+
+### Source package
+
+The package is produced by Vite and esbuild, so what AMO reviews is generated code. AMO
+therefore asks, with **every** upload of a version, for the source archive and the
+instructions to build the package from it. Without them the version is rejected.
+
+```bash
+npm run package:source      # -> packages/squiggle-source-<version>.zip
+```
+
+That is `git archive` of `HEAD`: tracked files only, so commit first, and no
+`node_modules`, no `dist`, no secret. It holds the extension, `shared/`, and the `server/`
+and `web/` workspaces, because the lockfile covers all of them and `npm ci` needs them.
+
+In the upload form, attach that archive and paste these build instructions:
+
+```
+Requirements: Node.js 20 and npm 10, on Linux or macOS.
+
+  unzip squiggle-source-<version>.zip && cd squiggle-source
+  npm ci
+  SQUIGGLE_HOSTED_ORIGIN=<production origin> npm run build:firefox
+
+The package is dist/firefox. Zipping its contents gives the submitted add-on
+(scripts/package.mjs does that for both browsers).
+
+SQUIGGLE_HOSTED_ORIGIN is the only build-time setting: the origin of Squiggle's own
+server, written into the code. Use the same value as the submitted package, which is
+the hosted origin on the privacy policy.
+
+File names under dist/firefox/assets carry a hash that depends on the directory the
+build ran in, so they differ between checkouts. Their contents do not.
+
+No code is downloaded at build time beyond the npm packages in package-lock.json.
+```
+
+Run the lint on the built package before uploading; the validator AMO runs is the same:
+
+```bash
+npx web-ext lint -s dist/firefox
+```
+
+It reports no error. Two `UNSAFE_VAR_ASSIGNMENT` warnings point at `innerHTML` inside
+the bundled React runtime (the `SquiggleBadge-*.js` chunk); the extension's own code
+never assigns `innerHTML`. They are expected and AMO review accepts them.
+
+`data_collection_permissions` in the Firefox manifest is only understood from Firefox 140,
+which is why `strict_min_version` is `140.0`. Lowering one without the other either
+fails validation or installs the add-on without showing its data disclosure.
+
+## Submitting a version
+
+The privacy answers, permission justifications and reviewer notes are written once, in
+[`store-disclosure.md`](store-disclosure.md), and the listing text in
+[`../store/listing.fr.md`](../store/listing.fr.md). Before uploading:
+
+- [ ] `npm run typecheck`, `npm run build:all`, `npm test`
+- [ ] `npx web-ext lint -s dist/firefox` reports no error
+- [ ] the Chrome zip declares no content script and no host permission beyond the four
+      providers: the packaging tests pin both
+- [ ] the privacy policy URL in both dashboards answers with the published policy
+- [ ] `npm run package:source` for the AMO upload

@@ -187,6 +187,18 @@ describe('Multi-browser Build & Packaging Verification', () => {
     });
   });
 
+  /** The store listing's summary line is the manifest description, and the store caps it. */
+  it.each([
+    ['chrome', chromeDist],
+    ['firefox', firefoxDist],
+  ])('%s description fits the 132 characters a store listing allows', (_target, dist) => {
+    const { description } = JSON.parse(
+      fs.readFileSync(path.join(dist, 'manifest.json'), 'utf-8'),
+    ) as { description: string };
+
+    expect(description.length).toBeLessThanOrEqual(132);
+  });
+
   /**
    * `data_collection_permissions` is understood from Firefox 140. An older minimum
    * is rejected by the AMO validator, and a browser that does not know the key

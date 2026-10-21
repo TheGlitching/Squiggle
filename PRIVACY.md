@@ -218,11 +218,16 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
   hébergé, conserver de la même façon le jeton de session et la clé de signature de
   l'installation.
 - **`sidePanel`** — afficher le résultat dans le panneau latéral, à côté de l'article.
-- **accès aux sites** (`https://*/*`, `http://*/*`) et script de contenu sur toutes les
-  pages : les articles se trouvent sur n'importe quel domaine, et l'extension ne peut
-  pas savoir à l'avance lequel vous lirez. Le script est présent sur la page mais n'en
-  extrait le texte que lorsque vous lancez une analyse ; cet accès sert à lire la page
-  que vous analysez et à joindre le fournisseur que vous avez choisi.
+- **accès aux quatre fournisseurs de modèles** (`api.anthropic.com`, `api.openai.com`,
+  `openrouter.ai`, `generativelanguage.googleapis.com`) - avec votre propre clé,
+  l'extension appelle directement le fournisseur que vous avez choisi.
+- **accès à tous les sites, facultatif** (`https://*/*`, `http://*/*`) - jamais demandé à
+  l'installation. Vous pouvez l'accorder dans les réglages (« Accès aux sites ») et le
+  retirer au même endroit. Il permet d'analyser une page après avoir changé de site sans
+  recliquer sur l'icône et, avec votre propre clé, de lire les sources que l'article cite.
+
+Aucun script n'est déclaré pour s'exécuter sur les pages : le lecteur d'article n'est
+inséré que dans l'onglet où vous lancez l'analyse.
 
 Le mode hébergé **ne demande aucune autorisation supplémentaire**.
 

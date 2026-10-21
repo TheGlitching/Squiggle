@@ -30,7 +30,8 @@
     "test": "vitest run && npm run test -w @squiggle/server && npm run test -w @squiggle/web",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server && npm run typecheck -w @squiggle/web",
-    "package": "npm run build:all && node scripts/package.mjs"
+    "package": "npm run build:all && node scripts/package.mjs",
+    "package:source": "mkdir -p packages && git archive --format=zip --prefix=squiggle-source/ -o packages/squiggle-source-$npm_package_version.zip HEAD"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
