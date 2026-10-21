@@ -362,7 +362,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               <a href={TRANSPARENCY_URL} target="_blank" rel="noreferrer" className="underline">
                 le trajet des données
               </a>{' '}
-              — l’article est analysé sur nos serveurs, jamais conservé en clair.
+              : l’article est analysé sur nos serveurs et n’y est jamais conservé.
             </p>
           </section>
 

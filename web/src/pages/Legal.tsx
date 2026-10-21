@@ -69,8 +69,8 @@ export function Legal() {
               Transparence
             </Link>
             . En résumé : votre navigateur nous envoie le texte de l’article pour l’analyser, il n’est
-            jamais conservé ; le rapport est mis en cache sous la seule empreinte de l’adresse de
-            l’article ; votre adresse e-mail est conservée tant que le compte existe. Vous pouvez
+            jamais conservé ; le rapport, qui contient des extraits de l’article, est mis en cache et
+            partagé 30 jours ; votre adresse e-mail est conservée tant que le compte existe. Vous pouvez
             demander l’accès, la rectification et la suppression de vos données depuis la page de
             contact.
           </p>
@@ -89,7 +89,7 @@ export function Legal() {
           <h2 className="font-display text-xl font-semibold">6. Propriété intellectuelle</h2>
           <p className="mt-3 text-muted">
             Le logiciel de Squiggle est publié sous licence MIT. Les articles analysés appartiennent à
-            leurs auteurs et éditeurs ; Squiggle n’en conserve pas le texte et ne le redistribue pas.
+            leurs auteurs et éditeurs ; Squiggle n’en conserve pas le texte ; un rapport n’en reproduit que de courts extraits, pour montrer ce qu’il discute.
           </p>
         </section>
 

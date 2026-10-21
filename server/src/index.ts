@@ -93,7 +93,7 @@ import { systemClock } from './lib/clock';
 import type { EmailSender, FetchLike } from './lib/brevo';
 import { BrevoEmailSender } from './lib/brevo';
 import { apiError, errorResponse, type Outcome } from './lib/errors';
-import { sha256Hex } from '@squiggle/shared';
+import { HOSTED_ANALYSIS, sha256Hex } from '@squiggle/shared';
 import { migrate, type SqlQuery } from './migrations';
 import { secureEquals } from './lib/secureCompare';
 
@@ -155,7 +155,7 @@ export interface Services {
  * predictable from the model name, and the API rejects anything that is not
  * exactly right.
  */
-export const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash';
+export const DEFAULT_OPENROUTER_MODEL: string = HOSTED_ANALYSIS.model;
 
 /** The deployment settings the provider gateway reads. */
 export interface LlmEnv {
