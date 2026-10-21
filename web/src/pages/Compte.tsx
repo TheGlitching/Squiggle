@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
 
 import { getAccount, logout, messageForError, openPortal, startCheckout, type Account } from '../api';
+import { DonneesCompte } from '../components/DonneesCompte';
+import { frenchDate } from '../format';
 import { Link, navigate, usePath } from '../router';
 import { describeAccount } from '../usage';
-
-function frenchDate(ms: number | null): string | null {
-  if (ms === null) return null;
-  return new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-}
 
 export function Compte() {
   const path = usePath();
@@ -18,6 +15,7 @@ export function Compte() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     getAccount()
@@ -56,6 +54,23 @@ export function Compte() {
 
   if (loading) {
     return <p className="mx-auto max-w-md px-5 py-16 text-muted">Chargement de votre compte…</p>;
+  }
+
+  if (deleted) {
+    return (
+      <div className="mx-auto w-full max-w-md px-5 py-16">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Compte supprimé</h1>
+        <p role="status" className="mt-3 text-muted">
+          Votre compte et les données qui y étaient rattachées ont été effacés. Vous pouvez fermer cette page.
+        </p>
+        <Link
+          to="/"
+          className="mt-6 inline-block rounded-lg border border-border bg-surface px-5 py-3 font-medium hover:border-accent hover:text-accentInk"
+        >
+          Revenir à l’accueil
+        </Link>
+      </div>
+    );
   }
 
   if (!account) {
@@ -155,20 +170,15 @@ export function Compte() {
         </Link>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-border bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold">Données et déconnexion</h2>
-        <p className="mt-2 text-sm text-muted">
-          Voir{' '}
-          <Link to="/transparence" className="underline hover:text-foreground">
-            le détail du trajet des données
-          </Link>
-          . La suppression du compte et la révocation des installations arrivent prochainement ; en
-          attendant, écrivez-nous depuis la page de contact.
-        </p>
-        <button onClick={signOut} className="mt-4 text-sm text-muted underline hover:text-foreground">
-          Se déconnecter
-        </button>
-      </section>
+      <DonneesCompte
+        account={account}
+        onSignOut={signOut}
+        onEmailChanged={(email) => setAccount((current) => (current ? { ...current, email } : current))}
+        onDeleted={() => {
+          setAccount(null);
+          setDeleted(true);
+        }}
+      />
     </div>
   );
 }

@@ -97,6 +97,36 @@ export function issueBridgeCode(publicKeyJwk: unknown): Promise<{ code: string; 
   return call('/web/bridge/code', { method: 'POST', body: JSON.stringify({ publicKeyJwk }) });
 }
 
+/** One connected extension: the key it signs with and when its token stops working. */
+export interface Install {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export async function listInstalls(): Promise<Install[]> {
+  const { installs } = await call<{ installs: Install[] }>('/web/account/installs');
+  return installs;
+}
+
+export function revokeInstall(id: string): Promise<{ ok: true }> {
+  return call('/web/account/installs/revoke', { method: 'POST', body: JSON.stringify({ id }) });
+}
+
+/** Send a confirmation code to the new address. Nothing changes until it is confirmed. */
+export function requestEmailChange(email: string): Promise<{ sent: true }> {
+  return call('/web/account/email', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export function confirmEmailChange(code: string): Promise<{ email: string }> {
+  return call('/web/account/email/confirm', { method: 'POST', body: JSON.stringify({ code }) });
+}
+
+/** Erase the account. The server cancels a live subscription first, or refuses. */
+export function deleteAccount(): Promise<{ ok: true }> {
+  return call('/web/account/delete', { method: 'POST', body: JSON.stringify({ confirm: true }) });
+}
+
 export function googleSignInUrl(): string {
   return `${API_BASE}/auth/google`;
 }
@@ -108,6 +138,7 @@ export function googleSignInUrl(): string {
  */
 const FRENCH_ERRORS: Record<string, string> = {
   invalid_email: 'Cette adresse e-mail n’est pas valide.',
+  email_taken: 'Cette adresse est déjà utilisée par un autre compte.',
   invalid_code: 'Ce code n’est pas valide.',
   link_already_used: 'Ce code a déjà été utilisé.',
   expired_link: 'Ce code a expiré. Demandez-en un nouveau.',

@@ -14,7 +14,11 @@ afterEach(() => {
 });
 
 function renderWith(account: ReturnType<typeof makeAccount>) {
-  installFetch(() => jsonResponse({ ok: true, ...account }));
+  installFetch((call) =>
+    call.url.endsWith('/web/account/installs')
+      ? jsonResponse({ ok: true, installs: [] })
+      : jsonResponse({ ok: true, ...account }),
+  );
   window.history.pushState({}, '', '/compte');
   return render(<Compte />);
 }
