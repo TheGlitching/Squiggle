@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 
 import { BrandLockup } from './Brand';
+import { LEGAL_PAGES } from '../offer';
 import { Link } from '../router';
 
-/** Where a reader reaches us: the public issue tracker. */
-export const CONTACT_URL = 'https://github.com/TheGlitching/Squiggle/issues';
+/** Where a reader reaches us, and the address the legal pages publish. */
+export const CONTACT_EMAIL = 'contact@squiggle.fr';
+export const CONTACT_URL = `mailto:${CONTACT_EMAIL}`;
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
@@ -20,9 +22,6 @@ export function Layout({ children }: { children: ReactNode }) {
             </Link>
             <Link to="/transparence" className="hover:text-foreground">
               Transparence
-            </Link>
-            <Link to="/legal" className="hover:text-foreground">
-              Légal
             </Link>
             <Link
               to="/compte"
@@ -43,15 +42,12 @@ export function Layout({ children }: { children: ReactNode }) {
             <Link to="/transparence" className="hover:text-foreground">
               Transparence
             </Link>
-            <Link to="/legal" className="hover:text-foreground">
-              Confidentialité et conditions
-            </Link>
-            <a
-              href={CONTACT_URL}
-              className="hover:text-foreground"
-              rel="noreferrer noopener"
-              target="_blank"
-            >
+            {LEGAL_PAGES.map(([to, label]) => (
+              <Link key={to} to={to} className="hover:text-foreground">
+                {label}
+              </Link>
+            ))}
+            <a href={CONTACT_URL} className="hover:text-foreground">
               Contact
             </a>
           </nav>

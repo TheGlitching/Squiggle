@@ -10,7 +10,7 @@
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import { RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
 import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
@@ -620,6 +620,7 @@ export class MemoryDb implements Db {
     sweep(this.runs, (r) => r.expiresAt <= now);
     const cutoff = now - usageLogRetentionMs;
     sweep(this.usageLog, (r) => r.createdAt <= cutoff);
+    sweep(this.rates, (r) => r.windowStart <= now - RATE_WINDOW_MS);
     return removed;
   }
 }

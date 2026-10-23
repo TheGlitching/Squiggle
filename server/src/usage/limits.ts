@@ -6,6 +6,7 @@
  *   - cached reports:        30-day TTL, at most REPORT_MAX_COUNT, size-capped
  *   - usage ledger rows:     12 months (who ran what, never the content)
  *   - short-lived auth rows:  purged as soon as their own TTL lapses
+ *   - rate-limit windows:     purged once their hour has closed
  */
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -22,6 +23,13 @@ export const REPORT_MAX_BYTES = 256 * 1024;
 
 /** Ledger rows are kept for 12 months, then dropped. */
 export const USAGE_LOG_RETENTION_MS = 365 * DAY_MS;
+
+/**
+ * The longest rate-limit window in use (every caller counts per hour). A
+ * window row names an IP or an address in clear, so the hourly sweep drops it
+ * once it closes. A longer window must raise this, or its count resets early.
+ */
+export const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * The cron trigger (`wrangler.jsonc`) that runs the daily report sweep; any

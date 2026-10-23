@@ -518,8 +518,8 @@ export interface Db {
 
   /**
    * Remove short-lived rows whose TTL has lapsed (nonces, web sessions,
-   * magic links, OAuth handshakes, analysis runs) plus ledger rows older than
-   * `usageLogRetentionMs`. Called by the scheduled handler, not per request.
+   * magic links, OAuth handshakes, analysis runs, rate-limit windows that have
+   * closed) plus ledger rows older than `usageLogRetentionMs`. Called by the scheduled handler, not per request.
    * Resolves to how many rows were removed.
    */
   purgeExpired(now: number, usageLogRetentionMs: number): Promise<number>;
