@@ -80,8 +80,8 @@ export function Accueil() {
 
   return (
     <LandingShell>
-      <div className={`${PAGE} grid items-center gap-12 py-12 md:py-16 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-16`}>
-        <div>
+      <div className={`${PAGE} flex flex-col gap-12 py-12 md:py-16 lg:flex-row lg:items-center lg:gap-16`}>
+        <div className="lg:min-w-0 lg:flex-1">
           <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl lg:text-6xl">
             Analyse l’article que vous lisez et montre ce qui ne tient pas.
           </h1>
@@ -118,7 +118,7 @@ export function Accueil() {
           </p>
         </div>
 
-        <figure className="m-0 mx-auto w-full max-w-[26rem] lg:mx-0">
+        <figure className="m-0 mx-auto w-full max-w-[26rem] lg:mx-0 lg:shrink-0">
           <div className="relative h-[34rem] overflow-hidden rounded-card border border-border bg-surface lg:h-[40rem]">
             <img
               src="/landing/rapport.png"
@@ -239,7 +239,7 @@ export function Accueil() {
               {PRICE_MONTHLY}
               <span className="text-base font-normal text-muted"> par mois</span>
             </p>
-            <p className="mt-3 text-base leading-relaxed text-muted">
+            <p className="mt-3 mb-6 text-base leading-relaxed text-muted">
               {DAILY_ANALYSES} analyses par jour. Sans engagement, résiliable à tout moment.
             </p>
             <Link to="/connexion" className={`${PRIMARY_BUTTON} mt-auto`}>

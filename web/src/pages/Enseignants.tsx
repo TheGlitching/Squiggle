@@ -84,7 +84,7 @@ export function Enseignants() {
         title="Obtenir l’accès gratuit"
         intro="L’offre est gratuite pour les enseignants. Elle s’ouvre sur simple demande."
       >
-        <ol className={`m-0 grid list-decimal gap-3 pl-6 text-base leading-relaxed text-muted ${MEASURE}`}>
+        <ol className={`m-0 list-decimal pl-6 text-base leading-relaxed text-muted [&>li+li]:mt-3 ${MEASURE}`}>
           <li>Installez l’extension depuis la page d’accueil, sur Chrome ou Firefox.</li>
           <li>
             Écrivez-nous depuis la page de contact, en indiquant votre établissement et votre

@@ -102,7 +102,7 @@ export function Section({
           {title}
         </h2>
         {intro ? <p className={`mt-4 text-lg leading-relaxed text-muted ${MEASURE}`}>{intro}</p> : null}
-        <div className="mt-10">{children}</div>
+        <div className={intro ? 'mt-10' : 'mt-6'}>{children}</div>
       </div>
     </section>
   );
