@@ -2,7 +2,7 @@
  * The account page renders one of the four states from the usage module and
  * offers only the action that state allows: subscribe, manage, or nothing.
  */
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { account as makeAccount, installFetch, jsonResponse } from './helpers';
@@ -33,6 +33,16 @@ describe('Compte', () => {
     renderWith(makeAccount({ usage: { used: 1, limit: 3, remaining: 2, resetsAt: null } }));
     expect(await screen.findByText('Analyse d’essai')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /s’abonner : 4,99 €\/mois/i })).toBeInTheDocument();
+  });
+
+  it('only starts checkout once the reader asks for the service to start immediately', async () => {
+    renderWith(makeAccount({ usage: { used: 1, limit: 3, remaining: 2, resetsAt: null } }));
+    const subscribe = await screen.findByRole('button', { name: /s’abonner/i });
+    expect(subscribe).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /commence dès le paiement/ }));
+    expect(subscribe).toBeEnabled();
+    expect(screen.getByRole('link', { name: 'Conditions de vente' })).toHaveAttribute('href', '/cgv');
+    expect(screen.getByText(/TVA non applicable, art\. 293 B du CGI/)).toBeInTheDocument();
   });
 
   it('shows an exhausted trial and a subscribe action', async () => {

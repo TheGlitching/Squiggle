@@ -44,7 +44,9 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
 
    `GEMINI_API_KEY` is only needed to select Gemini with `LLM_PROVIDER=gemini`.
 5. **The other side of each integration**, all pointing at the environment's origin:
-   the Google OAuth redirect URI `<origin>/auth/google/callback`, the Stripe webhook
+   the Google OAuth redirect URI `<origin>/auth/google/callback` (with, on the consent
+   screen, the privacy policy `<origin>/confidentialite` and the terms
+   `<origin>/conditions`), the Stripe webhook
    endpoint `<origin>/webhooks/stripe` (see [stripe-webhook.md](stripe-webhook.md)), and
    the sender address of `BREVO_FROM_ADDRESS` verified in Brevo.
 

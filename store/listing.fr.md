@@ -60,7 +60,7 @@ Politique de confidentialité et trajet des données : voir les liens ci-dessous
 
 ## Liens
 
-- Politique de confidentialité : `<origine hébergée>/legal`
+- Politique de confidentialité : `<origine hébergée>/confidentialite`
 - Trajet des données : `<origine hébergée>/transparence`
 - Code source : https://github.com/TheGlitching/Squiggle
 - Assistance : https://github.com/TheGlitching/Squiggle/issues

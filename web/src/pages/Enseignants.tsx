@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { CONTACT_URL } from '../components/Layout';
+import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
 import { LandingShell, MEASURE, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, Section } from '../components/Landing';
 import { Link } from '../router';
 
@@ -40,7 +40,7 @@ export function Enseignants() {
           l’article que vous choisissez.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <a href={CONTACT_URL} target="_blank" rel="noreferrer noopener" className={PRIMARY_BUTTON}>
+          <a href={CONTACT_URL} className={PRIMARY_BUTTON}>
             Demander l’accès enseignant
           </a>
           {/* A plain anchor: a client-side navigation would drop the hash and not scroll. */}
@@ -87,13 +87,12 @@ export function Enseignants() {
         <ol className={`m-0 list-decimal pl-6 text-base leading-relaxed text-muted [&>li+li]:mt-3 ${MEASURE}`}>
           <li>Installez l’extension depuis la page d’accueil, sur Chrome ou Firefox.</li>
           <li>
-            Écrivez-nous depuis la page de contact, en indiquant votre établissement et votre
-            discipline.
+            Écrivez-nous à {CONTACT_EMAIL}, en indiquant votre établissement et votre discipline.
           </li>
           <li>Nous activons l’offre sur votre compte.</li>
         </ol>
         <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <a href={CONTACT_URL} target="_blank" rel="noreferrer noopener" className={PRIMARY_BUTTON}>
+          <a href={CONTACT_URL} className={PRIMARY_BUTTON}>
             Demander l’accès enseignant
           </a>
           <Link to="/" className={SECONDARY_BUTTON}>
