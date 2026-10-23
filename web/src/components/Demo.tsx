@@ -134,13 +134,13 @@ function DemoBody({ example, active, revealed, instant = false, onTyped }: BodyP
         }`}
       >
         <span
-          className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.14em]"
+          className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.14em]"
           style={{ color: color.text }}
         >
           <span className="h-[5px] w-[5px] flex-none rounded-[1px]" style={{ background: color.text }} />
           {example.cat}
         </span>
-        <p className="m-0 text-[0.85rem] leading-normal text-muted">{example.explain}</p>
+        <p className="m-0 text-base leading-normal text-muted">{example.explain}</p>
       </div>
     </div>
   );
@@ -183,7 +183,7 @@ export function Demo() {
     return () => window.clearTimeout(timer);
   }, [active, reduced]);
 
-  const wrapper = 'mt-6 rounded-card border border-border bg-surface p-[18px] text-left';
+  const wrapper = 'rounded-card border border-border bg-surface p-[18px] text-left';
 
   if (reduced) {
     return (
