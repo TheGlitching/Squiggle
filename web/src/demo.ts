@@ -135,3 +135,40 @@ export const EXAMPLES: ResolvedExample[] = DEMO_FINDINGS.map((example) => ({
 export function totalChars(example: DemoExample): number {
   return example.before.length + example.mark.length + example.after.length;
 }
+
+/**
+ * The four states a factual assertion can land in, as the landing explains them.
+ * The labels and the tone mirror `src/ui/components/VerificationBadge.tsx`; a
+ * test reads that file so the two cannot drift apart unnoticed.
+ */
+export const VERIFICATION_STATES: Array<{
+  state: DemoVerification;
+  label: string;
+  hint: string;
+  chip: string;
+}> = [
+  {
+    state: 'verifiee',
+    label: 'Vérifiée',
+    hint: 'Les sources consultées confirment ce point de l’article.',
+    chip: 'border-[#059669]/50 bg-[#059669]/15 text-[#34d399]',
+  },
+  {
+    state: 'non-sourcee',
+    label: 'Non sourcée dans l’article',
+    hint: 'Vérifiable, mais l’article ne cite rien à l’appui : une remarque sur son sourcing, pas un doute sur son exactitude.',
+    chip: 'border-border bg-[#121215] text-muted',
+  },
+  {
+    state: 'douteuse',
+    label: 'Douteuse',
+    hint: 'Les sources consultées mettent ce point en doute.',
+    chip: 'border-[#dc2626]/50 bg-[#dc2626]/15 text-[#f87171]',
+  },
+  {
+    state: 'non-verifiable',
+    label: 'Non vérifiable telle qu’écrite',
+    hint: 'Telle qu’elle est formulée, l’affirmation ne peut pas être confrontée à des sources : elle n’est ni établie ni contredite.',
+    chip: 'border-dashed border-[#d97706]/50 bg-surface text-[#fbbf24]',
+  },
+];

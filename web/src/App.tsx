@@ -5,6 +5,7 @@ import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
+import { Enseignants } from './pages/Enseignants';
 import { Legal } from './pages/Legal';
 import { Pont } from './pages/Pont';
 import { Transparence } from './pages/Transparence';
@@ -41,6 +42,9 @@ export function App() {
     case '/tarifs':
       page = <Accueil />;
       break;
+    case '/enseignants':
+      page = <Enseignants />;
+      break;
     case '/connexion':
       page = <Connexion />;
       break;
@@ -64,9 +68,8 @@ export function App() {
       page = <NotFound />;
   }
 
-  // The landing is its own full-bleed page, faithful to the approved
-  // prototype: it carries its own slim header and has no site chrome.
-  if (route === '/' || route === '/tarifs') return page;
+  // The landing pages carry their own header and footer and have no site chrome.
+  if (route === '/' || route === '/tarifs' || route === '/enseignants') return page;
 
   return <Layout>{page}</Layout>;
 }
