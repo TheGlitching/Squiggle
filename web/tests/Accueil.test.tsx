@@ -130,7 +130,8 @@ describe('Accueil', () => {
     render(<Accueil />);
     const footer = within(screen.getByRole('navigation', { name: 'Navigation de pied de page' }));
     expect(footer.getByRole('link', { name: 'Transparence' })).toHaveAttribute('href', '/transparence');
-    expect(footer.getByRole('link', { name: 'Légal' })).toHaveAttribute('href', '/legal');
+    expect(footer.getByRole('link', { name: 'Mentions légales' })).toHaveAttribute('href', '/mentions-legales');
+    expect(footer.getByRole('link', { name: 'Confidentialité' })).toHaveAttribute('href', '/confidentialite');
     expect(footer.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', CONTACT_URL);
   });
 

@@ -285,7 +285,7 @@ export function Accueil() {
           ))}
         </div>
         <p className="mt-6">
-          <a href={CONTACT_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+          <a href={CONTACT_URL} className={QUIET_LINK}>
             Une autre question ? Écrivez-nous
           </a>
         </p>

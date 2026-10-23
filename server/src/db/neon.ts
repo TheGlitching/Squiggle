@@ -16,7 +16,7 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import { RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
 import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
@@ -709,6 +709,7 @@ export class NeonDb implements Db {
       this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now} RETURNING 1`,
       this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now} RETURNING 1`,
       this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs} RETURNING 1`,
+      this.q`DELETE FROM rate_limits WHERE window_start <= ${now - RATE_WINDOW_MS} RETURNING 1`,
     ]);
     return swept.reduce((n, rows) => n + rows.length, 0);
   }

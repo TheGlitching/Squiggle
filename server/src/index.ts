@@ -770,8 +770,8 @@ function servicesFromEnv(env: Env): Services {
 
 /**
  * The retention sweeps `PRIVACY.md` promises. Cron triggers (`wrangler.jsonc`):
- * the hourly one drops lapsed short-lived rows (analysis runs live one hour) and
- * ledger rows past 12 months; the daily one drops expired and over-cap reports.
+ * the hourly one drops lapsed short-lived rows (analysis runs live one hour),
+ * closed rate-limit windows and ledger rows past 12 months; the daily one drops expired and over-cap reports.
  * Logs counts only.
  */
 export async function runScheduled(s: Services, cron: string): Promise<void> {

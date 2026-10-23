@@ -6,11 +6,11 @@ import { Accueil } from './pages/Accueil';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
-import { Legal } from './pages/Legal';
+import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pont } from './pages/Pont';
 import { Transparence } from './pages/Transparence';
 
-/** Old emailed links pointed at /magic-link; keep them working. */
+/** An old address that must keep working: emailed /magic-link links, the first /legal. */
 function Redirect({ to }: { to: string }) {
   useEffect(() => {
     navigate(to);
@@ -58,8 +58,21 @@ export function App() {
     case '/transparence':
       page = <Transparence />;
       break;
+    case '/mentions-legales':
+      page = <MentionsLegales />;
+      break;
+    case '/cgv':
+      page = <Cgv />;
+      break;
+    case '/confidentialite':
+      page = <Confidentialite />;
+      break;
+    case '/conditions':
+      page = <Conditions />;
+      break;
     case '/legal':
-      page = <Legal />;
+      // The address the first store submissions declared as the privacy policy.
+      page = <Redirect to="/confidentialite" />;
       break;
     case '/pont':
       page = <Pont />;

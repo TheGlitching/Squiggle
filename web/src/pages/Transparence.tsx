@@ -9,17 +9,23 @@ export const INFERENCE_HOSTS_TEXT =
     ? inferenceHosts.join(', ')
     : 'des hébergeurs d’inférence choisis par OpenRouter parmi ceux qui servent ce modèle';
 
-const RETENTION = [
+/** The inference hosts as a row label: named once pinned, OpenRouter's choice until then. */
+export const INFERENCE_HOSTS_LABEL =
+  inferenceHosts.length > 0 ? `Hébergeurs d’inférence : ${INFERENCE_HOSTS_TEXT}` : 'Hébergeurs d’inférence (choisis via OpenRouter)';
+
+export const RETENTION = [
   ['Texte de l’article', 'Mémoire, le temps de l’appel d’audit', 'Jamais écrit'],
   ['Rapport d’analyse, avec extraits de l’article (cache partagé)', 'Base de données', '30 jours, 500 rapports au plus'],
   ['Analyse en cours (constats, sans l’article)', 'Base de données', '1 heure'],
   ['Journal d’usage : qu’un compte a lancé une analyse, et quand', 'Base de données', '12 mois, sans contenu et sans nommer l’article'],
+  ['Compteur d’analyses du jour', 'Base de données', 'Tant que le compte existe'],
   ['Adresse e-mail', 'Base de données', 'Tant que le compte existe'],
   ['Identifiant Google, si connexion Google', 'Base de données', 'Tant que le compte existe'],
   ['Clé publique de votre installation', 'Base de données', 'Tant que vous ne la révoquez pas'],
   ['Jeton d’extension', 'Base de données, en empreinte SHA-256', '90 jours'],
   ['Session web', 'Base de données, en empreinte SHA-256', '30 jours'],
-  ['Code de connexion', 'Base de données, en empreinte SHA-256', '10 minutes'],
+  ['Code de connexion, avec l’adresse IP de la demande', 'Base de données, le code en empreinte SHA-256', '10 minutes'],
+  ['Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l’heure', 'Base de données', '2 heures au plus'],
   ['Identifiants Stripe (client, abonnement)', 'Base de données', 'Tant que le compte existe'],
   ['Compteurs de fonctionnement : réponses du cache, échecs par étape d’analyse', 'Base de données', 'Un nombre par jour et par nom d’événement, sans compte et sans article'],
   ['Journaux techniques', 'Cloudflare', 'Aucun texte d’article, aucune adresse d’article en clair'],
@@ -28,7 +34,7 @@ const RETENTION = [
 const SUBPROCESSORS = [
   ['OpenRouter', `Passerelle d’analyse : route chaque requête vers le modèle ${modelLabel}`, 'Le texte de l’article et les extraits des sources citées, sans identité de lecteur'],
   [
-    inferenceHosts.length > 0 ? `Hébergeurs d’inférence : ${INFERENCE_HOSTS_TEXT}` : 'Hébergeurs d’inférence (choisis via OpenRouter)',
+    INFERENCE_HOSTS_LABEL,
     `Exécution du modèle ${modelLabel}, un modèle à poids ouverts`,
     'Le texte de l’article et les extraits des sources citées, sans identité de lecteur',
   ],

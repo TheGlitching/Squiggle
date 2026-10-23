@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MemoryDb } from '../src/db/memory';
-import { DAY_MS, REPORT_MAX_BYTES, REPORT_TTL_MS, USAGE_LOG_RETENTION_MS, utcDayOf } from '../src/usage/limits';
+import { DAY_MS, RATE_WINDOW_MS, REPORT_MAX_BYTES, REPORT_TTL_MS, USAGE_LOG_RETENTION_MS, utcDayOf } from '../src/usage/limits';
 import { T0 } from './helpers';
 
 const DAY = DAY_MS;
@@ -187,6 +187,19 @@ describe('purgeExpired (retention sweep)', () => {
     expect(await db.findOAuthPending('st-new')).not.toBeNull();
     expect(await db.addNonce({ keyId: 'k', nonce: 'n-old', now: T0 + 2000, ttlMs: 1000 })).toBe(true); // gone
     expect(await db.addNonce({ keyId: 'k', nonce: 'n-new', now: T0 + 2000, ttlMs: 1000 })).toBe(false); // kept
+  });
+
+  it('drops a rate-limit window once its hour has closed', async () => {
+    const db = new MemoryDb();
+    const rate = (now: number) => db.recordAndCheckRate({ scope: 'magic_link:ip', key: '203.0.113.7', limit: 5, windowMs: RATE_WINDOW_MS, now });
+    const start = Math.floor(T0 / RATE_WINDOW_MS) * RATE_WINDOW_MS;
+    await rate(start);
+
+    await db.purgeExpired(start + RATE_WINDOW_MS - 1, USAGE_LOG_RETENTION_MS);
+    expect((await rate(start + 1)).count).toBe(2); // window still open: kept
+
+    expect(await db.purgeExpired(start + RATE_WINDOW_MS, USAGE_LOG_RETENTION_MS)).toBe(1);
+    expect((await rate(start + 2)).count).toBe(1); // the row, and the IP in it, are gone
   });
 
   it('keeps ledger rows for 12 months, then drops them', async () => {

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { BrandLockup } from './Brand';
 import { CONTACT_URL } from './Layout';
-import { GITHUB_URL } from '../offer';
+import { GITHUB_URL, LEGAL_PAGES } from '../offer';
 import { Link } from '../router';
 
 const TRANSITION =
@@ -62,10 +62,12 @@ export function LandingShell({ children }: { children: ReactNode }) {
             <Link to="/transparence" className={QUIET_LINK}>
               Transparence
             </Link>
-            <Link to="/legal" className={QUIET_LINK}>
-              Légal
-            </Link>
-            <a href={CONTACT_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+            {LEGAL_PAGES.map(([to, label]) => (
+              <Link key={to} to={to} className={QUIET_LINK}>
+                {label}
+              </Link>
+            ))}
+            <a href={CONTACT_URL} className={QUIET_LINK}>
               Contact
             </a>
           </nav>

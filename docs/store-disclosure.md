@@ -95,7 +95,7 @@ The French listing copy (name, summary, description, links, reviewer notes) is
 [`store/listing.fr.md`](../store/listing.fr.md); it is written for the hosted offer and
 must go out with the release that ships it. The summary is the manifest `description`.
 
-- **Privacy policy URL**: the published policy, `<hosted origin>/legal`, in both
+- **Privacy policy URL**: the published policy, `<hosted origin>/confidentialite`, in both
   dashboards. Not the repository's `PRIVACY.md`, which is the source of the page but not
   a URL a store should point at.
 - **Screenshots**: five at most, 1280x800, from a real analysis in a real browser, taken

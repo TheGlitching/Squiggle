@@ -140,7 +140,8 @@ servi qu'à un lecteur dont la page donne le même texte.
 | Clé publique de votre installation | base de données | tant que vous ne la révoquez pas |
 | Jeton d'extension | base de données, **en empreinte SHA-256** | 90 jours |
 | Session web | base de données, **en empreinte SHA-256** | 30 jours |
-| Lien de connexion par e-mail | base de données, **en empreinte SHA-256** | 10 minutes |
+| Lien de connexion par e-mail, avec l'adresse IP de la demande | base de données, le code **en empreinte SHA-256** | 10 minutes |
+| Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l'heure | base de données | 2 heures au plus |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
 | Compteurs de fonctionnement : combien de fois le cache a répondu, combien de fois une étape d'analyse a échoué, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |
@@ -183,8 +184,8 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
   nouvelle adresse. L'adresse portée par Stripe sur vos reçus suit ce changement.
 - **Révocation d'une installation** — la page de compte liste les extensions connectées
   et permet d'en révoquer une : sa clé cesse aussitôt d'être acceptée.
-- Pour tout le reste : [ouvrez un ticket](https://github.com/TheGlitching/Squiggle/issues)
-  ou utilisez l'adresse de contact publiée sur le site.
+- Pour tout le reste : écrivez à contact@squiggle.fr. La politique complète, avec les
+  bases légales et les transferts hors UE, est publiée sur le site, à `/confidentialite`.
 
 ## Ce qui n'est jamais fait, dans les deux modes
 
@@ -234,5 +235,5 @@ Le mode hébergé **ne demande aucune autorisation supplémentaire**.
 
 ## Contact
 
-Un problème ou une question : [ouvrez un ticket](https://github.com/TheGlitching/Squiggle/issues).
+Un problème ou une question : contact@squiggle.fr, ou [ouvrez un ticket](https://github.com/TheGlitching/Squiggle/issues).
 Le code est public et vérifiable.

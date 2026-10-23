@@ -178,8 +178,12 @@ export function Connexion() {
 
       <p className="mt-8 text-xs text-muted">
         En vous connectant, vous acceptez les{' '}
-        <Link to="/legal" className="underline hover:text-foreground">
-          conditions et la politique de confidentialité
+        <Link to="/conditions" className="underline hover:text-foreground">
+          conditions d’utilisation
+        </Link>{' '}
+        et la{' '}
+        <Link to="/confidentialite" className="underline hover:text-foreground">
+          politique de confidentialité
         </Link>
         . Aucune publicité, aucun traceur.
       </p>
