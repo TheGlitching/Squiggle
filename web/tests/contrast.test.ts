@@ -31,6 +31,15 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** An `rgba(r, g, b, a)` tint composited over an opaque hex ground. */
+function over(rgba: string, ground: string): string {
+  const [r, g, b, a] = rgba.match(/[\d.]+/g)!.map(Number);
+  const base = [0, 2, 4].map((i) => parseInt(ground.slice(1 + i, 3 + i), 16));
+  return `#${[r, g, b]
+    .map((c, i) => Math.round(c * a + base[i] * (1 - a)).toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
 function hue(hex: string): number {
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(1 + i, 3 + i), 16) / 255);
   const max = Math.max(r, g, b);
@@ -79,6 +88,16 @@ describe('text contrast on the dark theme (AA, 4.5:1)', () => {
     }
   });
 
+  // The hero's article is a publisher's light page: its text, and its text under
+  // each highlight tint, must read as well as the page's own.
+  it('keeps the hero article readable on its sheet and under every highlight', () => {
+    expect(contrast(colors.paperInk, colors.paper)).toBeGreaterThanOrEqual(7);
+    expect(contrast(colors.paperMuted, colors.paper)).toBeGreaterThanOrEqual(4.5);
+    for (const { tint } of Object.values(SEVERITY_COLORS)) {
+      expect(contrast(colors.paperInk, over(tint, colors.paper))).toBeGreaterThanOrEqual(7);
+    }
+  });
+
   it('labels every demo severity with a readable tone on the panel', () => {
     for (const { text } of Object.values(SEVERITY_COLORS)) {
       expect(contrast(text, colors.surface)).toBeGreaterThanOrEqual(4.5);
@@ -98,6 +117,12 @@ describe('non-text contrast (AA, 3:1)', () => {
       expect(contrast(colors.accent, colors[ground])).toBeGreaterThanOrEqual(3);
       expect(contrast(colors.accentHover, colors[ground])).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('marks the selected and the focused hero passage visibly on the sheet', () => {
+    expect(contrast(colors.paperInk, colors.paper)).toBeGreaterThanOrEqual(3);
+    // The focus ring's dark offset is what meets the sheet.
+    expect(contrast(colors.background, colors.paper)).toBeGreaterThanOrEqual(3);
   });
 
   it('keeps the logo marks visible on the accent tile', () => {
