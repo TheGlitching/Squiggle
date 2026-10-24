@@ -89,12 +89,11 @@ export function Accueil() {
       <div className={`${PAGE} py-12 md:py-16`}>
         <HeroScene>
           <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance md:text-5xl xl:text-6xl">
-            Sachez ce qu’un article prouve, et ce qu’il se contente d’affirmer.
+            Un avis que vous pouvez défendre.
           </h1>
-          <p className={`mt-6 text-lg leading-relaxed text-muted md:text-xl ${MEASURE}`}>
-            Avant de le partager ou d’en débattre, vous voyez dans la page les passages fragiles, la
-            raison de chaque doute et ce que les sources disent des faits vérifiables. Vous jugez sur
-            pièces.
+          <p className={`mt-6 text-lg leading-relaxed text-pretty text-muted md:text-xl ${MEASURE}`}>
+            Dans l’article que vous lisez, Squiggle surligne les passages fragiles, dit pourquoi et cherche
+            ce que les sources disent des faits vérifiables.
           </p>
 
           {/* One primary action: the store this browser installs from, or, where no
@@ -130,7 +129,7 @@ export function Accueil() {
           </p>
           {!installUrl && install?.kind === 'ios' ? (
             <p className="mt-4 text-base text-muted">
-              Pour l’avoir comme une application, touchez Partager puis « Sur l’écran d’accueil ».
+              Pour l’avoir comme une application, touchez Partager puis « Sur l’écran d’accueil ».
             </p>
           ) : null}
           {!installUrl && !mobile ? (

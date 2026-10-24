@@ -41,7 +41,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <footer className="mt-16 border-t border-border bg-surface">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-5 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>Squiggle. Ce que l’article prouve, ce qu’il affirme. Aucune publicité, aucun traceur.</p>
+          <p>Squiggle. Un avis que vous pouvez défendre. Aucune publicité, aucun traceur.</p>
           <nav className="flex flex-wrap gap-4" aria-label="Navigation de pied de page">
             <Link to="/transparence" className="hover:text-foreground">
               Transparence
