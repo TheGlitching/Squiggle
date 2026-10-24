@@ -61,6 +61,56 @@ export function severityToHighlightSeverity(
   }
 }
 
+/** Mirror of the panel's `findingTone` (`src/ui/components/FindingCard.tsx`): a
+ * finding card is toned by its severity alone, so it can differ from the page
+ * highlight, which `severityToHighlightSeverity` caps by verification. */
+export function findingTone(severity: SeverityLevel, category: DemoCategory): HighlightSeverity {
+  if (category === 'point-fort') return 'positive';
+  return severity === 3 ? 'critical' : severity === 2 ? 'warning' : 'info';
+}
+
+/** Mirror of `CATEGORY_LABELS_FR` in `src/adapters/findingAdapters.ts`. */
+export const CATEGORY_LABELS: Record<DemoCategory, string> = {
+  sophisme: 'Sophisme',
+  'affirmation-non-etayee': 'Affirmation non étayée',
+  surinterpretation: 'Surinterprétation',
+  'source-absente': 'Source absente',
+  cadrage: 'Cadrage',
+  'point-fort': 'Point fort',
+};
+
+/** Mirror of `src/ui/components/SeverityBadge.tsx`. */
+export const SEVERITY_LABELS: Record<SeverityLevel, string> = { 3: 'Critique', 2: 'Majeur', 1: 'Mineur' };
+
+export type ScoreBand = 'solide' | 'perfectible' | 'fragile' | 'problematique';
+
+/** Mirror of `determineScoreBand` in `shared/src/engine/scoring.ts`, kept here so
+ * the bundle does not pull the engine's schema library in for four thresholds. */
+export function scoreBand(score: number): ScoreBand {
+  if (score >= 80) return 'solide';
+  if (score >= 70) return 'perfectible';
+  if (score >= 60) return 'fragile';
+  return 'problematique';
+}
+
+/** The band titles of `getScoreBandLabel`, and the severity tone the panel's
+ * `getScoreBandColor` paints each band with. */
+export const SCORE_BANDS: Record<ScoreBand, { title: string; tone: HighlightSeverity }> = {
+  solide: { title: 'Article solide', tone: 'positive' },
+  perfectible: { title: 'Article perfectible', tone: 'info' },
+  fragile: { title: 'Article fragile', tone: 'warning' },
+  problematique: { title: 'Article problématique', tone: 'critical' },
+};
+
+/** The five domains of the grid. A test pins these to the engine's own definitions. */
+export const DOMAINS = [
+  ['Robustesse factuelle et sourcing', 35, 'Les chiffres, les dates et les citations sont-ils précis, sourcés, vérifiables ?'],
+  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits, ou d’un saut de raisonnement ?'],
+  ['Cadrage et procédés rhétoriques', 25, 'Le titre, les mots choisis et la mise en scène orientent-ils le jugement sans preuve ?'],
+  ['Déontologie et transparence', 10, 'Les sources sont-elles nommées, les intérêts signalés, le fait distingué du commentaire ?'],
+  ['Soin de la langue', 5, 'Orthographe et grammaire, comme indice de rigueur.'],
+] as const;
+
 export interface DemoExample {
   /** Display category, shown with the explanation once the highlight lands. */
   cat: string;
@@ -68,6 +118,9 @@ export interface DemoExample {
   mark: string;
   after: string;
   explain: string;
+  /** The finding card's title and body in the hero's panel. */
+  label: string;
+  detail: string;
   severity: SeverityLevel;
   category: DemoCategory;
   verification?: DemoVerification;
@@ -78,8 +131,10 @@ export const DEMO_FINDINGS: DemoExample[] = [
     cat: 'Robustesse factuelle',
     before: 'Selon ',
     mark: 'une étude',
-    after: ', 78 % des Français seraient concernés.',
+    after: ', 78\u00a0% des Français seraient concernés.',
     explain: 'Étude non nommée : aucun institut, aucune méthodologie, le chiffre n’est pas vérifiable.',
+    label: 'Étude non nommée',
+    detail: 'Aucun institut, aucune date, aucune méthodologie : le chiffre est présenté comme établi, mais le lecteur ne peut pas le retrouver.',
     severity: 2,
     category: 'affirmation-non-etayee',
     verification: 'non-sourcee',
@@ -90,6 +145,8 @@ export const DEMO_FINDINGS: DemoExample[] = [
     mark: 'ils ne lisent plus',
     after: '.',
     explain: 'Faux dilemme : l’un n’empêche pas l’autre.',
+    label: 'Faux dilemme',
+    detail: 'Être sur les réseaux n’empêche pas de lire : l’article oppose deux pratiques que rien ne rend exclusives, et les sources consultées ne confirment pas ce recul.',
     severity: 3,
     category: 'sophisme',
     verification: 'douteuse',
@@ -100,6 +157,8 @@ export const DEMO_FINDINGS: DemoExample[] = [
     mark: 'un désastre absolu',
     after: ', une hémorragie incontrôlée.',
     explain: 'Exagération : le lexique fait le travail des faits.',
+    label: 'Exagération',
+    detail: 'Le lexique fait le travail des faits : aucun chiffre ne vient mesurer ce « désastre ».',
     severity: 2,
     category: 'cadrage',
   },
@@ -109,6 +168,8 @@ export const DEMO_FINDINGS: DemoExample[] = [
     mark: 'Selon un expert',
     after: ', la mesure serait inévitable.',
     explain: 'Source anonyme : ni nom, ni conflit d’intérêts déclaré.',
+    label: 'Source anonyme',
+    detail: 'Ni nom, ni fonction, ni conflit d’intérêts déclaré : impossible de savoir qui parle, ni à quel titre.',
     severity: 2,
     category: 'source-absente',
   },
@@ -118,6 +179,8 @@ export const DEMO_FINDINGS: DemoExample[] = [
     mark: 'pris des décisions au niveau de la situation',
     after: '.',
     explain: 'Le flou de la langue trahit le flou du propos.',
+    label: 'Formulation creuse',
+    detail: 'La phrase ne dit pas quelles décisions ont été prises : le flou de la langue trahit celui du propos.',
     severity: 1,
     category: 'surinterpretation',
   },
@@ -172,3 +235,36 @@ export const VERIFICATION_STATES: Array<{
     chip: 'border-dashed border-[#d97706]/50 bg-surface text-[#fbbf24]',
   },
 ];
+
+/**
+ * The sample article and report the hero shows. A paragraph mixes plain text
+ * with indexes into `EXAMPLES`, each rendered as its sentence with the passage
+ * highlighted, so the page and the panel describe the same five findings.
+ */
+export const HERO_ARTICLE: { title: string; byline: string; paragraphs: Array<Array<string | number>> } = {
+  title: 'Lecture\u00a0: une génération perdue\u00a0?',
+  byline: 'Tribune',
+  paragraphs: [
+    ['La lecture recule chez les adolescents, et le constat inquiète. ', 0, ' ', 1],
+    [2, ' ', 3, ' ', 4],
+    [
+      'Dans les médiathèques, pourtant, bibliothécaires et enseignants décrivent des lecteurs qui ont changé de supports plus que de goûts. Les mangas, les romans publiés en ligne et les clubs de lecture attirent des adolescents que les listes scolaires ne retiennent plus.',
+    ],
+  ],
+};
+
+export const HERO_REPORT = {
+  /** Marks per domain, in the grid's order; they sum to the score. */
+  marks: [18, 15, 17, 6.5, 4.5],
+  summary:
+    'L’article part d’un vrai sujet, mais son chiffre central ne renvoie à aucune étude identifiable et il tire d’une habitude une conclusion que les faits ne portent pas. La fin, plus nuancée, redresse en partie l’ensemble.',
+  research: '1 affirmation sur 2 confrontée à une source, 3 recherches menées.',
+  claims: '1 douteuse, 1 non sourcée dans l’article',
+  /** The finding selected before the reader picks one: the critical one. */
+  selected: 1,
+};
+
+/** The panel prints marks the French way: `6,5`, not `6.5`. */
+export function formatPoints(value: number): string {
+  return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+}

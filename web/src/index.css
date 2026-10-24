@@ -22,6 +22,11 @@
   --color-warning: #d97706;
   --color-warningSoft: #1f1608;
   --color-warningInk: #fbbf24;
+  /* The page a reader is on, as the hero draws it: a publisher's light sheet
+     beside the dark panel, which is where the extension actually lives. */
+  --color-paper: #f2f1ee;
+  --color-paperInk: #1c1b1f;
+  --color-paperMuted: #5c5b61;
 
   --font-display: Bricolage Grotesque, system-ui, sans-serif;
   --font-sans: Bricolage Grotesque, system-ui, sans-serif;
@@ -99,6 +104,35 @@
     clip-path: inset(0 0 0 0);
   }
 
+  /* A hero highlight: the overlay's tint and 2px severity underline. Inline,
+     so a passage that wraps keeps its tint on every line it spans. */
+  .hero-hl {
+    border-radius: 3px;
+    padding: 1px 2px;
+    color: inherit;
+    cursor: pointer;
+    background-color: var(--sev-tint);
+    text-decoration: underline 2px var(--sev-color);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 5px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    animation: hero-mark 420ms var(--ease-out) calc(300ms + var(--i) * 140ms) backwards;
+  }
+
+  .hero-hl[aria-pressed='true'] {
+    outline: 2px solid var(--color-paperInk);
+    outline-offset: 1px;
+  }
+
+  .hero-line {
+    animation: hero-fade 320ms var(--ease-out) 1100ms backwards;
+  }
+
+  .hero-card {
+    animation: hero-fade 200ms var(--ease-out);
+  }
+
   .caret {
     display: inline-block;
     width: 2px;
@@ -120,11 +154,30 @@
       clip-path: none;
     }
 
+    .hero-hl,
+    .hero-line,
+    .hero-card {
+      animation: none;
+    }
+
     .demo-body,
     .demo-body.is-out {
       transition: none;
       filter: none;
     }
+  }
+}
+
+@keyframes hero-mark {
+  from {
+    background-color: transparent;
+    text-decoration-color: transparent;
+  }
+}
+
+@keyframes hero-fade {
+  from {
+    opacity: 0;
   }
 }
 

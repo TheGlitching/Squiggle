@@ -8,20 +8,12 @@ import {
   SECONDARY_BUTTON,
   Section,
 } from '../components/Landing';
-import { VERIFICATION_STATES } from '../demo';
+import { HeroScene } from '../components/HeroScene';
+import { DOMAINS, VERIFICATION_STATES } from '../demo';
 import { CHROME_URL, FIREFOX_URL, installUrlFor } from '../install';
 import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL } from '../offer';
 import { Link } from '../router';
 import { CONTACT_URL } from '../components/Layout';
-
-/** The five domains of the grid. A test pins these to the engine's own definitions. */
-export const DOMAINS = [
-  ['Robustesse factuelle et sourcing', 35, 'Les chiffres, les dates et les citations sont-ils précis, sourcés, vérifiables ?'],
-  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits, ou d’un saut de raisonnement ?'],
-  ['Cadrage et procédés rhétoriques', 25, 'Le titre, les mots choisis et la mise en scène orientent-ils le jugement sans preuve ?'],
-  ['Déontologie et transparence', 10, 'Les sources sont-elles nommées, les intérêts signalés, le fait distingué du commentaire ?'],
-  ['Soin de la langue', 5, 'Orthographe et grammaire, comme indice de rigueur.'],
-] as const;
 
 const NEUTRALITY = [
   [
@@ -80,9 +72,9 @@ export function Accueil() {
 
   return (
     <LandingShell>
-      <div className={`${PAGE} flex flex-col gap-12 py-12 md:py-16 lg:flex-row lg:items-center lg:gap-16`}>
-        <div className="lg:min-w-0 lg:flex-1">
-          <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl lg:text-6xl">
+      <div className={`${PAGE} py-12 md:py-16`}>
+        <HeroScene>
+          <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl xl:text-6xl">
             Analyse l’article que vous lisez et montre ce qui ne tient pas.
           </h1>
           <p className={`mt-6 text-lg leading-relaxed text-muted md:text-xl ${MEASURE}`}>
@@ -116,26 +108,7 @@ export function Accueil() {
           <p className="mt-4 text-base text-muted">
             {FREE_ANALYSES} analyses offertes, puis {PRICE_MONTHLY} par mois. Sans engagement.
           </p>
-        </div>
-
-        <figure className="m-0 mx-auto w-full max-w-[26rem] lg:mx-0 lg:shrink-0">
-          <div className="relative h-[34rem] overflow-hidden rounded-card border border-border bg-surface lg:h-[40rem]">
-            <img
-              src="/landing/rapport.png"
-              width={800}
-              height={2756}
-              alt="Capture du panneau Squiggle : une note de 61 sur 100, « article fragile », les cinq domaines notés, puis deux constats qui citent chacun la phrase de l’article concernée."
-              className="block h-full w-full object-cover object-top"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-surface to-transparent"
-            />
-          </div>
-          <figcaption className="mt-3 text-base text-muted">
-            Le panneau de l’extension, sur un article d’exemple.
-          </figcaption>
-        </figure>
+        </HeroScene>
       </div>
 
       <Section

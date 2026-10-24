@@ -9,14 +9,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SCORE_DOMAINS } from '../../shared/src/engine/types';
 import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
-import { DOMAINS } from '../src/pages/Accueil';
 import { Accueil } from '../src/pages/Accueil';
-import { VERIFICATION_STATES } from '../src/demo';
+import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
 
 afterEach(cleanup);
 
@@ -32,11 +32,23 @@ describe('Accueil', () => {
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
   });
 
-  it('shows a real capture of the report beside the promise', () => {
+  it('shows an article with its highlights beside the panel that explains them', async () => {
     render(<Accueil />);
-    const capture = screen.getByRole('img', { name: /Capture du panneau Squiggle/ });
-    expect(capture).toHaveAttribute('src', '/landing/rapport.png');
-    expect(screen.getByText('Le panneau de l’extension, sur un article d’exemple.')).toBeInTheDocument();
+    const article = within(screen.getByRole('article', { name: /article d’exemple/ }));
+    const panel = within(screen.getByRole('group', { name: 'Le rapport Squiggle sur cet article' }));
+    expect(panel.getByText('61')).toBeInTheDocument();
+    expect(panel.getByText('Article fragile')).toBeInTheDocument();
+    expect(panel.getByText('Vérification factuelle')).toBeInTheDocument();
+    expect(panel.getByText('Faux dilemme')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /Capture du panneau/ })).toBeNull();
+    expect(screen.queryByText(/sur un article d’exemple/)).toBeNull();
+
+    const passage = article.getByRole('button', { name: /Selon un expert/ });
+    expect(passage).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(passage);
+    expect(passage).toHaveAttribute('aria-pressed', 'true');
+    expect(panel.getByText('Source anonyme')).toBeInTheDocument();
+    expect(panel.queryByText('Faux dilemme')).toBeNull();
   });
 
   it('has every section a first-time reader looks for', () => {
@@ -68,8 +80,9 @@ describe('Accueil', () => {
       expect(badge).toContain(`label: '${label}'`);
     }
     render(<Accueil />);
+    const section = within(screen.getByRole('region', { name: 'Ce qu’il vérifie' }));
     for (const { label } of VERIFICATION_STATES) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(section.getByText(label)).toBeInTheDocument();
     }
   });
 
@@ -157,7 +170,9 @@ describe('Accueil', () => {
 
   it('sets running text at 16 px or more, on a 68ch measure', () => {
     const { container } = render(<Accueil />);
+    // The rebuilt extension panel keeps the panel's own 12 px scale.
     for (const p of container.querySelectorAll('p, dd, li > p')) {
+      if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
     const lead = screen.getByText(/Squiggle relit un article de presse/);
