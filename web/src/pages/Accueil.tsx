@@ -10,7 +10,7 @@ import {
 } from '../components/Landing';
 import { HeroScene } from '../components/HeroScene';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
-import { CHROME_URL, FIREFOX_URL, installUrlFor } from '../install';
+import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor } from '../install';
 import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL } from '../offer';
 import { Link } from '../router';
 import { CONTACT_URL } from '../components/Layout';
@@ -74,19 +74,19 @@ export function Accueil() {
     <LandingShell>
       <div className={`${PAGE} py-12 md:py-16`}>
         <HeroScene>
-          <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl xl:text-6xl">
-            Analyse l’article que vous lisez et montre ce qui ne tient pas.
+          <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance md:text-5xl xl:text-6xl">
+            Sachez ce qu’un article prouve, et ce qu’il se contente d’affirmer.
           </h1>
           <p className={`mt-6 text-lg leading-relaxed text-muted md:text-xl ${MEASURE}`}>
-            Squiggle relit un article de presse comme un lecteur exigeant : il surligne dans la page
-            les passages fragiles, dit pourquoi, et cherche en ligne de quoi confirmer ou infirmer
-            les faits qu’il peut vérifier.
+            Avant de le partager ou d’en débattre, vous voyez dans la page les passages fragiles, la
+            raison de chaque doute et ce que les sources disent des faits vérifiables. Vous jugez sur
+            pièces.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
             {installUrl ? (
               <a href={installUrl} className={PRIMARY_BUTTON}>
-                Installer l’extension
+                {installLabelFor(installUrl)}
               </a>
             ) : (
               <p className="m-0 text-base text-muted">
@@ -101,12 +101,12 @@ export function Accueil() {
                 .
               </p>
             )}
-            <a href="#tarifs" className={SECONDARY_BUTTON}>
-              Voir les tarifs
+            <a href="#verifie" className={SECONDARY_BUTTON}>
+              Voir un exemple
             </a>
           </div>
           <p className="mt-4 text-base text-muted">
-            {FREE_ANALYSES} analyses offertes, puis {PRICE_MONTHLY} par mois. Sans engagement.
+            {FREE_ANALYSES} analyses offertes, sans carte bancaire. Ensuite {PRICE_MONTHLY} par mois, sans engagement.
           </p>
         </HeroScene>
       </div>

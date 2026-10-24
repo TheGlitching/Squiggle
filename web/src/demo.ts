@@ -132,7 +132,7 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'Selon ',
     mark: 'une étude',
     after: ', 78\u00a0% des Français seraient concernés.',
-    explain: 'Étude non nommée : aucun institut, aucune méthodologie, le chiffre n’est pas vérifiable.',
+    explain: 'Étude non nommée : ni institut ni méthodologie, l’article ne permet pas de remonter au chiffre.',
     label: 'Étude non nommée',
     detail: 'Aucun institut, aucune date, aucune méthodologie : le chiffre est présenté comme établi, mais le lecteur ne peut pas le retrouver.',
     severity: 2,

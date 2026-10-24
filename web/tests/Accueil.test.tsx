@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SCORE_DOMAINS } from '../../shared/src/engine/types';
 import { CONTACT_URL } from '../src/components/Layout';
@@ -21,12 +21,12 @@ import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
 afterEach(cleanup);
 
 describe('Accueil', () => {
-  it('leads with the approved tagline as the page heading and a way to sign in', () => {
+  it('leads with what the reader gets, as the page heading, and a way to sign in', () => {
     render(<Accueil />);
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Analyse l’article que vous lisez et montre ce qui ne tient pas.',
+        name: 'Sachez ce qu’un article prouve, et ce qu’il se contente d’affirmer.',
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
@@ -148,19 +148,46 @@ describe('Accueil', () => {
     expect(footer.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', CONTACT_URL);
   });
 
-  it('offers an install route that is never dead', () => {
-    render(<Accueil />);
-    const install = screen.queryByRole('link', { name: /Installer l’extension/ });
-    if (install) {
-      expect(install.getAttribute('href')).toMatch(/(chromewebstore|addons\.mozilla)/);
-    } else {
-      expect(screen.getByRole('link', { name: 'Chrome' })).toHaveAttribute('href', CHROME_URL);
-      expect(screen.getByRole('link', { name: 'Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+  it('names the store the install button opens, and never leaves it dead', () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get');
+    for (const [ua, label, href] of [
+      ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', 'Ajouter à Chrome', CHROME_URL],
+      ['Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0', 'Ajouter à Firefox', FIREFOX_URL],
+    ]) {
+      agent.mockReturnValue(ua);
+      render(<Accueil />);
+      expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
+      cleanup();
     }
+    agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
+    render(<Accueil />);
+    expect(screen.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Chrome' })).toHaveAttribute('href', CHROME_URL);
+    expect(screen.getByRole('link', { name: 'Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+    agent.mockRestore();
     expect(screen.getByRole('link', { name: /code source est sur GitHub/ })).toHaveAttribute(
       'href',
       'https://github.com/TheGlitching/Squiggle',
     );
+  });
+
+  it('points the second hero button at the example and states the offer without a card', () => {
+    render(<Accueil />);
+    expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#verifie');
+    expect(
+      screen.getByText('3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois, sans engagement.'),
+    ).toBeInTheDocument();
+  });
+
+  it('describes the free offer honestly to search engines and link previews', () => {
+    const html = readFileSync(resolve(__dirname, '../index.html'), 'utf8');
+    const meta = (attr: string, key: string) =>
+      html.match(new RegExp(`${attr}="${key}"\\s+content="([^"]+)"`))?.[1];
+    expect(meta('name', 'description')).toContain('3 analyses offertes');
+    expect(meta('name', 'description')).not.toMatch(/par jour/);
+    expect(meta('property', 'og:description')).toBe(meta('name', 'description'));
+    expect(meta('property', 'og:title')).toBe(html.match(/<title>([^<]+)<\/title>/)?.[1]);
+    expect(meta('property', 'og:image')).toBe('https://squiggle.fr/og.png');
   });
 
   it('names the five demo domains for screen readers', () => {
@@ -175,7 +202,7 @@ describe('Accueil', () => {
       if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
-    const lead = screen.getByText(/Squiggle relit un article de presse/);
+    const lead = screen.getByText(/Avant de le partager ou d’en débattre/);
     expect(lead.className).toContain('max-w-[68ch]');
     const privacy = within(screen.getByRole('region', { name: 'Vos données' })).getByText(/transite par notre serveur/);
     expect(privacy.className).toContain('max-w-[68ch]');
