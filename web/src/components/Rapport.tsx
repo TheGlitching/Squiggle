@@ -9,17 +9,18 @@ import { useMemo, useState, type CSSProperties } from 'react';
 
 import { getScoreBandLabel } from '../../../shared/src/engine/bands';
 import type { AnalysisReport, EvidenceSource, Finding, TextBlock } from '../../../shared/src/engine/types';
-import { severityColor, VERIFICATION_STATES } from '../demo';
-import { frenchDate } from '../format';
 import {
-  BAND_TONES,
   CATEGORY_LABELS,
   findingTone,
   formatPoints,
-  locateFindings,
+  SCORE_BANDS,
+  severityColor,
   SEVERITY_LABELS,
-  type Segment,
-} from '../report';
+  VERIFICATION_STATES,
+  type HighlightSeverity,
+} from '../demo';
+import { frenchDate } from '../format';
+import { locateFindings, passageTone, type Segment } from '../report';
 
 const VERIFICATION = Object.fromEntries(VERIFICATION_STATES.map((v) => [v.state, v]));
 
@@ -39,10 +40,14 @@ function domainOf(url: string): string {
 const passageId = (finding: Finding) => `passage-${finding.id}`;
 const findingId = (finding: Finding) => `constat-${finding.id}`;
 
-function toneStyle(finding: Finding): CSSProperties {
-  const tone = severityColor(findingTone(finding));
-  return { '--sev-color': tone.color, '--sev-tint': tone.tint, '--sev-text': tone.text } as CSSProperties;
+function toneStyle(tone: HighlightSeverity): CSSProperties {
+  const { color, tint, text } = severityColor(tone);
+  return { '--sev-color': color, '--sev-tint': tint, '--sev-text': text } as CSSProperties;
 }
+
+/** As in the extension: a passage is capped by its verification, its card toned by severity alone. */
+const passageStyle = (finding: Finding) => toneStyle(passageTone(finding));
+const cardStyle = (finding: Finding) => toneStyle(findingTone(finding.severity, finding.category));
 
 /** Bring an element into view inside its own scroller, then hand it the focus. */
 function reveal(id: string) {
@@ -71,7 +76,7 @@ function Passage({
       id={anchor ? passageId(anchor) : undefined}
       tabIndex={anchor ? undefined : -1}
       className="annot"
-      style={toneStyle(lead)}
+      style={passageStyle(lead)}
       aria-current={segment.findings.some((f) => f.id === selected) ? 'true' : undefined}
       onClick={(event) => {
         event.preventDefault();
@@ -112,7 +117,7 @@ function FindingCard({
     <article
       id={findingId(finding)}
       tabIndex={-1}
-      style={toneStyle(finding)}
+      style={cardStyle(finding)}
       aria-labelledby={`${findingId(finding)}-titre`}
       className={`scroll-mt-6 rounded-card border bg-surface p-5 outline-hidden focus-visible:ring-1 focus-visible:ring-offset-0 transition-colors duration-160 ease-out ${
         selected ? 'border-accentHover ring-1 ring-accentHover' : 'border-border'
@@ -203,9 +208,13 @@ function Block({
     <Passage key={index} segment={segment} selected={selected} onSelect={onSelect} />
   ));
   if (block.type === 'heading') {
-    return <h3 className="mt-0 mb-5 font-serif text-2xl font-semibold leading-snug">{content}</h3>;
+    return (
+      <h3 className="mt-0 mb-5 font-serif text-2xl leading-tight font-semibold tracking-tight md:text-3xl">
+        {content}
+      </h3>
+    );
   }
-  return <p className="mt-0 mb-4 last:mb-0">{content}</p>;
+  return <p className="mt-0 mb-5 last:mb-0">{content}</p>;
 }
 
 export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: TextBlock[] }) {
@@ -227,7 +236,7 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
   }, [blocks, segments, report.findings]);
 
   const band = getScoreBandLabel(report.scoreBand);
-  const bandTone = severityColor(BAND_TONES[report.scoreBand]);
+  const bandTone = severityColor(SCORE_BANDS[report.scoreBand].tone);
   const select = (finding: Finding) => setSelected(finding.id);
   const withdrawn = report.research.withdrawn ?? [];
   const analysedAt = Date.parse(report.meta.analyzedAt);
@@ -235,10 +244,7 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
 
   return (
     <div className="grid gap-10">
-      <section
-        aria-labelledby="note-titre"
-        className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] lg:gap-12"
-      >
+      <section aria-labelledby="note-titre" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] lg:gap-12">
         <div>
           <h2 id="note-titre" className="sr-only">
             La note
@@ -292,7 +298,11 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
             Le texte, annoté
           </h2>
           <p className="mt-1 mb-0 text-sm text-muted">Sélectionnez un passage surligné pour lire son constat.</p>
-          <div className="mt-5 max-w-[68ch] font-serif text-lg leading-[1.7] text-foreground">
+          {/* The same sheet as the landing's example article: the text is the article, Squiggle's notes sit beside it. */}
+          <article
+            aria-label="Le texte collé, surligné par Squiggle"
+            className="mt-5 rounded-card bg-paper px-6 py-7 font-serif text-lg leading-[1.6] text-paperInk md:px-12 md:py-10"
+          >
             {blocks.map((block) => (
               <Block
                 key={block.id}
@@ -302,7 +312,7 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
                 onSelect={select}
               />
             ))}
-          </div>
+          </article>
         </section>
 
         <section

@@ -1,44 +1,18 @@
 /**
- * What the report page needs to show an engine report: the category names,
- * the severity names and tones, and where each finding's quote sits in the
- * pasted text.
- *
- * The names mirror the extension's panel, which the web app may not import:
- * `CATEGORY_LABELS` is `src/adapters/findingAdapters.ts` `CATEGORY_LABELS_FR`
- * and `SEVERITY_LABELS` is `src/ui/components/SeverityBadge.tsx`; a test reads
- * both files so the two cannot drift. The tones are the overlay's, through
- * `demo.ts`.
+ * Where each finding's quote sits in the pasted text, and the tone its passage
+ * is painted in. The names a report uses (categories, severities, bands) are
+ * the landing demo's mirrors of the extension, in `demo.ts`.
  */
-import type { Finding, FindingCategory, ScoreBand, SeverityLevel, TextBlock } from '../../shared/src/engine/types';
+import type { Finding, TextBlock } from '../../shared/src/engine/types';
 import { severityToHighlightSeverity, type HighlightSeverity } from './demo';
 
-export const CATEGORY_LABELS: Record<FindingCategory, string> = {
-  sophisme: 'Sophisme',
-  'affirmation-non-etayee': 'Affirmation non étayée',
-  surinterpretation: 'Surinterprétation',
-  'source-absente': 'Source absente',
-  cadrage: 'Cadrage',
-  'point-fort': 'Point fort',
-};
-
-export const SEVERITY_LABELS: Record<SeverityLevel, string> = {
-  3: 'Critique',
-  2: 'Majeur',
-  1: 'Mineur',
-};
-
-/** The tone a finding is painted in, in the text and on its card. */
-export function findingTone(finding: Finding): HighlightSeverity {
+/**
+ * A passage's tone in the text, as the extension paints it in the page: capped
+ * by the verification. Its card is toned by severity alone (`findingTone`).
+ */
+export function passageTone(finding: Finding): HighlightSeverity {
   return severityToHighlightSeverity(finding.severity, finding.category, finding.verification);
 }
-
-/** A band's tone, as the extension's score gauge colours it. */
-export const BAND_TONES: Record<ScoreBand, HighlightSeverity> = {
-  solide: 'positive',
-  perfectible: 'info',
-  fragile: 'warning',
-  problematique: 'critical',
-};
 
 const TONE_RANK: Record<HighlightSeverity, number> = { critical: 3, warning: 2, info: 1, positive: 0 };
 
@@ -65,7 +39,10 @@ const SPACED = /[":;!?]/;
  * whether a quote mark or a colon was spaced the French way.
  */
 function findLoosely(haystack: string, needle: string): { start: number; end: number } | null {
-  const folded = fold(needle).replace(/ +/g, ' ').trim().replace(/ *([":;!?]) */g, '$1');
+  const folded = fold(needle)
+    .replace(/ +/g, ' ')
+    .trim()
+    .replace(/ *([":;!?]) */g, '$1');
   if (!folded) return null;
   const pattern = [...folded]
     .map((ch) => {
@@ -144,7 +121,7 @@ export function locateFindings(blocks: TextBlock[], findings: Finding[]): Locate
       const covering = list
         .filter((r) => r.start <= from && r.end >= to)
         .map((r) => r.finding)
-        .sort((a, b) => TONE_RANK[findingTone(b)] - TONE_RANK[findingTone(a)]);
+        .sort((a, b) => TONE_RANK[passageTone(b)] - TONE_RANK[passageTone(a)]);
       parts.push({
         text: block.text.slice(from, to),
         findings: covering,
@@ -155,9 +132,4 @@ export function locateFindings(blocks: TextBlock[], findings: Finding[]): Locate
   }
 
   return { segments, located };
-}
-
-/** Domain marks carry one decimal; French copy takes a French decimal comma. */
-export function formatPoints(value: number): string {
-  return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 }

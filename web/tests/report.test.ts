@@ -1,16 +1,11 @@
 /**
- * Where each finding's passage is in the pasted text, and the names the report
- * gives it. A passage that is not found is a finding the reader cannot place;
- * a name that drifts from the extension's is the same finding called two
- * things depending on where it was read.
+ * Where each finding's passage is in the pasted text. A passage that is not
+ * found is a finding the reader cannot place in what they pasted.
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import type { Finding, TextBlock } from '../../shared/src/engine/types';
-import { CATEGORY_LABELS, locateFindings, SEVERITY_LABELS } from '../src/report';
+import { locateFindings } from '../src/report';
 
 const BLOCKS: TextBlock[] = [
   { id: 'b1', type: 'heading', text: 'Cantines : le menu fait fuir les élèves', charStart: 0 },
@@ -81,25 +76,6 @@ describe('locateFindings', () => {
     expect(result.located.has('f1')).toBe(false);
     for (const block of BLOCKS) {
       expect((result.segments.get(block.id) ?? []).map((s) => s.text).join('')).toBe(block.text);
-    }
-  });
-});
-
-describe('the names the report uses', () => {
-  const read = (path: string) => readFileSync(resolve(__dirname, '../..', path), 'utf8');
-
-  it('are the extension’s category labels', () => {
-    const source = read('src/adapters/findingAdapters.ts');
-    const block = source.slice(source.indexOf('CATEGORY_LABELS_FR'), source.indexOf('};', source.indexOf('CATEGORY_LABELS_FR')));
-    for (const [category, label] of Object.entries(CATEGORY_LABELS)) {
-      expect(block).toMatch(new RegExp(`'?${category}'?: '${label}'`));
-    }
-  });
-
-  it('are the extension’s severity labels', () => {
-    const source = read('src/ui/components/SeverityBadge.tsx');
-    for (const [level, label] of Object.entries(SEVERITY_LABELS)) {
-      expect(source).toMatch(new RegExp(`case ${level}:[\\s\\S]*?return '${label}'`));
     }
   });
 });

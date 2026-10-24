@@ -297,7 +297,10 @@ export function Analyser() {
 function Aside() {
   const install = useInstall();
   return (
-    <aside aria-label="Bon à savoir" className="grid max-w-[68ch] content-start gap-5 text-sm leading-relaxed text-muted lg:pt-8">
+    <aside
+      aria-label="Bon à savoir"
+      className="grid max-w-[68ch] content-start gap-5 text-sm leading-relaxed text-muted lg:pt-8"
+    >
       <p className="m-0">
         <strong className="font-medium text-foreground">Le même compte que l’extension.</strong> Une analyse décompte
         une de vos analyses offertes ou du jour. Un texte qu’un autre lecteur a déjà fait analyser vous est rendu sans
