@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +17,7 @@ import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { Accueil } from '../src/pages/Accueil';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
+import { MOBILE } from './helpers';
 
 afterEach(cleanup);
 
@@ -148,7 +149,7 @@ describe('Accueil', () => {
     expect(footer.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', CONTACT_URL);
   });
 
-  it('names the store the install button opens, and never leaves it dead', () => {
+  it('names the store the install button opens, with the analysis on the site second', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     for (const [ua, label, href] of [
       ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', 'Ajouter à Chrome', CHROME_URL],
@@ -157,26 +158,70 @@ describe('Accueil', () => {
       agent.mockReturnValue(ua);
       render(<Accueil />);
       expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
+      expect(screen.getByRole('link', { name: 'Analyser un article sur le site' })).toHaveAttribute('href', '/analyser');
       cleanup();
     }
+    agent.mockRestore();
+  });
+
+  it('leads with the analysis on the site where no extension can be installed', () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get');
     agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
     render(<Accueil />);
     expect(screen.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
     expect(screen.getByRole('link', { name: 'Chrome' })).toHaveAttribute('href', CHROME_URL);
     expect(screen.getByRole('link', { name: 'Firefox' })).toHaveAttribute('href', FIREFOX_URL);
     agent.mockRestore();
-    expect(screen.getByRole('link', { name: /code source est sur GitHub/ })).toHaveAttribute(
-      'href',
-      'https://github.com/TheGlitching/Squiggle',
-    );
   });
 
-  it('points the second hero button at the example and states the offer without a card', () => {
+  it('on a phone, leads with the analysis and never points at a store', () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get');
+    for (const ua of MOBILE) {
+      agent.mockReturnValue(ua);
+      render(<Accueil />);
+      expect(screen.getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
+      expect(screen.queryByRole('link', { name: /^Ajouter à|^Chrome$|^Firefox$/ })).toBeNull();
+      cleanup();
+    }
+    agent.mockRestore();
+  });
+
+  it('offers the browser’s own install prompt when it has one', async () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(MOBILE[0]);
+    render(<Accueil />);
+    expect(screen.queryByRole('button', { name: 'Installer l’application' })).toBeNull();
+    const prompt = vi.fn(() => Promise.resolve());
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), { prompt }));
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Installer l’application' }));
+    expect(prompt).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Installer l’application' })).toBeNull());
+    agent.mockRestore();
+  });
+
+  it('tells iOS Safari where its install lives, and not Chrome on iOS', () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(MOBILE[3]);
+    render(<Accueil />);
+    expect(screen.getByText(/touchez Partager puis « Sur l’écran d’accueil »/)).toBeInTheDocument();
+    cleanup();
+    agent.mockReturnValue(MOBILE[4]);
+    render(<Accueil />);
+    expect(screen.queryByText(/touchez Partager/)).toBeNull();
+    agent.mockRestore();
+  });
+
+  it('keeps the example one tap away and states the offer without a card', () => {
     render(<Accueil />);
     expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#verifie');
     expect(
       screen.getByText('3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois, sans engagement.'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /code source est sur GitHub/ })).toHaveAttribute(
+      'href',
+      'https://github.com/TheGlitching/Squiggle',
+    );
   });
 
   it('describes the free offer honestly to search engines and link previews', () => {
