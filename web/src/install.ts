@@ -1,5 +1,5 @@
 /**
- * Where "Installer l'extension" sends the reader. One named constant per store,
+ * Where the install button sends the reader. One named constant per store,
  * routed by user agent so the button is never dead: Firefox goes to AMO, a
  * Chromium browser goes to the Chrome Web Store, and anything else (Safari)
  * shows both links instead of a button that goes nowhere.
@@ -15,4 +15,8 @@ export function installUrlFor(userAgent: string): string | null {
     return CHROME_URL;
   }
   return null;
+}
+/** The install button names the store it opens. */
+export function installLabelFor(url: string): string {
+  return url === FIREFOX_URL ? 'Ajouter à Firefox' : 'Ajouter à Chrome';
 }
