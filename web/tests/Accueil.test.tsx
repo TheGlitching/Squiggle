@@ -27,7 +27,7 @@ describe('Accueil', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Sachez ce qu’un article prouve, et ce qu’il se contente d’affirmer.',
+        name: 'Un avis que vous pouvez défendre.',
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
@@ -247,7 +247,7 @@ describe('Accueil', () => {
       if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
-    const lead = screen.getByText(/Avant de le partager ou d’en débattre/);
+    const lead = screen.getByText(/Dans l’article que vous lisez/);
     expect(lead.className).toContain('max-w-[68ch]');
     const privacy = within(screen.getByRole('region', { name: 'Vos données' })).getByText(/transite par notre serveur/);
     expect(privacy.className).toContain('max-w-[68ch]');
