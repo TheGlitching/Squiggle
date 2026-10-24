@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { getAccount, googleSignInUrl, messageForError, requestMagicLink, verifyMagicLink } from '../api';
+import { isStandalone } from '../install';
 import { navigate, Link, usePath } from '../router';
 
 function searchOf(path: string): URLSearchParams {
@@ -126,8 +127,11 @@ export function Connexion() {
       ) : (
         <form onSubmit={submitCode} className="mt-8 space-y-4">
           <p className="text-sm text-muted">
-            Saisissez le code à 8 caractères reçu par e-mail, ou ouvrez le lien depuis ce message. Il
-            est valable 10 minutes.
+            {/* The installed app keeps its own cookies on iOS: a link tapped in Mail
+                signs Safari in, not the app, so only the code works here. */}
+            {isStandalone()
+              ? 'Saisissez ici le code à 8 caractères reçu par e-mail, plutôt que de toucher le lien : il s’ouvrirait dans le navigateur, pas dans l’application. Le code est valable 10 minutes.'
+              : 'Saisissez le code à 8 caractères reçu par e-mail, ou ouvrez le lien depuis ce message. Il est valable 10 minutes.'}
           </p>
           <label className="block">
             <span className="text-sm font-medium">Code de connexion</span>

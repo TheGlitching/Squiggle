@@ -16,6 +16,7 @@ import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } f
 import { getAccount, type Account } from '../api';
 import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
+import { useInstall } from '../install';
 import { FREE_ANALYSES } from '../offer';
 import {
   articleFromShare,
@@ -333,38 +334,6 @@ function Aside() {
       ) : null}
     </aside>
   );
-}
-
-interface InstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-}
-
-/**
- * How this browser installs the app, if it does and it is not installed yet:
- * Chromium hands over its own prompt, iOS Safari only has its Share menu.
- */
-function useInstall(): { kind: 'prompt'; prompt: () => void } | { kind: 'ios' } | null {
-  const [deferred, setDeferred] = useState<InstallPromptEvent | null>(null);
-  const standalone = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
-
-  useEffect(() => {
-    const keep = (event: Event) => {
-      event.preventDefault();
-      setDeferred(event as InstallPromptEvent);
-    };
-    const installed = () => setDeferred(null);
-    window.addEventListener('beforeinstallprompt', keep);
-    window.addEventListener('appinstalled', installed);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', keep);
-      window.removeEventListener('appinstalled', installed);
-    };
-  }, []);
-
-  if (standalone) return null;
-  if (deferred) return { kind: 'prompt', prompt: () => void deferred.prompt().finally(() => setDeferred(null)) };
-  return ios ? { kind: 'ios' } : null;
 }
 
 function Action({

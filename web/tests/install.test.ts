@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor } from '../src/install';
+import { MOBILE } from './helpers';
+import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor, isMobile } from '../src/install';
 
 describe('installUrlFor', () => {
   it('sends Firefox to AMO', () => {
@@ -27,6 +28,13 @@ describe('installUrlFor', () => {
 
   it('returns null for a browser with no store', () => {
     expect(installUrlFor('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15')).toBeNull();
+  });
+
+  it('returns null on a phone or a tablet, whose browsers install no extension', () => {
+    for (const ua of MOBILE) {
+      expect(isMobile(ua)).toBe(true);
+      expect(installUrlFor(ua)).toBeNull();
+    }
   });
 });
 

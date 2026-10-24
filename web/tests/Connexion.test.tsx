@@ -119,4 +119,21 @@ describe('Connexion', () => {
     });
     expect(new URLSearchParams(window.location.search).get('ext')).toBe('abcdefghijklmnop');
   });
+
+  it('inside the installed app, asks for the code rather than the link', async () => {
+    const user = userEvent.setup();
+    installFetch((call) => {
+      if (call.url.endsWith('/web/account')) return jsonResponse({ ok: false, error: 'invalid_session' }, 401);
+      if (call.url.endsWith('/auth/magic-link')) return jsonResponse({ ok: true, sent: true });
+      return undefined;
+    });
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(display-mode: standalone)' }));
+
+    renderAt('/connexion');
+    await user.type(screen.getByLabelText('Adresse e-mail'), 'marie@example.com');
+    await user.click(screen.getByRole('button', { name: 'Recevoir mon code' }));
+
+    expect(await screen.findByText(/plutôt que de toucher le lien/)).toBeInTheDocument();
+    expect(screen.queryByText(/ou ouvrez le lien/)).toBeNull();
+  });
 });

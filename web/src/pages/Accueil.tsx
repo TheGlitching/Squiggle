@@ -10,7 +10,7 @@ import {
 } from '../components/Landing';
 import { HeroScene } from '../components/HeroScene';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
-import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor } from '../install';
+import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
 import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL } from '../offer';
 import { Link } from '../router';
 import { CONTACT_URL } from '../components/Layout';
@@ -79,7 +79,10 @@ const FAQ = [
 ] as const;
 
 export function Accueil() {
-  const installUrl = installUrlFor(typeof navigator === 'undefined' ? '' : navigator.userAgent);
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const installUrl = installUrlFor(userAgent);
+  const mobile = isMobile(userAgent);
+  const install = useInstall();
 
   return (
     <LandingShell>
@@ -94,34 +97,55 @@ export function Accueil() {
             pièces.
           </p>
 
+          {/* One primary action: the store this browser installs from, or, where no
+              extension can be installed (a phone, Safari), the analysis on the site. */}
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
             {installUrl ? (
-              <a href={installUrl} className={PRIMARY_BUTTON}>
-                {installLabelFor(installUrl)}
-              </a>
-            ) : (
-              <p className="m-0 text-base text-muted">
-                Disponible pour{' '}
-                <a href={CHROME_URL} className={QUIET_LINK}>
-                  Chrome
-                </a>{' '}
-                et{' '}
-                <a href={FIREFOX_URL} className={QUIET_LINK}>
-                  Firefox
+              <>
+                <a href={installUrl} className={PRIMARY_BUTTON}>
+                  {installLabelFor(installUrl)}
                 </a>
-                .
-              </p>
+                <Link to="/analyser" className={SECONDARY_BUTTON}>
+                  Analyser un article sur le site
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+                  Analyser un article
+                </Link>
+                {install?.kind === 'prompt' ? (
+                  <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+                    Installer l’application
+                  </button>
+                ) : null}
+              </>
             )}
-            <a href="#verifie" className={SECONDARY_BUTTON}>
+            <a href="#verifie" className={QUIET_LINK}>
               Voir un exemple
             </a>
-            <Link to="/analyser" className={QUIET_LINK}>
-              Sans extension : analyser un texte
-            </Link>
           </div>
           <p className="mt-4 text-base text-muted">
             {FREE_ANALYSES} analyses offertes, sans carte bancaire. Ensuite {PRICE_MONTHLY} par mois, sans engagement.
           </p>
+          {!installUrl && install?.kind === 'ios' ? (
+            <p className="mt-4 text-base text-muted">
+              Pour l’avoir comme une application, touchez Partager puis « Sur l’écran d’accueil ».
+            </p>
+          ) : null}
+          {!installUrl && !mobile ? (
+            <p className="mt-4 text-base text-muted">
+              L’extension est disponible pour{' '}
+              <a href={CHROME_URL} className={QUIET_LINK}>
+                Chrome
+              </a>{' '}
+              et{' '}
+              <a href={FIREFOX_URL} className={QUIET_LINK}>
+                Firefox
+              </a>
+              .
+            </p>
+          ) : null}
         </HeroScene>
       </div>
 
