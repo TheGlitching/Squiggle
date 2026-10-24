@@ -28,7 +28,10 @@
   // GEMINI_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, ADMIN_TOKEN) is
   // set per environment with `wrangler secret put --env <name>` and lives in
   // the Cloudflare secret store, never in this file, never in the repo (see
-  // AGENTS.md). `GEMINI_MODEL` is an optional var, set only to select Gemini.
+  // AGENTS.md). So is EXTENSION_CHROME_ORIGIN, the origin CORS is pinned to for
+  // the Chrome listing: not sensitive, but it is a real extension id, which the
+  // repo never carries. Firefox has no such value (see src/lib/cors.ts).
+  // `GEMINI_MODEL` is an optional var, set only to select Gemini.
   //
   // A value that is not decided yet is a PENDING_… placeholder, and
   // `npm run deploy:production` refuses to ship one (scripts/deploy.mjs).
@@ -44,8 +47,6 @@
         // The staging Worker's own address; the workers.dev subdomain is the
         // account's, so it is filled in once the account exists.
         "WEB_APP_ORIGIN": "https://squiggle-server-staging.PENDING_WORKERS_SUBDOMAIN.workers.dev",
-        "EXTENSION_CHROME_ORIGIN": "chrome-extension://PENDING_CHROME_ID",
-        "EXTENSION_FIREFOX_ORIGIN": "moz-extension://PENDING_FIREFOX_ID",
         "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr",
         "LLM_PROVIDER": "openrouter",
         "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
@@ -64,11 +65,6 @@
       "vars": {
         // Origin of the hosted web app; used to build magic-link / OAuth URLs.
         "WEB_APP_ORIGIN": "https://squiggle.fr",
-        // Origins of our two store listings, pinned for CORS. A page on any other
-        // origin cannot read our responses, which is what keeps a malicious web
-        // page from burning our model quota even if it steals a token.
-        "EXTENSION_CHROME_ORIGIN": "chrome-extension://PENDING_CHROME_ID",
-        "EXTENSION_FIREFOX_ORIGIN": "moz-extension://PENDING_FIREFOX_ID",
         // Verified sender address in the Brevo account (not a secret).
         "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr",
         // Which provider hosted analyses run on. `openrouter` is the default and

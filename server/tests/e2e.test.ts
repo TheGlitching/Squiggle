@@ -134,7 +134,7 @@ describe('end to end', () => {
     expect((await res.json()).error).toBe('invalid_token');
   });
 
-  it('CORS is pinned to exactly the web app and the two store origins', async () => {
+  it('CORS is pinned to the web app and the Chrome listing, with no wildcard', async () => {
     const env = makeTestEnv();
 
     const fromWeb = await env.handler(
@@ -147,11 +147,6 @@ describe('end to end', () => {
     );
     expect(fromChrome.headers.get('access-control-allow-origin')).toBe(CHROME_ORIGIN);
 
-    const fromFirefox = await env.handler(
-      new Request(`${env.webAppOrigin}/health`, { headers: { origin: FIREFOX_ORIGIN } }),
-    );
-    expect(fromFirefox.headers.get('access-control-allow-origin')).toBe(FIREFOX_ORIGIN);
-
     const fromElsewhere = await env.handler(
       new Request(`${env.webAppOrigin}/health`, { headers: { origin: 'https://evil.example' } }),
     );
@@ -162,5 +157,63 @@ describe('end to end', () => {
     const noOrigin = await env.handler(new Request(`${env.webAppOrigin}/health`));
     expect(noOrigin.status).toBe(200);
     expect(noOrigin.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('a Firefox install reaches the extension endpoints, and nothing that rides a cookie', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+    const key = await generateSigningKeyPair();
+    const { token } = (await (await claim(env, sessionCookie, await exportJwk(key))).json()) as { token: string };
+    const firefox = { origin: FIREFOX_ORIGIN, 'sec-fetch-site': 'cross-site' };
+
+    // What Firefox 159 sends from an MV3 background or sidebar page: a preflight
+    // for the signing headers, then the call, both from moz-extension://<uuid>.
+    const preflight = await env.handler(
+      new Request(`${env.webAppOrigin}/v1/account`, { method: 'OPTIONS', headers: firefox }),
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe(FIREFOX_ORIGIN);
+    // Answered without credentials: the signature authenticates, never a cookie.
+    expect(preflight.headers.get('access-control-allow-credentials')).toBeNull();
+
+    const account = await env.handler(await accountRequest(env, key, token, { origin: FIREFOX_ORIGIN }));
+    expect(account.status).toBe(200);
+    expect(account.headers.get('access-control-allow-origin')).toBe(FIREFOX_ORIGIN);
+
+    const redeem = await env.handler(
+      new Request(`${env.webAppOrigin}/auth/bridge/redeem`, {
+        method: 'POST',
+        headers: { ...firefox, 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'ABCDEFGH' }),
+      }),
+    );
+    expect((await redeem.json()).error).toBe('invalid_code');
+    expect(redeem.headers.get('access-control-allow-origin')).toBe(FIREFOX_ORIGIN);
+
+    // The cookie-authenticated surface stays closed to it: any other installed
+    // Firefox extension has an origin of exactly this shape.
+    for (const [method, path] of [
+      ['POST', '/auth/claim'],
+      ['GET', '/web/account'],
+      ['POST', '/auth/logout'],
+      ['GET', '/health'],
+    ]) {
+      const res = await env.handler(
+        new Request(`${env.webAppOrigin}${path}`, { method, headers: { ...firefox, cookie: sessionCookie } }),
+      );
+      expect(res.status, `${method} ${path}`).toBe(403);
+      expect(res.headers.get('access-control-allow-origin'), `${method} ${path}`).toBeNull();
+    }
+
+    // Only the exact shape Firefox produces; a web page cannot have it at all.
+    for (const lookalike of [
+      'moz-extension://evil.example',
+      `${FIREFOX_ORIGIN}.evil.example`,
+      FIREFOX_ORIGIN.toUpperCase(),
+      'https://0b1e5c3a-7d2f-4e8a-9c61-5f3a2d4b8e17.example',
+    ]) {
+      const res = await env.handler(await accountRequest(env, key, token, { origin: lookalike }));
+      expect(res.status, lookalike).toBe(403);
+    }
   });
 });

@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-import { pendingVars } from './config.mjs';
+import { missingSecrets, pendingVars } from './config.mjs';
 
 const env = process.argv[2];
 if (env !== 'staging' && env !== 'production') {
@@ -27,6 +27,28 @@ if (pending.length > 0) {
     process.exit(1);
   }
   console.warn(`staging still has PENDING values: ${list}`);
+}
+
+// Staging may also run without its secrets while it is not deployed; a
+// production deploy that cannot even list them is refused rather than guessed.
+const listing = spawnSync('npx', ['wrangler', 'secret', 'list', '--env', env, '--format', 'json'], {
+  encoding: 'utf8',
+  stdio: ['inherit', 'pipe', 'inherit'],
+});
+let missing;
+try {
+  missing = listing.status === 0 ? missingSecrets(listing.stdout) : null;
+} catch {
+  missing = null;
+}
+if (missing === null || missing.length > 0) {
+  const problem =
+    missing === null ? 'could not list its secrets (see above)' : `secret not set: ${missing.join(', ')}`;
+  if (env === 'production') {
+    console.error(`Refusing to deploy production: ${problem}. See docs/DEPLOYING.md.`);
+    process.exit(1);
+  }
+  console.warn(`staging ${problem}`);
 }
 
 const result = spawnSync('npx', ['wrangler', 'deploy', '--env', env], { stdio: 'inherit' });

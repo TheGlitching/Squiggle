@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as entry from '../src/index';
 import { DAILY_CRON } from '../src/usage/limits';
-import { parseJsonc, pendingVars } from '../scripts/config.mjs';
+import { missingSecrets, parseJsonc, pendingVars } from '../scripts/config.mjs';
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const wranglerText = read('../wrangler.jsonc');
@@ -67,8 +67,6 @@ describe('environments', () => {
     expect(Object.keys(envs.staging.vars).sort()).toEqual(Object.keys(envs.production.vars).sort());
     for (const name of [
       'WEB_APP_ORIGIN',
-      'EXTENSION_CHROME_ORIGIN',
-      'EXTENSION_FIREFOX_ORIGIN',
       'BREVO_FROM_ADDRESS',
       'LLM_PROVIDER',
       'OPENROUTER_MODEL',
@@ -81,6 +79,12 @@ describe('environments', () => {
   it('keep every secret out of the file', () => {
     for (const env of Object.values(envs)) {
       for (const name of Object.keys(env.vars)) expect(name).not.toMatch(/KEY|SECRET|TOKEN|DATABASE_URL/);
+    }
+  });
+
+  it('keep every extension origin out of the file, so no real id lands in the repo', () => {
+    for (const env of Object.values(envs)) {
+      for (const value of Object.values(env.vars)) expect(String(value)).not.toMatch(/-extension:\/\//);
     }
   });
 
@@ -106,9 +110,14 @@ describe('the PENDING guard', () => {
     expect(pendingVars(text, 'staging')).toEqual([]);
   });
 
-  it('still blocks production until the undecided values are filled in', () => {
-    expect(pendingVars(wranglerText, 'production')).toEqual(
-      expect.arrayContaining(['EXTENSION_CHROME_ORIGIN', 'EXTENSION_FIREFOX_ORIGIN', 'STRIPE_PRICE_ID']),
-    );
+  it('still blocks production until the Stripe price exists', () => {
+    expect(pendingVars(wranglerText, 'production')).toEqual(['STRIPE_PRICE_ID']);
+  });
+});
+
+describe('the secret guard', () => {
+  it('names the required secrets missing from `wrangler secret list`', () => {
+    expect(missingSecrets('[{"name":"DATABASE_URL","type":"secret_text"}]')).toEqual(['EXTENSION_CHROME_ORIGIN']);
+    expect(missingSecrets('[{"name":"EXTENSION_CHROME_ORIGIN","type":"secret_text"}]')).toEqual([]);
   });
 });
