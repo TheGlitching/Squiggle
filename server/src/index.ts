@@ -8,9 +8,10 @@
  * environment (secrets live in the Workers secret store, never in this repo)
  * and hands every request to the same handler.
  *
- * CORS is pinned to a small set of allowed origins (the web app and our two
- * store listings) and no wildcard is ever emitted, so a page on any other
- * origin cannot read our responses even if it somehow obtains a token.
+ * CORS is pinned to a small set of allowed origins (the web app and the
+ * Chrome listing, plus any Firefox install on the endpoints it calls; see
+ * lib/cors.ts) and no wildcard is ever emitted, so a page on any other origin
+ * cannot read our responses even if it somehow obtains a token.
  *
  * Endpoints:
  *   GET    /health                     liveness probe
@@ -84,7 +85,7 @@ import {
 import { entitlementOf } from './billing/quota';
 import { createCheckoutSession, createPortalSession, type StripeConfig } from './billing/stripe';
 import { handleStripeWebhook } from './billing/webhook';
-import { corsHeaders, originRequired } from './lib/cors';
+import { corsHeaders, firefoxExtensionCall, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
 import { DAILY_CRON, REPORT_MAX_COUNT, USAGE_LOG_RETENTION_MS } from './usage/limits';
 import { NeonDb } from './db/neon';
@@ -102,9 +103,13 @@ import { secureEquals } from './lib/secureCompare';
 export interface Env {
   // Non-secret (wrangler.jsonc vars)
   WEB_APP_ORIGIN: string;
-  EXTENSION_CHROME_ORIGIN: string;
-  EXTENSION_FIREFOX_ORIGIN: string;
   // Secrets (wrangler secret put)
+  /**
+   * `chrome-extension://<id>` of the Chrome listing. Not sensitive, but a real
+   * extension id never enters the repository (AGENTS.md), so it is set like a
+   * secret. Firefox has no counterpart: see lib/cors.ts.
+   */
+  EXTENSION_CHROME_ORIGIN: string;
   DATABASE_URL: string;
   BREVO_API_KEY: string;
   BREVO_FROM_ADDRESS: string;
@@ -211,7 +216,8 @@ async function handle(
   const requestId = newRequestId();
   const startedAt = Date.now();
   const origin = req.headers.get('origin');
-  const originAllowed = origin !== null && allowedOrigins.has(origin);
+  const pinned = origin !== null && allowedOrigins.has(origin);
+  const originAllowed = pinned || (origin !== null && firefoxExtensionCall(origin, url.pathname));
 
   // A wrong origin is refused everywhere; a MISSING one is refused on the
   // endpoints that a page could otherwise drive with the reader's own cookie.
@@ -233,7 +239,7 @@ async function handle(
 
   if (req.method === 'OPTIONS') {
     if (!originAllowed) return new Response(null, { status: 204 });
-    return new Response(null, { status: 204, headers: corsHeaders(origin as string) });
+    return new Response(null, { status: 204, headers: corsHeaders(origin as string, pinned) });
   }
 
   let res: Response;
@@ -249,7 +255,7 @@ async function handle(
   const headers = new Headers(res.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   if (originAllowed) {
-    for (const [k, v] of Object.entries(corsHeaders(origin as string))) headers.set(k, v);
+    for (const [k, v] of Object.entries(corsHeaders(origin as string, pinned))) headers.set(k, v);
   }
   res = new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 
@@ -746,7 +752,7 @@ function servicesFromEnv(env: Env): Services {
       fromName: 'Squiggle',
     }),
     webAppOrigin: env.WEB_APP_ORIGIN,
-    extensionOrigins: [env.EXTENSION_CHROME_ORIGIN, env.EXTENSION_FIREFOX_ORIGIN],
+    extensionOrigins: [env.EXTENSION_CHROME_ORIGIN],
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,

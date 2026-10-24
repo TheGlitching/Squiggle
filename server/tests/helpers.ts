@@ -26,7 +26,9 @@ import type { UserRow } from '../src/db/types';
 
 export const WEB_APP_ORIGIN = 'https://squiggle.fr';
 export const CHROME_ORIGIN = 'chrome-extension://test-chrome-id';
-export const FIREFOX_ORIGIN = 'moz-extension://test-ff-id';
+// Firefox draws a fresh UUID per install, so this one is never configured: it is
+// what any Firefox install looks like, not a value the server knows in advance.
+export const FIREFOX_ORIGIN = 'moz-extension://0b1e5c3a-7d2f-4e8a-9c61-5f3a2d4b8e17';
 
 /** Fixed "now" for the suite: 2023-11-14T22:13:20Z. */
 export const T0 = 1_700_000_000_000;
@@ -379,7 +381,7 @@ export function makeTestEnv(
     clock,
     email,
     webAppOrigin,
-    extensionOrigins: [CHROME_ORIGIN, FIREFOX_ORIGIN],
+    extensionOrigins: [CHROME_ORIGIN],
     googleClientId: 'test-google-client-id',
     fetchImpl: opts.fetchImpl,
     adminToken: opts.adminToken,
