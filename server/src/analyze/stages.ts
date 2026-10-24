@@ -1,9 +1,10 @@
 /**
  * The five analysis stage endpoints (Phase 2c).
  *
- * The extension drives the run; the server owns the result. Each call is one
- * or two model calls (5–25 s), which is what makes a whole analysis fit on a
- * serverless runtime that would time out on a single 3-minute request.
+ * The client drives the run (the extension, or the web app with a pasted
+ * text); the server owns the result. Each call is one or two model calls
+ * (5–25 s), which is what makes a whole analysis fit on a serverless runtime
+ * that would time out on a single 3-minute request.
  *
  *   check         cache lookup only — a hit costs 0 LLM calls and 0 credits,
  *                 and the article's text never leaves the reader's machine
@@ -16,9 +17,11 @@
  * Two invariants hold the whole thing together.
  *
  *  1. **The server never fetches the article.** Its text is always supplied by
- *     the extension, from the page the reader is already looking at, so a
- *     paywalled article is analysed exactly as far as the reader can read it
- *     (flagged as partial) and our IP never appears in a publisher's logs.
+ *     the client: the extension reads the page the reader is already looking
+ *     at, the web app sends what the reader pasted. A paywalled article is
+ *     analysed exactly as far as the reader can read it (flagged as partial),
+ *     an address given beside a pasted text is never requested, and our IP
+ *     never appears in a publisher's logs.
  *     The only pages the server fetches are the article's own cited sources,
  *     through the SSRF-hardened fetcher.
  *
@@ -45,6 +48,7 @@ import {
   RESEARCHABLE_FINDING_CATEGORIES,
   researchFindings,
   safeFetchPageText,
+  sha256Hex,
   verifyCitedSources,
   type AnalysisInput,
   type BaseLLMClient,
@@ -67,7 +71,7 @@ import {
   HOUR_MS,
   MAX_CONCURRENT_RUNS,
 } from '../usage/abuse';
-import { articleUrlHash, canonicalArticleUrl } from './canonicalUrl';
+import { articleUrlHash, canonicalAddress, PASTED_TEXT_KEY } from './canonicalUrl';
 import type { AuditRequest } from './schemas';
 import { parseRunState, serializeRunState, type AnalysisRunState } from './runState';
 
@@ -134,9 +138,9 @@ export interface CheckResult {
 }
 
 /**
- * Cache preflight. Takes the URL and the fingerprint of the text the reader's
- * page yields: on a hit the reader gets a full report without the article
- * ever being sent anywhere.
+ * Cache preflight. Takes the URL (absent for a text pasted without one) and
+ * the fingerprint of the text the reader's page yields: on a hit the reader
+ * gets a full report without the article ever being sent anywhere.
  *
  * The fingerprint is the reader's own claim and is not verified, which is
  * safe: a reader who lies about it asks for a report built from a text that is
@@ -145,7 +149,7 @@ export interface CheckResult {
  */
 export async function analyzeCheck(
   s: AnalyzeServices,
-  rawUrl: string,
+  rawUrl: string | undefined,
   textHash: string,
 ): Promise<Outcome<CheckResult>> {
   const urlHash = await articleUrlHash(rawUrl);
@@ -186,10 +190,11 @@ export async function analyzeAudit(
   user: UserRow,
   payload: AuditRequest,
 ): Promise<Outcome<AuditResult>> {
-  const canonical = canonicalArticleUrl(payload.url);
+  // The address is only ever a key and a line of the prompt: whatever it
+  // names, this server never requests it.
+  const canonical = canonicalAddress(payload.url);
   if (!canonical) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
-  const urlHash = await articleUrlHash(canonical);
-  if (!urlHash) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
+  const urlHash = await sha256Hex(canonical);
 
   const now = s.clock.now();
 
@@ -215,7 +220,7 @@ export async function analyzeAudit(
   const client = s.llm();
 
   const input: AnalysisInput = {
-    url: canonical,
+    url: canonical === PASTED_TEXT_KEY ? 'non communiquée (texte collé par le lecteur)' : canonical,
     title: payload.title || 'Article sans titre',
     author: payload.author,
     outlet: payload.outlet,

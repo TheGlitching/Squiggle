@@ -32,7 +32,7 @@ extension and must be changed in both halves together: the landing demo's severi
 logic and palette (`web/src/demo.ts` mirrors `src/adapters/findingAdapters.ts`
 `severityToHighlightSeverity` and `src/content/shadowOverlay.ts`'s colours), and the
 R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBadge.tsx`,
-plus the PNGs in `src/assets/`). The design tokens themselves live in
+plus the PNGs in `src/assets/` and the app icons in `web/public/icons/`). The design tokens themselves live in
 `web/src/index.css` (the `@theme` block). The dark theme's WCAG AA
 contract is pinned by `web/tests/contrast.test.ts`: primary buttons carry
 `accentForeground` (near-black) on `accent`, and demo severity labels use the

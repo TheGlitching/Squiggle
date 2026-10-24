@@ -35,6 +35,11 @@
  *   POST   /v1/analyze/research        (signed) check one factual finding
  *   POST   /v1/analyze/source-check    (signed) read one link the article cites
  *   POST   /v1/analyze/finalize        (signed) reconcile, cache, consume 1 credit
+ *   GET    /web/analyze/check          (session) the same five stages for a pasted text,
+ *   POST   /web/analyze/audit                    on the same quota, behind an allowed Origin
+ *   POST   /web/analyze/research
+ *   POST   /web/analyze/source-check
+ *   POST   /web/analyze/finalize
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
@@ -58,6 +63,7 @@ import {
   AuditRequestSchema,
   CheckQuerySchema,
   FinalizeRequestSchema,
+  PastedAuditRequestSchema,
   ResearchRequestSchema,
   SourceCheckRequestSchema,
 } from './analyze/schemas';
@@ -438,7 +444,11 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   }
 
   if (path.startsWith('/v1/analyze/')) {
-    return analyzeRoute(req, url, s, path, method, requestId);
+    return analyzeRoute(req, url, s, 'install', path.slice('/v1/analyze'.length), method, requestId);
+  }
+
+  if (path.startsWith('/web/analyze/')) {
+    return analyzeRoute(req, url, s, 'session', path.slice('/web/analyze'.length), method, requestId);
   }
 
   if (path === '/admin/metrics' && method === 'GET') {
@@ -628,16 +638,23 @@ async function accountForUser(
 }
 
 /**
- * The analysis stages. Every one of them is behind the same signed-request
- * gate as the rest of `/v1/`, and every body is parsed by its zod schema
- * before a handler sees it — so a handler only ever receives a value of the
- * shape it declares, and an oversized or malformed payload costs no tokens.
+ * The analysis stages, reached two ways that differ only in how the reader is
+ * identified. `install` is the extension, behind the same signed-request gate
+ * as the rest of `/v1/`. `session` is the web app, with the session cookie and
+ * an allowed Origin (`lib/cors.ts`); it may audit a text without an address
+ * and never one that cites links. Past that, both run the same handlers on
+ * the same account, so a pasted text spends the same trial and subscription.
+ *
+ * Every body is parsed by its zod schema before a handler sees it, so a
+ * handler only ever receives a value of the shape it declares, and an
+ * oversized or malformed payload costs no tokens.
  */
 async function analyzeRoute(
   req: Request,
   url: URL,
   s: Services,
-  path: string,
+  caller: 'install' | 'session',
+  stage: string,
   method: string,
   requestId: string,
 ): Promise<Response> {
@@ -657,38 +674,49 @@ async function analyzeRoute(
   // read once and reused: re-reading a consumed body would verify one string
   // and parse another.
   const rawBody = method === 'GET' ? '' : await req.text();
-  const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
-  if (!auth.ok) return finish(auth);
+  let user: UserRow;
+  if (caller === 'install') {
+    const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
+    if (!auth.ok) return finish(auth);
+    user = auth.user;
+  } else {
+    const session = await sessionUser({ db: s.db, clock: s.clock }, req);
+    if (!session) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
+    user = session;
+  }
 
-  if (path === '/v1/analyze/check' && method === 'GET') {
-    const target = url.searchParams.get('url') ?? '';
+  if (stage === '/check' && method === 'GET') {
+    // A pasted text may come without an address; an install always has one,
+    // so an absent `url` there stays the `invalid_url` it always was.
+    const target = url.searchParams.get('url') ?? (caller === 'session' ? undefined : '');
     const query = CheckQuerySchema.safeParse({ text: url.searchParams.get('text') ?? '' });
-    if (!query.success) return finish(invalidPayload(query.error, requestId, auth.user.id));
+    if (!query.success) return finish(invalidPayload(query.error, requestId, user.id));
     return finish(await analyzeCheck(analyze, target, query.data.text));
   }
 
-  if (path === '/v1/analyze/audit' && method === 'POST') {
-    const parsed = AuditRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
-    return finish(await analyzeAudit(analyze, auth.user, parsed.data));
+  if (stage === '/audit' && method === 'POST') {
+    const schema = caller === 'install' ? AuditRequestSchema : PastedAuditRequestSchema;
+    const parsed = schema.safeParse(parseJson(rawBody));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
+    return finish(await analyzeAudit(analyze, user, parsed.data));
   }
 
-  if (path === '/v1/analyze/research' && method === 'POST') {
+  if (stage === '/research' && method === 'POST') {
     const parsed = ResearchRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
-    return finish(await analyzeResearch(analyze, auth.user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
+    return finish(await analyzeResearch(analyze, user, parsed.data));
   }
 
-  if (path === '/v1/analyze/source-check' && method === 'POST') {
+  if (stage === '/source-check' && method === 'POST') {
     const parsed = SourceCheckRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
-    return finish(await analyzeSourceCheck(analyze, auth.user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
+    return finish(await analyzeSourceCheck(analyze, user, parsed.data));
   }
 
-  if (path === '/v1/analyze/finalize' && method === 'POST') {
+  if (stage === '/finalize' && method === 'POST') {
     const parsed = FinalizeRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, auth.user.id));
-    return finish(await analyzeFinalize(analyze, auth.user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
+    return finish(await analyzeFinalize(analyze, user, parsed.data));
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));

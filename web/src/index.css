@@ -133,6 +133,26 @@
     animation: hero-fade 200ms var(--ease-out);
   }
 
+  /* A finding's passage in a pasted text: the hero highlight, without its
+     entrance, since a report is read rather than shown. */
+  .annot {
+    border-radius: 3px;
+    padding: 1px 2px;
+    color: inherit;
+    background-color: var(--sev-tint);
+    text-decoration: underline 2px var(--sev-color);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 5px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .annot:hover,
+  .annot[aria-current='true'] {
+    outline: 2px solid var(--color-paperInk);
+    outline-offset: 1px;
+  }
+
   .caret {
     display: inline-block;
     width: 2px;
@@ -196,6 +216,13 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    /* The site is dark-only: native scrollbars, resize handles and pickers follow. */
+    color-scheme: dark;
+  }
+
+  input,
+  textarea {
+    caret-color: var(--color-accentHover);
   }
 
   body {

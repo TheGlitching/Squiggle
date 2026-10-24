@@ -12,7 +12,8 @@ each a separate Worker with its own secrets and its own database.
 
 The list of Worker paths is `assets.run_worker_first` in `server/wrangler.jsonc`.
 `server/tests/deploy.test.ts` fails when the Worker gains a route that list does not
-cover, or when a web route falls under one of its prefixes.
+cover, when a web route falls under one of its prefixes, or when the installed app's
+service worker (`web/sw.js`) stops listing the same paths as the ones it never answers.
 
 ## One-time setup, per environment
 

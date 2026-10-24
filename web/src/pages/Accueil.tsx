@@ -33,7 +33,18 @@ const NEUTRALITY = [
 const FAQ = [
   [
     'Sur quels navigateurs fonctionne-t-il ?',
-    'Sur Chrome et Firefox, ainsi que sur les navigateurs basés sur Chromium comme Edge ou Brave.',
+    'L’extension, sur Chrome et Firefox, ainsi que sur les navigateurs basés sur Chromium comme Edge ou Brave. Partout ailleurs, le site analyse le texte que vous y collez.',
+  ],
+  [
+    'Et sur mon téléphone ?',
+    <>
+      Collez le texte de l’article sur la page{' '}
+      <Link to="/analyser" className={QUIET_LINK}>
+        Analyser un texte
+      </Link>
+      . Le site s’installe sur l’écran d’accueil comme une application ; sur Android, vous pouvez ensuite partager
+      un article vers Squiggle. C’est le même compte que l’extension : mêmes analyses offertes, même abonnement.
+    </>,
   ],
   [
     'Que se passe-t-il quand mes analyses offertes sont épuisées ?',
@@ -45,7 +56,7 @@ const FAQ = [
   ],
   [
     'Mon article est-il envoyé quelque part ?',
-    'Avec un compte, oui : le texte de l’article transite par notre serveur et par le fournisseur du modèle le temps de l’analyse, puis n’est pas conservé. Avec votre propre clé, il part directement chez le fournisseur que vous avez choisi. Le détail est sur la page Transparence.',
+    'Avec un compte, oui : le texte de l’article, lu par l’extension ou collé sur le site, transite par notre serveur et par le fournisseur du modèle le temps de l’analyse, puis n’est pas conservé. Avec votre propre clé, il part directement chez le fournisseur que vous avez choisi. Le détail est sur la page Transparence.',
   ],
   [
     'Et les articles payants ?',
@@ -104,6 +115,9 @@ export function Accueil() {
             <a href="#verifie" className={SECONDARY_BUTTON}>
               Voir un exemple
             </a>
+            <Link to="/analyser" className={QUIET_LINK}>
+              Sans extension : analyser un texte
+            </Link>
           </div>
           <p className="mt-4 text-base text-muted">
             {FREE_ANALYSES} analyses offertes, sans carte bancaire. Ensuite {PRICE_MONTHLY} par mois, sans engagement.

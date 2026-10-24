@@ -3,9 +3,10 @@
  *
  * The destination travels through a hop the server does not control (Google,
  * a mailbox), so it is stored server-side with the handshake and only ever
- * taken from this allowlist: the account page, or the extension bridge with
- * both of its parameters. Anything else - another origin, a protocol-relative
- * URL, an unknown path - is dropped and the caller falls back to `/compte`.
+ * taken from this allowlist: the account page, the analysis page, or the
+ * extension bridge with both of its parameters. Anything else - another
+ * origin, a protocol-relative URL, an unknown path - is dropped and the caller
+ * falls back to `/compte`.
  */
 
 export const DEFAULT_NEXT = '/compte';
@@ -32,6 +33,8 @@ export function sanitizeNext(raw: unknown): string | null {
   if (url.origin !== PROBE_ORIGIN) return null;
 
   if (url.pathname === '/compte') return DEFAULT_NEXT;
+  // Nothing of the pasted text travels: it waits in the reader's own browser.
+  if (url.pathname === '/analyser') return '/analyser';
   if (url.pathname === '/pont') {
     const ext = url.searchParams.get('ext')?.trim();
     const pub = url.searchParams.get('pub')?.trim();

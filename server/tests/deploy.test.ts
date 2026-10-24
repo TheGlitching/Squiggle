@@ -47,6 +47,12 @@ describe('static assets', () => {
     for (const path of served) expect(routedToWorker(path), path).toBe(true);
   });
 
+  it('keep the installed app’s service worker off every Worker path', () => {
+    const worker = read('../../web/sw.js');
+    const declared = /const SERVER_PATHS = (\[[^\]]*\]);/.exec(worker)?.[1];
+    expect(declared && JSON.parse(declared.replace(/'/g, '"'))).toEqual(patterns);
+  });
+
   it('leave every web route to the static assets', () => {
     const routes = [...read('../../web/src/App.tsx').matchAll(/case '(\/[^']*)'/g)].map((m) => m[1]);
     expect(routes).toContain('/compte');

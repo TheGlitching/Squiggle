@@ -49,26 +49,37 @@ export const CheckQuerySchema = z.object({
   text: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
-export const AuditRequestSchema = z
-  .object({
-    url,
-    title: z.string().max(500).default(''),
-    author: z.string().max(200).optional(),
-    outlet: z.string().max(200).optional(),
-    blocks: z.array(TextBlockSchema).min(1).max(MAX_BLOCKS),
-    citedSources: z.array(CitedSourceSchema).max(MAX_CITED_SOURCES).default([]),
-    /**
-     * The extension could only read part of the page (a paywall). It changes
-     * what the audit is told it is looking at, never whether it runs.
-     */
-    partialAccess: z.boolean().default(false),
-  })
-  .refine(
-    (v) => v.blocks.reduce((total, b) => total + b.text.length, 0) <= MAX_ARTICLE_CHARS,
-    { message: `l'article dépasse ${MAX_ARTICLE_CHARS} caractères`, path: ['blocks'] },
-  );
+const auditFields = {
+  url,
+  title: z.string().max(500).default(''),
+  author: z.string().max(200).optional(),
+  outlet: z.string().max(200).optional(),
+  blocks: z.array(TextBlockSchema).min(1).max(MAX_BLOCKS),
+  citedSources: z.array(CitedSourceSchema).max(MAX_CITED_SOURCES).default([]),
+  /**
+   * The extension could only read part of the page (a paywall). It changes
+   * what the audit is told it is looking at, never whether it runs.
+   */
+  partialAccess: z.boolean().default(false),
+};
 
-export type AuditRequest = z.infer<typeof AuditRequestSchema>;
+const withinArticleCap = (v: { blocks: Array<{ text: string }> }) =>
+  v.blocks.reduce((total, b) => total + b.text.length, 0) <= MAX_ARTICLE_CHARS;
+const overArticleCap = { message: `l'article dépasse ${MAX_ARTICLE_CHARS} caractères`, path: ['blocks'] };
+
+export const AuditRequestSchema = z.object(auditFields).refine(withinArticleCap, overArticleCap);
+
+/**
+ * The web app's audit: a text the reader pasted. Its address is optional
+ * metadata, given to the audit and never fetched; without one the report is
+ * filed by its text alone. A pasted text carries no links, so the request may
+ * name none, and a run opened from it can never make the server read a page.
+ */
+export const PastedAuditRequestSchema = z
+  .object({ ...auditFields, url: url.optional(), citedSources: z.array(CitedSourceSchema).max(0).default([]) })
+  .refine(withinArticleCap, overArticleCap);
+
+export type AuditRequest = z.infer<typeof PastedAuditRequestSchema>;
 
 export const RunIdSchema = z.string().min(1).max(128);
 

@@ -79,6 +79,15 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   { method: 'POST', path: '/web/account/email/confirm' },
   { method: 'GET', path: '/web/account/installs' },
   { method: 'POST', path: '/web/account/installs/revoke' },
+  // A pasted text's analysis, on the reader's cookie: each stage can spend
+  // the account's credit or model calls, so none of them runs without an
+  // Origin proving the web app sent it. The GET is included because it is
+  // the same conversation, and a check is what a forged run would start with.
+  { method: 'GET', path: '/web/analyze/check' },
+  { method: 'POST', path: '/web/analyze/audit' },
+  { method: 'POST', path: '/web/analyze/research' },
+  { method: 'POST', path: '/web/analyze/source-check' },
+  { method: 'POST', path: '/web/analyze/finalize' },
 ];
 
 export function originRequired(method: string, path: string): boolean {
