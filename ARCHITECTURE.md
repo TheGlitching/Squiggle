@@ -58,6 +58,15 @@ The same Worker serves the web app (`web/dist`) as static assets, so the app and
 share one origin; only the API paths reach the Worker code. See
 [docs/DEPLOYING.md](docs/DEPLOYING.md).
 
+The web app is a second client of the same analysis. Its analysis page sends the text a
+reader pasted to `/web/analyze/*`, the same five stages as `/v1/analyze/*`, identified by
+the session cookie instead of an install's signature and refused without an allowed
+`Origin`. Past that check both reach the same handlers on the same account, so the trial
+and the subscription are one, and the client is the same `HostedAnalysisClient`
+(`shared/src/hosted/client.ts`) in its session mode. A pasted text cites no links, so the
+web route refuses any `citedSources`: a run started from the site never makes the server
+read a page.
+
 ```
 +-----------------------------+
 |         Extension           |
@@ -93,11 +102,13 @@ check  ->  audit  ->  research (x N)  ->  source-check (x M)  ->  finalize
 
 Three invariants hold that shape together.
 
-**The server never fetches the article.** Its text always comes from the extension,
-from the page the reader is already looking at. A paywalled article is therefore
-analysed exactly as far as the reader can read it, flagged as partial, and our IP
-never appears in a publisher's logs. The only pages the server fetches are the
-sources the article itself cites, through an SSRF-hardened fetcher.
+**The server never fetches the article.** Its text always comes from the client: the
+extension, from the page the reader is already looking at, or the web app, from what the
+reader pasted. A paywalled article is therefore analysed exactly as far as the reader can
+read it, flagged as partial, and our IP never appears in a publisher's logs. An address
+given beside a pasted text is a key and a line of the prompt, never a request. The only
+pages the server fetches are the sources the article itself cites, through an
+SSRF-hardened fetcher.
 
 **The intermediate state stays on the server.** It lives in an `analysis_runs` row for
 an hour; the client names a run, a finding and a claim, never their content. Finalize
@@ -117,6 +128,23 @@ fingerprint (`articleTextHash` in `shared/`) is computed by the extension to ask
 cache and by the server, from the text it was given, to file a report: a client cannot
 declare the hash a report is stored under, so text invented for a real article's
 address is never served to a reader whose page says something else.
+
+A text pasted without an address is filed under a fixed key, `PASTED_TEXT_KEY`, that no
+http(s) URL can canonicalise to, so its report is keyed by the fingerprint alone: the same
+words get the same report, any other words another one. The web app makes the title the
+first block, so the fingerprint covers it too.
+
+## The installed app
+
+The web app is a PWA (`web/public/manifest.webmanifest`, `web/sw.js`), opening on the
+analysis page. Its service worker caches the build's own files and nothing else: a page
+navigation gets the app's one `index.html`, fresh or from the cache when offline, and
+every request under the Worker's paths goes to the network and is never stored. Android
+can share an article to it (Web Share Target, `GET /analyser?title&text&url`); the
+worker answers every navigation by fetching the bare `/`, so a shared text in that query
+string never leaves the device, and the page moves it into the form and wipes it from the
+address bar. `vite.config.ts` writes the file list and a content-derived version into the
+worker at build time.
 
 `SECURITY.md` has the controls and the residual risks; `PRIVACY.md` has the retention
 table and the subprocessors.
@@ -219,6 +247,8 @@ shared/    the analysis engine, the provider clients, and the request-signing
            protocol - imported by BOTH the extension and the server, so a
            prompt, a score or a signature can never mean two different things
 server/    the hosted backend (Cloudflare Workers + Neon)
+web/       the public web app: sign-in, subscription, the extension bridge, and
+           the paste-to-analyse page; reads shared/ by relative path, never src/
 ```
 
 `shared/` exists for one reason: the moment the same analysis could run in two places,

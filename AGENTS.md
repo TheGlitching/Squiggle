@@ -27,12 +27,14 @@ out of `shared/`, move it instead.
 `web/BRIDGE.md`; the extension's half is `src/hosted/session.ts` (sign-in paths, the
 signed account read, sign-out) and `squiggle-auth.html` (the Chromium landing page).
 
-`web/` may not import from `src/`, so two web surfaces deliberately mirror the
+`web/` may not import from `src/`, so three web surfaces deliberately mirror the
 extension and must be changed in both halves together: the landing demo's severity
 logic and palette (`web/src/demo.ts` mirrors `src/adapters/findingAdapters.ts`
-`severityToHighlightSeverity` and `src/content/shadowOverlay.ts`'s colours), and the
-R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBadge.tsx`,
-plus the PNGs in `src/assets/`). The design tokens themselves live in
+`severityToHighlightSeverity` and `src/content/shadowOverlay.ts`'s colours), the report
+page's category and severity names (`web/src/report.ts`, pinned by
+`web/tests/report.test.ts`), and the R2-02 badge (`web/src/components/Brand.tsx` beside
+`src/ui/components/SquiggleBadge.tsx`, plus the PNGs in `src/assets/` and the app icons
+in `web/public/icons/`). The design tokens themselves live in
 `web/src/index.css` (the `@theme` block). The dark theme's WCAG AA
 contract is pinned by `web/tests/contrast.test.ts`: primary buttons carry
 `accentForeground` (near-black) on `accent`, and demo severity labels use the
