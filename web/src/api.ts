@@ -7,7 +7,7 @@
  * app and the API are the same origin.
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 export type Plan = 'none' | 'trial' | 'active';
 

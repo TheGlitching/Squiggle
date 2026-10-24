@@ -55,3 +55,18 @@ export function account(overrides: Partial<Account> = {}): Account {
     ...overrides,
   };
 }
+
+/** An in-memory `Storage`: the test environment's own `localStorage` is Node's, and not usable. */
+export function memoryStorage(): Storage {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => void map.set(k, String(v)),
+    removeItem: (k) => void map.delete(k),
+    clear: () => map.clear(),
+    key: (i) => [...map.keys()][i] ?? null,
+    get length() {
+      return map.size;
+    },
+  };
+}

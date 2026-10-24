@@ -19,7 +19,7 @@ import { DAILY_ANALYSES, FREE_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../offer
 import { Link } from '../router';
 import { INFERENCE_HOSTS_LABEL, RETENTION } from './Transparence';
 
-const UPDATED = '22 octobre 2026';
+const UPDATED = '23 octobre 2026';
 
 const EDITEUR = {
   name: 'Denis Fonteneau',
@@ -333,6 +333,12 @@ export function Confidentialite() {
           analyses, qui note qu’une analyse a eu lieu et quand, jamais laquelle. Le texte des articles n’est jamais
           conservé, et aucune identité de lecteur n’accompagne une requête vers le modèle.
         </p>
+        <p>
+          Un texte que vous collez sur la page « Analyser un texte » est traité exactement comme l’article que lit
+          l’extension : il transite par notre serveur et par le fournisseur du modèle le temps de l’analyse, puis n’est
+          pas conservé. L’adresse que vous indiquez à côté reste une simple mention : elle n’est jamais visitée. Avant
+          l’analyse, le texte attend dans votre navigateur, jamais sur nos serveurs, jusqu’à ce que vous l’effaciez.
+        </p>
         <Table head={['Finalité', 'Base légale (RGPD)']} rows={PROCESSING} />
         <p>Aucune donnée n’est vendue, utilisée pour de la publicité, pour un profilage, ni pour entraîner un modèle.</p>
       </Article>
@@ -370,7 +376,10 @@ export function Confidentialite() {
       <Article title="6. Cookies et traceurs">
         <p>
           Le site dépose un seul cookie, la session de connexion, strictement nécessaire au service : il n’appelle pas
-          votre consentement. Aucun traceur publicitaire ou analytique n’est utilisé, sur le site comme dans l’extension.
+          votre consentement. Il garde aussi dans votre navigateur le texte que vous collez pour l’analyser et, si vous
+          l’installez sur votre écran d’accueil, ses propres fichiers pour s’ouvrir sans attendre ; ni l’un ni l’autre
+          ne sert à vous suivre. Aucun traceur publicitaire ou analytique n’est utilisé, sur le site comme dans
+          l’extension.
         </p>
       </Article>
     </LegalPage>
@@ -388,7 +397,8 @@ export function Conditions() {
           Un rapport est l’analyse d’un texte : la façon dont un article étaye ce qu’il affirme. Il relève des
           affirmations, regarde si l’article cite ses sources et si ces sources disent ce qu’il leur fait dire, et signale
           les procédés qui affaiblissent un raisonnement. Il porte sur le texte que votre navigateur a transmis, tel
-          qu’il était au moment de l’analyse, dans la limite de ce que vous pouviez lire.
+          qu’il était au moment de l’analyse : la page que vous lisiez, dans la limite de ce que vous pouviez en lire,
+          ou le texte que vous avez collé sur le site.
         </p>
       </Article>
 
@@ -403,7 +413,8 @@ export function Conditions() {
 
       <Article title="3. Le cache partagé">
         <p>
-          Un rapport est mis en cache 30 jours et servi à tout lecteur dont la page donne le même texte. Il ne cite que de
+          Un rapport est mis en cache 30 jours et servi à tout lecteur dont la page, ou le texte collé, donne le même
+          texte. Il ne cite que de
           courts extraits de l’article, pour montrer ce qu’il discute ; il n’en reproduit jamais le texte intégral.
         </p>
       </Article>

@@ -17,10 +17,14 @@ export function Layout({ children }: { children: ReactNode }) {
             <BrandLockup />
           </Link>
           <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted" aria-label="Navigation principale">
+            <Link to="/analyser" className="hover:text-foreground">
+              Analyser un texte
+            </Link>
             <Link to="/tarifs" className="hover:text-foreground">
               Tarifs
             </Link>
-            <Link to="/transparence" className="hover:text-foreground">
+            {/* In the footer too; on a phone the header keeps to one line of links. */}
+            <Link to="/transparence" className="hover:text-foreground max-sm:hidden">
               Transparence
             </Link>
             <Link

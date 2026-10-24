@@ -14,7 +14,8 @@ export const INFERENCE_HOSTS_LABEL =
   inferenceHosts.length > 0 ? `Hébergeurs d’inférence : ${INFERENCE_HOSTS_TEXT}` : 'Hébergeurs d’inférence (choisis via OpenRouter)';
 
 export const RETENTION = [
-  ['Texte de l’article', 'Mémoire, le temps de l’appel d’audit', 'Jamais écrit'],
+  ['Texte de l’article, lu par l’extension ou collé sur le site', 'Mémoire, le temps de l’appel d’audit', 'Jamais écrit'],
+  ['Texte collé sur le site, avant l’analyse', 'Votre navigateur, jamais nos serveurs', 'Jusqu’à ce que vous l’effaciez'],
   ['Rapport d’analyse, avec extraits de l’article (cache partagé)', 'Base de données', '30 jours, 500 rapports au plus'],
   ['Analyse en cours (constats, sans l’article)', 'Base de données', '1 heure'],
   ['Journal d’usage : qu’un compte a lancé une analyse, et quand', 'Base de données', '12 mois, sans contenu et sans nommer l’article'],
@@ -66,8 +67,9 @@ export function Transparence() {
             équilibre entre vitesse, qualité de raisonnement et coût. Il est exécuté par{' '}
             {INFERENCE_HOSTS_TEXT}. Utiliser un modèle à poids ouverts ne signifie pas envoyer le
             texte vers des serveurs en Chine. Squiggle ne traite que des articles publics : le texte
-            de la page que vous lisez, son adresse et les pages qu’elle cite. Aucune donnée privée
-            ne part vers le modèle, et aucune identité de lecteur n’accompagne une requête.
+            de la page que vous lisez, son adresse et les pages qu’elle cite. Un texte collé sur le
+            site suit exactement le même trajet. Aucune donnée privée ne part vers le modèle, et
+            aucune identité de lecteur n’accompagne une requête.
           </p>
           <dl className="mt-5 space-y-3 text-sm">
             <div>
@@ -81,9 +83,11 @@ export function Transparence() {
             <div>
               <dt className="font-medium">Notre serveur ne va jamais chercher l’article lui-même.</dt>
               <dd className="text-muted">
-                C’est votre navigateur qui le lui fournit, depuis la page que vous lisez. Un article
-                payant est donc analysé exactement dans la limite de ce que vous pouvez lire. Notre
-                adresse n’apparaît dans les journaux d’aucun éditeur.
+                C’est votre navigateur qui le lui fournit : l’extension depuis la page que vous lisez,
+                le site depuis le texte que vous y collez. Un article payant est donc analysé
+                exactement dans la limite de ce que vous pouvez lire. L’adresse que vous indiquez à
+                côté d’un texte collé accompagne le rapport, mais personne ne la visite. Notre adresse
+                n’apparaît dans les journaux d’aucun éditeur.
               </dd>
             </div>
             <div>

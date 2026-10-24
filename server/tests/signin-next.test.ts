@@ -56,6 +56,11 @@ describe('sanitizeNext', () => {
     expect(bridgeOf(sanitizeNext(BRIDGE)!)).toEqual({ pathname: '/pont', ext: 'abcdefghijklmnop', pub: PUB });
   });
 
+  it('keeps the analysis page, without anything a share could have put after it', () => {
+    expect(sanitizeNext('/analyser')).toBe('/analyser');
+    expect(sanitizeNext('/analyser?text=Le%20texte%20de%20l%E2%80%99article')).toBe('/analyser');
+  });
+
   it('drops every parameter of a bridge URL but ext and pub', () => {
     expect(sanitizeNext(`${BRIDGE}&evil=1`)).toBe(sanitizeNext(BRIDGE));
   });
@@ -69,6 +74,7 @@ describe('sanitizeNext', () => {
     ['a relative path', 'compte'],
     ['a path off the allowlist', '/admin'],
     ['a look-alike prefix', '/compte-evil'],
+    ['a look-alike of the analysis page', '/analyser-evil'],
     ['a bridge without ext', `/pont?pub=${encodeURIComponent(PUB)}`],
     ['a bridge without pub', '/pont?ext=abc'],
     ['an empty string', ''],

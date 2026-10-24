@@ -47,8 +47,9 @@ hosts is tracked separately). Squiggle only processes public articles: the text 
 the page being read, its URL and the pages it cites. No reader identity is sent
 with a request. What that means concretely:
 
-- **the article text you are reading is sent to our server**, and from there to
-  OpenRouter and the inference host that runs the model. It is not stored: the
+- **the article text you are reading is sent to our server**, or the text you paste
+  on the website, and from there to OpenRouter and the inference host that runs the
+  model. It is not stored: the
   audit call is the only thing that needs it, and it is dropped when that request
   ends. No table in our database holds it.
 - **the finished report is cached and shared, and it contains excerpts.** Each
@@ -56,9 +57,12 @@ with a request. What that means concretely:
   summary. Two readers of the same article get the same report, which is what
   makes the service affordable. The cache key is the canonical URL, computed on
   the server, plus a fingerprint of the article's text, plus the model and the
-  prompt version.
+  prompt version. A text pasted on the website without an address is filed under a
+  fixed key no URL can canonicalise to, so it is keyed by its fingerprint alone.
 - **our server never fetches the article itself.** It only ever fetches pages
-  the article cites, and only through an SSRF-hardened fetcher.
+  the article cites, and only through an SSRF-hardened fetcher. An address given
+  beside a pasted text is never requested, and the website's analysis route refuses
+  cited links outright, so a run started there makes the server read no page.
 
 ### The controls
 
@@ -76,7 +80,9 @@ with a request. What that means concretely:
   top-level navigation carries no `Origin` by design; their anti-forgery control
   is the OAuth `state`. `/v1/*` is exempt because the signature is strictly
   stronger evidence than a header, and a mismatched origin is still refused
-  there.
+  there. The website's analysis stages (`/web/analyze/*`) are among the
+  Origin-required ones, the GET preflight included: each stage spends model calls
+  or a credit on the reader's cookie, and nothing but our own page may start one.
 - **Ceilings, not just quotas.** One analysis in flight per account, an hourly
   per-account ceiling, and an hourly ceiling for the whole service. The last one
   is what bounds the worst case: every account compromised at once still cannot
@@ -89,7 +95,8 @@ with a request. What that means concretely:
   the reader's own page yields the same hash. Text invented for a real
   article's address therefore sits under a key no honest reader asks for. The
   same rule stops a corrected article from being served its old report. The
-  title, author and outlet are not part of the fingerprint.
+  title, author and outlet are not part of the fingerprint, except that the
+  website sends a pasted title as the text's first block.
 - **Report sanitization.** A cached report is written by one reader's analysis
   and served to every later reader of the same article, which makes the cache
   the one place where text derived from a hostile article could reach someone

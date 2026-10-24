@@ -5,6 +5,7 @@
  * `src/adapters/findingAdapters.ts` and `SEVERITY_COLORS` mirrors
  * `src/content/shadowOverlay.ts`. Change them together.
  */
+import { determineScoreBand } from '../../shared/src/engine/bands';
 
 export type DemoCategory =
   | 'sophisme'
@@ -84,14 +85,8 @@ export const SEVERITY_LABELS: Record<SeverityLevel, string> = { 3: 'Critique', 2
 
 export type ScoreBand = 'solide' | 'perfectible' | 'fragile' | 'problematique';
 
-/** Mirror of `determineScoreBand` in `shared/src/engine/scoring.ts`, kept here so
- * the bundle does not pull the engine's schema library in for four thresholds. */
-export function scoreBand(score: number): ScoreBand {
-  if (score >= 80) return 'solide';
-  if (score >= 70) return 'perfectible';
-  if (score >= 60) return 'fragile';
-  return 'problematique';
-}
+/** The engine's own thresholds, from the module that keeps them apart from its schema library. */
+export const scoreBand: (score: number) => ScoreBand = determineScoreBand;
 
 /** The band titles of `getScoreBandLabel`, and the severity tone the panel's
  * `getScoreBandColor` paints each band with. */

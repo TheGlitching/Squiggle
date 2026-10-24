@@ -1,5 +1,6 @@
 /**
- * The extension's half of the hosted analysis protocol.
+ * The client half of the hosted analysis protocol, for both entry points: the
+ * extension (a signed install) and the web app (a browser session).
  *
  * It lives beside `auth/signing.ts` and for the same reason: the server
  * implements the other half of exactly this conversation, and a disagreement
@@ -47,7 +48,8 @@ export class HostedApiError extends Error {
   }
 }
 
-export interface HostedClientConfig {
+/** The extension: every call is signed with the install's key, on `/v1/analyze/*`. */
+export interface InstallClientConfig {
   /** Origin of the hosted API, without a trailing slash. */
   baseUrl: string;
   /** The opaque extension token issued when this install signed in. */
@@ -60,8 +62,27 @@ export interface HostedClientConfig {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * The web app: it holds no key, so every call rides the reader's session
+ * cookie on `/web/analyze/*`, where the server requires an allowed Origin
+ * instead of a signature. The stages, their order and their payloads are the
+ * extension's, so the two entry points cannot drift into two protocols.
+ */
+export interface SessionClientConfig {
+  /** Origin of the hosted API, without a trailing slash; empty when same-origin. */
+  baseUrl: string;
+  session: 'cookie';
+  fetchImpl?: typeof fetch;
+}
+
+export type HostedClientConfig = InstallClientConfig | SessionClientConfig;
+
 export interface HostedAnalyzeInput {
-  url: string;
+  /**
+   * The article's address. Only a text pasted into the web app may lack one;
+   * the server then files the report by the text alone.
+   */
+  url?: string;
   title?: string;
   author?: string;
   outlet?: string;
@@ -95,6 +116,8 @@ interface CheckResponse {
 
 export class HostedAnalysisClient {
   private readonly config: HostedClientConfig;
+  /** `/v1/analyze` for a signed install, `/web/analyze` for a browser session. */
+  private readonly stages: string;
   private controller: AbortController | null = null;
   private notes: string[] = [];
   private lastProgress = 0;
@@ -102,6 +125,7 @@ export class HostedAnalysisClient {
 
   constructor(config: HostedClientConfig) {
     this.config = config;
+    this.stages = 'privateKey' in config ? '/v1/analyze' : '/web/analyze';
   }
 
   /**
@@ -131,10 +155,8 @@ export class HostedAnalysisClient {
       //    it was built from, so the check carries the fingerprint of the text
       //    (not the text) beside the address.
       const textHash = await articleTextHash(input.blocks);
-      const check = await this.call<CheckResponse>(
-        'GET',
-        `/v1/analyze/check?url=${encodeURIComponent(input.url)}&text=${textHash}`,
-      );
+      const address = input.url === undefined ? '' : `url=${encodeURIComponent(input.url)}&`;
+      const check = await this.call<CheckResponse>('GET', `${this.stages}/check?${address}text=${textHash}`);
       if (check.hit && check.report) {
         this.note('Analyse déjà disponible : aucun nouvel appel au modèle.');
         this.report('success', 'Analyse récupérée sans nouvel appel au modèle', 100);
@@ -144,7 +166,7 @@ export class HostedAnalysisClient {
       // 2. The audit. One call, and the only one that carries the article.
       this.report('calling_provider', 'Audit critique en cours...', 15);
       this.throwIfAborted();
-      const audit = await this.call<AuditResponse>('POST', '/v1/analyze/audit', {
+      const audit = await this.call<AuditResponse>('POST', `${this.stages}/audit`, {
         url: input.url,
         title: input.title ?? '',
         author: input.author,
@@ -169,7 +191,7 @@ export class HostedAnalysisClient {
           this.place(i / Math.max(1, researchable.length)),
         );
         try {
-          const res = await this.call<{ ok: true; claim: FactualClaim | null }>('POST', '/v1/analyze/research', {
+          const res = await this.call<{ ok: true; claim: FactualClaim | null }>('POST', `${this.stages}/research`, {
             runId: audit.runId,
             findingId: researchable[i],
           });
@@ -189,7 +211,7 @@ export class HostedAnalysisClient {
           this.throwIfAborted();
           this.note(`Lecture de la source citée : ${source.text || source.domain}`);
           try {
-            await this.call('POST', '/v1/analyze/source-check', {
+            await this.call('POST', `${this.stages}/source-check`, {
               runId: audit.runId,
               claimId: claim.id,
               sourceUrl: source.href,
@@ -204,7 +226,7 @@ export class HostedAnalysisClient {
       // 5. Pure code on the server: reconcile, rescore, cache, one credit.
       this.throwIfAborted();
       this.report('scoring', 'Synthèse et calcul de la note...', 96);
-      const finalized = await this.call<{ ok: true; report: AnalysisReport }>('POST', '/v1/analyze/finalize', {
+      const finalized = await this.call<{ ok: true; report: AnalysisReport }>('POST', `${this.stages}/finalize`, {
         runId: audit.runId,
       });
 
@@ -224,24 +246,15 @@ export class HostedAnalysisClient {
   // -------------------------------------------------------------------------
 
   /**
-   * One signed request. The body is serialized ONCE and both signed and sent,
-   * because the signature covers a hash of the exact bytes: signing one
-   * serialization and sending another is the classic way to make this protocol
-   * fail only in production, where a key ordering differs.
+   * One request, signed when this is an install. The body is serialized ONCE
+   * and both signed and sent, because the signature covers a hash of the exact
+   * bytes: signing one serialization and sending another is the classic way to
+   * make this protocol fail only in production, where a key ordering differs.
    */
   private async call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
     const rawBody = body === undefined ? undefined : JSON.stringify(body);
-    const nonce = randomToken(16);
-    const timestamp = Math.floor(Date.now() / 1000);
-    const input = await buildSigningInput({ method, path, nonce, timestamp, body: rawBody ?? null });
-    const signature = await signRequest(this.config.privateKey, input);
-
-    const headers: Record<string, string> = {
-      [SigningHeaders.authorization]: `Bearer ${this.config.token}`,
-      [SigningHeaders.signature]: signature,
-      [SigningHeaders.nonce]: nonce,
-      [SigningHeaders.timestamp]: String(timestamp),
-    };
+    const headers: Record<string, string> =
+      'privateKey' in this.config ? await this.signedHeaders(this.config, method, path, rawBody) : {};
     if (rawBody !== undefined) headers['content-type'] = 'application/json';
 
     const fetchImpl = this.config.fetchImpl ?? fetch;
@@ -252,6 +265,9 @@ export class HostedAnalysisClient {
         headers,
         body: rawBody,
         signal: this.controller?.signal,
+        // The session cookie is the web app's only credential. Same-origin in
+        // production; a dev build calls a local API on another port.
+        ...('session' in this.config ? { credentials: 'include' as const } : {}),
       });
     } catch (err) {
       this.rethrowIfAborted(err);
@@ -278,6 +294,23 @@ export class HostedAnalysisClient {
       );
     }
     return parsed as T;
+  }
+
+  private async signedHeaders(
+    install: InstallClientConfig,
+    method: string,
+    path: string,
+    rawBody: string | undefined,
+  ): Promise<Record<string, string>> {
+    const nonce = randomToken(16);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const input = await buildSigningInput({ method, path, nonce, timestamp, body: rawBody ?? null });
+    return {
+      [SigningHeaders.authorization]: `Bearer ${install.token}`,
+      [SigningHeaders.signature]: await signRequest(install.privateKey, input),
+      [SigningHeaders.nonce]: nonce,
+      [SigningHeaders.timestamp]: String(timestamp),
+    };
   }
 
   // -------------------------------------------------------------------------

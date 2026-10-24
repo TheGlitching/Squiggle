@@ -44,7 +44,12 @@ export function LandingShell({ children }: { children: ReactNode }) {
                 {label}
               </a>
             ))}
-            <Link to="/enseignants" className={NAV_LINK}>
+            <Link to="/analyser" className={NAV_LINK}>
+              Analyser un texte
+            </Link>
+            {/* On a phone the header keeps to one line of links: the teachers' offer is
+                also in the pricing and the FAQ. */}
+            <Link to="/enseignants" className={`${NAV_LINK} max-sm:hidden`}>
               Enseignants
             </Link>
             <Link to="/connexion" className={`${NAV_LINK} font-medium text-foreground`}>

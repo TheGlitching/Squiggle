@@ -15,6 +15,12 @@ Chrome and Firefox, Manifest V3. Bring your own API key: no backend, no account,
 telemetry. A hosted mode, for readers who would rather not hold an API key, is
 [under construction](#hosted-mode-under-construction).
 
+Without the extension, on a phone for instance, the website runs the same analysis on
+an article's text pasted into its analysis page (`/analyser`), and draws the same
+report over it. The site installs as an app on Android and iOS, and on Android an
+article can be shared straight to it. It runs in hosted mode, on the same account,
+free analyses and subscription as the extension.
+
 ## Who it is for
 
 Someone reading a news article, not the journalist who wrote it. A reader cannot edit
@@ -131,6 +137,9 @@ What changes, stated plainly, because it is the whole trade:
 - our server never fetches the article itself — your browser supplies it, from the
   page you are already reading. A paywalled article is analysed as far as you can read
   it, and flagged as partial.
+- on the website, the text is what you paste, and it travels exactly like the article
+  the extension reads. An address given beside it is kept as a label and a cache key,
+  never requested.
 
 [PRIVACY.md](PRIVACY.md) has the retention table and the subprocessors,
 [SECURITY.md](SECURITY.md) the controls and the residual risks, and
@@ -175,6 +184,11 @@ server/src/           the hosted backend (Cloudflare Workers + Neon)
   analyze/            the five analysis stage endpoints and the shared cache
   billing/            Stripe checkout, portal, webhook, quotas
   index.ts            the config-driven LLM provider gateway (LLM_PROVIDER)
+
+web/                  the public web app (Vite + React), served by the same Worker
+  src/pages/          sign-in, account, legal pages, and Analyser: paste an article
+  src/paste.ts        a paste as the engine's blocks, and the share target's input
+  sw.js               the installed app's service worker: the app shell, nothing else
 ```
 
 `shared/` is not a convenience. The moment the same analysis can run in two places, a

@@ -1,10 +1,11 @@
 # Politique de confidentialité
 
-*Dernière mise à jour : 20 octobre 2026*
+*Dernière mise à jour : 23 octobre 2026*
 
-Squiggle est une extension de navigateur qui analyse la rigueur d'un article de presse.
-Cette page décrit exactement ce qu'elle lit, ce qu'elle envoie, à qui, et ce qu'elle
-conserve.
+Squiggle est une extension de navigateur qui analyse la rigueur d'un article de presse,
+et un site, squiggle.fr, qui fait la même analyse sur le texte d'un article qu'on y
+colle. Cette page décrit exactement ce qu'ils lisent, ce qu'ils envoient, à qui, et ce
+qu'ils conservent.
 
 Il existe **deux modes**, et ils n'ont pas la même politique parce qu'ils n'ont pas le
 même trajet de données.
@@ -19,6 +20,10 @@ même trajet de données.
 
 Le mode « clé personnelle » ne change pas et ne changera pas. Il reste le mode par
 défaut, et rien de ce qui suit sur le mode hébergé ne s'y applique.
+
+L'analyse sur le site (la page « Analyser un texte ») est le mode hébergé, sans
+extension : elle tourne sur le même compte, avec les mêmes analyses offertes et le même
+abonnement, et tout ce que la section 2 dit du mode hébergé s'y applique.
 
 ---
 
@@ -106,8 +111,9 @@ votre navigateur  ──(le texte de l'article)──▶  notre serveur  ──�
 
 Trois choses à en retenir.
 
-**Votre navigateur envoie le texte de l'article.** C'est la différence essentielle
-avec le mode BYOK : nous le voyons. Il est utilisé pour l'appel d'audit et il
+**Votre navigateur envoie le texte de l'article** : celui que l'extension lit dans la
+page, ou celui que vous collez sur le site, qui suit exactement le même trajet. C'est
+la différence essentielle avec le mode BYOK : nous le voyons. Il est utilisé pour l'appel d'audit et il
 disparaît à la fin de cette requête. **Aucune table de notre base de données ne
 contient de texte d'article** : les étapes suivantes de l'analyse ne travaillent que
 sur les constats de l'audit, pas sur l'article.
@@ -116,7 +122,11 @@ sur les constats de l'audit, pas sur l'article.
 le lui fournit, depuis la page que vous lisez déjà. Conséquence directe : un article
 payant est analysé exactement dans la limite de ce que vous pouvez lire (et le rapport
 le signale), et notre adresse n'apparaît dans les journaux d'aucun éditeur. Les seules
-pages que notre serveur va chercher sont **les sources citées par l'article**.
+pages que notre serveur va chercher sont **les sources citées par l'article**. Sur le
+site, l'adresse que vous indiquez à côté d'un texte collé reste une simple mention :
+elle accompagne le rapport et sert de clé au cache, mais **elle n'est jamais visitée**,
+et un texte collé ne cite aucun lien, si bien qu'une analyse lancée depuis le site ne
+fait lire aucune page à notre serveur.
 
 **Le rapport est mis en cache et partagé.** Deux lecteurs du même article obtiennent le
 même rapport, et c'est ce qui rend le service abordable : le second ne consomme aucun
@@ -124,13 +134,17 @@ crédit et son navigateur n'envoie même pas l'article. **Un rapport contient de
 de l'article** (la citation de chaque constat) et un résumé ; il ne contient jamais le
 texte intégral. La clé du cache est l'adresse canonique de l'article, plus l'empreinte
 (SHA-256) de son texte, plus le modèle et la version des consignes : un rapport n'est
-servi qu'à un lecteur dont la page donne le même texte.
+servi qu'à un lecteur dont la page donne le même texte. Un texte collé sans adresse est
+rangé sous une clé fixe, avec la même empreinte : son rapport n'est servi qu'à un
+lecteur qui colle le même texte.
 
 ## Ce que nous conservons, et combien de temps
 
 | Donnée | Où | Durée |
 |---|---|---|
-| Texte de l'article | mémoire, le temps de l'appel d'audit | **jamais écrit** |
+| Texte de l'article, lu par l'extension ou collé sur le site | mémoire, le temps de l'appel d'audit | **jamais écrit** |
+| Texte collé sur le site, avant l'analyse | **votre navigateur** (stockage local du site), jamais notre serveur | jusqu'à ce que vous l'effaciez |
+| Fichiers du site installé sur l'écran d'accueil | votre navigateur | jusqu'à la version suivante du site ; **jamais une réponse de compte ou d'analyse** |
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
 | Analyse en cours (constats, sans l'article) | base de données | 1 heure |
 | Journal d'usage : qu'un compte a lancé une analyse, et quand | base de données | 12 mois, **sans aucun contenu et sans dire de quel article** |

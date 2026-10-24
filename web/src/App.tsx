@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
+import { Analyser } from './pages/Analyser';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
@@ -41,6 +42,9 @@ export function App() {
     case '/':
     case '/tarifs':
       page = <Accueil />;
+      break;
+    case '/analyser':
+      page = <Analyser />;
       break;
     case '/enseignants':
       page = <Enseignants />;
