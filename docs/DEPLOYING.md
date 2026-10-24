@@ -25,8 +25,6 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    production one.
 3. **Fill the `PENDING_…` values** of the environment in `server/wrangler.jsonc`:
    - `WEB_APP_ORIGIN` of staging, once its `workers.dev` address is known;
-   - `EXTENSION_CHROME_ORIGIN` and `EXTENSION_FIREFOX_ORIGIN`, the origins of the two
-     store listings;
    - `STRIPE_PRICE_ID`: the recurring price, from the test-mode catalogue for staging.
 
    `npm run deploy:production` refuses to run while any of them is left.
@@ -41,14 +39,31 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | `OPENROUTER_API_KEY` | the key hosted analyses run on |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
    | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate` and `GET /admin/metrics`; any long random string |
+   | `EXTENSION_CHROME_ORIGIN` | `chrome-extension://<id>`, the id of the Chrome Web Store listing |
 
    `GEMINI_API_KEY` is only needed to select Gemini with `LLM_PROVIDER=gemini`.
+
+   `EXTENSION_CHROME_ORIGIN` is not sensitive, but it is a real extension id, and the
+   repository never carries one, so it is set like a secret. CORS is pinned to it:
+   without it every Chrome reader is refused, and `npm run deploy:production` refuses
+   to run while `wrangler secret list` does not show it. Firefox needs nothing here:
+   its extension origin is `moz-extension://<uuid>` with a UUID drawn on every
+   install, so the server accepts any origin of that shape, on the endpoints the
+   extension signs or redeems a code on and nowhere else (`server/src/lib/cors.ts`).
 5. **The other side of each integration**, all pointing at the environment's origin:
    the Google OAuth redirect URI `<origin>/auth/google/callback` (with, on the consent
    screen, the privacy policy `<origin>/confidentialite` and the terms
    `<origin>/conditions`), the Stripe webhook
    endpoint `<origin>/webhooks/stripe` (see [stripe-webhook.md](stripe-webhook.md)), and
    the sender address of `BREVO_FROM_ADDRESS` verified in Brevo.
+
+## Staging is optional
+
+Production does not depend on staging: nothing is shared between them, and
+`npm run deploy:production` checks only the production values. Staging stays undeployed
+until it is needed. Its `PENDING_…` values (its `workers.dev` subdomain, the test-mode
+price) and its secrets, including the `EXTENSION_CHROME_ORIGIN` of a development build,
+are filled in at that point; `npm run deploy:staging` only warns about them.
 
 ## Deploy
 

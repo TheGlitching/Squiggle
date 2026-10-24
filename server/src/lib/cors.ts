@@ -6,8 +6,21 @@
  *
  * **Reading our responses.** A browser will only hand a response to a page
  * whose origin we echo in `access-control-allow-origin`. We echo exactly one
- * of a small pinned set — the web app and our two store listings — and never
- * a wildcard, so no other page can read anything we return.
+ * of a small pinned set (the web app and the Chrome listing) and never a
+ * wildcard, so no other page can read anything we return.
+ *
+ * **Firefox cannot be pinned.** Its extension origin is
+ * `moz-extension://<uuid>`, and the UUID is drawn at random on every install,
+ * so there is no listing-wide value to configure. Firefox sends that origin,
+ * with `Sec-Fetch-Site: cross-site`, on every call from the background or the
+ * sidebar, and preflights the signed ones. So any origin of exactly that shape
+ * is accepted, but only on the endpoints that authenticate without a cookie:
+ * `/v1/*`, which is signed by the install's own key, and the bridge redeem,
+ * whose credential is the single-use code. Those are the only two the
+ * extension calls. The answer carries no `allow-credentials`. A web page can
+ * never present a `moz-extension:` origin, so this opens nothing to the web;
+ * another installed Firefox extension can, which is why the cookie-carrying
+ * endpoints stay closed to the shape.
  *
  * **Being called at all.** That is the CSRF question, and it is the one an
  * `Origin` header actually answers: a page cannot forge the header, so an
@@ -72,13 +85,20 @@ export function originRequired(method: string, path: string): boolean {
   return ORIGIN_REQUIRED.some((entry) => entry.method === method && entry.path === path);
 }
 
-export function corsHeaders(origin: string): Record<string, string> {
+const FIREFOX_EXTENSION_ORIGIN = /^moz-extension:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A Firefox install calling one of the endpoints it is allowed to reach. */
+export function firefoxExtensionCall(origin: string, path: string): boolean {
+  return FIREFOX_EXTENSION_ORIGIN.test(origin) && (path.startsWith('/v1/') || path === '/auth/bridge/redeem');
+}
+
+export function corsHeaders(origin: string, credentials: boolean): Record<string, string> {
   return {
     'access-control-allow-origin': origin,
-    // Safe only because the allowed set is an explicit allowlist and never a
+    // Safe only because the pinned set is an explicit allowlist and never a
     // wildcard: the session cookie has to travel for the web app to reach the
     // API at all when the two sit on different hosts.
-    'access-control-allow-credentials': 'true',
+    ...(credentials ? { 'access-control-allow-credentials': 'true' } : {}),
     'access-control-allow-methods': 'GET, POST, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type, x-squiggle-sig, x-squiggle-nonce, x-squiggle-ts',
     'access-control-expose-headers': 'x-squiggle-request-id',
