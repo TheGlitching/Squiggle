@@ -79,8 +79,26 @@ export function canonicalArticleUrl(raw: string): string | null {
   return parsed.toString();
 }
 
-/** SHA-256 hex of the canonical URL. This is what the cache and the logs use. */
-export async function articleUrlHash(raw: string): Promise<string | null> {
-  const canonical = canonicalArticleUrl(raw);
+/**
+ * Where a text pasted into the web app without its address is filed. Such a
+ * report is then keyed by the fingerprint of its text alone, which is what
+ * already tells two readers of one address apart: the same words get the same
+ * report, any other words a different one. It is not an http(s) URL, so no
+ * canonical article address can ever equal it.
+ */
+export const PASTED_TEXT_KEY = 'squiggle:texte-colle';
+
+/**
+ * The canonical form of a payload's address: an article's canonical URL, the
+ * pasted-text key when there is none, or null when the string given is not an
+ * http(s) page.
+ */
+export function canonicalAddress(raw: string | undefined): string | null {
+  return raw === undefined ? PASTED_TEXT_KEY : canonicalArticleUrl(raw);
+}
+
+/** SHA-256 hex of the canonical address. This is what the cache and the logs use. */
+export async function articleUrlHash(raw: string | undefined): Promise<string | null> {
+  const canonical = canonicalAddress(raw);
   return canonical === null ? null : sha256Hex(canonical);
 }
