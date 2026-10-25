@@ -89,11 +89,11 @@ export function Accueil() {
       <div className={`${PAGE} py-12 md:py-16`}>
         <HeroScene>
           <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance md:text-5xl xl:text-6xl">
-            Un avis que vous pouvez défendre.
+            Un <span className="whitespace-nowrap">fact-check</span> pour chaque article.
           </h1>
           <p className={`mt-6 text-lg leading-relaxed text-pretty text-muted md:text-xl ${MEASURE}`}>
-            Dans l’article que vous lisez, Squiggle surligne les passages fragiles, dit pourquoi et cherche
-            ce que les sources disent des faits vérifiables.
+            Dans l’article que vous lisez, Squiggle confronte les faits vérifiables aux sources, surligne les
+            passages fragiles et dit pourquoi. De quoi vous faire un avis que vous pouvez défendre.
           </p>
 
           {/* One primary action: the store this browser installs from, or, where no

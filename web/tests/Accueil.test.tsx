@@ -27,9 +27,10 @@ describe('Accueil', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Un avis que vous pouvez défendre.',
+        name: 'Un fact-check pour\u00a0chaque article.',
       }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/De quoi vous faire un avis que vous pouvez défendre\.$/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
   });
 
