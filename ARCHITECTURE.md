@@ -43,7 +43,7 @@ is from the reader's browser to the provider whose key they configured.
 
 ## Hosted mode
 
-*Under construction, not deployed. Documented here as it lands.*
+*In production on [squiggle.fr](https://squiggle.fr). Documented here as it changes.*
 
 A reader who does not want to hold an API key can sign in and have the analysis run on
 our infrastructure instead, on our own key, against credits. The provider and the model

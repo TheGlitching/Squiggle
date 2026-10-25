@@ -37,8 +37,8 @@ the sources an article cites. Hosted mode adds no permission.
 
 ## Hosted mode
 
-*This section describes the server that is being built. It is not deployed yet;
-it is documented here as it lands, not after.*
+*This section describes the server in production on squiggle.fr. It is documented
+here as it changes, not after.*
 
 In hosted mode the analysis runs on our infrastructure, on our own OpenRouter key,
 instead of on a key you hold. The model is DeepSeek V4.1 Flash, an open-weight
