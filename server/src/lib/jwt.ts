@@ -1,20 +1,19 @@
 /**
- * Verification of Google ID tokens (JWTs with ES256 / P-256 signatures).
+ * Verification of Google ID tokens (JWTs with RS256 signatures).
  *
- * Google publishes its signing keys as a JWKS (`GOOGLE_JWKS_URL`); we select
- * the key by the token header's `kid`, import it as a P-256 verify key, and
+ * Google publishes its signing keys as a JWKS (`GOOGLE_JWKS_URL`) of RSA
+ * keys and signs ID tokens RS256 (RSASSA-PKCS1-v1_5 with SHA-256). We select
+ * the key by the token header's `kid`, import it as an RSA verify key, and
  * validate the signature plus the security-relevant claims: issuer, audience
  * (our client id), the `nonce` we put in the auth request (this is what makes
  * the token unusable against a different session or a replayed handshake),
  * and expiry.
  *
- * One encoding wrinkle: Google signs in the JOSE form — a bare 64-byte
- * `r||s` concatenation — while some WebCrypto runtimes expect (and only
- * accept) a DER-encoded `r`/`s` pair. The shared `verifyRequest` handles
- * both encodings, so the actual cryptographic check reuses it and there is
- * a single signature-verification code path in the whole product.
+ * RS256 is the only accepted `alg`: the header is never trusted to pick the
+ * algorithm, so `none`, HS256 or anything else is refused before any key is
+ * looked at.
  */
-import { base64urlDecode, importP256Jwk, verifyRequest, type P256Jwk } from '@squiggle/shared';
+import { base64urlDecode } from '@squiggle/shared';
 
 export interface GoogleIdTokenClaims {
   iss: string;
@@ -50,15 +49,16 @@ export async function verifyGoogleIdToken(args: VerifyIdTokenArgs): Promise<Goog
   const [header64, payload64, sig64] = parts;
 
   const header = JSON.parse(decoderText(base64urlDecode(header64))) as { alg?: unknown; kid?: unknown };
-  if (header.alg !== 'ES256' || typeof header.kid !== 'string') {
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string') {
     throw new Error('unsupported token header');
   }
 
-  const jwk = findP256Jwk(args.jwks, header.kid);
+  const jwk = findRsaJwk(args.jwks, header.kid);
   if (!jwk) throw new Error('unknown key id');
-  const key = await importP256Jwk(jwk);
+  const key = await crypto.subtle.importKey('jwk', jwk, RS256, false, ['verify']);
 
-  if (!(await verifyRequest(key, `${header64}.${payload64}`, sig64))) {
+  const signingInput = new TextEncoder().encode(`${header64}.${payload64}`);
+  if (!(await crypto.subtle.verify(RS256, key, base64urlDecode(sig64), signingInput))) {
     throw new Error('bad signature');
   }
 
@@ -74,12 +74,15 @@ export async function verifyGoogleIdToken(args: VerifyIdTokenArgs): Promise<Goog
   return claims;
 }
 
-function findP256Jwk(jwks: { keys: unknown[] }, kid: string): P256Jwk | null {
+const RS256 = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } as const;
+
+/** Only the fields the key needs: a stray `alg`/`use`/`key_ops` cannot widen it. */
+function findRsaJwk(jwks: { keys: unknown[] }, kid: string): JsonWebKey | null {
   for (const k of jwks.keys) {
     if (typeof k !== 'object' || k === null) continue;
     const o = k as Record<string, unknown>;
-    if (o.kty === 'EC' && o.crv === 'P-256' && o.kid === kid && typeof o.x === 'string' && typeof o.y === 'string') {
-      return { kty: 'EC', crv: 'P-256', x: o.x, y: o.y };
+    if (o.kty === 'RSA' && o.kid === kid && typeof o.n === 'string' && typeof o.e === 'string') {
+      return { kty: 'RSA', n: o.n, e: o.e };
     }
   }
   return null;

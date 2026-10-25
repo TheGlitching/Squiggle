@@ -1,16 +1,14 @@
 /**
  * Shared fixtures for the auth test suite: an in-memory DB, a manual clock,
- * a recording email sender, a fake Google OAuth server (real ECDSA, JOSE-form
- * signatures, like the production one), and a signed-request builder that
+ * a recording email sender, a fake Google OAuth server (real RS256 signatures
+ * and an RSA JWKS, like the production one), and a signed-request builder that
  * uses the same shared module the extension uses — so the tests exercise the
  * actual wire protocol end to end.
  */
 import {
   base64urlEncode,
   buildSigningInput,
-  derToJose,
   exportP256Jwk,
-  generateSigningKeyPair,
   randomToken,
   signRequest,
 } from '@squiggle/shared';
@@ -67,6 +65,8 @@ export interface FakeGoogleState {
   failTokens: boolean;
   failJwks: boolean;
   wrongNonce: boolean;
+  /** Sign the ID token with a key the JWKS does not publish. */
+  forgeSignature: boolean;
   seenVerifiers: string[];
   seenRedirectUris: string[];
 }
@@ -75,13 +75,15 @@ export interface FakeGoogle {
   fetchImpl: FetchLike;
   state: FakeGoogleState;
   kid: string;
-  keyPair: CryptoKeyPair;
   sub: string;
 }
 
 export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
-  const keyPair = await generateSigningKeyPair();
-  const jwk = await exportP256Jwk(keyPair.publicKey);
+  // Google signs its ID tokens RS256 and publishes RSA keys only.
+  const rsa = { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' };
+  const keyPair = (await crypto.subtle.generateKey(rsa, true, ['sign', 'verify'])) as CryptoKeyPair;
+  const forger = (await crypto.subtle.generateKey(rsa, true, ['sign', 'verify'])) as CryptoKeyPair;
+  const { kty, n, e } = (await crypto.subtle.exportKey('jwk', keyPair.publicKey)) as JsonWebKey;
   const kid = 'test-kid';
   const sub = 'g-sub-123';
 
@@ -92,6 +94,7 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
     failTokens: false,
     failJwks: false,
     wrongNonce: false,
+    forgeSignature: false,
     seenVerifiers: [],
     seenRedirectUris: [],
   };
@@ -99,16 +102,12 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
   const encoder = new TextEncoder();
 
   async function mintIdToken(claims: Record<string, unknown>): Promise<string> {
-    const header = base64urlEncode(encoder.encode(JSON.stringify({ alg: 'ES256', typ: 'JWT', kid })));
+    const header = base64urlEncode(encoder.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid })));
     const payload = base64urlEncode(encoder.encode(JSON.stringify(claims)));
     const signingInput = `${header}.${payload}`;
-    // Google always emits the JOSE raw r||s form regardless of what a local
-    // WebCrypto `sign` happens to produce (DER on some runtimes), so normalize.
-    const sig = new Uint8Array(
-      await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keyPair.privateKey, encoder.encode(signingInput)),
-    );
-    const jose = sig.length === 64 ? sig : derToJose(sig);
-    return `${signingInput}.${base64urlEncode(jose)}`;
+    const signer = state.forgeSignature ? forger.privateKey : keyPair.privateKey;
+    const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signer, encoder.encode(signingInput)));
+    return `${signingInput}.${base64urlEncode(sig)}`;
   }
 
   const fetchImpl: FetchLike = async (input, init) => {
@@ -142,13 +141,13 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
 
     if (url === GOOGLE_JWKS_URL) {
       if (state.failJwks) return new Response('boom', { status: 500 });
-      return Response.json({ keys: [{ ...jwk, kid }] });
+      return Response.json({ keys: [{ kty, n, e, alg: 'RS256', use: 'sig', kid }] });
     }
 
     return new Response('not found', { status: 404 });
   };
 
-  return { fetchImpl, state, kid, keyPair, sub };
+  return { fetchImpl, state, kid, sub };
 }
 
 // ---------------------------------------------------------------------------
