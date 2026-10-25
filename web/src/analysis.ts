@@ -14,6 +14,8 @@ export interface Progress {
   message: string;
   /** 0 to 100, never moving backwards. */
   percent: number;
+  /** The server's stage, which the page draws as a step of the analysis. */
+  stage?: PipelineProgressEvent['stage'];
 }
 
 /** The report, with the blocks it was made from: the page highlights in exactly those. */
@@ -34,7 +36,8 @@ export async function analyzePasted(
     {
       abortSignal: signal,
       onProgress: (event: PipelineProgressEvent) => {
-        if (event.status === 'analyzing') onProgress({ message: event.message, percent: event.progress });
+        if (event.status === 'analyzing')
+          onProgress({ message: event.message, percent: event.progress, stage: event.stage });
       },
     },
   );

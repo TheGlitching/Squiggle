@@ -2,10 +2,32 @@ import { useEffect, useState } from 'react';
 
 import { getAccount, logout, messageForError, openPortal, startCheckout, type Account } from '../api';
 import { DonneesCompte } from '../components/DonneesCompte';
+import { DeviceFigure } from '../components/Iso';
+import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { frenchDate } from '../format';
 import { DAILY_ANALYSES, SUBSCRIBE_LABEL, VAT_NOTE } from '../offer';
 import { Link, navigate, usePath } from '../router';
 import { describeAccount } from '../usage';
+
+/** What is left today, one mark per analysis: the remaining ones in violet. */
+function Usage({ remaining, limit }: { remaining: number; limit: number }) {
+  return (
+    <div>
+      <p className="m-0 flex items-baseline gap-1.5">
+        <span className="font-mono text-4xl font-semibold tracking-tight">{remaining}</span>
+        <span className="text-base text-muted">/ {limit} analyses restantes</span>
+      </p>
+      <div aria-hidden="true" className="mt-3 flex gap-1.5">
+        {Array.from({ length: limit }, (_, index) => (
+          <span
+            key={index}
+            className={`h-2.5 w-5 rounded-full ${index < remaining ? 'bg-accent' : 'border border-borderControl'}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function Compte() {
   const path = usePath();
@@ -55,20 +77,17 @@ export function Compte() {
   }
 
   if (loading) {
-    return <p className="mx-auto max-w-md px-5 py-16 text-muted">Chargement de votre compte…</p>;
+    return <p className={`${PAGE} py-16 text-muted`}>Chargement de votre compte…</p>;
   }
 
   if (deleted) {
     return (
-      <div className="mx-auto w-full max-w-md px-5 py-16">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Compte supprimé</h1>
-        <p role="status" className="mt-3 text-muted">
+      <div className={`${PAGE} py-12 md:py-20`}>
+        <h1 className={TITLE}>Compte supprimé</h1>
+        <p role="status" className="mt-3 text-lg text-muted">
           Votre compte et les données qui y étaient rattachées ont été effacés. Vous pouvez fermer cette page.
         </p>
-        <Link
-          to="/"
-          className="mt-6 inline-block rounded-lg border border-border bg-surface px-5 py-3 font-medium hover:border-accent hover:text-accentInk"
-        >
+        <Link to="/" className={`${SECONDARY_BUTTON} mt-8`}>
           Revenir à l’accueil
         </Link>
       </div>
@@ -77,14 +96,11 @@ export function Compte() {
 
   if (!account) {
     return (
-      <div className="mx-auto w-full max-w-md px-5 py-16">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Mon compte</h1>
-        <p className="mt-3 text-muted">Connectez-vous pour voir votre abonnement et votre usage.</p>
-        {error ? <p role="alert" className="mt-4 text-sm text-criticalInk">{error}</p> : null}
-        <Link
-          to="/connexion?next=/compte"
-          className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover"
-        >
+      <div className={`${PAGE} py-12 md:py-20`}>
+        <h1 className={TITLE}>Mon compte</h1>
+        <p className="mt-3 text-lg text-muted">Connectez-vous pour voir votre abonnement et votre usage.</p>
+        {error ? <p role="alert" className="mt-4 text-base text-criticalInk">{error}</p> : null}
+        <Link to="/connexion?next=/compte" className={`${PRIMARY_BUTTON} mt-8`}>
           Se connecter
         </Link>
       </div>
@@ -95,114 +111,106 @@ export function Compte() {
   const expires = frenchDate(account.planExpiresAt);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-5 py-16">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">Mon compte</h1>
-      <p className="mt-2 text-muted">{account.email}</p>
+    <div className={`${PAGE} py-12 md:py-20`}>
+      <div className="max-w-3xl">
+        <h1 className={TITLE}>Mon compte</h1>
+        <p className="mt-3 mb-0 text-lg text-muted">{account.email}</p>
 
-      {payment === 'ok' ? (
-        <p className="mt-6 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
-          {account.plan === 'active'
-            ? 'Merci ! Votre abonnement est actif.'
-            : 'Merci ! Votre abonnement est en cours d’activation. Actualisez cette page dans un instant.'}
-        </p>
-      ) : null}
-      {payment === 'annule' ? (
-        <p className="mt-6 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
-          Le paiement a été annulé. Vous pouvez réessayer quand vous voulez.
-        </p>
-      ) : null}
+        {payment === 'ok' ? (
+          <p role="status" className="mt-6 mb-0 rounded-control border border-border bg-surface px-4 py-3 text-base">
+            {account.plan === 'active'
+              ? 'Merci ! Votre abonnement est actif.'
+              : 'Merci ! Votre abonnement est en cours d’activation. Actualisez cette page dans un instant.'}
+          </p>
+        ) : null}
+        {payment === 'annule' ? (
+          <p role="status" className="mt-6 mb-0 rounded-control border border-border bg-surface px-4 py-3 text-base">
+            Le paiement a été annulé. Vous pouvez réessayer quand vous voulez.
+          </p>
+        ) : null}
 
-      {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
-          {error}
-        </p>
-      ) : null}
+        {error ? (
+          <p role="alert" className="mt-6 mb-0 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk">
+            {error}
+          </p>
+        ) : null}
 
-      <section className="mt-8 rounded-2xl border border-border bg-surface p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-muted">Formule</p>
-            <h2 className="mt-1 font-display text-xl font-semibold">{view.title}</h2>
-            <p className="mt-1 text-sm text-muted">{view.detail}</p>
-            {expires && account.plan === 'active' ? (
-              <p className="mt-1 text-xs text-faint">Prochaine échéance : {expires}</p>
+        <section aria-labelledby="formule-titre" className="mt-12 border-t border-lineSoft pt-10">
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+            <div>
+              <h2 id="formule-titre" className="m-0 font-display text-2xl font-semibold tracking-[-0.01em]">
+                {view.title}
+              </h2>
+              <p className="mt-1 mb-0 text-base text-muted">{view.detail}</p>
+              {expires && account.plan === 'active' ? (
+                <p className="mt-1 mb-0 text-base text-muted">Prochaine échéance : {expires}</p>
+              ) : null}
+            </div>
+            <Usage remaining={account.usage.remaining} limit={account.usage.limit} />
+          </div>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            {view.canSubscribe ? (
+              <div>
+                {/* The express request of art. L221-25 that the conditions of sale rely on. */}
+                <label className="mb-4 flex max-w-xl items-start gap-3 text-base text-muted">
+                  <input
+                    type="checkbox"
+                    checked={startNow}
+                    onChange={(event) => setStartNow(event.target.checked)}
+                    className="mt-1 h-4.5 w-4.5 shrink-0 accent-accent"
+                  />
+                  <span>
+                    Je demande que l’abonnement commence dès le paiement. Si je me rétracte dans les 14 jours, je
+                    paierai les jours déjà écoulés.
+                  </span>
+                </label>
+                <button onClick={subscribe} disabled={busy || !startNow} className={`${PRIMARY_BUTTON} disabled:opacity-50`}>
+                  {SUBSCRIBE_LABEL}
+                </button>
+                <p className="mt-3 mb-0 text-sm text-muted">
+                  {DAILY_ANALYSES} analyses par jour, sans engagement, renouvelé chaque mois. {VAT_NOTE}.{' '}
+                  <Link to="/cgv" className="underline underline-offset-4 hover:text-foreground">
+                    Conditions de vente
+                  </Link>
+                </p>
+              </div>
+            ) : null}
+            {view.state === 'active' || view.state === 'quota_exhausted' ? (
+              <button onClick={manage} disabled={busy} className={`${SECONDARY_BUTTON} disabled:opacity-60`}>
+                Gérer ou résilier mon abonnement
+              </button>
             ) : null}
           </div>
-          <div className="text-right">
-            <p className="font-serif text-3xl font-semibold text-accent">
-              {account.usage.remaining}
-              <span className="text-base text-muted"> / {account.usage.limit}</span>
+        </section>
+
+        <section aria-labelledby="extension-titre" className="mt-12 grid items-center gap-x-10 gap-y-4 border-t border-lineSoft pt-10 sm:grid-cols-[minmax(0,1fr)_12rem]">
+          <div>
+            <h2 id="extension-titre" className="m-0 font-display text-2xl font-semibold tracking-[-0.01em]">
+              Le bouton dans votre navigateur
+            </h2>
+            <p className="mt-2 mb-0 text-base text-muted">
+              Pour analyser d’un clic l’article ouvert dans Chrome ou Firefox, connectez l’extension à ce compte.
             </p>
-            <p className="text-xs text-muted">analyses restantes</p>
+            <Link to="/pont" className={`${SECONDARY_BUTTON} mt-5`}>
+              Connecter l’extension
+            </Link>
           </div>
-        </div>
+          <div className="max-sm:hidden">
+            <DeviceFigure device="navigateur" />
+          </div>
+        </section>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {view.canSubscribe ? (
-            <div>
-              {/* The express request of art. L221-25 that the conditions of sale rely on. */}
-              <label className="mb-3 flex max-w-md items-start gap-2 text-sm text-muted">
-                <input
-                  type="checkbox"
-                  checked={startNow}
-                  onChange={(event) => setStartNow(event.target.checked)}
-                  className="mt-1 accent-accent"
-                />
-                <span>
-                  Je demande que l’abonnement commence dès le paiement. Si je me rétracte dans les 14 jours, je paierai
-                  les jours déjà écoulés.
-                </span>
-              </label>
-              <button
-                onClick={subscribe}
-                disabled={busy || !startNow}
-                className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
-              >
-                {SUBSCRIBE_LABEL}
-              </button>
-              <p className="mt-2 text-xs text-muted">
-                {DAILY_ANALYSES} analyses par jour, sans engagement, renouvelé chaque mois. {VAT_NOTE}.{' '}
-                <Link to="/cgv" className="underline hover:text-foreground">
-                  Conditions de vente
-                </Link>
-              </p>
-            </div>
-          ) : null}
-          {view.state === 'active' || view.state === 'quota_exhausted' ? (
-            <button
-              onClick={manage}
-              disabled={busy}
-              className="rounded-lg border border-border bg-background px-5 py-2.5 font-medium hover:border-accent hover:text-accentInk disabled:opacity-60"
-            >
-              Gérer ou résilier mon abonnement
-            </button>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-border bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold">Connecter l’extension</h2>
-        <p className="mt-2 text-sm text-muted">
-          L’extension analyse les articles dans votre navigateur. Connectez-la pour que les analyses
-          tournent sur nos serveurs, sans clé d’API.
-        </p>
-        <Link
-          to="/pont"
-          className="mt-4 inline-block rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
-        >
-          Connecter l’extension
-        </Link>
-      </section>
-
-      <DonneesCompte
-        account={account}
-        onSignOut={signOut}
-        onEmailChanged={(email) => setAccount((current) => (current ? { ...current, email } : current))}
-        onDeleted={() => {
-          setAccount(null);
-          setDeleted(true);
-        }}
-      />
+        <DonneesCompte
+          account={account}
+          onSignOut={signOut}
+          onEmailChanged={(email) => setAccount((current) => (current ? { ...current, email } : current))}
+          onDeleted={() => {
+            setAccount(null);
+            setDeleted(true);
+          }}
+        />
+      </div>
     </div>
   );
 }

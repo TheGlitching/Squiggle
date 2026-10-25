@@ -14,7 +14,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } from '../analysis';
 import { getAccount, type Account } from '../api';
-import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
+import { StepFigure, type Step } from '../components/Iso';
+import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
 import { FREE_ANALYSES } from '../offer';
@@ -50,9 +51,6 @@ function initialArticle(): { article: PastedArticle; shared: Partial<PastedArtic
     : { ...draft, title: shared.title || draft.title, source: shared.source || draft.source };
   return { article: article as PastedArticle, shared };
 }
-
-const FIELD =
-  'mt-2 block w-full rounded-control border border-borderControl bg-surface px-4 py-3 text-base text-foreground outline-hidden transition-colors duration-160 ease-out placeholder:text-muted focus:border-accentHover disabled:opacity-70';
 
 export function Analyser() {
   const [{ article: start, shared }] = useState(initialArticle);
@@ -154,12 +152,8 @@ export function Analyser() {
 
   if (phase.kind === 'done') {
     return (
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:py-12">
-        <h1
-          ref={reportTop}
-          tabIndex={-1}
-          className="m-0 font-display text-2xl font-semibold tracking-tight outline-hidden focus-visible:ring-0 sm:text-3xl"
-        >
+      <div className={`${PAGE} py-8 sm:py-14`}>
+        <h1 ref={reportTop} tabIndex={-1} className={`${TITLE} outline-hidden focus-visible:ring-0`}>
           {article.title.trim() || 'Rapport d’analyse'}
         </h1>
         <div className="mt-3 mb-10 flex flex-wrap items-center gap-x-6 gap-y-1">
@@ -177,14 +171,15 @@ export function Analyser() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 pt-8 sm:py-12">
-      <h1 className="m-0 font-display text-2xl font-semibold tracking-tight sm:text-3xl">Analyser un texte</h1>
-      <p className="mt-2 mb-0 max-w-[68ch] text-base leading-relaxed text-muted">
-        Collez le texte d’un article : Squiggle le relit avec la grille de l’extension et surligne les passages
-        fragiles, avec la raison de chaque constat.
+    <div className={`${PAGE} pt-8 sm:py-14`}>
+      <h1 className={TITLE}>Analyser un article</h1>
+      <p className="mt-3 mb-0 max-w-[68ch] text-lg leading-relaxed text-muted">
+        Collez le texte. Le rapport arrive en une à deux minutes.
       </p>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+      {phase.kind === 'running' ? <Stages stage={phase.progress.stage} /> : null}
+
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-16">
         <form onSubmit={analyse} noValidate>
           <fieldset disabled={running} className="m-0 grid gap-6 border-0 p-0">
             <div>
@@ -273,7 +268,7 @@ export function Analyser() {
             </div>
           </fieldset>
 
-          <div className="sticky bottom-0 z-10 -mx-5 mt-6 border-t border-border bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
             {showProblem && problem ? (
               <p role="alert" className="mt-0 mb-3 text-sm text-warningInk">
                 {PASTE_PROBLEMS[problem]}
@@ -300,39 +295,74 @@ function Aside() {
   return (
     <aside
       aria-label="Bon à savoir"
-      className="grid max-w-[68ch] content-start gap-5 text-sm leading-relaxed text-muted lg:pt-8"
+      className="grid max-w-[68ch] content-start gap-6 text-base leading-relaxed text-muted lg:pt-9"
     >
-      <p className="m-0">
-        <strong className="font-medium text-foreground">Le même compte que l’extension.</strong> Une analyse décompte
-        une de vos analyses offertes ou du jour. Un texte qu’un autre lecteur a déjà fait analyser vous est rendu sans
-        rien décompter.
-      </p>
-      <p className="m-0">
-        <strong className="font-medium text-foreground">Votre texte n’est pas conservé.</strong> Il passe par notre
-        serveur et par le modèle le temps de l’analyse ; le rapport, qui en cite de courts extraits, est gardé 30 jours.{' '}
-        <Link
-          to="/transparence"
-          className="text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk"
-        >
-          Le trajet des données
-        </Link>
-      </p>
+      <div>
+        <h2 className="m-0 font-display text-lg font-semibold text-foreground">Un seul compte</h2>
+        <p className="mt-1 mb-0">
+          Site, appli et extension partagent vos analyses. Un article déjà analysé ne décompte rien.
+        </p>
+      </div>
+      <div>
+        <h2 className="m-0 font-display text-lg font-semibold text-foreground">Rien n’est gardé</h2>
+        <p className="mt-1 mb-0">
+          Votre texte n’est pas conservé ; le rapport l’est 30 jours.{' '}
+          <Link to="/transparence" className={QUIET_LINK}>
+            Le trajet des données
+          </Link>
+        </p>
+      </div>
       {install ? (
-        <div className="m-0">
-          <p className="m-0">
-            <strong className="font-medium text-foreground">Sur votre téléphone.</strong>{' '}
+        <div>
+          <h2 className="m-0 font-display text-lg font-semibold text-foreground">Sur votre téléphone</h2>
+          <p className="mt-1 mb-0">
             {install.kind === 'prompt'
-              ? 'Installez Squiggle sur l’écran d’accueil : un article partagé vers Squiggle arrive directement ici.'
-              : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil » : Squiggle s’ouvre alors comme une application.'}
+              ? 'Installez l’appli : un article partagé vers Squiggle arrive directement ici.'
+              : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil ».'}
           </p>
           {install.kind === 'prompt' ? (
             <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3`}>
-              Installer Squiggle
+              Installer l’appli
             </button>
           ) : null}
         </div>
       ) : null}
     </aside>
+  );
+}
+
+/** Where the analysis stands, drawn as the home page explains it. */
+const STAGES: Array<[Step, string]> = [
+  ['article', 'L’article'],
+  ['lecture', 'La relecture'],
+  ['sources', 'Les sources'],
+  ['rapport', 'Le rapport'],
+];
+
+function stepOf(stage: Progress['stage']): number {
+  if (stage === 'calling_provider') return 1;
+  if (stage === 'parsing_response' || stage === 'researching') return 2;
+  if (stage === 'scoring' || stage === 'storing' || stage === 'success') return 3;
+  return 0;
+}
+
+function Stages({ stage }: { stage: Progress['stage'] }) {
+  const current = stepOf(stage);
+  return (
+    <ol aria-hidden="true" className="mt-8 grid max-w-3xl list-none grid-cols-4 gap-3 p-0 sm:gap-6">
+      {STAGES.map(([step, label], index) => (
+        <li
+          key={step}
+          className={`grid content-start gap-2 text-center text-sm sm:text-base ${index === current ? 'font-medium text-accentInk' : 'text-muted'}`}
+        >
+          {/* Only the drawing of a step still to come fades; its name stays readable. */}
+          <div className={`transition-opacity duration-300 ${index > current ? 'opacity-35' : ''}`}>
+            <StepFigure step={step} live={index === current} />
+          </div>
+          {label}
+        </li>
+      ))}
+    </ol>
   );
 }
 

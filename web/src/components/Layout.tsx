@@ -1,37 +1,52 @@
 import type { ReactNode } from 'react';
 
 import { BrandLockup } from './Brand';
-import { LEGAL_PAGES, TAGLINE } from '../offer';
+import { LEAD, MEASURE, PAGE, QUIET_LINK, TITLE } from './Landing';
+import { GITHUB_URL, LEGAL_PAGES, TAGLINE } from '../offer';
 import { Link } from '../router';
 
 /** Where a reader reaches us, and the address the legal pages publish. */
 export const CONTACT_EMAIL = 'contact@squiggle.fr';
 export const CONTACT_URL = `mailto:${CONTACT_EMAIL}`;
 
-export function Layout({ children }: { children: ReactNode }) {
+const NAV = [
+  ['Comment ça marche', '/#comment'],
+  ['Tarifs', '/#tarifs'],
+] as const;
+
+const NAV_LINK = 'inline-block py-2 text-base text-muted transition-colors duration-160 ease-out hover:text-foreground';
+
+/**
+ * Every page's chrome: one header, one footer. `account` is the reader's way in:
+ * "Se connecter" where a newcomer lands, "Mon compte" inside the app.
+ */
+export function Layout({ children, account = 'Se connecter' }: { children: ReactNode; account?: string }) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border bg-surface/80 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-4">
-          <Link to="/" className="flex items-center" aria-label="Squiggle, accueil">
+    <div className="flex min-h-screen flex-col bg-background text-base text-foreground">
+      <header className="border-b border-lineSoft">
+        <div className={`${PAGE} flex items-center justify-between gap-x-6 py-3.5`}>
+          <Link to="/" aria-label="Squiggle, accueil" className="inline-block shrink-0 py-1">
             <BrandLockup />
           </Link>
-          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted" aria-label="Navigation principale">
-            <Link to="/analyser" className="hover:text-foreground">
-              Analyser un texte
+          <nav aria-label="Navigation principale" className="flex items-center gap-x-4 sm:gap-x-6 lg:gap-x-7">
+            {/* Plain anchors: a hash link must scroll, whichever page it is read from. */}
+            {NAV.map(([label, href]) => (
+              <a key={href} href={href} className={`${NAV_LINK} max-lg:hidden`}>
+                {label}
+              </a>
+            ))}
+            <Link to="/enseignants" className={`${NAV_LINK} max-lg:hidden`}>
+              Enseignants
             </Link>
-            <Link to="/tarifs" className="hover:text-foreground">
-              Tarifs
-            </Link>
-            {/* In the footer too; on a phone the header keeps to one line of links. */}
-            <Link to="/transparence" className="hover:text-foreground max-sm:hidden">
-              Transparence
+            {/* Under 375 px only the way in fits beside the brand; every page links to the analysis. */}
+            <Link to="/analyser" className={`${NAV_LINK} text-foreground max-[374px]:hidden`}>
+              Analyser
             </Link>
             <Link
-              to="/compte"
-              className="rounded-md border border-border bg-surface px-3 py-1.5 font-medium text-foreground hover:border-accent hover:text-accentInk"
+              to={account === 'Se connecter' ? '/connexion' : '/compte'}
+              className="inline-block py-2 text-base font-medium whitespace-nowrap text-foreground transition-colors duration-160 ease-out hover:text-accentInk sm:rounded-control sm:border sm:border-borderControl sm:px-3.5 sm:hover:border-accent"
             >
-              Mon compte
+              {account}
             </Link>
           </nav>
         </div>
@@ -39,19 +54,34 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="mt-16 border-t border-border bg-surface">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-5 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>Squiggle. {TAGLINE} Aucune publicité, aucun traceur.</p>
-          <nav className="flex flex-wrap gap-4" aria-label="Navigation de pied de page">
-            <Link to="/transparence" className="hover:text-foreground">
+      <footer className="border-t border-lineSoft">
+        <div
+          className={`${PAGE} grid gap-8 py-12 text-base text-muted md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-end md:gap-12`}
+        >
+          <div className="grid gap-3">
+            <Link to="/" aria-label="Squiggle, accueil" className="inline-block w-fit py-1 text-foreground">
+              <BrandLockup />
+            </Link>
+            <p className="m-0">{TAGLINE} Aucune publicité, aucun traceur.</p>
+            <p className="m-0">
+              <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+                Le code source est sur GitHub <span aria-hidden="true">↗</span>
+              </a>
+            </p>
+          </div>
+          <nav aria-label="Navigation de pied de page" className="flex flex-wrap gap-x-6 gap-y-1 md:justify-end">
+            <Link to="/enseignants" className={QUIET_LINK}>
+              Enseignants
+            </Link>
+            <Link to="/transparence" className={QUIET_LINK}>
               Transparence
             </Link>
             {LEGAL_PAGES.map(([to, label]) => (
-              <Link key={to} to={to} className="hover:text-foreground">
+              <Link key={to} to={to} className={QUIET_LINK}>
                 {label}
               </Link>
             ))}
-            <a href={CONTACT_URL} className="hover:text-foreground">
+            <a href={CONTACT_URL} className={QUIET_LINK}>
               Contact
             </a>
           </nav>
@@ -61,12 +91,24 @@ export function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-export function Page({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) {
+/** A reading page: its title, a one-line lead, and the content on the measure. */
+export function Page({
+  title,
+  lead,
+  wide = false,
+  children,
+}: {
+  title: string;
+  lead?: string;
+  /** Diagrams and tables take the page's full width; running text keeps its own measure. */
+  wide?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-12">
-      <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-      {lead ? <p className="mt-4 max-w-2xl text-lg text-muted">{lead}</p> : null}
-      <div className="mt-10">{children}</div>
+    <div className={`${PAGE} py-12 md:py-20`}>
+      <h1 className={`${TITLE} ${MEASURE}`}>{title}</h1>
+      {lead ? <p className={`mt-5 ${LEAD} ${MEASURE}`}>{lead}</p> : null}
+      <div className={`mt-10 md:mt-14 ${wide ? '' : 'max-w-3xl'}`}>{children}</div>
     </div>
   );
 }

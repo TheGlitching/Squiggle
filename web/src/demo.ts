@@ -99,21 +99,20 @@ export const SCORE_BANDS: Record<ScoreBand, { title: string; tone: HighlightSeve
 
 /** The five domains of the grid. A test pins these to the engine's own definitions. */
 export const DOMAINS = [
-  ['Robustesse factuelle et sourcing', 35, 'Les chiffres, les dates et les citations sont-ils précis, sourcés, vérifiables\u00a0?'],
-  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits, ou d’un saut de raisonnement\u00a0?'],
-  ['Cadrage et procédés rhétoriques', 25, 'Le titre, les mots choisis et la mise en scène orientent-ils le jugement sans preuve\u00a0?'],
-  ['Déontologie et transparence', 10, 'Les sources sont-elles nommées, les intérêts signalés, le fait distingué du commentaire\u00a0?'],
-  ['Soin de la langue', 5, 'Orthographe et grammaire, comme indice de rigueur.'],
+  ['Robustesse factuelle et sourcing', 35, 'Les chiffres sont-ils sourcés\u00a0?'],
+  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits\u00a0?'],
+  ['Cadrage et procédés rhétoriques', 25, 'Les mots orientent-ils le jugement\u00a0?'],
+  ['Déontologie et transparence', 10, 'Sait-on qui parle, et à quel titre\u00a0?'],
+  ['Soin de la langue', 5, 'La langue est-elle assez précise\u00a0?'],
 ] as const;
 
 export interface DemoExample {
-  /** Display category, shown with the explanation once the highlight lands. */
+  /** The domain the finding is scored in, or `Point fort` for a strength. */
   cat: string;
   before: string;
   mark: string;
   after: string;
-  explain: string;
-  /** The finding card's title and body in the hero's panel. */
+  /** The finding card's title and body in the example's report. */
   label: string;
   detail: string;
   severity: SeverityLevel;
@@ -126,7 +125,8 @@ export interface DemoExample {
  * in the domain named by `cat`, a sophism or a framing remark carries no
  * verification state, a missing source is always "non sourcée", and only an
  * unsupported claim is looked up, here to be put in doubt by what the sources
- * say. `demo.test.ts` checks all of it against the engine.
+ * say. Above 50 the engine must name a strength, so the example has one.
+ * `demo.test.ts` checks all of it against the engine.
  */
 export const DEMO_FINDINGS: DemoExample[] = [
   {
@@ -134,7 +134,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'Selon ',
     mark: 'une étude',
     after: ', 78\u00a0% des Français seraient concernés.',
-    explain: 'Étude non nommée : ni institut ni méthodologie, l’article ne permet pas de remonter au chiffre.',
     label: 'Étude non nommée',
     detail: 'Aucun institut, aucune date, aucune méthodologie : le chiffre est présenté comme établi, mais le lecteur ne peut pas le retrouver.',
     severity: 2,
@@ -146,7 +145,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'Puisque les jeunes sont sur les réseaux, ',
     mark: 'ils ne lisent plus',
     after: '.',
-    explain: 'Faux dilemme : l’un n’empêche pas l’autre.',
     label: 'Faux dilemme',
     detail: 'Être sur les réseaux n’empêche pas de lire : l’article oppose deux pratiques que rien ne rend exclusives.',
     severity: 2,
@@ -157,7 +155,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'La situation est ',
     mark: 'un désastre absolu',
     after: ', une hémorragie incontrôlée.',
-    explain: 'Exagération : le lexique fait le travail des faits.',
     label: 'Exagération',
     detail: 'Le lexique fait le travail des faits : aucun chiffre ne vient mesurer ce « désastre ».',
     severity: 2,
@@ -168,9 +165,8 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: '',
     mark: 'Neuf adolescents sur dix n’ouvrent plus un livre',
     after: ' en dehors des cours.',
-    explain: 'Chiffre mis en doute : les sources consultées comptent une majorité d’adolescents qui lisent encore pour leur plaisir.',
     label: 'Chiffre mis en doute',
-    detail: 'Les enquêtes du Centre national du livre consultées mesurent un recul de la lecture de loisir chez les adolescents, mais la plupart d’entre eux lisent encore pour leur plaisir : rien n’y appuie «\u00a0neuf sur dix\u00a0».',
+    detail: 'Les enquêtes du Centre national du livre mesurent un recul, mais la plupart des adolescents lisent encore pour leur plaisir. Rien n’y appuie «\u00a0neuf sur dix\u00a0».',
     severity: 2,
     category: 'affirmation-non-etayee',
     verification: 'douteuse',
@@ -180,11 +176,20 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: '',
     mark: 'Selon un expert',
     after: ', le mouvement serait irréversible.',
-    explain: 'Autorité non nommée : ni nom, ni fonction, ni intérêt déclaré.',
     label: 'Autorité non nommée',
     detail: 'Ni nom, ni fonction, ni conflit d’intérêts déclaré : impossible de savoir qui parle, ni à quel titre.',
     severity: 1,
     category: 'cadrage',
+  },
+  {
+    cat: 'Point fort',
+    before: 'Dans les médiathèques, pourtant, ',
+    mark: 'bibliothécaires et enseignants décrivent des lecteurs',
+    after: ' qui ont changé de supports plus que de goûts.',
+    label: 'Témoins de terrain',
+    detail: 'La fin donne la parole à ceux qui voient les adolescents lire : elle nuance le constat du début.',
+    severity: 1,
+    category: 'point-fort',
   },
 ];
 
@@ -196,10 +201,6 @@ export const EXAMPLES: ResolvedExample[] = DEMO_FINDINGS.map((example) => ({
   ...example,
   sev: severityToHighlightSeverity(example.severity, example.category, example.verification),
 }));
-
-export function totalChars(example: DemoExample): number {
-  return example.before.length + example.mark.length + example.after.length;
-}
 
 /**
  * The four states a factual assertion can land in, as the landing explains them.
@@ -215,25 +216,25 @@ export const VERIFICATION_STATES: Array<{
   {
     state: 'verifiee',
     label: 'Vérifiée',
-    hint: 'Les sources consultées confirment ce point de l’article.',
+    hint: 'Les sources donnent raison à l’article.',
     chip: 'border-[#059669]/50 bg-[#059669]/15 text-[#34d399]',
   },
   {
     state: 'non-sourcee',
     label: 'Non sourcée dans l’article',
-    hint: 'Vérifiable, mais l’article ne cite rien à l’appui : une remarque sur son sourcing, pas un doute sur son exactitude.',
+    hint: 'L’article ne cite rien à l’appui.',
     chip: 'border-border bg-[#121215] text-muted',
   },
   {
     state: 'douteuse',
     label: 'Douteuse',
-    hint: 'Les sources consultées mettent ce point en doute.',
+    hint: 'Les sources le mettent en doute.',
     chip: 'border-[#dc2626]/50 bg-[#dc2626]/15 text-[#f87171]',
   },
   {
     state: 'non-verifiable',
     label: 'Non vérifiable telle qu’écrite',
-    hint: 'Telle qu’elle est formulée, l’affirmation ne peut pas être confrontée à des sources : elle n’est ni établie ni contredite.',
+    hint: 'Trop flou pour être confronté aux sources.',
     chip: 'border-dashed border-[#d97706]/50 bg-surface text-[#fbbf24]',
   },
 ];
@@ -249,9 +250,7 @@ export const HERO_ARTICLE: { title: string; byline: string; paragraphs: Array<Ar
   paragraphs: [
     ['La lecture recule chez les adolescents, et le constat inquiète. ', 0, ' ', 1],
     [2, ' ', 3, ' ', 4],
-    [
-      'Dans les médiathèques, pourtant, bibliothécaires et enseignants décrivent des lecteurs qui ont changé de supports plus que de goûts. Les mangas, les romans publiés en ligne et les clubs de lecture attirent des adolescents que les listes scolaires ne retiennent plus.',
-    ],
+    [5],
   ],
 };
 

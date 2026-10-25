@@ -83,14 +83,19 @@ describe('the demo, as the engine would produce it', () => {
   const standing = (findings: typeof EXAMPLES) =>
     computeFourchesCaudinesScore(fullMarks, findings).normalizedCategories.map((category) => category.score);
 
-  it('names the domain each finding is scored in', () => {
+  it('names the domain each finding is scored in, and a strength costs nothing', () => {
     const domains = Object.keys(SCORE_DOMAINS);
     for (const example of EXAMPLES) {
       const lowered = standing([example]).flatMap((score, index) =>
         score < fullMarks[index].score ? [domains[index]] : [],
       );
-      expect(lowered, example.label).toEqual([CAT_DOMAIN[example.cat]]);
+      expect(lowered, example.label).toEqual(example.category === 'point-fort' ? [] : [CAT_DOMAIN[example.cat]]);
     }
+  });
+
+  // Above 50 the engine must name a strength, so a 61 shows one.
+  it('shows a strength, as the engine must above 50', () => {
+    expect(EXAMPLES.some((example) => example.category === 'point-fort' && example.sev === 'positive')).toBe(true);
   });
 
   it('gives each finding a verification state the engine can reach', () => {

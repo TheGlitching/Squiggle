@@ -54,7 +54,7 @@ function A({ to, children }: { to: string; children: ReactNode }) {
 function Article({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      <h2 className="font-display text-2xl font-semibold tracking-[-0.01em]">{title}</h2>
       <div className="mt-3 space-y-3 text-muted">{children}</div>
     </section>
   );
@@ -63,9 +63,9 @@ function Article({ title, children }: { title: string; children: ReactNode }) {
 function LegalPage({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
   return (
     <Page title={title} lead={lead}>
-      <div className="space-y-10 text-sm leading-relaxed">
+      <div className="space-y-12 text-base leading-relaxed">
         {children}
-        <p className="text-xs text-faint">Dernière mise à jour : {UPDATED}.</p>
+        <p className="text-sm text-faint">Dernière mise à jour : {UPDATED}.</p>
       </div>
     </Page>
   );
@@ -198,7 +198,7 @@ export function Cgv() {
           Pour vous rétracter, écrivez à <Mail /> une déclaration sans ambiguïté, par exemple en reprenant le modèle
           ci-dessous.
         </p>
-        <blockquote className="rounded-xl border border-border bg-surface p-5 text-sm">
+        <blockquote className="rounded-card border border-border bg-surface p-5 text-base">
           <p className="font-medium text-foreground">Formulaire de rétractation</p>
           <p className="mt-2">
             À l’attention de {EDITEUR.name}, {EDITEUR.address}, {CONTACT_EMAIL} : je vous notifie par la présente ma
@@ -283,8 +283,8 @@ const TRANSFERS = [
 function Table({ head, rows }: { head: readonly string[]; rows: readonly (readonly string[])[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
+      <table className="w-full border-collapse text-left text-base">
+        <thead className="bg-surface text-sm text-muted">
           <tr>
             {head.map((h) => (
               <th key={h} className="px-4 py-3 font-medium">
