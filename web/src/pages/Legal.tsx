@@ -54,7 +54,7 @@ function A({ to, children }: { to: string; children: ReactNode }) {
 function Article({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      <h2 className="m-0 font-display text-2xl font-semibold">{title}</h2>
       <div className="mt-3 space-y-3 text-muted">{children}</div>
     </section>
   );
@@ -62,10 +62,10 @@ function Article({ title, children }: { title: string; children: ReactNode }) {
 
 function LegalPage({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
   return (
-    <Page title={title} lead={lead}>
-      <div className="space-y-10 text-sm leading-relaxed">
+    <Page eyebrow="Informations légales" title={title} lead={lead}>
+      <div className="space-y-10 text-base leading-relaxed">
         {children}
-        <p className="text-xs text-faint">Dernière mise à jour : {UPDATED}.</p>
+        <p className="text-sm text-muted">Dernière mise à jour : {UPDATED}.</p>
       </div>
     </Page>
   );

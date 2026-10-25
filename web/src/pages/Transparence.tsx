@@ -1,3 +1,4 @@
+import { BrowserFigure, LensFigure, ServerFigure, Stations } from '../components/Figures';
 import { Page } from '../components/Layout';
 import { HOSTED_ANALYSIS } from '../../../shared/src/hosted/disclosure';
 
@@ -46,23 +47,45 @@ const SUBPROCESSORS = [
   ['Brevo', 'Envoi des e-mails de connexion', 'Votre adresse e-mail'],
 ] as const;
 
+const FACTS = [
+  ['Jamais écrit', 'Le texte de l’article'],
+  ['30 jours', 'Le rapport et ses courts extraits'],
+  ['Aucun', 'Publicité ou traceur'],
+] as const;
+
 export function Transparence() {
   return (
     <Page
-      title="Transparence"
-      lead="Où va votre article, ce que nous gardons, et à qui. Cette page ne bouge pas au rythme du produit : elle décrit le trajet réel des données, y compris quand il n’est pas flatteur."
+      eyebrow="Transparence"
+      wide
+      title="Où va votre article"
+      lead="Ce que nous gardons, combien de temps, et à qui il passe. Le trajet réel, y compris quand il n’est pas flatteur."
     >
-      <div className="space-y-10">
+      <div className="space-y-14">
+        <dl className="grid gap-3 sm:grid-cols-3">
+          {FACTS.map(([value, label]) => (
+            <div key={label} className="rounded-card border border-border bg-surface p-5">
+              <dt className="text-base text-muted">{label}</dt>
+              <dd className="m-0 mt-1 font-display text-3xl font-semibold tracking-tight">{value}</dd>
+            </div>
+          ))}
+        </dl>
+
         <section>
-          <h2 className="font-display text-xl font-semibold">Le trajet d’une analyse</h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface p-6">
-            <p className="font-mono text-sm">
-              votre navigateur <span className="text-accent">──(le texte de l’article)──▶</span> notre
-              serveur <span className="text-accent">──▶</span> OpenRouter{' '}
-              <span className="text-accent">──▶</span> {modelLabel}
-            </p>
+          <h2 className="m-0 font-display text-2xl font-semibold">Le trajet d’une analyse</h2>
+          <div className="mt-6">
+            <Stations
+              label="Le trajet d’une analyse"
+              size="sm"
+              items={[
+                { figure: <BrowserFigure />, title: 'Votre navigateur', note: 'Le texte de la page, ou celui que vous collez.' },
+                { figure: <ServerFigure />, title: 'Notre serveur', note: 'Le transmet sans l’écrire.' },
+                { figure: <ServerFigure />, title: 'OpenRouter', note: 'Route la requête, sans identité de lecteur.' },
+                { figure: <LensFigure />, title: modelLabel, note: 'Le modèle, à poids ouverts.' },
+              ]}
+            />
           </div>
-          <p className="mt-4 text-sm text-muted">
+          <p className="mt-6 mb-0 text-base leading-relaxed text-muted">
             L’analyse tourne sur {modelLabel}, un modèle à poids ouverts, choisi pour le meilleur
             équilibre entre vitesse, qualité de raisonnement et coût. Il est exécuté par{' '}
             {INFERENCE_HOSTS_TEXT}. Utiliser un modèle à poids ouverts ne signifie pas envoyer le
@@ -71,38 +94,37 @@ export function Transparence() {
             site suit exactement le même trajet. Aucune donnée privée ne part vers le modèle, et
             aucune identité de lecteur n’accompagne une requête.
           </p>
-          <dl className="mt-5 space-y-3 text-sm">
-            <div>
+          <dl className="mt-6 grid gap-3 text-base md:grid-cols-3">
+            <div className="rounded-card border border-border bg-surface p-5">
               <dt className="font-medium">Nous voyons l’article, le temps de l’analyser.</dt>
-              <dd className="text-muted">
+              <dd className="m-0 mt-2 text-muted">
                 C’est la différence avec le mode « clé personnelle ». Le texte sert à l’appel d’audit
                 et disparaît à la fin de cette requête : aucune table de notre base ne contient de
                 texte d’article.
               </dd>
             </div>
-            <div>
+            <div className="rounded-card border border-border bg-surface p-5">
               <dt className="font-medium">Notre serveur ne va jamais chercher l’article lui-même.</dt>
-              <dd className="text-muted">
-                C’est votre navigateur qui le lui fournit : l’extension depuis la page que vous lisez,
-                le site depuis le texte que vous y collez. Un article payant est donc analysé
-                exactement dans la limite de ce que vous pouvez lire. L’adresse que vous indiquez à
-                côté d’un texte collé accompagne le rapport, mais personne ne la visite. Notre adresse
-                n’apparaît dans les journaux d’aucun éditeur.
+              <dd className="m-0 mt-2 text-muted">
+                Votre navigateur le lui fournit. Un article payant est donc analysé dans la limite de ce
+                que vous pouvez lire. L’adresse indiquée à côté d’un texte collé accompagne le rapport,
+                mais personne ne la visite. Notre adresse n’apparaît dans les journaux d’aucun éditeur.
               </dd>
             </div>
-            <div>
+            <div className="rounded-card border border-border bg-surface p-5">
               <dt className="font-medium">Le rapport est mis en cache et partagé.</dt>
-              <dd className="text-muted">
+              <dd className="m-0 mt-2 text-muted">
                 Deux lecteurs du même article obtiennent le même rapport, et le second ne consomme
-                aucun crédit. Le rapport contient des extraits de l’article (la citation de chaque constat) et un résumé. Ce que nous ne gardons jamais, c’est le texte intégral.
+                aucun crédit. Le rapport contient des extraits de l’article (la citation de chaque
+                constat) et un résumé, jamais le texte intégral.
               </dd>
             </div>
           </dl>
         </section>
 
         <section>
-          <h2 className="font-display text-xl font-semibold">Ce que nous conservons, et combien de temps</h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border">
+          <h2 className="m-0 font-display text-2xl font-semibold">Ce que nous conservons, et combien de temps</h2>
+          <div className="mt-4 overflow-x-auto rounded-card border border-border">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
                 <tr>
@@ -122,13 +144,13 @@ export function Transparence() {
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-sm text-muted">
+          <p className="mt-4 text-base text-muted">
             Une ligne de journal ne peut contenir qu’un nom d’événement, un nombre, un identifiant
             opaque ou l’empreinte d’une adresse : il n’existe aucun champ de texte libre où écrire un
             paragraphe, même par accident. Une requête refusée est journalisée par le nom du champ,
             jamais par sa valeur.
           </p>
-          <p className="mt-4 text-sm text-muted">
+          <p className="mt-4 text-base text-muted">
             Nous mesurons le lancement avec ce que le serveur détient déjà, jamais avec un traceur
             dans l’extension ou sur le site : nombre de comptes par semaine, part de comptes ayant
             terminé une analyse, essais menés à leur terme, abonnements et résiliations (d’après
@@ -139,8 +161,8 @@ export function Transparence() {
         </section>
 
         <section>
-          <h2 className="font-display text-xl font-semibold">Les sous-traitants</h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border">
+          <h2 className="m-0 font-display text-2xl font-semibold">Les sous-traitants</h2>
+          <div className="mt-4 overflow-x-auto rounded-card border border-border">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
                 <tr>
@@ -163,8 +185,8 @@ export function Transparence() {
         </section>
 
         <section>
-          <h2 className="font-display text-xl font-semibold">Ce qui n’est jamais fait</h2>
-          <ul className="mt-4 space-y-2 text-sm text-muted">
+          <h2 className="m-0 font-display text-2xl font-semibold">Ce qui n’est jamais fait</h2>
+          <ul className="mt-4 space-y-2 text-base text-muted">
             <li>Aucune donnée n’est vendue.</li>
             <li>Aucune donnée n’est utilisée pour entraîner un modèle.</li>
             <li>

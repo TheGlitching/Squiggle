@@ -25,8 +25,8 @@ export function Badge({ className = '' }: { className?: string }) {
 export function BrandLockup({ className = '' }: { className?: string }) {
   return (
     <span className={`flex items-center gap-2.5 ${className}`}>
-      <Badge className="h-9 w-9 shrink-0" />
-      <span className="font-display text-2xl font-semibold leading-none tracking-tight">squiggle</span>
+      <Badge className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
+      <span className="font-display text-xl font-semibold leading-none tracking-tight sm:text-2xl">squiggle</span>
     </span>
   );
 }

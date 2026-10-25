@@ -107,13 +107,12 @@ export const DOMAINS = [
 ] as const;
 
 export interface DemoExample {
-  /** Display category, shown with the explanation once the highlight lands. */
+  /** The domain the finding scores in, as a reader would name it. */
   cat: string;
   before: string;
   mark: string;
   after: string;
-  explain: string;
-  /** The finding card's title and body in the hero's panel. */
+  /** The finding card's title and body, as the hero shows them. */
   label: string;
   detail: string;
   severity: SeverityLevel;
@@ -134,7 +133,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'Selon ',
     mark: 'une étude',
     after: ', 78\u00a0% des Français seraient concernés.',
-    explain: 'Étude non nommée : ni institut ni méthodologie, l’article ne permet pas de remonter au chiffre.',
     label: 'Étude non nommée',
     detail: 'Aucun institut, aucune date, aucune méthodologie : le chiffre est présenté comme établi, mais le lecteur ne peut pas le retrouver.',
     severity: 2,
@@ -146,7 +144,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'Puisque les jeunes sont sur les réseaux, ',
     mark: 'ils ne lisent plus',
     after: '.',
-    explain: 'Faux dilemme : l’un n’empêche pas l’autre.',
     label: 'Faux dilemme',
     detail: 'Être sur les réseaux n’empêche pas de lire : l’article oppose deux pratiques que rien ne rend exclusives.',
     severity: 2,
@@ -157,7 +154,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: 'La situation est ',
     mark: 'un désastre absolu',
     after: ', une hémorragie incontrôlée.',
-    explain: 'Exagération : le lexique fait le travail des faits.',
     label: 'Exagération',
     detail: 'Le lexique fait le travail des faits : aucun chiffre ne vient mesurer ce « désastre ».',
     severity: 2,
@@ -168,9 +164,8 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: '',
     mark: 'Neuf adolescents sur dix n’ouvrent plus un livre',
     after: ' en dehors des cours.',
-    explain: 'Chiffre mis en doute : les sources consultées comptent une majorité d’adolescents qui lisent encore pour leur plaisir.',
     label: 'Chiffre mis en doute',
-    detail: 'Les enquêtes du Centre national du livre consultées mesurent un recul de la lecture de loisir chez les adolescents, mais la plupart d’entre eux lisent encore pour leur plaisir : rien n’y appuie «\u00a0neuf sur dix\u00a0».',
+    detail: 'Les enquêtes consultées mesurent un recul, mais la plupart des adolescents lisent encore pour leur plaisir : rien n’y appuie «\u00a0neuf sur dix\u00a0».',
     severity: 2,
     category: 'affirmation-non-etayee',
     verification: 'douteuse',
@@ -180,7 +175,6 @@ export const DEMO_FINDINGS: DemoExample[] = [
     before: '',
     mark: 'Selon un expert',
     after: ', le mouvement serait irréversible.',
-    explain: 'Autorité non nommée : ni nom, ni fonction, ni intérêt déclaré.',
     label: 'Autorité non nommée',
     detail: 'Ni nom, ni fonction, ni conflit d’intérêts déclaré : impossible de savoir qui parle, ni à quel titre.',
     severity: 1,
@@ -196,10 +190,6 @@ export const EXAMPLES: ResolvedExample[] = DEMO_FINDINGS.map((example) => ({
   ...example,
   sev: severityToHighlightSeverity(example.severity, example.category, example.verification),
 }));
-
-export function totalChars(example: DemoExample): number {
-  return example.before.length + example.mark.length + example.after.length;
-}
 
 /**
  * The four states a factual assertion can land in, as the landing explains them.

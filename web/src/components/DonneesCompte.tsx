@@ -36,7 +36,7 @@ interface Props {
 
 export function DonneesCompte({ account, onSignOut, onEmailChanged, onDeleted }: Props) {
   return (
-    <section aria-labelledby="donnees-titre" className="mt-6 rounded-2xl border border-border bg-surface p-6">
+    <section aria-labelledby="donnees-titre" className="mt-6 rounded-card border border-border bg-surface p-5 sm:p-6">
       <h2 id="donnees-titre" className="font-display text-lg font-semibold">
         Données et compte
       </h2>

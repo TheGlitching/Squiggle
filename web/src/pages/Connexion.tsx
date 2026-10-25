@@ -1,8 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { getAccount, googleSignInUrl, messageForError, requestMagicLink, verifyMagicLink } from '../api';
+import { CodeFigure } from '../components/Figures';
+import { Plate } from '../components/iso';
+import { Eyebrow, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../components/Landing';
 import { isStandalone } from '../install';
 import { navigate, Link, usePath } from '../router';
+
+const FIELD =
+  'mt-2 block w-full rounded-control border border-borderControl bg-surface px-4 py-3 text-base text-foreground outline-hidden transition-colors duration-160 ease-out placeholder:text-muted focus:border-accentHover';
 
 function searchOf(path: string): URLSearchParams {
   return new URLSearchParams(path.includes('?') ? path.slice(path.indexOf('?') + 1) : '');
@@ -85,112 +91,105 @@ export function Connexion() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md px-5 py-16">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">Connexion</h1>
-      <p className="mt-3 text-muted">
-        Entrez votre adresse e-mail : vous recevez un code et un lien de connexion. Pas de mot de
-        passe à retenir.
-      </p>
+    <div className="mx-auto grid w-full max-w-5xl items-center gap-12 px-4 py-12 sm:px-6 md:py-16 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-20">
+      <div>
+        <Eyebrow>Votre compte</Eyebrow>
+        <h1 className="m-0 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Connexion</h1>
+        <p className="mt-3 mb-0 text-lg text-muted">Un code par e-mail. Aucun mot de passe.</p>
 
-      {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
-          {error}
-        </p>
-      ) : null}
-
-      {busy && step === 'email' && linkCode ? (
-        <p className="mt-6 text-muted">Connexion en cours…</p>
-      ) : null}
-
-      {step === 'email' ? (
-        <form onSubmit={submitEmail} className="mt-8 space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium">Adresse e-mail</span>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 outline-hidden focus:border-accent"
-              placeholder="vous@exemple.fr"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
-          >
-            Recevoir mon code
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={submitCode} className="mt-8 space-y-4">
-          <p className="text-sm text-muted">
-            {/* The installed app keeps its own cookies on iOS: a link tapped in Mail
-                signs Safari in, not the app, so only the code works here. */}
-            {isStandalone()
-              ? 'Saisissez ici le code à 8 caractères reçu par e-mail, plutôt que de toucher le lien : il s’ouvrirait dans le navigateur, pas dans l’application. Le code est valable 10 minutes.'
-              : 'Saisissez le code à 8 caractères reçu par e-mail, ou ouvrez le lien depuis ce message. Il est valable 10 minutes.'}
+        {error ? (
+          <p role="alert" className="mt-6 mb-0 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk">
+            {error}
           </p>
-          <label className="block">
-            <span className="text-sm font-medium">Code de connexion</span>
-            <input
-              type="text"
-              required
-              inputMode="text"
-              autoComplete="one-time-code"
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="mt-1.5 w-full rounded-lg border border-borderControl bg-surface px-3.5 py-2.5 font-mono text-lg tracking-[0.3em] outline-hidden focus:border-accent"
-              placeholder="ABCD2345"
-              maxLength={12}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60"
-          >
-            {busy ? 'Connexion…' : 'Se connecter'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setStep('email');
-              setError(null);
-            }}
-            className="w-full text-sm text-muted hover:text-foreground"
-          >
-            Utiliser une autre adresse
-          </button>
-        </form>
-      )}
+        ) : null}
 
-      <div className="my-8 flex items-center gap-3 text-xs uppercase tracking-widest text-faint">
-        <span className="h-px flex-1 bg-border" />
-        ou
-        <span className="h-px flex-1 bg-border" />
+        {busy && step === 'email' && linkCode ? <p className="mt-6 mb-0 text-muted">Connexion en cours…</p> : null}
+
+        {step === 'email' ? (
+          <form onSubmit={submitEmail} className="mt-8 grid gap-4">
+            <label className="block">
+              <span className="text-base font-medium">Adresse e-mail</span>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={FIELD}
+                placeholder="vous@exemple.fr"
+              />
+            </label>
+            <button type="submit" disabled={busy} className={`${PRIMARY_BUTTON} w-full disabled:opacity-60`}>
+              Recevoir mon code
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={submitCode} className="mt-8 grid gap-4">
+            <p className="m-0 text-base text-muted">
+              {/* The installed app keeps its own cookies on iOS: a link tapped in Mail
+                  signs Safari in, not the app, so only the code works here. */}
+              {isStandalone()
+                ? 'Saisissez ici le code à 8 caractères reçu par e-mail, plutôt que de toucher le lien : il s’ouvrirait dans le navigateur, pas dans l’application. Le code est valable 10 minutes.'
+                : 'Saisissez le code à 8 caractères reçu par e-mail, ou ouvrez le lien depuis ce message. Il est valable 10 minutes.'}
+            </p>
+            <label className="block">
+              <span className="text-base font-medium">Code de connexion</span>
+              <input
+                type="text"
+                required
+                inputMode="text"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                className={`${FIELD} font-mono text-lg tracking-[0.3em]`}
+                placeholder="ABCD2345"
+                maxLength={12}
+              />
+            </label>
+            <button type="submit" disabled={busy} className={`${PRIMARY_BUTTON} w-full disabled:opacity-60`}>
+              {busy ? 'Connexion…' : 'Se connecter'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('email');
+                setError(null);
+              }}
+              className="min-h-11 w-full text-base text-muted hover:text-foreground"
+            >
+              Utiliser une autre adresse
+            </button>
+          </form>
+        )}
+
+        <div className="my-6 flex items-center gap-3 font-mono text-[13px] tracking-widest text-muted uppercase">
+          <span className="h-px flex-1 bg-border" />
+          ou
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <a href={googleSignInUrl(requestedNext ?? undefined)} className={`${SECONDARY_BUTTON} w-full`}>
+          Continuer avec Google
+        </a>
+
+        <p className="mt-8 mb-0 text-sm text-muted">
+          En vous connectant, vous acceptez les{' '}
+          <Link to="/conditions" className="underline hover:text-foreground">
+            conditions d’utilisation
+          </Link>{' '}
+          et la{' '}
+          <Link to="/confidentialite" className="underline hover:text-foreground">
+            politique de confidentialité
+          </Link>
+          . Aucune publicité, aucun traceur.
+        </p>
       </div>
 
-      <a
-        href={googleSignInUrl(requestedNext ?? undefined)}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 font-medium hover:border-accent hover:text-accentInk"
-      >
-        Continuer avec Google
-      </a>
-
-      <p className="mt-8 text-xs text-muted">
-        En vous connectant, vous acceptez les{' '}
-        <Link to="/conditions" className="underline hover:text-foreground">
-          conditions d’utilisation
-        </Link>{' '}
-        et la{' '}
-        <Link to="/confidentialite" className="underline hover:text-foreground">
-          politique de confidentialité
-        </Link>
-        . Aucune publicité, aucun traceur.
-      </p>
+      <Plate fig="3" name="Le code" readout={step === 'code' ? `${code.length}/8` : 'en attente'}>
+        <div className="mt-2 h-44 sm:h-72">
+          <CodeFigure value={step === 'code' ? code : ''} />
+        </div>
+      </Plate>
     </div>
   );
 }

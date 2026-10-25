@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { PRIMARY_BUTTON } from './components/Landing';
 import { Layout } from './components/Layout';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
@@ -21,11 +22,11 @@ function Redirect({ to }: { to: string }) {
 
 function NotFound() {
   return (
-    <div className="mx-auto w-full max-w-md px-5 py-24 text-center">
-      <p className="font-mono text-sm text-accent">404</p>
-      <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight">Page introuvable</h1>
-      <p className="mt-3 text-muted">Le lien est peut-être ancien ou mal orthographié.</p>
-      <a href="/" className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover">
+    <div className="mx-auto w-full max-w-md px-4 py-24 text-center">
+      <p className="font-mono text-base text-accentInk">404</p>
+      <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight">Page introuvable</h1>
+      <p className="mt-3 text-lg text-muted">Le lien est peut-être ancien ou mal orthographié.</p>
+      <a href="/" className={`${PRIMARY_BUTTON} mt-6`}>
         Revenir à l’accueil
       </a>
     </div>

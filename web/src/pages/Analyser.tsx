@@ -14,7 +14,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } from '../analysis';
 import { getAccount, type Account } from '../api';
-import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
+import { ReadFigure } from '../components/Figures';
+import { Eyebrow, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
 import { FREE_ANALYSES } from '../offer';
@@ -154,7 +155,7 @@ export function Analyser() {
 
   if (phase.kind === 'done') {
     return (
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:py-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <h1
           ref={reportTop}
           tabIndex={-1}
@@ -177,14 +178,22 @@ export function Analyser() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 pt-8 sm:py-12">
-      <h1 className="m-0 font-display text-2xl font-semibold tracking-tight sm:text-3xl">Analyser un texte</h1>
-      <p className="mt-2 mb-0 max-w-[68ch] text-base leading-relaxed text-muted">
-        Collez le texte d’un article : Squiggle le relit avec la grille de l’extension et surligne les passages
-        fragiles, avec la raison de chaque constat.
-      </p>
+    <div className="mx-auto w-full max-w-5xl px-4 pt-8 sm:px-6 sm:py-12">
+      <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <div>
+          <Eyebrow>Analyse</Eyebrow>
+          <h1 className="m-0 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Analyser un article</h1>
+          <p className="mt-3 mb-0 max-w-[68ch] text-lg leading-relaxed text-muted">
+            Collez le texte : Squiggle surligne ce qui cloche et dit pourquoi.
+          </p>
+        </div>
+        {/* While the analysis runs, the lens keeps reading. */}
+        <div className={`h-32 max-sm:hidden ${running ? 'scan-loop' : ''}`}>
+          <ReadFigure />
+        </div>
+      </div>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
         <form onSubmit={analyse} noValidate>
           <fieldset disabled={running} className="m-0 grid gap-6 border-0 p-0">
             <div>
@@ -273,7 +282,7 @@ export function Analyser() {
             </div>
           </fieldset>
 
-          <div className="sticky bottom-0 z-10 -mx-5 mt-6 border-t border-border bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
             {showProblem && problem ? (
               <p role="alert" className="mt-0 mb-3 text-sm text-warningInk">
                 {PASTE_PROBLEMS[problem]}
@@ -298,32 +307,27 @@ export function Analyser() {
 function Aside() {
   const install = useInstall();
   return (
-    <aside
-      aria-label="Bon à savoir"
-      className="grid max-w-[68ch] content-start gap-5 text-sm leading-relaxed text-muted lg:pt-8"
-    >
-      <p className="m-0">
-        <strong className="font-medium text-foreground">Le même compte que l’extension.</strong> Une analyse décompte
-        une de vos analyses offertes ou du jour. Un texte qu’un autre lecteur a déjà fait analyser vous est rendu sans
-        rien décompter.
-      </p>
-      <p className="m-0">
-        <strong className="font-medium text-foreground">Votre texte n’est pas conservé.</strong> Il passe par notre
-        serveur et par le modèle le temps de l’analyse ; le rapport, qui en cite de courts extraits, est gardé 30 jours.{' '}
-        <Link
-          to="/transparence"
-          className="text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk"
-        >
-          Le trajet des données
-        </Link>
-      </p>
+    <aside aria-label="Bon à savoir" className="grid max-w-[68ch] content-start gap-4 text-base leading-relaxed text-muted lg:pt-8">
+      <div className="rounded-card border border-border bg-surface p-4">
+        <p className="m-0 font-medium text-foreground">Déjà analysé ?</p>
+        <p className="mt-1 mb-0">Un texte qu’un autre lecteur a fait analyser ne vous coûte rien.</p>
+      </div>
+      <div className="rounded-card border border-border bg-surface p-4">
+        <p className="m-0 font-medium text-foreground">Votre texte n’est pas conservé.</p>
+        <p className="mt-1 mb-0">
+          Le rapport, avec de courts extraits, est gardé 30 jours.{' '}
+          <Link to="/transparence" className="text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk">
+            Le trajet des données
+          </Link>
+        </p>
+      </div>
       {install ? (
-        <div className="m-0">
-          <p className="m-0">
-            <strong className="font-medium text-foreground">Sur votre téléphone.</strong>{' '}
+        <div className="rounded-card border border-border bg-surface p-4">
+          <p className="m-0 font-medium text-foreground">Sur votre téléphone.</p>
+          <p className="mt-1 mb-0">
             {install.kind === 'prompt'
-              ? 'Installez Squiggle sur l’écran d’accueil : un article partagé vers Squiggle arrive directement ici.'
-              : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil » : Squiggle s’ouvre alors comme une application.'}
+              ? 'Installez Squiggle : un article partagé vers Squiggle arrive directement ici.'
+              : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil » : Squiggle s’ouvre comme une application.'}
           </p>
           {install.kind === 'prompt' ? (
             <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3`}>

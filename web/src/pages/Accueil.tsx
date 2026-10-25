@@ -1,212 +1,192 @@
-import { Demo, DemoText } from '../components/Demo';
+import type { ReactNode } from 'react';
+
 import {
-  LandingShell,
-  MEASURE,
-  PAGE,
-  PRIMARY_BUTTON,
-  QUIET_LINK,
-  SECONDARY_BUTTON,
-  Section,
-} from '../components/Landing';
-import { HeroScene } from '../components/HeroScene';
-import { DOMAINS, VERIFICATION_STATES } from '../demo';
+  BrowserFigure,
+  GridFigure,
+  LensFigure,
+  OpenFigure,
+  PasteFigure,
+  ReadFigure,
+  ReportFigure,
+  ReportTileFigure,
+  ServerFigure,
+  Stations,
+  TextFigure,
+} from '../components/Figures';
+import { HeroFigure } from '../components/HeroFigure';
+import { LandingShell, MEASURE, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, Section } from '../components/Landing';
+import { CONTACT_URL } from '../components/Layout';
+import { ReportDiagram } from '../components/ReportDiagram';
 import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
+import { frenchSpacing } from '../format';
 import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL, TAGLINE } from '../offer';
 import { Link } from '../router';
-import { CONTACT_URL } from '../components/Layout';
+
+const STEPS = [
+  {
+    figure: <PasteFigure />,
+    title: 'Vous collez l’article',
+    note: 'Sur le site, dans l’appli, ou d’un clic sur ordinateur.',
+  },
+  {
+    figure: <ReadFigure />,
+    title: 'Squiggle le relit',
+    note: 'Phrase par phrase, même grille pour tous. S’il met un fait en question, il consulte d’abord les sources.',
+  },
+  {
+    figure: <ReportFigure />,
+    title: 'Vous lisez son avis',
+    note: 'Une note sur 100, les passages fragiles et leur raison. En une à deux minutes.',
+  },
+];
 
 const NEUTRALITY = [
-  [
-    'Une seule grille pour tous les articles',
-    'Les mêmes cinq domaines et les mêmes pondérations s’appliquent à chaque article, quels que soient le sujet, le média ou le bord de l’auteur. Aucun réglage ne favorise un titre.',
-  ],
-  [
-    'Une méthode publique',
-    'La grille, les consignes données au modèle et le calcul de la note sont publiés avec le code source. Vous pouvez vérifier comment une note est obtenue, et la contester.',
-  ],
-  [
-    'Aucun verdict sur les personnes',
-    'Squiggle juge la solidité d’un texte, jamais l’honnêteté d’un auteur, d’un média ou d’une personne citée. Ce qu’il ne peut pas vérifier, il le dit « non vérifiable », pas « faux ».',
-  ],
+  ['Une seule grille', 'Mêmes questions, mêmes poids, quel que soit le média ou le bord.', <GridFigure key="grille" />],
+  ['Une méthode publique', 'Grille et code en ligne : une note se vérifie et se conteste.', <OpenFigure key="methode" />],
+  ['Le texte, jamais l’auteur', 'Aucun verdict sur une personne ou un média.', <TextFigure key="texte" />],
 ] as const;
 
-const FAQ = [
+const DATA_FLOW = [
+  { figure: <BrowserFigure />, title: 'Votre navigateur', note: 'Envoie le texte de l’article.' },
+  { figure: <ServerFigure />, title: 'Notre serveur', note: 'Le transmet sans l’écrire nulle part.' },
+  { figure: <LensFigure />, title: 'Le service d’analyse', note: 'Le lit le temps de l’analyse.' },
+  { figure: <ReportTileFigure />, title: 'Le rapport', note: 'Gardé 30 jours, avec de courts extraits.' },
+];
+
+const FAQ: Array<[string, ReactNode]> = [
+  ['Sur quel appareil ?', 'Partout : sur le site, avec l’appli installée, ou d’un clic sur Chrome et Firefox.'],
   [
-    'Sur quels navigateurs fonctionne-t-il ?',
-    'L’extension, sur Chrome et Firefox, ainsi que sur les navigateurs basés sur Chromium comme Edge ou Brave. Partout ailleurs, le site analyse le texte que vous y collez.',
+    `Et après les ${FREE_ANALYSES} analyses offertes ?`,
+    `L’abonnement : ${PRICE_MONTHLY} par mois, ${DAILY_ANALYSES} analyses par jour, sans engagement.`,
   ],
-  [
-    'Et sur mon téléphone ?',
-    <>
-      Collez le texte de l’article sur la page{' '}
-      <Link to="/analyser" className={QUIET_LINK}>
-        Analyser un texte
-      </Link>
-      . Le site s’installe sur l’écran d’accueil comme une application ; sur Android, vous pouvez ensuite partager
-      un article vers Squiggle. C’est le même compte que l’extension : mêmes analyses offertes, même abonnement.
-    </>,
-  ],
-  [
-    'Que se passe-t-il quand mes analyses offertes sont épuisées ?',
-    `Vous pouvez vous abonner (${PRICE_MONTHLY} par mois, ${DAILY_ANALYSES} analyses par jour) ou utiliser votre propre clé d’API auprès d’un fournisseur de modèle : l’extension reste alors gratuite.`,
-  ],
-  [
-    'Une analyse peut-elle se tromper ?',
-    'Oui. Elle est produite en partie par un modèle de langage. C’est pourquoi chaque constat cite la phrase exacte de l’article et donne sa raison : vous jugez sur pièces. Quand une affirmation ne peut pas être vérifiée, le rapport le dit au lieu de trancher.',
-  ],
+  ['Une analyse peut-elle se tromper ?', 'Oui. Chaque constat cite donc sa phrase et sa raison : vous jugez sur pièces.'],
   [
     'Mon article est-il envoyé quelque part ?',
-    'Avec un compte, oui : le texte de l’article, lu par l’extension ou collé sur le site, transite par notre serveur et par le fournisseur du modèle le temps de l’analyse, puis n’est pas conservé. Avec votre propre clé, il part directement chez le fournisseur que vous avez choisi. Le détail est sur la page Transparence.',
+    <>
+      À notre serveur et au service d’analyse, le temps de l’analyse. Il n’est pas conservé.{' '}
+      <Link to="/transparence" className={QUIET_LINK}>
+        Le trajet exact
+      </Link>
+    </>,
   ],
-  [
-    'Et les articles payants ?',
-    'Squiggle analyse le texte que votre navigateur affiche. Sur un article derrière un abonnement, c’est ce que vous pouvez lire, et le rapport signale que l’analyse est partielle.',
-  ],
-  [
-    'Comment résilier mon abonnement ?',
-    'À tout moment depuis la page « Mon compte », via le portail de gestion Stripe. La résiliation prend effet à la fin de la période en cours.',
-  ],
+  ['Et les articles payants ?', 'Squiggle analyse ce que vous pouvez lire, et signale un article coupé.'],
+  ['Comment résilier mon abonnement ?', 'À tout moment, depuis « Mon compte ». Effet à la fin de la période en cours.'],
   [
     'Puis-je l’utiliser en classe ?',
     <>
-      Oui, et c’est gratuit pour les enseignants sur demande.{' '}
+      Oui, gratuitement, sur demande.{' '}
       <Link to="/enseignants" className={QUIET_LINK}>
-        La page Enseignants explique comment
+        La page Enseignants
       </Link>
-      .
     </>,
   ],
-] as const;
+];
 
-export function Accueil() {
+/** The analyses an offer gives, as dots: three to try, ten a day. */
+function Dots({ count, label }: { count: number; label: string }) {
+  return (
+    <span role="img" aria-label={label} className="mt-5 flex flex-wrap gap-1.5">
+      {Array.from({ length: count }, (_, index) => (
+        <span key={index} className="h-3 w-3 rounded-full bg-accent" />
+      ))}
+    </span>
+  );
+}
+
+/** The ways in, ordered by what this device can do: the site first, then the app or the browser button. */
+function HeroActions() {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   const installUrl = installUrlFor(userAgent);
   const mobile = isMobile(userAgent);
   const install = useInstall();
 
   return (
-    <LandingShell>
-      <div className={`${PAGE} py-12 md:py-16`}>
-        <HeroScene>
-          <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance md:text-5xl xl:text-6xl">
-            {TAGLINE}
-          </h1>
-          <p className={`mt-6 text-lg leading-relaxed text-pretty text-muted md:text-xl ${MEASURE}`}>
-            Dans l’article que vous lisez, Squiggle surligne les passages fragiles, dit pourquoi et montre aussi
-            ce qui est solide. S’il met un fait en question, il consulte d’abord les sources.
-          </p>
-
-          {/* One primary action: the store this browser installs from, or, where no
-              extension can be installed (a phone, Safari), the analysis on the site. */}
-          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            {installUrl ? (
-              <>
-                <a href={installUrl} className={PRIMARY_BUTTON}>
-                  {installLabelFor(installUrl)}
-                </a>
-                <Link to="/analyser" className={SECONDARY_BUTTON}>
-                  Analyser un article sur le site
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-                  Analyser un article
-                </Link>
-                {install?.kind === 'prompt' ? (
-                  <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-                    Installer l’application
-                  </button>
-                ) : null}
-              </>
-            )}
-            <a href="#verifie" className={QUIET_LINK}>
-              Voir un exemple
-            </a>
-          </div>
-          <p className="mt-4 text-base text-muted">
-            {FREE_ANALYSES} analyses offertes, sans carte bancaire. Ensuite {PRICE_MONTHLY} par mois, sans engagement.
-          </p>
-          {!installUrl && install?.kind === 'ios' ? (
-            <p className="mt-4 text-base text-muted">
-              Pour l’avoir comme une application, touchez Partager puis « Sur l’écran d’accueil ».
-            </p>
-          ) : null}
-          {!installUrl && !mobile ? (
-            <p className="mt-4 text-base text-muted">
-              L’extension est disponible pour{' '}
-              <a href={CHROME_URL} className={QUIET_LINK}>
-                Chrome
-              </a>{' '}
-              et{' '}
-              <a href={FIREFOX_URL} className={QUIET_LINK}>
-                Firefox
-              </a>
-              .
-            </p>
-          ) : null}
-        </HeroScene>
+    <>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+          Analyser un article
+        </Link>
+        {installUrl ? (
+          <a href={installUrl} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+            {installLabelFor(installUrl)}
+          </a>
+        ) : install?.kind === 'prompt' ? (
+          <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+            Installer l’application
+          </button>
+        ) : null}
       </div>
+      <p className="mt-4 mb-0 text-base text-muted">
+        {FREE_ANALYSES} analyses offertes, sans carte bancaire.
+      </p>
+      {!installUrl && install?.kind === 'ios' ? (
+        <p className="mt-2 mb-0 text-base text-muted">
+          Pour l’avoir comme une application, touchez Partager puis « Sur l’écran d’accueil ».
+        </p>
+      ) : null}
+      {!installUrl && !mobile ? (
+        <p className="mt-2 mb-0 text-base text-muted">
+          Aussi en bouton pour{' '}
+          <a href={CHROME_URL} className={QUIET_LINK}>
+            Chrome
+          </a>{' '}
+          et{' '}
+          <a href={FIREFOX_URL} className={QUIET_LINK}>
+            Firefox
+          </a>
+          .
+        </p>
+      ) : null}
+    </>
+  );
+}
 
-      <Section
-        id="verifie"
-        title="Ce qu’il vérifie"
-        intro="Chaque article est relu selon cinq domaines pondérés sur 100. Les constats sont surlignés dans la page, avec la raison."
-      >
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-16">
-          <ol className="m-0 grid list-none gap-3 p-0" aria-label="Les cinq domaines">
-            {DOMAINS.map(([label, weight, question]) => (
-              <li key={label} className="rounded-card border border-border bg-surface p-5">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <h3 className="m-0 font-display text-xl font-semibold">{label}</h3>
-                  <span className="font-mono text-sm text-muted">{weight} points sur 100</span>
-                </div>
-                <p className={`mt-2 mb-0 text-base leading-relaxed text-muted ${MEASURE}`}>{question}</p>
-              </li>
-            ))}
-          </ol>
-
-          <div className="self-start lg:sticky lg:top-8">
-            <Demo />
-            <DemoText />
+export function Accueil() {
+  return (
+    <LandingShell>
+      <div className="hero-backdrop">
+        <div className={`${PAGE} pt-10 pb-16 md:pt-16 lg:pb-24`}>
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-end lg:gap-16">
+            <h1 className="m-0 font-display text-[2.6rem] leading-[1.02] font-semibold tracking-[-0.03em] text-balance sm:text-6xl lg:text-7xl">
+              {TAGLINE}
+            </h1>
+            <div>
+              <p className={`m-0 text-lg leading-relaxed text-pretty text-muted md:text-xl ${MEASURE}`}>
+                Collez un article{'\u00a0'}: Squiggle surligne ce qui cloche, dit pourquoi, et montre aussi ce qui est solide.
+              </p>
+              <HeroActions />
+            </div>
+          </div>
+          <div className="mt-10 md:mt-14">
+            <HeroFigure />
           </div>
         </div>
+      </div>
 
-        <h3 className="mt-14 mb-0 font-display text-2xl font-semibold">Quatre états pour chaque fait relevé</h3>
-        <p className={`mt-3 text-base leading-relaxed text-pretty text-muted ${MEASURE}`}>
-          Un fait relevé n’est jamais dit simplement vrai ou faux. Quand Squiggle en met un en question,
-          il consulte les sources : elles le confirment, le mettent en doute, ou ne permettent pas de le
-          vérifier tel qu’il est écrit. Quand l’article ne cite rien à l’appui d’un fait, le rapport le
-          dit non sourcé.
-        </p>
-        <dl className="mt-6 grid gap-4 md:grid-cols-2">
-          {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (
-            <div key={state} className="rounded-card border border-border bg-surface p-5">
-              <dt>
-                <span className={`inline-block rounded-md border px-2.5 py-1 text-sm font-medium ${chip}`}>
-                  {label}
-                </span>
-              </dt>
-              <dd className="m-0 mt-3 text-base leading-relaxed text-muted">{hint}</dd>
-            </div>
-          ))}
-        </dl>
+      <Section id="comment" index="01 · Comment ça marche" title="Trois gestes, un deuxième avis">
+        <Stations label="Les trois étapes" items={STEPS} />
       </Section>
 
-      <Section
-        id="neutralite"
-        title="Comment il reste neutre"
-        intro="Une note n’a de valeur que si l’on sait comment elle est fabriquée."
-      >
+      <Section id="rapport" index="02 · Le rapport" title="Ce que dit le rapport">
+        <ReportDiagram />
+      </Section>
+
+      <Section id="neutralite" index="03 · Neutralité" title="Neutre par construction">
         <ul className="m-0 grid list-none gap-4 p-0 md:grid-cols-3">
-          {NEUTRALITY.map(([title, text]) => (
-            <li key={title} className="rounded-card border border-border bg-surface p-6">
-              <h3 className="m-0 font-display text-xl font-semibold">{title}</h3>
-              <p className="mt-3 mb-0 text-base leading-relaxed text-muted">{text}</p>
+          {NEUTRALITY.map(([title, text, figure]) => (
+            <li
+              key={title}
+              className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-4 rounded-card border border-border bg-surface p-4 md:block md:p-5"
+            >
+              <div className="h-20 md:h-32">{figure}</div>
+              <div>
+                <h3 className="m-0 font-display text-xl font-semibold md:mt-5">{title}</h3>
+                <p className="mt-2 mb-0 text-base leading-relaxed text-muted">{text}</p>
+              </div>
             </li>
           ))}
         </ul>
-        <p className="mt-6">
+        <p className="mt-6 mb-0">
           <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
             Lire la méthode et le code sur GitHub{' '}
             <span aria-hidden="true" className="font-mono">
@@ -216,92 +196,98 @@ export function Accueil() {
         </p>
       </Section>
 
-      <Section id="confidentialite" title="Vos données">
-        <p className={`m-0 text-base leading-relaxed text-muted ${MEASURE}`}>
-          Avec un compte, le texte de l’article transite par notre serveur et par le fournisseur du
-          modèle le temps de l’analyse, puis n’est pas conservé. Le rapport, qui cite de courts
-          extraits, est gardé 30 jours dans un cache partagé. Aucune publicité, aucun traceur. Avec
-          votre propre clé, l’article part directement chez le fournisseur que vous avez choisi, jamais
-          chez nous.
+      <Section id="donnees" index="04 · Vos données" title="Ce que devient votre article">
+        <Stations label="Le trajet d’un article" items={DATA_FLOW} size="sm" />
+        <p className={`mt-6 mb-0 text-lg leading-relaxed text-pretty ${MEASURE}`}>
+          Le texte de l’article n’est pas conservé. Aucune publicité, aucun traceur.
         </p>
-        <p className="mt-4">
+        <p className="mt-3 mb-0">
           <Link to="/transparence" className={QUIET_LINK}>
             Voir le trajet exact des données
           </Link>
         </p>
       </Section>
 
-      <Section
-        id="tarifs"
-        title="Tarifs"
-        intro="Essayez d’abord. Payez seulement si l’outil vous sert."
-      >
-        <div className="grid gap-4 md:grid-cols-3">
+      <Section id="tarifs" index="05 · Tarifs" title="Essayez d’abord" intro="Payez seulement si l’outil vous sert.">
+        <div className="grid gap-4 md:grid-cols-2">
           <article className="flex flex-col rounded-card border border-border bg-surface p-6">
             <h3 className="m-0 font-display text-xl font-semibold">Essai</h3>
-            <p className="mt-3 mb-0 font-display text-3xl font-semibold">Gratuit</p>
-            <p className="mt-3 text-base leading-relaxed text-muted">
+            <p className="mt-2 mb-0 font-display text-5xl font-semibold tracking-tight">Gratuit</p>
+            <Dots count={FREE_ANALYSES} label={`${FREE_ANALYSES} analyses`} />
+            <p className="mt-4 mb-6 text-base leading-relaxed text-muted">
               {FREE_ANALYSES} analyses offertes à l’inscription, sans carte bancaire.
             </p>
+            <Link to="/analyser" className={`${SECONDARY_BUTTON} mt-auto`}>
+              Essayer
+            </Link>
           </article>
 
           <article className="flex flex-col rounded-card border-2 border-accent bg-surface p-6">
             <h3 className="m-0 font-display text-xl font-semibold">Abonnement</h3>
-            <p className="mt-3 mb-0 font-display text-3xl font-semibold">
+            <p className="mt-2 mb-0 font-display text-5xl font-semibold tracking-tight">
               {PRICE_MONTHLY}
-              <span className="text-base font-normal text-muted"> par mois</span>
+              <span className="text-lg font-normal tracking-normal text-muted"> par mois</span>
             </p>
-            <p className="mt-3 mb-6 text-base leading-relaxed text-muted">
+            <Dots count={DAILY_ANALYSES} label={`${DAILY_ANALYSES} analyses par jour`} />
+            <p className="mt-4 mb-6 text-base leading-relaxed text-muted">
               {DAILY_ANALYSES} analyses par jour. Sans engagement, résiliable à tout moment.
             </p>
             <Link to="/connexion" className={`${PRIMARY_BUTTON} mt-auto`}>
               {SUBSCRIBE_LABEL}
             </Link>
           </article>
-
-          <article className="flex flex-col rounded-card border border-border bg-surface p-6">
-            <h3 className="m-0 font-display text-xl font-semibold">Votre propre clé</h3>
-            <p className="mt-3 mb-0 font-display text-3xl font-semibold">Gratuit</p>
-            <p className="mt-3 text-base leading-relaxed text-muted">
-              L’extension ne coûte rien : vous réglez directement le fournisseur du modèle de votre choix.
-            </p>
-          </article>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-card border border-border bg-accentSoft p-6">
-          <p className={`m-0 text-base leading-relaxed ${MEASURE}`}>
-            <strong className="font-semibold">Gratuit pour les enseignants, sur demande.</strong>{' '}
-            Pour projeter un rapport en classe ou préparer un exercice d’éducation aux médias.
-          </p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-card border border-border bg-accentSoft p-6">
+          <p className="m-0 text-lg font-semibold">Gratuit pour les enseignants, sur demande.</p>
           <Link to="/enseignants" className={SECONDARY_BUTTON}>
             Offre enseignants
           </Link>
         </div>
       </Section>
 
-      <Section id="faq" title="Questions fréquentes">
-        <div className={`grid gap-3 ${MEASURE}`}>
+      <Section id="faq" index="06 · Questions" title="Questions fréquentes">
+        <div className="grid items-start gap-3 lg:grid-cols-2">
           {FAQ.map(([question, answer]) => (
             <details key={question} className="group rounded-card border border-border bg-surface">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-5 py-3 font-display text-lg font-medium [&::-webkit-details-marker]:hidden">
-                {question}
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 px-5 py-3 font-display text-lg font-medium [&::-webkit-details-marker]:hidden">
+                {frenchSpacing(question)}
                 <span
                   aria-hidden="true"
-                  className="font-mono text-accentInk transition-transform duration-160 ease-out group-open:rotate-45 motion-reduce:transition-none"
+                  className="font-mono text-xl text-accentInk transition-transform duration-160 ease-out group-open:rotate-45 motion-reduce:transition-none"
                 >
                   +
                 </span>
               </summary>
-              <p className="m-0 px-5 pb-5 text-base leading-relaxed text-muted">{answer}</p>
+              <p className="m-0 px-5 pb-5 text-base leading-relaxed text-muted">
+                {typeof answer === 'string' ? frenchSpacing(answer) : answer}
+              </p>
             </details>
           ))}
         </div>
-        <p className="mt-6">
+        <p className="mt-6 mb-0">
           <a href={CONTACT_URL} className={QUIET_LINK}>
             Une autre question ? Écrivez-nous
           </a>
         </p>
       </Section>
+
+      <section aria-labelledby="a-vous-titre" className="border-t border-lineSoft">
+        <div className={`${PAGE} grid items-center gap-8 py-16 md:grid-cols-[minmax(0,1fr)_16rem] md:py-24`}>
+          <div>
+            <h2 id="a-vous-titre" className="m-0 font-display text-4xl font-semibold tracking-tight md:text-6xl">
+              À votre tour.
+            </h2>
+            <p className="mt-4 mb-0 text-lg text-muted md:text-xl">Collez un article, lisez son deuxième avis.</p>
+            <Link to="/analyser" className={`${PRIMARY_BUTTON} mt-8 max-sm:w-full`}>
+              Analyser un article
+            </Link>
+          </div>
+          <div className="h-48 max-md:hidden">
+            <ReadFigure />
+          </div>
+        </div>
+      </section>
     </LandingShell>
   );
 }
