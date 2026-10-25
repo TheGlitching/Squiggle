@@ -116,8 +116,8 @@ describe('the PENDING guard', () => {
     expect(pendingVars(text, 'staging')).toEqual([]);
   });
 
-  it('still blocks production until the Stripe price exists', () => {
-    expect(pendingVars(wranglerText, 'production')).toEqual(['STRIPE_PRICE_ID']);
+  it('leaves production with nothing pending', () => {
+    expect(pendingVars(wranglerText, 'production')).toEqual([]);
   });
 });
 
