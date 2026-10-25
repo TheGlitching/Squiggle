@@ -10,7 +10,7 @@ export const SUBSCRIBE_LABEL = `S’abonner : ${PRICE_MONTHLY}/mois`;
  * the page title and the link preview, and a test keeps the two in step; `og.png` is a
  * rendering of the hero and is captured again when it changes.
  */
-export const TAGLINE = 'Un avis que vous pouvez défendre.';
+export const TAGLINE = 'Un deuxième avis sur votre lecture.';
 
 export const GITHUB_URL = 'https://github.com/TheGlitching/Squiggle';
 
