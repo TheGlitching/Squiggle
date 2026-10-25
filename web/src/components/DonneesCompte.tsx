@@ -21,11 +21,11 @@ import { frenchDate } from '../format';
 import { Link } from '../router';
 
 const inputClass =
-  'mt-1.5 w-full rounded-lg border border-borderControl bg-background px-3.5 py-2.5 outline-none focus:border-accent';
+  'mt-2 block w-full rounded-control border border-borderControl bg-background px-4 py-3 text-base outline-none focus:border-accentHover';
 const secondaryButton =
-  'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:border-accent hover:text-accentInk disabled:opacity-60';
+  'inline-flex min-h-11 items-center rounded-control border border-borderControl px-4 py-2 text-base font-medium hover:border-accent hover:text-accentInk disabled:opacity-60';
 const primaryButton =
-  'rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accentForeground hover:bg-accentHover disabled:opacity-60';
+  'inline-flex min-h-11 items-center rounded-control bg-accent px-4 py-2 text-base font-semibold text-accentForeground hover:bg-accentHover disabled:opacity-60';
 
 interface Props {
   account: Account;
@@ -36,11 +36,11 @@ interface Props {
 
 export function DonneesCompte({ account, onSignOut, onEmailChanged, onDeleted }: Props) {
   return (
-    <section aria-labelledby="donnees-titre" className="mt-6 rounded-2xl border border-border bg-surface p-6">
-      <h2 id="donnees-titre" className="font-display text-lg font-semibold">
+    <section aria-labelledby="donnees-titre" className="mt-4 rounded-card bg-surface p-6 sm:p-8">
+      <h2 id="donnees-titre" className="m-0 text-xl font-semibold">
         Données et compte
       </h2>
-      <p className="mt-2 text-sm text-muted">
+      <p className="mt-2 text-base text-muted">
         Voir{' '}
         <Link to="/transparence" className="underline hover:text-foreground">
           le détail du trajet des données
@@ -52,7 +52,7 @@ export function DonneesCompte({ account, onSignOut, onEmailChanged, onDeleted }:
       <InstallsBlock />
 
       <div className="mt-8 border-t border-border pt-6">
-        <button onClick={onSignOut} className="text-sm text-muted underline hover:text-foreground">
+        <button onClick={onSignOut} className="text-base text-muted underline hover:text-foreground">
           Se déconnecter
         </button>
       </div>
@@ -122,9 +122,9 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
 
   return (
     <div className="mt-8">
-      <h3 className="text-sm font-semibold">Adresse e-mail</h3>
+      <h3 className="text-base font-semibold">Adresse e-mail</h3>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">{email ?? 'Aucune adresse enregistrée.'}</p>
+        <p className="text-base text-muted">{email ?? 'Aucune adresse enregistrée.'}</p>
         {step === 'idle' ? (
           <button
             onClick={() => {
@@ -139,12 +139,12 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
       </div>
 
       {notice ? (
-        <p role="status" className="mt-3 text-sm text-foreground">
+        <p role="status" className="mt-3 text-base text-foreground">
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-3 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
+        <p role="alert" className="mt-3 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk">
           {error}
         </p>
       ) : null}
@@ -152,7 +152,7 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
       {step === 'address' ? (
         <form onSubmit={sendCode} className="mt-4 space-y-3">
           <label className="block">
-            <span className="text-sm font-medium">Nouvelle adresse e-mail</span>
+            <span className="text-base font-medium">Nouvelle adresse e-mail</span>
             <input
               type="email"
               required
@@ -163,7 +163,7 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
               placeholder="vous@exemple.fr"
             />
           </label>
-          <p className="text-xs text-muted">
+          <p className="text-sm text-muted">
             Nous envoyons un code à cette adresse. Votre adresse actuelle reste active tant que vous ne l’avez
             pas confirmé.
           </p>
@@ -180,14 +180,14 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
 
       {step === 'code' ? (
         <form onSubmit={confirm} className="mt-4 space-y-3">
-          <p className="text-sm text-muted">
+          <p className="text-base text-muted">
             {newEmail
               ? `Si ${newEmail} est disponible, un code vient d’y être envoyé. `
               : 'Saisissez le code reçu à la nouvelle adresse. '}
             Il est valable 10 minutes.
           </p>
           <label className="block">
-            <span className="text-sm font-medium">Code de confirmation</span>
+            <span className="text-base font-medium">Code de confirmation</span>
             <input
               type="text"
               required
@@ -255,36 +255,36 @@ function InstallsBlock() {
 
   return (
     <div className="mt-8">
-      <h3 className="text-sm font-semibold">Extensions connectées</h3>
-      <p className="mt-1 text-sm text-muted">
+      <h3 className="text-base font-semibold">Extensions connectées</h3>
+      <p className="mt-1 text-base text-muted">
         Chaque extension connectée à votre compte peut lancer des analyses à votre nom. Révoquez celle que vous
         ne reconnaissez pas ou dont vous n’avez plus l’usage.
       </p>
 
       {notice ? (
-        <p role="status" className="mt-3 text-sm text-foreground">
+        <p role="status" className="mt-3 text-base text-foreground">
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-3 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
+        <p role="alert" className="mt-3 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk">
           {error}
         </p>
       ) : null}
 
       {installs === null ? (
-        <p className="mt-3 text-sm text-muted">Chargement…</p>
+        <p className="mt-3 text-base text-muted">Chargement…</p>
       ) : installs.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">Aucune extension connectée.</p>
+        <p className="mt-3 text-base text-muted">Aucune extension connectée.</p>
       ) : (
-        <ul className="mt-3 divide-y divide-border rounded-lg border border-border">
+        <ul className="mt-3 divide-y divide-border rounded-control border border-border">
           {installs.map((install) => {
             const since = frenchDate(install.createdAt);
             return (
               <li key={install.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div>
-                  <p className="text-sm">Extension connectée le {since}</p>
-                  <p className="text-xs text-faint">Valable jusqu’au {frenchDate(install.expiresAt)}</p>
+                  <p className="text-base">Extension connectée le {since}</p>
+                  <p className="text-sm text-faint">Valable jusqu’au {frenchDate(install.expiresAt)}</p>
                 </div>
                 <button
                   onClick={() => revoke(install)}
@@ -333,31 +333,31 @@ function DeleteBlock({ onDeleted }: { onDeleted: () => void }) {
 
   return (
     <div className="mt-8 rounded-xl border border-critical p-5">
-      <h3 className="text-sm font-semibold text-criticalInk">Supprimer mon compte</h3>
+      <h3 className="text-base font-semibold text-criticalInk">Supprimer mon compte</h3>
 
       {!open ? (
         <>
-          <p className="mt-1 text-sm text-muted">Efface votre compte et les données qui y sont rattachées.</p>
+          <p className="mt-1 text-base text-muted">Efface votre compte et les données qui y sont rattachées.</p>
           <button
             onClick={() => setOpen(true)}
-            className="mt-4 rounded-lg border border-critical px-4 py-2 text-sm font-medium text-criticalInk hover:bg-criticalSoft"
+            className="mt-4 rounded-control border border-critical px-4 py-2 text-base font-medium text-criticalInk hover:bg-criticalSoft"
           >
             Supprimer mon compte…
           </button>
         </>
       ) : (
         <div role="group" aria-labelledby="suppression-titre" className="mt-1">
-          <p id="suppression-titre" className="text-sm font-medium">
+          <p id="suppression-titre" className="text-base font-medium">
             Supprimer définitivement votre compte ?
           </p>
-          <p className="mt-2 text-sm text-muted">Sont effacés, sans possibilité de retour :</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
+          <p className="mt-2 text-base text-muted">Sont effacés, sans possibilité de retour :</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-base text-muted">
             <li>votre compte et votre adresse e-mail ;</li>
             <li>vos extensions connectées, qui cesseront de fonctionner ;</li>
             <li>vos sessions ouvertes sur ce site ;</li>
             <li>votre journal d’usage et votre compteur d’analyses.</li>
           </ul>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-base text-muted">
             Un abonnement en cours est résilié immédiatement. Les rapports déjà partagés ne sont pas
             rattachés à vous et ne sont pas concernés.
           </p>
@@ -365,7 +365,7 @@ function DeleteBlock({ onDeleted }: { onDeleted: () => void }) {
           {error ? (
             <p
               role="alert"
-              className="mt-4 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk"
+              className="mt-4 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk"
             >
               {error}
             </p>

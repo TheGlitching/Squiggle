@@ -18,6 +18,7 @@ import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { Accueil } from '../src/pages/Accueil';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
 import { TAGLINE } from '../src/offer';
+import { MEASURE } from '../src/components/Landing';
 import { MOBILE } from './helpers';
 
 afterEach(cleanup);
@@ -49,32 +50,43 @@ describe('Accueil', () => {
     expect(html).toContain(`<meta property="og:title" content="${title}" />`);
   });
 
-  it('shows an article with its highlights beside the panel that explains them', async () => {
+  it('lets a reader try the example in place, without an account or a request', async () => {
+    const fetch = vi.fn(() => Promise.reject(new Error('no request expected')));
+    vi.stubGlobal('fetch', fetch);
     render(<Accueil />);
     const article = within(screen.getByRole('article', { name: /article d’exemple/ }));
-    const panel = within(screen.getByRole('group', { name: 'Le rapport Squiggle sur cet article' }));
-    expect(panel.getByText('61')).toBeInTheDocument();
-    expect(panel.getByText('Article fragile')).toBeInTheDocument();
-    expect(panel.getByText('Vérification factuelle')).toBeInTheDocument();
-    expect(panel.getByText('Chiffre mis en doute')).toBeInTheDocument();
-    expect(panel.getByText('Douteuse')).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: /Capture du panneau/ })).toBeNull();
-    expect(screen.queryByText(/sur un article d’exemple/)).toBeNull();
+    // Before: the text, already pasted, and no highlight yet.
+    expect(article.queryAllByRole('button')).toHaveLength(0);
+
+    const hero = within(screen.getByRole('region', { name: TAGLINE }));
+    await userEvent.click(hero.getByRole('button', { name: 'Analyser cet exemple' }));
+    expect(await hero.findByText('61')).toBeInTheDocument();
+    expect(hero.getByText('Article fragile')).toBeInTheDocument();
+    expect(hero.getByText('Chiffre mis en doute')).toBeInTheDocument();
+    expect(hero.getByText('Douteuse')).toBeInTheDocument();
 
     const passage = article.getByRole('button', { name: /Selon un expert/ });
-    expect(passage).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(passage);
     expect(passage).toHaveAttribute('aria-pressed', 'true');
-    expect(panel.getByText('Autorité non nommée')).toBeInTheDocument();
-    expect(panel.queryByText('Chiffre mis en doute')).toBeNull();
-    expect(panel.queryByText('Douteuse')).toBeNull();
+    expect(hero.getByText('Autorité non nommée')).toBeInTheDocument();
+    expect(hero.queryByText('Chiffre mis en doute')).toBeNull();
+    // The strength is marked too: the example shows what is solid.
+    expect(article.getByRole('button', { name: /témoins de terrain/ })).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'À votre tour : collez un article' })).toHaveAttribute('href', '/analyser');
+    expect(screen.getByRole('link', { name: 'Voir le rapport complet' })).toHaveAttribute('href', '/analyser?exemple');
+    expect(screen.getByText(/Exemple analysé à l’avance/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('has every section a first-time reader looks for', () => {
     render(<Accueil />);
     for (const name of [
-      'Ce qu’il vérifie',
-      'Comment il reste neutre',
+      'Comment ça marche',
+      'Une note sur 100, cinq questions',
+      'Partout où vous lisez',
+      'Neutre par construction',
       'Vos données',
       'Tarifs',
       'Questions fréquentes',
@@ -99,7 +111,7 @@ describe('Accueil', () => {
       expect(badge).toContain(`label: '${label}'`);
     }
     render(<Accueil />);
-    const section = within(screen.getByRole('region', { name: 'Ce qu’il vérifie' }));
+    const section = within(screen.getByRole('region', { name: 'Une note sur 100, cinq questions' }));
     for (const { label } of VERIFICATION_STATES) {
       expect(section.getByText(label)).toBeInTheDocument();
     }
@@ -107,7 +119,7 @@ describe('Accueil', () => {
 
   it('explains how it stays neutral: one grid, a public method, no verdict on people', () => {
     render(<Accueil />);
-    const section = within(screen.getByRole('region', { name: 'Comment il reste neutre' }));
+    const section = within(screen.getByRole('region', { name: 'Neutre par construction' }));
     expect(section.getByText('Une seule grille pour tous les articles')).toBeInTheDocument();
     expect(section.getByText('Une méthode publique')).toBeInTheDocument();
     expect(section.getByText('Aucun verdict sur les personnes')).toBeInTheDocument();
@@ -167,39 +179,42 @@ describe('Accueil', () => {
     expect(footer.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', CONTACT_URL);
   });
 
-  it('names the store the install button opens, with the analysis on the site second', () => {
+  it('offers the browser button on a computer, in plain words, below the try', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
-    for (const [ua, label, href] of [
-      ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', 'Ajouter à Chrome', CHROME_URL],
-      ['Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0', 'Ajouter à Firefox', FIREFOX_URL],
-    ]) {
+    for (const [ua, store] of [
+      ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', CHROME_URL],
+      ['Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0', FIREFOX_URL],
+      ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15', null],
+    ] as const) {
       agent.mockReturnValue(ua);
       render(<Accueil />);
-      expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
-      expect(screen.getByRole('link', { name: 'Analyser un article sur le site' })).toHaveAttribute('href', '/analyser');
+      // The hero leads with the example, never with a store.
+      const hero = within(screen.getByRole('region', { name: TAGLINE }));
+      expect(hero.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
+      expect(hero.getByRole('button', { name: 'Analyser cet exemple' })).toBeInTheDocument();
+      const partout = within(screen.getByRole('region', { name: 'Partout où vous lisez' }));
+      expect(partout.getByRole('link', { name: 'Ajouter à Chrome' })).toHaveAttribute('href', CHROME_URL);
+      expect(partout.getByRole('link', { name: 'Ajouter à Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+      // The store this browser installs from is the one set as a button.
+      for (const [name, href] of [['Ajouter à Chrome', CHROME_URL], ['Ajouter à Firefox', FIREFOX_URL]] as const) {
+        const link = partout.getByRole('link', { name });
+        expect(link.className.includes('min-h-12'), name).toBe(href === store);
+      }
+      expect(partout.getByText(/Ajoutez le bouton Squiggle à votre navigateur/)).toBeInTheDocument();
+      expect(screen.queryByText(/extension/i)).toBeNull();
       cleanup();
     }
     agent.mockRestore();
   });
 
-  it('leads with the analysis on the site where no extension can be installed', () => {
-    const agent = vi.spyOn(navigator, 'userAgent', 'get');
-    agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
-    render(<Accueil />);
-    expect(screen.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
-    expect(screen.getByRole('link', { name: 'Chrome' })).toHaveAttribute('href', CHROME_URL);
-    expect(screen.getByRole('link', { name: 'Firefox' })).toHaveAttribute('href', FIREFOX_URL);
-    agent.mockRestore();
-  });
-
-  it('on a phone, leads with the analysis and never points at a store', () => {
+  it('on a phone, points at the site and the app, never at a store', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     for (const ua of MOBILE) {
       agent.mockReturnValue(ua);
       render(<Accueil />);
-      expect(screen.getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
-      expect(screen.queryByRole('link', { name: /^Ajouter à|^Chrome$|^Firefox$/ })).toBeNull();
+      const partout = within(screen.getByRole('region', { name: 'Partout où vous lisez' }));
+      expect(partout.getByRole('link', { name: 'Analyser un texte' })).toHaveAttribute('href', '/analyser');
+      expect(screen.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
       cleanup();
     }
     agent.mockRestore();
@@ -208,38 +223,41 @@ describe('Accueil', () => {
   it('offers the browser’s own install prompt when it has one', async () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(MOBILE[0]);
     render(<Accueil />);
-    expect(screen.queryByRole('button', { name: 'Installer l’application' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Installer l’appli' })).toBeNull();
     const prompt = vi.fn(() => Promise.resolve());
     act(() => {
       window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), { prompt }));
     });
-    await userEvent.click(screen.getByRole('button', { name: 'Installer l’application' }));
+    // In the header too, on a phone.
+    expect(screen.getByRole('button', { name: 'Installer' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Installer l’appli' }));
     expect(prompt).toHaveBeenCalledOnce();
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Installer l’application' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Installer l’appli' })).toBeNull());
     agent.mockRestore();
   });
 
-  it('tells iOS Safari where its install lives, and not Chrome on iOS', () => {
+  it('tells iOS Safari where its install lives, and not Chrome on iOS', async () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(MOBILE[3]);
     render(<Accueil />);
-    expect(screen.getByText(/touchez Partager puis « Sur l’écran d’accueil »/)).toBeInTheDocument();
+    expect(screen.getByText('Touchez Partager, puis « Sur l’écran d’accueil ».')).toBeInTheDocument();
+    // The header's button shows the same steps on demand.
+    const install = screen.getByRole('button', { name: 'Installer' });
+    expect(install).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(install);
+    expect(install).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/Squiggle s’ouvre alors comme une appli/)).toBeInTheDocument();
     cleanup();
     agent.mockReturnValue(MOBILE[4]);
     render(<Accueil />);
-    expect(screen.queryByText(/touchez Partager/)).toBeNull();
+    expect(screen.queryByText(/Touchez Partager/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Installer' })).toBeNull();
     agent.mockRestore();
   });
 
-  it('keeps the example one tap away and states the offer without a card', () => {
+  it('links the source code from the footer', () => {
     render(<Accueil />);
-    expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#verifie');
-    expect(
-      screen.getByText('3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois, sans engagement.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /code source est sur GitHub/ })).toHaveAttribute(
-      'href',
-      'https://github.com/TheGlitching/Squiggle',
-    );
+    const footer = within(screen.getByRole('navigation', { name: 'Navigation de pied de page' }));
+    expect(footer.getByRole('link', { name: /Code source/ })).toHaveAttribute('href', 'https://github.com/TheGlitching/Squiggle');
   });
 
   it('describes the free offer honestly to search engines and link previews', () => {
@@ -253,22 +271,28 @@ describe('Accueil', () => {
     expect(meta('property', 'og:image')).toBe('https://squiggle.fr/og.png');
   });
 
-  it('names the five demo domains for screen readers', () => {
+  it('says what each figure shows, and lets it be played from the keyboard', async () => {
+    // With reduced motion the figure lands on its result at once.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce') }));
     render(<Accueil />);
-    expect(screen.getByText(/Faux dilemme \(solidité logique\)/)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Squiggle le parcourt, surligne 5 passages fragiles et un point fort/ })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Un ordinateur portable et un téléphone/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Relire l’article' }));
+    expect(await screen.findByText(/5 passages fragiles, 1 point fort · 61 sur 100/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sur téléphone' }));
+    expect(screen.getByText('Téléphone : le rapport dans l’appli')).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it('sets running text at 16 px or more, on a 68ch measure', () => {
     const { container } = render(<Accueil />);
-    // The rebuilt extension panel keeps the panel's own 12 px scale.
     for (const p of container.querySelectorAll('p, dd, li > p')) {
-      if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
-    const lead = screen.getByText(/Dans l’article que vous lisez/);
-    expect(lead.className).toContain('max-w-[68ch]');
+    const lead = screen.getByText(/surligne ce qui est fragile dans un article/);
+    expect(lead.className).toContain(MEASURE);
     const privacy = within(screen.getByRole('region', { name: 'Vos données' })).getByText(/transite par notre serveur/);
-    expect(privacy.className).toContain('max-w-[68ch]');
+    expect(privacy.className).toContain(MEASURE);
   });
 
   it('keeps every navigation link a comfortable target, not a bare line of text', () => {

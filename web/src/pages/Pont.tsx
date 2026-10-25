@@ -76,7 +76,7 @@ export function Pont() {
         </p>
         <Link
           to="/compte"
-          className="mt-6 inline-block rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
+          className="mt-6 inline-block rounded-control border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
         >
           Retour à mon compte
         </Link>
@@ -99,7 +99,7 @@ export function Pont() {
         </p>
         <Link
           to={`/connexion?next=${next}`}
-          className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover"
+          className="mt-6 inline-block rounded-control bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover"
         >
           Se connecter
         </Link>
@@ -119,7 +119,7 @@ export function Pont() {
           <p className="mt-4 font-mono text-4xl font-semibold tracking-[0.35em] text-accent">
             {code}
           </p>
-          <p className="mt-4 text-xs text-faint">
+          <p className="mt-4 text-sm text-muted">
             Ce code est valable 10 minutes et ne sert qu’une fois.
           </p>
         </div>
@@ -132,7 +132,7 @@ export function Pont() {
       )}
 
       {error ? (
-        <p role="alert" className="mt-6 rounded-lg border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
+        <p role="alert" className="mt-6 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-sm text-criticalInk">
           {error}
         </p>
       ) : null}
@@ -147,7 +147,7 @@ export function Pont() {
         </p>
         <button
           onClick={requestCode}
-          className="mt-4 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
+          className="mt-4 rounded-control border border-border bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accentInk"
         >
           Afficher un code à saisir
         </button>

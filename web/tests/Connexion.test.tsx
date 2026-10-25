@@ -133,7 +133,7 @@ describe('Connexion', () => {
     await user.type(screen.getByLabelText('Adresse e-mail'), 'marie@example.com');
     await user.click(screen.getByRole('button', { name: 'Recevoir mon code' }));
 
-    expect(await screen.findByText(/plutôt que de toucher le lien/)).toBeInTheDocument();
+    expect(await screen.findByText(/le lien de l’e-mail s’ouvrirait dans le navigateur/)).toBeInTheDocument();
     expect(screen.queryByText(/ou ouvrez le lien/)).toBeNull();
   });
 });

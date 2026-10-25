@@ -1,22 +1,21 @@
 import { useEffect } from 'react';
 
-import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
+import { FigClasse } from '../components/FigClasse';
 import { LandingShell, MEASURE, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, Section } from '../components/Landing';
+import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
 import { Link } from '../router';
 
 const USES = [
-  [
-    'Faire lire avant de faire analyser',
-    'Les élèves lisent l’article et notent ce qui leur paraît fragile. Vous lancez ensuite l’analyse : chaque constat est surligné dans la page, avec la phrase exacte et la raison, et la classe compare.',
-  ],
-  [
-    'Projeter un rapport commenté',
-    'Une note sur 100, cinq domaines et des constats lisibles de loin. Le rapport dit aussi ce qu’il n’a pas pu vérifier, ce qui ouvre la discussion sur la différence entre « faux » et « non vérifiable ».',
-  ],
-  [
-    'Travailler sur la méthode, pas sur le verdict',
-    'Repérer l’affirmation, chercher sa source, juger l’argument : les quatre états d’une affirmation et la grille commune à tous les articles servent de vocabulaire partagé.',
-  ],
+  ['Lire avant d’analyser', 'Les élèves notent ce qui leur paraît fragile. Puis la classe compare avec le rapport.'],
+  ['Projeter un rapport', 'La phrase exacte, le nom du problème, la raison : lisible du fond de la salle.'],
+  ['Parler méthode, pas verdict', '« Non vérifiable » n’est pas « faux » : de quoi ouvrir la discussion.'],
+] as const;
+
+const FRAME = [
+  'Aucune publicité, aucun traceur : rien ne suit les élèves.',
+  'La grille, les consignes et le calcul de la note sont publics.',
+  'Le rapport juge un texte, jamais son auteur ni le média.',
+  'Chaque constat cite sa phrase : on en débat sur pièces.',
 ] as const;
 
 export function Enseignants() {
@@ -30,72 +29,79 @@ export function Enseignants() {
 
   return (
     <LandingShell>
-      <div className={`${PAGE} py-12 md:py-16`}>
-        <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl">
-          Squiggle pour les enseignants
-        </h1>
-        <p className={`mt-6 text-lg leading-relaxed text-muted md:text-xl ${MEASURE}`}>
-          Repérer une affirmation, chercher sa source, juger un argument : c’est déjà un exercice
-          d’éducation aux médias et à l’information. Squiggle le fait sous les yeux de la classe, sur
-          l’article que vous choisissez.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <a href={CONTACT_URL} className={PRIMARY_BUTTON}>
-            Demander l’accès enseignant
-          </a>
-          {/* A plain anchor: a client-side navigation would drop the hash and not scroll. */}
-          <a href="/#verifie" className={SECONDARY_BUTTON}>
-            Voir ce qu’il vérifie
-          </a>
+      <section aria-labelledby="enseignants-titre" className={`${PAGE} pt-6 pb-16 sm:pt-12 md:pb-24`}>
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
+          <div>
+            <h1
+              id="enseignants-titre"
+              className="m-0 font-display text-[2.6rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl"
+            >
+              Squiggle pour les enseignants
+            </h1>
+            <p className={`mt-5 mb-8 text-lg leading-relaxed text-pretty md:text-xl ${MEASURE}`}>
+              La classe repère ce qui cloche dans un article. Squiggle donne un deuxième avis. On compare.
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+              <a href={CONTACT_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+                Demander l’accès enseignant
+              </a>
+              <Link to="/analyser?exemple" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+                Voir un rapport d’exemple
+              </Link>
+            </div>
+            <p className="mt-4 mb-0 text-base text-muted">Gratuit pour les enseignants, sur demande.</p>
+          </div>
+          <FigClasse />
         </div>
-        <p className="mt-4 text-base text-muted">Gratuit pour les enseignants, sur demande.</p>
-      </div>
+      </section>
 
-      <Section id="usages" title="Ce que vous pouvez en faire">
-        <ul className="m-0 grid list-none gap-4 p-0 md:grid-cols-3">
+      <Section id="usages" title="Ce que vous pouvez en faire" tone="raised">
+        <ul className="m-0 grid list-none gap-8 p-0 md:grid-cols-3 md:gap-10">
           {USES.map(([title, text]) => (
-            <li key={title} className="rounded-card border border-border bg-surface p-6">
-              <h3 className="m-0 font-display text-xl font-semibold">{title}</h3>
-              <p className="mt-3 mb-0 text-base leading-relaxed text-muted">{text}</p>
+            <li key={title}>
+              <h3 className="m-0 text-2xl leading-snug font-semibold tracking-tight">{title}</h3>
+              <p className="mt-2 mb-0 text-lg leading-relaxed text-muted">{text}</p>
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section id="cadre" title="Un outil que l’on peut montrer en classe">
-        <ul className={`m-0 grid list-none gap-3 p-0 text-base leading-relaxed text-muted ${MEASURE}`}>
-          <li>Aucune publicité et aucun traceur : rien ne suit les élèves d’une page à l’autre.</li>
-          <li>Le code, la grille et le calcul de la note sont publics : la méthode se discute et se critique.</li>
-          <li>Le rapport évalue un texte, jamais son auteur ni le média qui l’a publié.</li>
-          <li>
-            Une analyse peut se tromper : chaque constat cite la phrase concernée pour que l’on puisse
-            en débattre sur pièces.
-          </li>
+      <Section id="cadre" title="Un outil que l’on peut montrer en classe" layout="split">
+        <ul className="m-0 grid list-none gap-5 p-0">
+          {FRAME.map((line) => (
+            <li key={line} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4 text-lg leading-relaxed">
+              <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-1.5 h-5 w-5 text-[#34d399]">
+                <path d="M4 10.5l3.5 3.5L16 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {line}
+            </li>
+          ))}
         </ul>
-        <p className="mt-6">
+        <p className="mt-8 mb-0">
           <Link to="/transparence" className={QUIET_LINK}>
             Voir où va l’article analysé
           </Link>
         </p>
       </Section>
 
-      <Section
-        id="acces"
-        title="Obtenir l’accès gratuit"
-        intro="L’offre est gratuite pour les enseignants. Elle s’ouvre sur simple demande."
-      >
-        <ol className={`m-0 list-decimal pl-6 text-base leading-relaxed text-muted [&>li+li]:mt-3 ${MEASURE}`}>
-          <li>Installez l’extension depuis la page d’accueil, sur Chrome ou Firefox.</li>
-          <li>
-            Écrivez-nous à {CONTACT_EMAIL}, en indiquant votre établissement et votre discipline.
-          </li>
-          <li>Nous activons l’offre sur votre compte.</li>
+      <Section id="acces" title="Obtenir l’accès gratuit" tone="raised" layout="split">
+        <ol className="m-0 grid list-none gap-6 p-0">
+          {[
+            ['Créez un compte', 'Sur le site, avec votre adresse e-mail ou Google.'],
+            ['Écrivez-nous', `À ${CONTACT_EMAIL}, avec votre établissement et votre discipline.`],
+            ['C’est prêt', 'Nous activons l’offre sur votre compte.'],
+          ].map(([title, text]) => (
+            <li key={title}>
+              <h3 className="m-0 text-xl font-semibold">{title}</h3>
+              <p className="mt-1 mb-0 text-lg leading-relaxed text-muted">{text}</p>
+            </li>
+          ))}
         </ol>
-        <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <a href={CONTACT_URL} className={PRIMARY_BUTTON}>
+        <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <a href={CONTACT_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
             Demander l’accès enseignant
           </a>
-          <Link to="/" className={SECONDARY_BUTTON}>
+          <Link to="/" className={QUIET_LINK}>
             Retour à l’accueil
           </Link>
         </div>

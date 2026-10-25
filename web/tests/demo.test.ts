@@ -89,7 +89,8 @@ describe('the demo, as the engine would produce it', () => {
       const lowered = standing([example]).flatMap((score, index) =>
         score < fullMarks[index].score ? [domains[index]] : [],
       );
-      expect(lowered, example.label).toEqual([CAT_DOMAIN[example.cat]]);
+      // A strength costs nothing.
+      expect(lowered, example.label).toEqual(example.category === 'point-fort' ? [] : [CAT_DOMAIN[example.cat]]);
     }
   });
 

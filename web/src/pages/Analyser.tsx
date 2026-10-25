@@ -16,6 +16,8 @@ import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } f
 import { getAccount, type Account } from '../api';
 import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
+import { SignIn } from '../components/SignIn';
+import { EXAMPLE_ARTICLE, EXAMPLE_BLOCKS, EXAMPLE_REPORT } from '../example';
 import { useInstall } from '../install';
 import { FREE_ANALYSES } from '../offer';
 import {
@@ -32,12 +34,17 @@ import {
 import { Link } from '../router';
 import { describeAccount } from '../usage';
 
-const SIGN_IN = '/connexion?next=/analyser';
-
 type Phase =
   | { kind: 'edit' }
   | { kind: 'running'; progress: Progress }
-  | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[] };
+  | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[] }
+  /** The report written in advance on the sample article: no account, no request. */
+  | { kind: 'example' };
+
+/** `/analyser?exemple` opens the example report straight away. */
+function wantsExample(): boolean {
+  return new URLSearchParams(window.location.search).has('exemple');
+}
 
 /** The draft, with whatever a share just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null } {
@@ -51,15 +58,19 @@ function initialArticle(): { article: PastedArticle; shared: Partial<PastedArtic
   return { article: article as PastedArticle, shared };
 }
 
-const FIELD =
-  'mt-2 block w-full rounded-control border border-borderControl bg-surface px-4 py-3 text-base text-foreground outline-hidden transition-colors duration-160 ease-out placeholder:text-muted focus:border-accentHover disabled:opacity-70';
+const FIELD_BASE =
+  'mt-2 block w-full rounded-control border px-4 py-3 outline-hidden transition-colors duration-160 ease-out focus:border-accentHover disabled:opacity-70';
+const FIELD = `${FIELD_BASE} border-borderControl bg-surface text-base text-foreground placeholder:text-muted`;
+/** The paste area is the article's sheet: the same paper as the report's text. */
+const SHEET_FIELD = `${FIELD_BASE} border-paperMuted bg-paper font-serif text-lg leading-relaxed text-paperInk placeholder:text-paperMuted`;
 
 export function Analyser() {
   const [{ article: start, shared }] = useState(initialArticle);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   const [accountFailed, setAccountFailed] = useState(false);
-  const [phase, setPhase] = useState<Phase>({ kind: 'edit' });
+  const [phase, setPhase] = useState<Phase>(() => (wantsExample() ? { kind: 'example' } : { kind: 'edit' }));
+  const [askSignIn, setAskSignIn] = useState(false);
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
   const [notice, setNotice] = useState<string | null>(
     shared && !shared.text
@@ -73,8 +84,8 @@ export function Analyser() {
 
   // The shared text is in the form now; it does not stay in the address bar or the history.
   useEffect(() => {
-    if (window.location.search) window.history.replaceState(window.history.state, '', '/analyser');
-  }, []);
+    if (shared) window.history.replaceState(window.history.state, '', '/analyser');
+  }, [shared]);
 
   useEffect(() => saveDraft(article), [article]);
 
@@ -87,7 +98,7 @@ export function Analyser() {
   useEffect(loadAccount, []);
 
   useEffect(() => {
-    if (phase.kind === 'done') reportTop.current?.focus();
+    if (phase.kind === 'done' || phase.kind === 'example') reportTop.current?.focus();
   }, [phase.kind]);
 
   const problem = pasteProblem(article);
@@ -108,6 +119,27 @@ export function Analyser() {
       textArea.current?.focus();
       return;
     }
+    // Signed out: the sign-in opens here, under the text, which stays where it is.
+    if (account === null) {
+      setAskSignIn(true);
+      return;
+    }
+    await run();
+  }
+
+  /** Once signed in from this page, the analysis the reader asked for starts on its own. */
+  async function signedIn() {
+    setAskSignIn(false);
+    try {
+      const fresh = await getAccount();
+      setAccount(fresh);
+      if (fresh && describeAccount(fresh).canAnalyse) await run();
+    } catch {
+      setAccountFailed(true);
+    }
+  }
+
+  async function run() {
     setFailure(null);
     setNotice(null);
     const abort = new AbortController();
@@ -146,19 +178,51 @@ export function Analyser() {
     }
   }
 
+  function leaveExample() {
+    setPhase({ kind: 'edit' });
+    if (window.location.search) window.history.replaceState(window.history.state, '', '/analyser');
+  }
+
   function startOver() {
     setArticle(EMPTY_ARTICLE);
     setPhase({ kind: 'edit' });
     setShowProblem(false);
   }
 
-  if (phase.kind === 'done') {
+  if (phase.kind === 'example') {
     return (
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:py-12">
+      <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:py-12">
+        <p className="m-0 mb-6 rounded-card bg-accentSoft px-5 py-4 text-base leading-relaxed">
+          <strong className="font-semibold">Rapport d’exemple.</strong> Un article fictif, analysé à l’avance : rien
+          n’est décompté.
+        </p>
         <h1
           ref={reportTop}
           tabIndex={-1}
-          className="m-0 font-display text-2xl font-semibold tracking-tight outline-hidden focus-visible:ring-0 sm:text-3xl"
+          className="m-0 font-display text-3xl leading-tight font-semibold tracking-tight outline-hidden focus-visible:ring-0 sm:text-4xl"
+        >
+          {EXAMPLE_ARTICLE.title}
+        </h1>
+        <div className="mt-5 mb-10 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <button type="button" onClick={leaveExample} className={PRIMARY_BUTTON}>
+            Analyser votre article
+          </button>
+          <Link to="/" className={QUIET_LINK}>
+            Retour à l’accueil
+          </Link>
+        </div>
+        <Rapport report={EXAMPLE_REPORT} blocks={EXAMPLE_BLOCKS} example />
+      </div>
+    );
+  }
+
+  if (phase.kind === 'done') {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:py-12">
+        <h1
+          ref={reportTop}
+          tabIndex={-1}
+          className="m-0 font-display text-3xl leading-tight font-semibold tracking-tight outline-hidden focus-visible:ring-0 sm:text-4xl"
         >
           {article.title.trim() || 'Rapport d’analyse'}
         </h1>
@@ -177,14 +241,18 @@ export function Analyser() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 pt-8 sm:py-12">
-      <h1 className="m-0 font-display text-2xl font-semibold tracking-tight sm:text-3xl">Analyser un texte</h1>
-      <p className="mt-2 mb-0 max-w-[68ch] text-base leading-relaxed text-muted">
-        Collez le texte d’un article : Squiggle le relit avec la grille de l’extension et surligne les passages
-        fragiles, avec la raison de chaque constat.
+    <div className="mx-auto w-full max-w-6xl px-5 pt-8 sm:py-12">
+      <h1 className="m-0 font-display text-4xl leading-[1.1] font-semibold tracking-tight sm:text-5xl">Analyser un texte</h1>
+      <p className="mt-3 mb-0 max-w-[62ch] text-lg leading-relaxed text-muted">
+        Collez le texte d’un article : Squiggle surligne les passages fragiles et dit pourquoi.
+      </p>
+      <p className="mt-2 mb-0">
+        <button type="button" onClick={() => setPhase({ kind: 'example' })} className={`${QUIET_LINK} text-left`}>
+          Pas d’article sous la main ? Voir un rapport d’exemple
+        </button>
       </p>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-16">
         <form onSubmit={analyse} noValidate>
           <fieldset disabled={running} className="m-0 grid gap-6 border-0 p-0">
             <div>
@@ -203,10 +271,7 @@ export function Analyser() {
                 ) : null}
               </div>
               {notice ? (
-                <p
-                  role="status"
-                  className="mt-2 mb-0 rounded-control border border-border bg-accentSoft px-4 py-3 text-sm"
-                >
+                <p role="status" className="mt-2 mb-0 rounded-control bg-accentSoft px-4 py-3 text-sm">
                   {notice}
                 </p>
               ) : null}
@@ -222,58 +287,72 @@ export function Analyser() {
                   showProblem && problem !== null && problem !== 'bad_source' && problem !== 'title_too_long'
                 }
                 placeholder="Le texte de l’article, du chapô à la dernière phrase."
-                className={`${FIELD} min-h-64 resize-y leading-relaxed`}
+                className={`${SHEET_FIELD} min-h-64 resize-y`}
               />
               <p
                 id="texte-aide"
                 className={`mt-2 mb-0 text-sm ${showProblem && problem === 'too_short' ? 'text-warningInk' : 'text-muted'}`}
               >
                 {chars === 0
-                  ? 'Sélectionnez le texte dans la page de l’article, copiez-le, puis collez-le ici.'
+                  ? 'Copiez le texte dans la page de l’article, puis collez-le ici.'
                   : chars < MIN_TEXT_CHARS
                     ? `${chars} caractères : il en faut au moins ${MIN_TEXT_CHARS}.`
                     : `${chars.toLocaleString('fr-FR')} caractères.`}
               </p>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
-              <div>
-                <label htmlFor="titre" className="text-base font-medium">
-                  Titre <span className="font-normal text-muted">(facultatif)</span>
-                </label>
-                <input
-                  id="titre"
-                  value={article.title}
-                  onChange={(event) => edit('title', event.target.value)}
-                  maxLength={MAX_TITLE_CHARS}
-                  autoComplete="off"
-                  className={FIELD}
-                />
+            <details className="group" open={Boolean(article.title || article.source) || undefined}>
+              <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 text-base text-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <span aria-hidden="true" className="text-accentInk transition-transform duration-160 group-open:rotate-45">
+                  +
+                </span>
+                Titre et adresse (facultatif)
+              </summary>
+              <div className="mt-3 grid gap-6 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="titre" className="text-base font-medium">
+                    Titre <span className="font-normal text-muted">(facultatif)</span>
+                  </label>
+                  <input
+                    id="titre"
+                    value={article.title}
+                    onChange={(event) => edit('title', event.target.value)}
+                    maxLength={MAX_TITLE_CHARS}
+                    autoComplete="off"
+                    className={FIELD}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="source" className="text-base font-medium">
+                    Adresse de l’article <span className="font-normal text-muted">(facultatif)</span>
+                  </label>
+                  <input
+                    id="source"
+                    type="url"
+                    inputMode="url"
+                    value={article.source}
+                    onChange={(event) => edit('source', event.target.value)}
+                    placeholder="https://"
+                    autoComplete="off"
+                    aria-describedby="source-aide"
+                    aria-invalid={showProblem && problem === 'bad_source'}
+                    className={FIELD}
+                  />
+                  <p id="source-aide" className="mt-2 mb-0 text-sm text-muted">
+                    Elle accompagne le rapport. Squiggle ne visite jamais cette page.
+                  </p>
+                </div>
               </div>
-              <div>
-                <label htmlFor="source" className="text-base font-medium">
-                  Adresse de l’article <span className="font-normal text-muted">(facultatif)</span>
-                </label>
-                <input
-                  id="source"
-                  type="url"
-                  inputMode="url"
-                  value={article.source}
-                  onChange={(event) => edit('source', event.target.value)}
-                  placeholder="https://"
-                  autoComplete="off"
-                  aria-describedby="source-aide"
-                  aria-invalid={showProblem && problem === 'bad_source'}
-                  className={FIELD}
-                />
-                <p id="source-aide" className="mt-2 mb-0 text-sm text-muted">
-                  Elle accompagne le rapport. Squiggle ne visite jamais cette page.
-                </p>
-              </div>
-            </div>
+            </details>
           </fieldset>
 
-          <div className="sticky bottom-0 z-10 -mx-5 mt-6 border-t border-border bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          <div
+            className={`mt-6 ${
+              askSignIn
+                ? ''
+                : 'sticky bottom-0 z-10 -mx-5 border-t border-border bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0'
+            }`}
+          >
             {showProblem && problem ? (
               <p role="alert" className="mt-0 mb-3 text-sm text-warningInk">
                 {PASTE_PROBLEMS[problem]}
@@ -282,10 +361,23 @@ export function Analyser() {
             {failure ? <FailureNotice failure={failure} /> : null}
             {running ? (
               <RunningPanel progress={phase.progress} onCancel={() => controller.current?.abort()} />
+            ) : askSignIn && account === null ? (
+              <section aria-labelledby="connexion-titre" className="rounded-card bg-surface p-5 sm:p-8">
+                <h2 id="connexion-titre" className="m-0 text-2xl font-semibold tracking-tight">
+                  Connectez-vous pour lancer l’analyse
+                </h2>
+                <p className="mt-2 mb-6 text-base leading-relaxed text-muted">
+                  {FREE_ANALYSES} analyses offertes, sans carte bancaire. Votre texte reste ici.
+                </p>
+                <SignIn next="/analyser" onSignedIn={() => void signedIn()} />
+              </section>
             ) : (
               <Action account={account} accountFailed={accountFailed} onRetry={loadAccount} />
             )}
             {view && !running && view.canAnalyse ? <p className="mt-3 mb-0 text-sm text-muted">{view.detail}</p> : null}
+            {account === null && !askSignIn && !running ? (
+              <p className="mt-3 mb-0 text-sm text-muted">{FREE_ANALYSES} analyses offertes à l’inscription.</p>
+            ) : null}
           </div>
         </form>
         <Aside />
@@ -294,36 +386,29 @@ export function Analyser() {
   );
 }
 
-/** The questions a first paste raises: what it costs, where the text goes, how to have it on a phone. */
+/** What a first paste asks: where the text goes, what it costs, how to have it on a phone. */
 function Aside() {
   const install = useInstall();
   return (
-    <aside
-      aria-label="Bon à savoir"
-      className="grid max-w-[68ch] content-start gap-5 text-sm leading-relaxed text-muted lg:pt-8"
-    >
+    <aside aria-label="Bon à savoir" className="grid content-start gap-5 text-base leading-relaxed text-muted lg:pt-9">
       <p className="m-0">
-        <strong className="font-medium text-foreground">Le même compte que l’extension.</strong> Une analyse décompte
-        une de vos analyses offertes ou du jour. Un texte qu’un autre lecteur a déjà fait analyser vous est rendu sans
-        rien décompter.
+        <strong className="font-semibold text-foreground">Votre texte n’est pas conservé.</strong> Il ne quitte ce
+        navigateur que pour l’analyse.{' '}
+        <Link to="/transparence" className="text-accentInk underline decoration-borderControl underline-offset-4">
+          Le trajet
+        </Link>
       </p>
       <p className="m-0">
-        <strong className="font-medium text-foreground">Votre texte n’est pas conservé.</strong> Il passe par notre
-        serveur et par le modèle le temps de l’analyse ; le rapport, qui en cite de courts extraits, est gardé 30 jours.{' '}
-        <Link
-          to="/transparence"
-          className="text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk"
-        >
-          Le trajet des données
-        </Link>
+        <strong className="font-semibold text-foreground">Le même compte partout.</strong> Un texte déjà analysé par un
+        autre lecteur ne vous coûte rien.
       </p>
       {install ? (
         <div className="m-0">
           <p className="m-0">
-            <strong className="font-medium text-foreground">Sur votre téléphone.</strong>{' '}
+            <strong className="font-semibold text-foreground">Sur votre téléphone.</strong>{' '}
             {install.kind === 'prompt'
-              ? 'Installez Squiggle sur l’écran d’accueil : un article partagé vers Squiggle arrive directement ici.'
-              : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil » : Squiggle s’ouvre alors comme une application.'}
+              ? 'Installez l’appli : un article partagé vers Squiggle arrive ici.'
+              : 'Touchez Partager puis « Sur l’écran d’accueil » : Squiggle s’ouvre comme une appli.'}
           </p>
           {install.kind === 'prompt' ? (
             <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3`}>
@@ -352,19 +437,6 @@ function Action({
         <button type="button" onClick={onRetry} className={SECONDARY_BUTTON}>
           Réessayer
         </button>
-      </div>
-    );
-  }
-
-  if (account === null) {
-    return (
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <Link to={SIGN_IN} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-          Se connecter pour analyser
-        </Link>
-        <p className="m-0 text-sm text-muted">
-          {FREE_ANALYSES} analyses offertes à l’inscription. Votre texte reste ici, dans ce navigateur.
-        </p>
       </div>
     );
   }

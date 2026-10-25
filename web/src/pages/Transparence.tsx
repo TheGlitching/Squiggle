@@ -1,4 +1,5 @@
 import { Page } from '../components/Layout';
+import { Trajet } from '../components/Trajet';
 import { HOSTED_ANALYSIS } from '../../../shared/src/hosted/disclosure';
 
 const { modelLabel, inferenceHosts } = HOSTED_ANALYSIS;
@@ -46,134 +47,122 @@ const SUBPROCESSORS = [
   ['Brevo', 'Envoi des e-mails de connexion', 'Votre adresse e-mail'],
 ] as const;
 
+const NEVER = [
+  'Aucune donnée n’est vendue.',
+  'Aucune donnée n’est utilisée pour entraîner un modèle.',
+  'Les données reçues du navigateur ne servent qu’à fournir l’analyse demandée : elles ne sont ni transférées ni utilisées pour autre chose, ni pour de la publicité, ni pour évaluer une solvabilité (exigence « Limited Use » du Chrome Web Store).',
+  'Aucune publicité, aucun traceur, aucun mouchard analytique.',
+  'Aucun code n’est téléchargé ni exécuté depuis l’extérieur.',
+] as const;
+
+const FACTS = [
+  [
+    'Nous voyons l’article, le temps de l’analyser.',
+    'Le texte sert à l’analyse, puis disparaît : aucune table de notre base ne contient de texte d’article. Avec votre propre clé, il part directement chez le fournisseur choisi, jamais chez nous.',
+  ],
+  [
+    'Notre serveur ne va jamais chercher l’article.',
+    'Votre navigateur le lui fournit. Un article payant est analysé dans la limite de ce que vous lisez, et l’adresse indiquée à côté d’un texte collé n’est jamais visitée.',
+  ],
+  [
+    'Le rapport est mis en cache et partagé.',
+    'Deux lecteurs du même article obtiennent le même rapport, et le second ne consomme rien. Le rapport contient des extraits de l’article (la citation de chaque constat) et un résumé, jamais le texte intégral.',
+  ],
+] as const;
+
+function Table({ head, rows }: { head: readonly [string, string, string]; rows: ReadonlyArray<readonly [string, string, string]> }) {
+  return (
+    <div className="mt-6 overflow-x-auto rounded-card bg-surface">
+      <table className="w-full min-w-[36rem] border-collapse text-left text-sm sm:text-base">
+        <thead>
+          <tr>
+            {head.map((label) => (
+              <th key={label} className="px-5 py-4 font-semibold">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([first, second, third]) => (
+            <tr key={first} className="border-t border-lineSoft align-top">
+              <td className="px-5 py-3">{first}</td>
+              <td className="px-5 py-3 text-muted">{second}</td>
+              <td className="px-5 py-3 text-muted">{third}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Transparence() {
   return (
-    <Page
-      title="Transparence"
-      lead="Où va votre article, ce que nous gardons, et à qui. Cette page ne bouge pas au rythme du produit : elle décrit le trajet réel des données, y compris quand il n’est pas flatteur."
-    >
-      <div className="space-y-10">
-        <section>
-          <h2 className="font-display text-xl font-semibold">Le trajet d’une analyse</h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface p-6">
-            <p className="font-mono text-sm">
-              votre navigateur <span className="text-accent">──(le texte de l’article)──▶</span> notre
-              serveur <span className="text-accent">──▶</span> OpenRouter{' '}
-              <span className="text-accent">──▶</span> {modelLabel}
-            </p>
+    <Page title="Transparence" lead="Où va votre article, ce que nous gardons, et à qui. Y compris quand ce n’est pas flatteur.">
+      <div className="grid gap-16">
+        <section aria-labelledby="trajet-titre">
+          <h2 id="trajet-titre" className="m-0 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Le trajet d’une analyse
+          </h2>
+          <div className="mt-6 rounded-card bg-surface p-6 sm:p-8">
+            <Trajet />
           </div>
-          <p className="mt-4 text-sm text-muted">
-            L’analyse tourne sur {modelLabel}, un modèle à poids ouverts, choisi pour le meilleur
-            équilibre entre vitesse, qualité de raisonnement et coût. Il est exécuté par{' '}
-            {INFERENCE_HOSTS_TEXT}. Utiliser un modèle à poids ouverts ne signifie pas envoyer le
-            texte vers des serveurs en Chine. Squiggle ne traite que des articles publics : le texte
-            de la page que vous lisez, son adresse et les pages qu’elle cite. Un texte collé sur le
-            site suit exactement le même trajet. Aucune donnée privée ne part vers le modèle, et
-            aucune identité de lecteur n’accompagne une requête.
+          <p className="mt-6 mb-0 text-base leading-relaxed text-muted">
+            Le modèle est {modelLabel}, un modèle à poids ouverts, joint par OpenRouter et exécuté par{' '}
+            {INFERENCE_HOSTS_TEXT}. Utiliser un modèle à poids ouverts ne signifie pas envoyer le texte vers des
+            serveurs en Chine. Squiggle ne traite que des articles publics : le texte de la page que vous lisez, son
+            adresse et les pages qu’elle cite. Un texte collé sur le site suit le même trajet. Aucune donnée privée ne
+            part vers le modèle, et aucune identité de lecteur n’accompagne une requête.
           </p>
-          <dl className="mt-5 space-y-3 text-sm">
-            <div>
-              <dt className="font-medium">Nous voyons l’article, le temps de l’analyser.</dt>
-              <dd className="text-muted">
-                C’est la différence avec le mode « clé personnelle ». Le texte sert à l’appel d’audit
-                et disparaît à la fin de cette requête : aucune table de notre base ne contient de
-                texte d’article.
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium">Notre serveur ne va jamais chercher l’article lui-même.</dt>
-              <dd className="text-muted">
-                C’est votre navigateur qui le lui fournit : l’extension depuis la page que vous lisez,
-                le site depuis le texte que vous y collez. Un article payant est donc analysé
-                exactement dans la limite de ce que vous pouvez lire. L’adresse que vous indiquez à
-                côté d’un texte collé accompagne le rapport, mais personne ne la visite. Notre adresse
-                n’apparaît dans les journaux d’aucun éditeur.
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium">Le rapport est mis en cache et partagé.</dt>
-              <dd className="text-muted">
-                Deux lecteurs du même article obtiennent le même rapport, et le second ne consomme
-                aucun crédit. Le rapport contient des extraits de l’article (la citation de chaque constat) et un résumé. Ce que nous ne gardons jamais, c’est le texte intégral.
-              </dd>
-            </div>
+          <dl className="m-0 mt-10 grid gap-8 md:grid-cols-3">
+            {FACTS.map(([title, text]) => (
+              <div key={title}>
+                <dt className="text-lg leading-snug font-semibold">{title}</dt>
+                <dd className="m-0 mt-2 text-base leading-relaxed text-muted">{text}</dd>
+              </div>
+            ))}
           </dl>
         </section>
 
-        <section>
-          <h2 className="font-display text-xl font-semibold">Ce que nous conservons, et combien de temps</h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Donnée</th>
-                  <th className="px-4 py-3 font-medium">Où</th>
-                  <th className="px-4 py-3 font-medium">Durée</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RETENTION.map(([data, where, duration]) => (
-                  <tr key={data} className="border-t border-border align-top">
-                    <td className="px-4 py-3">{data}</td>
-                    <td className="px-4 py-3 text-muted">{where}</td>
-                    <td className="px-4 py-3 text-muted">{duration}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 text-sm text-muted">
-            Une ligne de journal ne peut contenir qu’un nom d’événement, un nombre, un identifiant
-            opaque ou l’empreinte d’une adresse : il n’existe aucun champ de texte libre où écrire un
-            paragraphe, même par accident. Une requête refusée est journalisée par le nom du champ,
-            jamais par sa valeur.
+        <section aria-labelledby="conservation-titre">
+          <h2 id="conservation-titre" className="m-0 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Ce que nous conservons, et combien de temps
+          </h2>
+          <Table head={['Donnée', 'Où', 'Durée']} rows={RETENTION} />
+          <p className="mt-6 mb-0 text-base leading-relaxed text-muted">
+            Une ligne de journal ne contient qu’un nom d’événement, un nombre, un identifiant opaque ou l’empreinte d’une
+            adresse : aucun champ de texte libre n’existe pour y écrire un paragraphe, même par accident. Une requête
+            refusée est journalisée par le nom du champ, jamais par sa valeur.
           </p>
-          <p className="mt-4 text-sm text-muted">
-            Nous mesurons le lancement avec ce que le serveur détient déjà, jamais avec un traceur
-            dans l’extension ou sur le site : nombre de comptes par semaine, part de comptes ayant
-            terminé une analyse, essais menés à leur terme, abonnements et résiliations (d’après
-            Stripe), réponses du cache, échecs par étape, coût moyen d’une analyse. Ce sont des
-            totaux : aucun ne désigne un lecteur ou un article, et ils ne sont consultables que par
-            nous.
+          <p className="mt-4 mb-0 text-base leading-relaxed text-muted">
+            Nous mesurons le lancement avec ce que le serveur détient déjà, jamais avec un traceur : nombre de comptes
+            par semaine, analyses terminées, essais menés à terme, abonnements et résiliations (d’après Stripe), réponses
+            du cache, échecs par étape, coût moyen d’une analyse. Ce sont des totaux, qui ne désignent ni un lecteur ni
+            un article.
           </p>
         </section>
 
-        <section>
-          <h2 className="font-display text-xl font-semibold">Les sous-traitants</h2>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-border">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Sous-traitant</th>
-                  <th className="px-4 py-3 font-medium">Rôle</th>
-                  <th className="px-4 py-3 font-medium">Ce qu’il voit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SUBPROCESSORS.map(([name, role, sees]) => (
-                  <tr key={name} className="border-t border-border align-top">
-                    <td className="px-4 py-3 font-medium">{name}</td>
-                    <td className="px-4 py-3 text-muted">{role}</td>
-                    <td className="px-4 py-3 text-muted">{sees}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <section aria-labelledby="sous-traitants-titre">
+          <h2 id="sous-traitants-titre" className="m-0 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Les sous-traitants
+          </h2>
+          <Table head={['Sous-traitant', 'Rôle', 'Ce qu’il voit']} rows={SUBPROCESSORS} />
         </section>
 
-        <section>
-          <h2 className="font-display text-xl font-semibold">Ce qui n’est jamais fait</h2>
-          <ul className="mt-4 space-y-2 text-sm text-muted">
-            <li>Aucune donnée n’est vendue.</li>
-            <li>Aucune donnée n’est utilisée pour entraîner un modèle.</li>
-            <li>
-              Les données reçues du navigateur ne servent qu’à fournir l’analyse demandée : elles ne
-              sont ni transférées ni utilisées pour autre chose, ni pour de la publicité, ni pour
-              évaluer une solvabilité (exigence « Limited Use » du Chrome Web Store).
-            </li>
-            <li>Aucune publicité, aucun traceur, aucun mouchard analytique.</li>
-            <li>Aucun code n’est téléchargé ni exécuté depuis l’extérieur.</li>
+        <section aria-labelledby="jamais-titre">
+          <h2 id="jamais-titre" className="m-0 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Ce qui n’est jamais fait
+          </h2>
+          <ul className="m-0 mt-6 grid list-none gap-4 p-0">
+            {NEVER.map((line) => (
+              <li key={line} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4 text-base leading-relaxed">
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-1 h-5 w-5 text-[#34d399]">
+                  <path d="M4 10.5l3.5 3.5L16 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {line}
+              </li>
+            ))}
           </ul>
         </section>
       </div>

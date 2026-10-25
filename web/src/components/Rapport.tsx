@@ -217,7 +217,16 @@ function Block({
   return <p className="mt-0 mb-5 last:mb-0">{content}</p>;
 }
 
-export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: TextBlock[] }) {
+export function Rapport({
+  report,
+  blocks,
+  example = false,
+}: {
+  report: AnalysisReport;
+  blocks: TextBlock[];
+  /** The report written in advance on the sample article: its last line says so, and no date. */
+  example?: boolean;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const { segments, located } = useMemo(() => locateFindings(blocks, report.findings), [blocks, report.findings]);
 
@@ -281,8 +290,9 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
                   aria-valuenow={category.score}
                   className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-border"
                 >
+                  {/* One neutral ink: colour is kept for severity, and each row is named. */}
                   <div
-                    className="h-full rounded-full bg-accent"
+                    className="h-full rounded-full bg-foreground"
                     style={{ width: `${Math.max(0, Math.min(100, (category.score / category.maxScore) * 100))}%` }}
                   />
                 </div>
@@ -368,10 +378,10 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
         </section>
       </div>
 
-      <p className="m-0 max-w-[68ch] text-sm text-muted">
-        Analyse effectuée via Squiggle, {report.meta.model}, consignes v{report.meta.promptVersion}
-        {analysedOn ? `, le ${analysedOn}` : ''}. Elle porte sur le texte collé : l’adresse source, si vous en avez
-        donné une, n’a pas été consultée.
+      <p className="m-0 max-w-[62ch] text-sm leading-relaxed text-muted">
+        {example
+          ? 'Rapport d’exemple, préparé à l’avance sur un article fictif.'
+          : `Analyse automatique${analysedOn ? ` du ${analysedOn}` : ''}, par un modèle de langage. Elle porte sur le texte collé : l’adresse source, si vous en avez donné une, n’a pas été consultée.`}
       </p>
     </div>
   );

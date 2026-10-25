@@ -106,18 +106,95 @@ afterEach(() => {
 });
 
 describe('Analyser, signed out', () => {
-  it('asks the reader to sign in and keeps the paste for when they come back', async () => {
+  it('opens the sign-in in place, under the text, and keeps the paste for a round trip', async () => {
     serve(null);
     const first = render(<Analyser />);
     paste(TEXT);
-    const signIn = await screen.findByRole('link', { name: 'Se connecter pour analyser' });
-    expect(signIn).toHaveAttribute('href', '/connexion?next=/analyser');
-    expect(screen.getByText(/Votre texte reste ici, dans ce navigateur/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    const panel = within(await screen.findByRole('region', { name: 'Connectez-vous pour lancer l’analyse' }));
+    expect(panel.getByText(/Votre texte reste ici/)).toBeInTheDocument();
+    expect(panel.getByLabelText('Adresse e-mail')).toBeInTheDocument();
+    const google = panel.getByRole('link', { name: 'Continuer avec Google' }).getAttribute('href')!;
+    expect(new URL(google, 'https://squiggle.fr').searchParams.get('next')).toBe('/analyser');
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
     first.unmount();
 
-    // Back from the sign-in, in the same browser.
+    // Back from Google, in the same browser.
     render(<Analyser />);
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+  });
+
+  it('starts the analysis on its own once the code is accepted', async () => {
+    let signedIn = false;
+    const seen: string[] = [];
+    vi.stubGlobal('localStorage', memoryStorage());
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = (typeof input === 'string' ? input : input.toString()).split('?')[0];
+        seen.push(path);
+        if (path === '/web/account') {
+          return signedIn ? jsonResponse({ ok: true, ...account() }) : jsonResponse({ ok: false, error: 'invalid_session' }, 401);
+        }
+        if (path === '/auth/magic-link') return jsonResponse({ ok: true, sent: true });
+        if (path === '/auth/magic-link/verify') {
+          signedIn = true;
+          return jsonResponse({ ok: true, userId: 'u1', email: 'marie@example.com', next: '/analyser' });
+        }
+        if (path === '/web/analyze/check') return jsonResponse({ ok: true, hit: false });
+        if (path === '/web/analyze/audit') return jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
+        if (path === '/web/analyze/finalize') return jsonResponse({ ok: true, report: REPORT, cached: true });
+        return jsonResponse({ ok: false, error: 'not_found' }, 404);
+      }),
+    );
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    fireEvent.change(await screen.findByLabelText('Adresse e-mail'), { target: { value: 'marie@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recevoir mon code' }));
+    fireEvent.change(await screen.findByLabelText('Code de connexion'), { target: { value: 'abcd2345' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen).toContain('/web/analyze/audit');
+    expect(window.location.pathname).toBe('/analyser');
+  });
+});
+
+describe('Analyser, the example', () => {
+  it('opens the full example report without an account or a request', async () => {
+    const seen = serve(null);
+    at('/analyser?exemple');
+    render(<Analyser />);
+    expect(screen.getByText(/Rapport d’exemple\./)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Lecture : une génération perdue ?' })).toBeInTheDocument();
+    expect(screen.getByText('61')).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Chiffre mis en doute' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Témoins de terrain' })).toBeInTheDocument();
+    expect(screen.getByText(/préparé à l’avance sur un article fictif/)).toBeInTheDocument();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+
+    // From there, straight to the reader's own article.
+    fireEvent.click(screen.getByRole('button', { name: 'Analyser votre article' }));
+    expect(screen.getByLabelText('Texte de l’article')).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
+  it('is one tap away from an empty form', () => {
+    serve(null);
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: /Voir un rapport d’exemple/ }));
+    expect(screen.getByText('61')).toBeInTheDocument();
+  });
+
+  it('never names the model in the report', async () => {
+    serve(account());
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    await screen.findByText('58');
+    expect(screen.queryByText(/openrouter\/test-model/)).toBeNull();
+    expect(screen.getByText(/par un modèle de langage/)).toBeInTheDocument();
   });
 });
 
