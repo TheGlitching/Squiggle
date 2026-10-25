@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { GOOGLE_AUTH_URL } from '../src/auth/google';
+import { GOOGLE_AUTH_URL, GOOGLE_JWKS_URL } from '../src/auth/google';
+import { verifyGoogleIdToken } from '../src/lib/jwt';
 import { base64urlEncode } from '@squiggle/shared';
 
 import { CHROME_ORIGIN, makeFakeGoogle, makeTestEnv, T0, type TestEnv } from './helpers';
@@ -61,7 +62,7 @@ describe('GET /auth/google/callback', () => {
     return { res, fake, env2 };
   }
 
-  it('exchanges the code (PKCE-checked), verifies the JOSE ID token, creates the user, and opens a session', async () => {
+  it('exchanges the code (PKCE-checked), verifies the RS256 ID token, creates the user, and opens a session', async () => {
     const { res, fake, env2 } = await happyPath();
 
     expect(res.status).toBe(302);
@@ -154,6 +155,40 @@ describe('GET /auth/google/callback', () => {
     res = await callback(env, `?code=ok&state=${encodeURIComponent(started3.state)}`);
     expect(res.status).toBe(502);
     expect((await res.json()).error).toBe('oauth_failed');
+  });
+
+  it('rejects an ID token not signed by a key in the JWKS', async () => {
+    const fake = await makeFakeGoogle('test-google-client-id');
+    const env = makeTestEnv({ fetchImpl: fake.fetchImpl });
+    const started = await startOAuth(env);
+    fake.state.nonce = started.nonce;
+    fake.state.nowMs = env.clock.now();
+    fake.state.forgeSignature = true;
+    const res = await callback(env, `?code=ok&state=${encodeURIComponent(started.state)}`);
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toBe('oauth_failed');
+    expect(await env.db.getUserByEmail('marie@gmail.com')).toBeNull();
+  });
+
+  it('refuses any alg but RS256, including none', async () => {
+    const fake = await makeFakeGoogle('test-google-client-id');
+    const jwks = (await (await fake.fetchImpl(GOOGLE_JWKS_URL)).json()) as { keys: unknown[] };
+    const nowSec = Math.floor(T0 / 1000);
+    const enc = (o: object) => base64urlEncode(new TextEncoder().encode(JSON.stringify(o)));
+    const payload = enc({
+      iss: 'https://accounts.google.com',
+      aud: 'test-google-client-id',
+      sub: fake.sub,
+      nonce: 'n',
+      iat: nowSec,
+      exp: nowSec + 3600,
+    });
+    for (const alg of ['none', 'HS256', 'ES256']) {
+      const idToken = `${enc({ alg, kid: fake.kid })}.${payload}.`;
+      await expect(
+        verifyGoogleIdToken({ idToken, audience: 'test-google-client-id', expectedNonce: 'n', jwks, nowSec }),
+      ).rejects.toThrow('unsupported token header');
+    }
   });
 
   it('sends CORS headers to a store origin', async () => {
