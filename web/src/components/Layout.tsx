@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { BrandLockup } from './Brand';
-import { LEGAL_PAGES } from '../offer';
+import { LEGAL_PAGES, TAGLINE } from '../offer';
 import { Link } from '../router';
 
 /** Where a reader reaches us, and the address the legal pages publish. */
@@ -41,7 +41,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <footer className="mt-16 border-t border-border bg-surface">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-5 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>Squiggle. Un fact-check pour chaque article. Aucune publicité, aucun traceur.</p>
+          <p>Squiggle. {TAGLINE} Aucune publicité, aucun traceur.</p>
           <nav className="flex flex-wrap gap-4" aria-label="Navigation de pied de page">
             <Link to="/transparence" className="hover:text-foreground">
               Transparence

@@ -11,7 +11,7 @@ import {
 import { HeroScene } from '../components/HeroScene';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
 import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
-import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL } from '../offer';
+import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL, TAGLINE } from '../offer';
 import { Link } from '../router';
 import { CONTACT_URL } from '../components/Layout';
 
@@ -89,11 +89,11 @@ export function Accueil() {
       <div className={`${PAGE} py-12 md:py-16`}>
         <HeroScene>
           <h1 className="m-0 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance md:text-5xl xl:text-6xl">
-            Un <span className="whitespace-nowrap">fact-check</span> pour chaque article.
+            {TAGLINE}
           </h1>
           <p className={`mt-6 text-lg leading-relaxed text-pretty text-muted md:text-xl ${MEASURE}`}>
-            Dans l’article que vous lisez, Squiggle confronte les faits vérifiables aux sources, surligne les
-            passages fragiles et dit pourquoi. De quoi vous faire un avis que vous pouvez défendre.
+            Dans l’article que vous lisez, Squiggle surligne les passages fragiles, dit pourquoi et montre aussi
+            ce qui est solide. S’il met un fait en question, il consulte d’abord les sources.
           </p>
 
           {/* One primary action: the store this browser installs from, or, where no
@@ -172,10 +172,12 @@ export function Accueil() {
           </div>
         </div>
 
-        <h3 className="mt-14 mb-0 font-display text-2xl font-semibold">Quatre états pour chaque fait</h3>
-        <p className={`mt-3 text-base leading-relaxed text-muted ${MEASURE}`}>
-          Une affirmation n’est jamais simplement vraie ou fausse : elle est confirmée, doutée par les
-          sources, laissée sans source par l’article, ou impossible à vérifier telle qu’elle est écrite.
+        <h3 className="mt-14 mb-0 font-display text-2xl font-semibold">Quatre états pour chaque fait relevé</h3>
+        <p className={`mt-3 text-base leading-relaxed text-pretty text-muted ${MEASURE}`}>
+          Un fait relevé n’est jamais dit simplement vrai ou faux. Quand Squiggle en met un en question,
+          il consulte les sources : elles le confirment, le mettent en doute, ou ne permettent pas de le
+          vérifier tel qu’il est écrit. Quand l’article ne cite rien à l’appui d’un fait, le rapport le
+          dit non sourcé.
         </p>
         <dl className="mt-6 grid gap-4 md:grid-cols-2">
           {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (

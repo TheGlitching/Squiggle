@@ -8,7 +8,16 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { determineScoreBand, getScoreBandLabel } from '../../shared/src/engine/scoring';
+import {
+  computeFourchesCaudinesScore,
+  determineScoreBand,
+  getScoreBandLabel,
+} from '../../shared/src/engine/scoring';
+import { SCORE_DOMAINS, type ScoreDomainKey } from '../../shared/src/engine/types';
+import {
+  FACTUAL_FINDING_CATEGORIES,
+  RESEARCHABLE_FINDING_CATEGORIES,
+} from '../../shared/src/engine/validator';
 
 import {
   CATEGORY_LABELS,
@@ -43,20 +52,74 @@ describe('severityToHighlightSeverity', () => {
 });
 
 describe('example -> severity -> colour', () => {
-  const byCategory = Object.fromEntries(EXAMPLES.map((example) => [example.cat, example]));
+  const byLabel = Object.fromEntries(EXAMPLES.map((example) => [example.label, example]));
 
   it('resolves each of the five examples to its shipped colour', () => {
-    expect(byCategory['Robustesse factuelle'].sev).toBe('info');
-    expect(byCategory['Solidité logique'].sev).toBe('critical');
-    expect(byCategory['Cadrage et rhétorique'].sev).toBe('warning');
-    expect(byCategory['Déontologie'].sev).toBe('warning');
-    expect(byCategory['Soin de la langue'].sev).toBe('info');
+    expect(byLabel['Étude non nommée'].sev).toBe('info');
+    expect(byLabel['Faux dilemme'].sev).toBe('warning');
+    expect(byLabel['Exagération'].sev).toBe('warning');
+    expect(byLabel['Chiffre mis en doute'].sev).toBe('warning');
+    expect(byLabel['Autorité non nommée'].sev).toBe('info');
   });
 
   it('points each severity at the extension palette entry', () => {
-    expect(severityColor(byCategory['Solidité logique'].sev)).toBe(SEVERITY_COLORS.critical);
-    expect(severityColor(byCategory['Déontologie'].sev)).toBe(SEVERITY_COLORS.warning);
-    expect(severityColor(byCategory['Robustesse factuelle'].sev)).toBe(SEVERITY_COLORS.info);
+    expect(severityColor(byLabel['Faux dilemme'].sev)).toBe(SEVERITY_COLORS.warning);
+    expect(severityColor(byLabel['Étude non nommée'].sev)).toBe(SEVERITY_COLORS.info);
+  });
+});
+
+// Every finding the landing shows must be one the engine can produce, with the
+// domain, the verification state and the marks it would give it.
+describe('the demo, as the engine would produce it', () => {
+  const CAT_DOMAIN: Record<string, ScoreDomainKey> = {
+    'Robustesse factuelle': 'robustesse_factuelle',
+    'Solidité logique': 'solidite_logique',
+    'Cadrage et rhétorique': 'cadrage_manipulation',
+  };
+  const fullMarks = (Object.keys(SCORE_DOMAINS) as ScoreDomainKey[]).map((domain) => ({
+    domain,
+    score: SCORE_DOMAINS[domain].weight,
+  }));
+  const standing = (findings: typeof EXAMPLES) =>
+    computeFourchesCaudinesScore(fullMarks, findings).normalizedCategories.map((category) => category.score);
+
+  it('names the domain each finding is scored in', () => {
+    const domains = Object.keys(SCORE_DOMAINS);
+    for (const example of EXAMPLES) {
+      const lowered = standing([example]).flatMap((score, index) =>
+        score < fullMarks[index].score ? [domains[index]] : [],
+      );
+      expect(lowered, example.label).toEqual([CAT_DOMAIN[example.cat]]);
+    }
+  });
+
+  it('gives each finding a verification state the engine can reach', () => {
+    for (const example of EXAMPLES) {
+      if (!FACTUAL_FINDING_CATEGORIES[example.category]) {
+        expect(example.verification, example.label).toBeUndefined();
+      } else if (RESEARCHABLE_FINDING_CATEGORIES[example.category]) {
+        // A claim the sources confirm is withdrawn, never shown as a finding.
+        expect(['douteuse', 'non-verifiable'], example.label).toContain(example.verification);
+      } else {
+        expect(example.verification, example.label).toBe('non-sourcee');
+      }
+    }
+  });
+
+  it('counts as looked up only the claims the research stage takes', () => {
+    const researched = EXAMPLES.filter((example) => RESEARCHABLE_FINDING_CATEGORIES[example.category]);
+    const confronted = researched.filter((example) => example.verification === 'douteuse');
+    expect(HERO_REPORT.research).toMatch(
+      new RegExp(`^${confronted.length} affirmation sur ${researched.length} confrontée à une source,`),
+    );
+    expect(HERO_REPORT.claims).toBe(`${confronted.length} douteuse`);
+  });
+
+  it('keeps each mark within what the findings leave of its domain', () => {
+    const ceilings = standing(EXAMPLES);
+    HERO_REPORT.marks.forEach((mark, index) => {
+      expect(mark).toBeLessThanOrEqual(ceilings[index]);
+    });
   });
 });
 
