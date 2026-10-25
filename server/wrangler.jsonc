@@ -83,7 +83,7 @@
         // a secret (it is visible in any Checkout URL), but it is environment
         // specific, so it lives here rather than in code. Filled in from the
         // Stripe dashboard (issue #5).
-        "STRIPE_PRICE_ID": "PENDING_PRICE_ID"
+        "STRIPE_PRICE_ID": "price_1UUZJ21VvAeMihPA3JsE9s6m"
       }
     }
   }
