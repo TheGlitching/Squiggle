@@ -12,8 +12,8 @@ highlighted in the article itself, and hovering one in the panel connects it to 
 passage it came from.
 
 Chrome and Firefox, Manifest V3. Bring your own API key: no backend, no account, no
-telemetry. A hosted mode, for readers who would rather not hold an API key, is
-[under construction](#hosted-mode-under-construction).
+telemetry. Readers who would rather not hold an API key can sign in instead: the
+[hosted mode](#hosted-mode) runs in production on [squiggle.fr](https://squiggle.fr).
 
 Without the extension, on a phone for instance, the website runs the same analysis on
 an article's text pasted into its analysis page (`/analyser`), and draws the same
@@ -115,17 +115,17 @@ for an analysis of the page you are looking at.
 
 See [SECURITY.md](SECURITY.md) for the data flow and how to report a vulnerability.
 
-## Hosted mode (under construction)
+## Hosted mode
 
 Holding an API key is a real barrier: you need an account with a model provider, a
 payment method on it, and enough of an idea of what a token costs to be comfortable.
 Most readers of a news article have none of that, and asking them to get it is asking
 them not to use the tool.
 
-So there will be a second mode: sign in, and the analysis runs on our infrastructure
-against credits — three free, then a small monthly subscription. **It is a choice, not
-a migration.** BYOK stays exactly as it is, remains the default, and is what the
-extension does with no account at all.
+So there is a second mode, in production on [squiggle.fr](https://squiggle.fr): sign in,
+and the analysis runs on our infrastructure against credits, three free, then a small
+monthly subscription. **It is a choice, not a migration.** BYOK stays exactly as it is,
+remains the default, and is what the extension does with no account at all.
 
 What changes, stated plainly, because it is the whole trade:
 

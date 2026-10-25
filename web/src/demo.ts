@@ -99,10 +99,10 @@ export const SCORE_BANDS: Record<ScoreBand, { title: string; tone: HighlightSeve
 
 /** The five domains of the grid. A test pins these to the engine's own definitions. */
 export const DOMAINS = [
-  ['Robustesse factuelle et sourcing', 35, 'Les chiffres, les dates et les citations sont-ils précis, sourcés, vérifiables ?'],
-  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits, ou d’un saut de raisonnement ?'],
-  ['Cadrage et procédés rhétoriques', 25, 'Le titre, les mots choisis et la mise en scène orientent-ils le jugement sans preuve ?'],
-  ['Déontologie et transparence', 10, 'Les sources sont-elles nommées, les intérêts signalés, le fait distingué du commentaire ?'],
+  ['Robustesse factuelle et sourcing', 35, 'Les chiffres, les dates et les citations sont-ils précis, sourcés, vérifiables\u00a0?'],
+  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits, ou d’un saut de raisonnement\u00a0?'],
+  ['Cadrage et procédés rhétoriques', 25, 'Le titre, les mots choisis et la mise en scène orientent-ils le jugement sans preuve\u00a0?'],
+  ['Déontologie et transparence', 10, 'Les sources sont-elles nommées, les intérêts signalés, le fait distingué du commentaire\u00a0?'],
   ['Soin de la langue', 5, 'Orthographe et grammaire, comme indice de rigueur.'],
 ] as const;
 
@@ -121,6 +121,13 @@ export interface DemoExample {
   verification?: DemoVerification;
 }
 
+/**
+ * Each example is a finding the engine can produce as shown: its category scores
+ * in the domain named by `cat`, a sophism or a framing remark carries no
+ * verification state, a missing source is always "non sourcée", and only an
+ * unsupported claim is looked up, here to be put in doubt by what the sources
+ * say. `demo.test.ts` checks all of it against the engine.
+ */
 export const DEMO_FINDINGS: DemoExample[] = [
   {
     cat: 'Robustesse factuelle',
@@ -131,7 +138,7 @@ export const DEMO_FINDINGS: DemoExample[] = [
     label: 'Étude non nommée',
     detail: 'Aucun institut, aucune date, aucune méthodologie : le chiffre est présenté comme établi, mais le lecteur ne peut pas le retrouver.',
     severity: 2,
-    category: 'affirmation-non-etayee',
+    category: 'source-absente',
     verification: 'non-sourcee',
   },
   {
@@ -141,10 +148,9 @@ export const DEMO_FINDINGS: DemoExample[] = [
     after: '.',
     explain: 'Faux dilemme : l’un n’empêche pas l’autre.',
     label: 'Faux dilemme',
-    detail: 'Être sur les réseaux n’empêche pas de lire : l’article oppose deux pratiques que rien ne rend exclusives, et les sources consultées ne confirment pas ce recul.',
-    severity: 3,
+    detail: 'Être sur les réseaux n’empêche pas de lire : l’article oppose deux pratiques que rien ne rend exclusives.',
+    severity: 2,
     category: 'sophisme',
-    verification: 'douteuse',
   },
   {
     cat: 'Cadrage et rhétorique',
@@ -158,26 +164,27 @@ export const DEMO_FINDINGS: DemoExample[] = [
     category: 'cadrage',
   },
   {
-    cat: 'Déontologie',
+    cat: 'Robustesse factuelle',
     before: '',
-    mark: 'Selon un expert',
-    after: ', la mesure serait inévitable.',
-    explain: 'Source anonyme : ni nom, ni conflit d’intérêts déclaré.',
-    label: 'Source anonyme',
-    detail: 'Ni nom, ni fonction, ni conflit d’intérêts déclaré : impossible de savoir qui parle, ni à quel titre.',
+    mark: 'Neuf adolescents sur dix n’ouvrent plus un livre',
+    after: ' en dehors des cours.',
+    explain: 'Chiffre mis en doute : les sources consultées comptent une majorité d’adolescents qui lisent encore pour leur plaisir.',
+    label: 'Chiffre mis en doute',
+    detail: 'Les enquêtes du Centre national du livre consultées mesurent un recul de la lecture de loisir chez les adolescents, mais la plupart d’entre eux lisent encore pour leur plaisir : rien n’y appuie «\u00a0neuf sur dix\u00a0».',
     severity: 2,
-    category: 'source-absente',
+    category: 'affirmation-non-etayee',
+    verification: 'douteuse',
   },
   {
-    cat: 'Soin de la langue',
-    before: 'Les autorités ont ',
-    mark: 'pris des décisions au niveau de la situation',
-    after: '.',
-    explain: 'Le flou de la langue trahit le flou du propos.',
-    label: 'Formulation creuse',
-    detail: 'La phrase ne dit pas quelles décisions ont été prises : le flou de la langue trahit celui du propos.',
+    cat: 'Cadrage et rhétorique',
+    before: '',
+    mark: 'Selon un expert',
+    after: ', le mouvement serait irréversible.',
+    explain: 'Autorité non nommée : ni nom, ni fonction, ni intérêt déclaré.',
+    label: 'Autorité non nommée',
+    detail: 'Ni nom, ni fonction, ni conflit d’intérêts déclaré : impossible de savoir qui parle, ni à quel titre.',
     severity: 1,
-    category: 'surinterpretation',
+    category: 'cadrage',
   },
 ];
 
@@ -249,14 +256,16 @@ export const HERO_ARTICLE: { title: string; byline: string; paragraphs: Array<Ar
 };
 
 export const HERO_REPORT = {
-  /** Marks per domain, in the grid's order; they sum to the score. */
-  marks: [18, 15, 17, 6.5, 4.5],
+  /** Marks per domain, in the grid's order; they sum to the score. Each stays
+   * under what the engine leaves of its domain once the findings above are
+   * counted, which `demo.test.ts` computes with the engine's own scoring. */
+  marks: [20, 15.5, 13, 8, 4.5],
   summary:
-    'L’article part d’un vrai sujet, mais son chiffre central ne renvoie à aucune étude identifiable et il tire d’une habitude une conclusion que les faits ne portent pas. La fin, plus nuancée, redresse en partie l’ensemble.',
-  research: '1 affirmation sur 2 confrontée à une source, 3 recherches menées.',
-  claims: '1 douteuse, 1 non sourcée dans l’article',
-  /** The finding selected before the reader picks one: the critical one. */
-  selected: 1,
+    'L’article part d’un vrai sujet, mais son chiffre central ne renvoie à aucune étude identifiable et les sources mettent en doute l’ampleur du recul annoncé. La fin, plus nuancée, redresse en partie l’ensemble.',
+  research: '1 affirmation sur 1 confrontée à une source, 3 recherches menées.',
+  claims: '1 douteuse',
+  /** The finding selected before the reader picks one: the claim the sources put in doubt. */
+  selected: 3,
 };
 
 /** The panel prints marks the French way: `6,5`, not `6.5`. */

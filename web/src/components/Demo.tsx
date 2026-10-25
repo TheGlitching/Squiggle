@@ -217,9 +217,8 @@ export function DemoText() {
   return (
     <p className="sr-only">
       Démonstration (animée, décorative) : dans une phrase d’article, Squiggle met en évidence le
-      passage problématique et en donne la raison, par domaine. Étude non nommée (robustesse
-      factuelle). Faux dilemme (solidité logique). Exagération (cadrage et rhétorique). Source
-      anonyme (déontologie). Flou de la langue (soin de la langue).
+      passage problématique et en donne la raison, par domaine.{' '}
+      {EXAMPLES.map((example) => `${example.label} (${example.cat.toLowerCase()}).`).join(' ')}
     </p>
   );
 }

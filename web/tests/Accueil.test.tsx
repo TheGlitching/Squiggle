@@ -17,6 +17,7 @@ import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { Accueil } from '../src/pages/Accueil';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
+import { TAGLINE } from '../src/offer';
 import { MOBILE } from './helpers';
 
 afterEach(cleanup);
@@ -27,10 +28,25 @@ describe('Accueil', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Un avis que vous pouvez défendre.',
+        name: TAGLINE,
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
+  });
+
+  // The research stage only looks up the facts the audit itself questioned, so the
+  // lead must not promise a source check for every verifiable fact.
+  it('promises a source check only for the facts it questions', () => {
+    render(<Accueil />);
+    expect(screen.getByText(/S’il met un fait en question, il consulte d’abord les sources\.$/)).toBeInTheDocument();
+    expect(screen.queryByText(/faits vérifiables/)).toBeNull();
+  });
+
+  it('repeats the headline in the page title and the link preview', () => {
+    const html = readFileSync(resolve(__dirname, '../index.html'), 'utf8');
+    const title = `Squiggle : ${TAGLINE.charAt(0).toLowerCase()}${TAGLINE.slice(1, -1)}`;
+    expect(html).toContain(`<title>${title}</title>`);
+    expect(html).toContain(`<meta property="og:title" content="${title}" />`);
   });
 
   it('shows an article with its highlights beside the panel that explains them', async () => {
@@ -40,7 +56,8 @@ describe('Accueil', () => {
     expect(panel.getByText('61')).toBeInTheDocument();
     expect(panel.getByText('Article fragile')).toBeInTheDocument();
     expect(panel.getByText('Vérification factuelle')).toBeInTheDocument();
-    expect(panel.getByText('Faux dilemme')).toBeInTheDocument();
+    expect(panel.getByText('Chiffre mis en doute')).toBeInTheDocument();
+    expect(panel.getByText('Douteuse')).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /Capture du panneau/ })).toBeNull();
     expect(screen.queryByText(/sur un article d’exemple/)).toBeNull();
 
@@ -48,8 +65,9 @@ describe('Accueil', () => {
     expect(passage).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(passage);
     expect(passage).toHaveAttribute('aria-pressed', 'true');
-    expect(panel.getByText('Source anonyme')).toBeInTheDocument();
-    expect(panel.queryByText('Faux dilemme')).toBeNull();
+    expect(panel.getByText('Autorité non nommée')).toBeInTheDocument();
+    expect(panel.queryByText('Chiffre mis en doute')).toBeNull();
+    expect(panel.queryByText('Douteuse')).toBeNull();
   });
 
   it('has every section a first-time reader looks for', () => {
