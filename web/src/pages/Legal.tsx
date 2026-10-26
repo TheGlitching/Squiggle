@@ -9,8 +9,8 @@
  *
  * Retention periods are not restated here: the privacy policy renders the
  * table the transparency page publishes, which follows `server/src/usage/limits.ts`
- * and the TTLs of the auth rows. A value not decided yet is a visible
- * `PENDING_…` marker, never a plausible guess.
+ * and the TTLs of the auth rows. A value not decided yet is left `null` and
+ * renders nothing (no placeholder, no plausible guess) until it is filled in.
  */
 import type { ReactNode } from 'react';
 
@@ -28,12 +28,12 @@ const EDITEUR = {
   siret: '830 369 922 00042',
   ape: '62.01Z (programmation informatique)',
   address: '100 avenue de Saint-Mandé, 75012 Paris, France',
+  /** Shown in the publisher's details once set. */
+  phone: null as string | null,
 };
 
-/** A value that must still be decided: shown, never guessed. */
-function Pending({ children }: { children: ReactNode }) {
-  return <span className="rounded-sm bg-warningSoft px-1.5 py-0.5 font-mono text-xs text-warningInk">{children}</span>;
-}
+/** The consumer mediator (art. L612-1), named in the conditions of sale once one is appointed. */
+const MEDIATEUR: { name: string; url: string } | null = null;
 
 function Mail() {
   return (
@@ -92,10 +92,12 @@ function Identity() {
       <dd>
         <Mail />
       </dd>
-      <dt className="font-medium text-foreground">Téléphone</dt>
-      <dd>
-        <Pending>PENDING_TELEPHONE_EDITEUR</Pending>
-      </dd>
+      {EDITEUR.phone ? (
+        <>
+          <dt className="font-medium text-foreground">Téléphone</dt>
+          <dd>{EDITEUR.phone}</dd>
+        </>
+      ) : null}
     </dl>
   );
 }
@@ -238,11 +240,20 @@ export function Cgv() {
         </p>
       </Article>
 
-      <Article title="10. Réclamations et médiation">
+      <Article title={MEDIATEUR ? '10. Réclamations et médiation' : '10. Réclamations'}>
         <p>
-          Pour toute réclamation, écrivez d’abord à <Mail /> : nous répondons sous 30 jours. Si le litige n’est pas résolu,
-          vous pouvez recourir gratuitement au médiateur de la consommation (art. L612-1) :{' '}
-          <Pending>PENDING_MEDIATEUR_CONSOMMATION</Pending>.
+          Pour toute réclamation, écrivez d’abord à <Mail /> : nous répondons sous 30 jours.
+          {MEDIATEUR ? (
+            <>
+              {' '}
+              Si le litige n’est pas résolu, vous pouvez recourir gratuitement au médiateur de la consommation (art.
+              L612-1) :{' '}
+              <a href={MEDIATEUR.url} className="underline hover:text-foreground">
+                {MEDIATEUR.name}
+              </a>
+              .
+            </>
+          ) : null}
         </p>
       </Article>
 
