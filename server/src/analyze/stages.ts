@@ -62,7 +62,7 @@ import {
 
 import type { Clock } from '../lib/clock';
 import type { Db, UserRow } from '../db/types';
-import { entitlementOf, refusalFor, startsRefusal } from '../billing/quota';
+import { entitlementOf, refusalFor, startsCountedFromDay, startsRefusal } from '../billing/quota';
 import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
 import { countMetric } from '../metrics';
@@ -388,10 +388,10 @@ async function enforceStartCeilings(
   // A credit is only consumed at finalize, so a run abandoned after its
   // research costs us a full analysis and the reader nothing. Without a count
   // of starts, one account could keep doing that every five minutes.
-  const starts = await s.db.recordRunStart(user.id, now);
-  const tooManyStarts = startsRefusal(entitlement, starts);
+  const started = await s.db.recordRunStart(user.id, now, startsCountedFromDay(entitlement));
+  const tooManyStarts = startsRefusal(entitlement, started);
   if (tooManyStarts) {
-    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:starts', count: starts.today });
+    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:starts', count: started });
     return tooManyStarts;
   }
 

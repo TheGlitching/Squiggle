@@ -52,7 +52,7 @@ Un clic sur l’icône, et Squiggle relit l’article ouvert. Il surligne les pa
 
 DEUX FAÇONS DE S’EN SERVIR
 • Gratuitement, avec votre propre clé d’API. Squiggle ne vous facture rien : la partie IA tourne sur votre propre compte chez un fournisseur d’IA (Anthropic, OpenAI, Google Gemini ou OpenRouter), qui vous facture directement chaque analyse, au tarif du modèle choisi. Une clé d’API, c’est le code d’accès personnel que ce fournisseur vous donne sur son site : collez-le une fois dans l’extension. L’analyse part alors de votre navigateur vers ce fournisseur, la clé y reste et rien ne passe par nos serveurs.
-• Avec un compte Squiggle, sans clé à créer : 3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois pour 10 analyses par jour, sans engagement. Le compte marche aussi sur squiggle.fr et dans son appli pour téléphone, sans rien installer.
+• Avec un compte Squiggle, sans clé à créer : 3 analyses offertes, sans carte bancaire. Ensuite 60 analyses par mois pour 4,99 €, sans engagement. Le compte marche aussi sur squiggle.fr et dans son appli pour téléphone, sans rien installer.
 
 Chaque constat cite la phrase exacte : choisissez-le, le passage s’éclaire dans la page. Vous vérifiez par vous-même.
 

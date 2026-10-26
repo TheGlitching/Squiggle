@@ -36,15 +36,19 @@ describe('describeAccount', () => {
     );
     expect(view.state).toBe('active');
     expect(view.canAnalyse).toBe(true);
-    expect(view.detail).toContain('4');
+    expect(view.detail).toBe('Il vous reste 4 analyses ce mois-ci.');
     expect(view.canSubscribe).toBe(false);
   });
 
-  it('reports an active plan whose daily quota is exhausted', () => {
+  it('reports an active plan whose monthly quota is exhausted, and when it comes back', () => {
     const view = describeAccount(
-      account({ plan: 'active', usage: { used: 5, limit: 5, remaining: 0, resetsAt: 1 } }),
+      account({ plan: 'active', usage: { used: 60, limit: 60, remaining: 0, resetsAt: Date.UTC(2026, 10, 26, 12) } }),
     );
     expect(view.state).toBe('quota_exhausted');
+    expect(view.detail).toBe('Vos 60 analyses de ce mois sont utilisées. Le compteur repart le 26 novembre.');
+    expect(
+      describeAccount(account({ plan: 'active', usage: { used: 60, limit: 60, remaining: 0, resetsAt: null } })).detail,
+    ).toMatch(/repart au renouvellement de l’abonnement\.$/);
     expect(view.canAnalyse).toBe(false);
     expect(view.needsSubscription).toBe(false);
     expect(view.canSubscribe).toBe(false);
