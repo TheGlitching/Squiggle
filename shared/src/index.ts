@@ -19,4 +19,5 @@ export * from './types/byok';
 export * from './auth/signing';
 export * from './hosted/client';
 export * from './hosted/disclosure';
+export * from './hosted/limits';
 export * from './hosted/textHash';

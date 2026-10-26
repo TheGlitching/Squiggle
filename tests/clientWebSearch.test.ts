@@ -248,7 +248,8 @@ describe('OpenRouterClient web search', () => {
     expect(requestBody.tools).toEqual([
       {
         type: 'openrouter:web_search',
-        parameters: { engine: 'parallel', mode: 'basic', max_results: 5 },
+        // A lone query is one billed search, never as many as the model likes.
+        parameters: { engine: 'parallel', mode: 'basic', max_results: 5, max_uses: 1 },
       },
     ]);
     expect(requestBody.plugins).toBeUndefined();

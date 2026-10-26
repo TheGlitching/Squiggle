@@ -24,8 +24,14 @@ import {
   StubLlm,
   type TestEnv,
 } from './helpers';
-import { MAX_RESEARCH_CALLS_PER_RUN, MAX_SOURCE_CHECKS_PER_RUN } from '../src/analyze/stages';
-import { effectivePlan } from '../src/billing/quota';
+import {
+  MAX_OUTPUT_TOKENS,
+  MAX_RESEARCH_CALLS_PER_RUN,
+  MAX_SEARCHES_PER_RESEARCH,
+  MAX_SOURCE_CHECKS_PER_RUN,
+} from '../src/analyze/stages';
+import { ACTIVE_ANALYSES_PER_DAY, effectivePlan, STARTS_PER_CREDIT, TRIAL_ANALYSES } from '../src/billing/quota';
+import { CONCURRENT_RUN_WINDOW_MS } from '../src/usage/abuse';
 
 const ARTICLE_URL = 'https://presse.example/politique/emploi-2026';
 const BLOCKS = [
@@ -196,19 +202,116 @@ describe('the client does not choose what a credit costs', () => {
       if (res.json.claim) claimIds.push((res.json.claim as { id: string }).id);
     }
 
+    // Two cited pages per claim: more reads than one run may buy.
     let accepted = 0;
     let refused = 0;
     for (let i = 0; i < claimIds.length; i += 1) {
-      const res = await call(env, who, '/v1/analyze/source-check', {
-        runId,
-        claimId: claimIds[i],
-        sourceUrl: cited[i].href,
-      });
-      if (res.status === 200) accepted += 1;
-      else refused += 1;
+      for (const source of [cited[i], cited[i + 4]]) {
+        const res = await call(env, who, '/v1/analyze/source-check', {
+          runId,
+          claimId: claimIds[i],
+          sourceUrl: source.href,
+        });
+        if (res.status === 200) accepted += 1;
+        else refused += 1;
+      }
     }
     expect(accepted).toBe(MAX_SOURCE_CHECKS_PER_RUN);
     expect(refused).toBeGreaterThan(0);
+  });
+});
+
+describe('what one model call can cost', () => {
+  it('caps the searches and the answer length of every call a run makes', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+
+    const audit = await call(env, who, '/v1/analyze/audit', {
+      url: ARTICLE_URL,
+      title: 'T',
+      blocks: BLOCKS,
+      citedSources: CITED,
+    });
+    const runId = audit.json.runId as string;
+    const research = await call(env, who, '/v1/analyze/research', { runId, findingId: 'f1' });
+    await call(env, who, '/v1/analyze/source-check', {
+      runId,
+      claimId: (research.json.claim as { id: string }).id,
+      sourceUrl: CITED[0].href,
+    });
+
+    // The audit and the cited-page judgement.
+    expect(env.llm.completeOptions).toHaveLength(2);
+    for (const options of env.llm.completeOptions) expect(options.maxTokens).toBe(MAX_OUTPUT_TOKENS);
+    // The research: a provider search tool left to itself may search thirty times in one request.
+    expect(env.llm.groundedOptions).toHaveLength(1);
+    expect(env.llm.groundedOptions[0].maxSearches).toBe(MAX_SEARCHES_PER_RESEARCH);
+    expect(env.llm.groundedOptions[0].maxTokens).toBe(MAX_OUTPUT_TOKENS);
+  });
+});
+
+describe('runs that are never finished', () => {
+  /** Open a run, research it, and walk away: the reader pays nothing, we pay the calls. */
+  async function abandon(env: TestEnv, who: { key: CryptoKeyPair; token: string }) {
+    const audit = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    if (audit.status === 200) {
+      await call(env, who, '/v1/analyze/research', { runId: audit.json.runId as string, findingId: 'f1' });
+    }
+    // Past the in-flight window, so the next start is not refused as concurrent.
+    env.clock.advance(CONCURRENT_RUN_WINDOW_MS + 1);
+    return audit;
+  }
+
+  it('stops a trial account from buying research forever by never finalizing', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+
+    const allowed = STARTS_PER_CREDIT * TRIAL_ANALYSES;
+    for (let i = 0; i < allowed; i += 1) expect((await abandon(env, who)).status).toBe(200);
+
+    const before = { ...env.llm.calls };
+    const refused = await abandon(env, who);
+    expect(refused.status).toBe(429);
+    expect(refused.json.error).toBe('starts_exhausted');
+    expect(refused.json.message).toMatch(/Abonnez-vous/);
+    expect(env.llm.calls).toEqual(before);
+
+    // A trial is measured over its whole life, not per day.
+    env.clock.advance(2 * 24 * 60 * 60 * 1000);
+    expect((await abandon(env, who)).json.error).toBe('starts_exhausted');
+  });
+
+  it('gives a subscriber their starts back at midnight UTC', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+    await env.db.setPlan(who.userId, 'active', env.clock.now() + 30 * 24 * 60 * 60 * 1000, env.clock.now());
+    // Start at a UTC midnight, so every start below lands on the same day.
+    const day = 24 * 60 * 60 * 1000;
+    env.clock.set(Math.ceil(env.clock.now() / day) * day);
+
+    const allowed = STARTS_PER_CREDIT * ACTIVE_ANALYSES_PER_DAY;
+    for (let i = 0; i < allowed; i += 1) expect((await abandon(env, who)).status).toBe(200);
+    const refused = await abandon(env, who);
+    expect(refused.json.error).toBe('starts_exhausted');
+    expect(refused.json.message).toMatch(/minuit UTC/);
+
+    env.clock.set(Math.ceil(env.clock.now() / day) * day);
+    expect((await abandon(env, who)).status).toBe(200);
+  });
+
+  it('does not count a run that finishes against the reader beyond its credit', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+
+    // Three finished trial analyses use three credits and three of the six starts.
+    for (let i = 0; i < TRIAL_ANALYSES; i += 1) {
+      const audit = await call(env, who, '/v1/analyze/audit', { url: `${ARTICLE_URL}-${i}`, title: 'T', blocks: BLOCKS });
+      expect(audit.status).toBe(200);
+      expect((await call(env, who, '/v1/analyze/finalize', { runId: audit.json.runId as string })).status).toBe(200);
+    }
+    // What stops the next one is the trial itself, with its own message.
+    const next = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    expect(next.json.error).toBe('trial_exhausted');
   });
 });
 

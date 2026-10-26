@@ -8,13 +8,14 @@
  * so a finding about the title is highlighted in it like any other.
  *
  * The limits mirror `server/src/analyze/schemas.ts`, so a text the server
- * would refuse is stopped here with a sentence instead of a 400.
+ * would refuse is stopped here with a sentence instead of a 400. The article
+ * cap is the server's own constant, from the shared workspace.
  */
 import type { TextBlock } from '../../shared/src/engine/types';
+import { articleLength, MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 
 /** Below this, the paste is a link or a title, not an article. */
 export const MIN_TEXT_CHARS = 200;
-export const MAX_ARTICLE_CHARS = 200_000;
 const MAX_BLOCK_CHARS = 20_000;
 const MAX_BLOCKS = 2_000;
 export const MAX_TITLE_CHARS = 500;
@@ -72,9 +73,11 @@ export type PasteProblem = 'too_short' | 'too_long' | 'too_many_lines' | 'title_
 export function pasteProblem(article: PastedArticle): PasteProblem | null {
   const text = article.text.trim();
   if (text.length < MIN_TEXT_CHARS) return 'too_short';
-  if (text.length > MAX_ARTICLE_CHARS) return 'too_long';
+  const blocks = blocksFromPaste(article);
+  // Counted as the server counts it, on the blocks it will receive.
+  if (articleLength(blocks) > MAX_ARTICLE_CHARS) return 'too_long';
   if (article.title.trim().length > MAX_TITLE_CHARS) return 'title_too_long';
-  if (blocksFromPaste(article).length > MAX_BLOCKS) return 'too_many_lines';
+  if (blocks.length > MAX_BLOCKS) return 'too_many_lines';
   if (article.source.trim() && !webAddress(article.source)) return 'bad_source';
   return null;
 }
