@@ -23,7 +23,35 @@ describe('Enseignants', () => {
     ).toBeInTheDocument();
     const offer = screen.getByText('Pour qui', { selector: 'dt' }).closest('dl') as HTMLElement;
     expect(offer.textContent).toContain('L’abonnement complet, gratuit');
-    expect(offer.textContent).toContain('Sur simple demande, par e-mail');
+    expect(offer.textContent).toContain('Un code de réduction, sur demande');
+    expect(screen.getByRole('list', { name: 'Comment le demander' })).toHaveTextContent('Le total passe à 0 €, sans carte bancaire.');
+  });
+
+  it('says what the classroom mode does, and that the students use no AI', () => {
+    render(<Enseignants />);
+    const mode = region('Le mode classe');
+    for (const title of ['Préparer en privé', 'Révéler un à un', 'Une fiche à photocopier'])
+      expect(mode.getByRole('heading', { level: 3, name: title })).toBeInTheDocument();
+    expect(mode.getByText(/Les élèves n’utilisent pas d’IA et n’ont pas de compte/)).toBeInTheDocument();
+    expect(mode.getByRole('link', { name: 'Ouvrir le mode classe' })).toHaveAttribute('href', '/classe');
+    expect(screen.queryByText('Le rapport complet, à projeter en classe')).toBeNull();
+    expect(region('Une séance, pas à pas').getByText('Étape 1 sur 6')).toBeInTheDocument();
+  });
+
+  // The CLEMI publishes the code to registered teachers only: this public page explains it, never prints it.
+  it('explains the 2027 press-week access without ever printing its code', () => {
+    const { container } = render(<Enseignants />);
+    const week = region('Semaines de la presse 2027');
+    expect(week.getByText(/du 15 au 28 mars 2027/)).toBeInTheDocument();
+    expect(week.getByRole('list', { name: 'Ce qui est offert pendant les Semaines de la presse' })).toHaveTextContent(
+      'rien ne sera prélevé',
+    );
+    const steps = week.getByRole('list', { name: 'Comment activer l’accès des Semaines de la presse' });
+    expect(steps).toHaveTextContent('site du CLEMI');
+    expect(steps).toHaveTextContent('Ajouter un code promotionnel');
+    expect(week.getByText(/Aucun compte élève/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/SEMAINEPRESSE|[A-Z]{6,}\d{2}/);
+    expect(screen.getByText(/jamais un texte d’élève/)).toBeInTheDocument();
   });
 
   it('gives a prefilled request from the top and again at the end', () => {
@@ -35,10 +63,10 @@ describe('Enseignants', () => {
     for (const request of requests) expect(request).toHaveAttribute('href', TEACHER_REQUEST_URL);
   });
 
-  // The exercise is shown on this page, never by sending the teacher back to the home page.
-  it('points to the exercise on the page itself', () => {
+  // The classroom mode and its exercise are shown on this page, never by sending the teacher back to the home page.
+  it('points to the classroom mode and the exercise on the page itself', () => {
     render(<Enseignants />);
-    expect(screen.getByRole('link', { name: 'Essayer l’exercice' })).toHaveAttribute('href', '#exercice');
+    expect(screen.getByRole('link', { name: 'Découvrir le mode classe' })).toHaveAttribute('href', '#mode-classe');
     expect(screen.queryByRole('link', { name: 'Voir un exemple' })).toBeNull();
     const steps = within(region('L’exercice, en trois temps').getByRole('list', { name: 'Les trois temps de l’exercice' }));
     expect(steps.getAllByRole('listitem')).toHaveLength(3);

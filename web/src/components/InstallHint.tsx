@@ -61,7 +61,7 @@ export function InstallHint() {
   };
 
   return (
-    <aside aria-label="L’appli Squiggle" className="border-b border-lineSoft bg-surface">
+    <aside aria-label="L’appli Squiggle" className="border-b border-lineSoft bg-surface print:hidden">
       <div className={`${PAGE} flex items-center gap-3 py-3`}>
         <img src="/icons/icon-192.png" alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-[9px]" />
         <p className="m-0 min-w-0 flex-1 text-base leading-snug">

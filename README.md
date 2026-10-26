@@ -21,6 +21,11 @@ report over it. The site installs as an app on Android and iOS, and on Android a
 article can be shared straight to it. It runs in hosted mode, on the same account,
 free analyses and subscription as the extension.
 
+For teachers, the classroom mode (`/classe`) prepares an analysed article for class: the
+teacher sees every answer alone, the projected board reveals the findings one by one,
+and a student sheet and an answer sheet print on A4. Students use no AI and need no
+account.
+
 ## Who it is for
 
 Someone reading a news article, not the journalist who wrote it. A reader cannot edit

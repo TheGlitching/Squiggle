@@ -149,6 +149,18 @@ worker at build time.
 `SECURITY.md` has the controls and the residual risks; `PRIVACY.md` has the retention
 table and the subprocessors.
 
+## The classroom mode
+
+`/classe` turns a report the teacher just got, or a session file they downloaded, into a
+lesson, and adds nothing to the server. The session (the pasted blocks, the report, the
+reveal order) lives in the tab's session storage and in the `.squiggle` file; `web/src/classe.ts`
+holds its model and the file format. During the lesson two windows of the same browser
+share it: the desk on the teacher's screen holds the state, the board (`/classe/tableau`)
+on the projector shows what it is told and sends its keys back, over a `BroadcastChannel`
+that never leaves the browser. A session opened from a file is a report the server can no
+longer vouch for, so the board says it came from a file instead of presenting it as
+Squiggle's own analysis; a signature over the report would lift that, and is not built.
+
 ## The analysis pipeline
 
 The ordering here is the design, not an implementation detail. It exists because an
