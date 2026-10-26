@@ -39,7 +39,7 @@ describe('the model a reader enters', () => {
 describe('the own-key form', () => {
   it('asks for the provider, the key and the model, in that order, and nothing else', () => {
     const markup = renderModal();
-    const byok = markup.slice(markup.indexOf('Utiliser ma propre clé'));
+    const byok = markup.slice(markup.indexOf('Gratuit avec votre propre clé'));
 
     const provider = byok.indexOf('Fournisseur');
     const key = byok.indexOf('Clé API');
@@ -57,7 +57,7 @@ describe('the settings sheet order', () => {
     const markup = renderModal();
 
     const hosted = markup.indexOf('Se connecter');
-    const byok = markup.indexOf('Utiliser ma propre clé');
+    const byok = markup.indexOf('Gratuit avec votre propre clé');
     expect(hosted).toBeGreaterThan(-1);
     expect(byok).toBeGreaterThan(-1);
     expect(hosted).toBeLessThan(byok);
