@@ -11,6 +11,7 @@ import { Enseignants } from './pages/Enseignants';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pont } from './pages/Pont';
 import { Transparence } from './pages/Transparence';
+import { titleFor } from './seo';
 
 /** An old address that must keep working: emailed /magic-link links, the first /legal. */
 function Redirect({ to }: { to: string }) {
@@ -41,10 +42,15 @@ function NotFound() {
   );
 }
 
-export function App() {
-  const path = usePath();
+/** `path` is given only by the build, which renders each public page outside a browser (`src/prerender.tsx`). */
+export function App({ path: at }: { path?: string }) {
+  const path = usePath(at);
   const route = path.split('?')[0];
   const search = path.includes('?') ? path.slice(path.indexOf('?')) : '';
+
+  useEffect(() => {
+    document.title = titleFor(route);
+  }, [route]);
 
   let page;
   switch (route) {

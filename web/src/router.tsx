@@ -11,8 +11,9 @@ function currentPath(): Path {
   return `${window.location.pathname}${window.location.search}`;
 }
 
-export function usePath(): Path {
-  const [path, setPath] = useState<Path>(currentPath);
+/** `at` fixes the path where there is no browser: the build renders each page at its own. */
+export function usePath(at?: Path): Path {
+  const [path, setPath] = useState<Path>(() => at ?? currentPath());
   useEffect(() => {
     const onChange = () => setPath(currentPath());
     window.addEventListener('popstate', onChange);

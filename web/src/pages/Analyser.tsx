@@ -43,7 +43,7 @@ type Phase =
 /** The draft, with whatever a share just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null } {
   const draft = loadDraft();
-  const shared = articleFromShare(new URLSearchParams(window.location.search));
+  const shared = articleFromShare(new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
   if (!shared) return { article: draft, shared: null };
   // A shared text replaces the draft; a shared address alone keeps the draft's text.
   const article = shared.text
