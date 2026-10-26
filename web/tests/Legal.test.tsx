@@ -1,7 +1,7 @@
 /**
  * The legal pages are what a store reviewer, Google's OAuth review and a
  * consumer read: each lives at its stable URL, names the publisher, and shows
- * every undecided value as a visible PENDING_ marker rather than a guess.
+ * nothing for a value not decided yet: no placeholder, no guess.
  */
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -36,13 +36,25 @@ describe('legal pages', () => {
     expect(text).toContain('contact@squiggle.fr');
   });
 
-  it('states a net price with the VAT exemption and leaves the mediator visibly pending', () => {
+  it('states a net price with the VAT exemption, and no placeholder for an undecided mediator', () => {
     const { container } = renderAt('/cgv');
     const text = container.textContent ?? '';
     expect(text).toContain('4,99 € par mois');
     expect(text).toContain('TVA non applicable, art. 293 B du CGI');
     expect(text).toContain('14 jours');
-    expect(text).toContain('PENDING_MEDIATEUR_CONSOMMATION');
+    expect(text).not.toMatch(/PENDING|médiateur de la consommation/);
+    expect(text).toContain('nous répondons sous 30 jours.');
+  });
+
+  it('shows no undecided value anywhere on the legal pages', () => {
+    for (const [path] of LEGAL_PAGES) {
+      const { container } = renderAt(path);
+      expect(container.textContent ?? '', path).not.toMatch(/PENDING/);
+      cleanup();
+    }
+    // The publisher's phone row appears only once a number is set.
+    renderAt('/mentions-legales');
+    expect(screen.queryByText('Téléphone', { selector: 'dt' })).toBeNull();
   });
 
   it('publishes the same retention table as the transparency page, plus the CNIL', () => {

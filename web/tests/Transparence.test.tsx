@@ -12,27 +12,22 @@ import { Transparence } from '../src/pages/Transparence';
 afterEach(cleanup);
 
 describe('Transparence', () => {
-  it('shows OpenRouter and the deployed model in the data flow, never Gemini', () => {
+  // The model changes over time: the page describes the engine, the privacy policy names its processors.
+  it('describes the engine as an AI model and names neither the model nor its gateway', () => {
     const { container } = render(<Transparence />);
     const text = container.textContent ?? '';
-    expect(text).toContain('OpenRouter');
-    expect(text).toContain(HOSTED_ANALYSIS.modelLabel);
-    expect(text).not.toMatch(/Gemini/);
+    expect(text).not.toContain(HOSTED_ANALYSIS.modelLabel);
+    expect(text).not.toMatch(/OpenRouter|DeepSeek|Gemini|poids ouverts/);
+    expect(text).toMatch(/modèle d’IA, choisi pour la qualité de son raisonnement/);
+    expect(screen.getByRole('cell', { name: 'Fournisseur du modèle d’IA' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'politique de confidentialité' })).toHaveAttribute('href', '/confidentialite');
   });
 
-  it('lists OpenRouter and the inference hosts as subprocessors', () => {
-    render(<Transparence />);
-    expect(screen.getAllByRole('cell', { name: 'OpenRouter' }).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Hébergeurs d’inférence/)).toBeInTheDocument();
-  });
-
-  it('says the model is open-weight, the data public, and no reader identity is sent', () => {
+  it('says the data is public and no reader identity is sent', () => {
     const { container } = render(<Transparence />);
     const text = container.textContent ?? '';
-    expect(text).toMatch(/poids ouverts/);
     expect(text).toMatch(/articles publics/);
-    expect(text).toMatch(/aucune identité de lecteur/);
-    expect(text).toMatch(/pas envoyer le\s+texte vers des serveurs en Chine/);
+    expect(text).toMatch(/aucune\s+identité de lecteur/);
   });
 
   it('declares that a report holds excerpts, not an index of the address', () => {

@@ -259,7 +259,7 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
             {band.title}
           </p>
           <p className="mt-1 mb-0 text-base text-muted">{band.description}</p>
-          <p className="mt-5 mb-0 max-w-[68ch] text-lg leading-relaxed">{report.summary}</p>
+          <p className="mt-5 mb-0 max-w-[55ch] text-lg leading-relaxed">{report.summary}</p>
         </div>
 
         <div>
@@ -368,8 +368,9 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
         </section>
       </div>
 
-      <p className="m-0 max-w-[68ch] text-sm text-muted">
-        Analyse effectuée via Squiggle, {report.meta.model}, consignes v{report.meta.promptVersion}
+      <p className="m-0 max-w-[55ch] text-sm text-muted">
+        {/* The model behind an analysis changes over time; the page names the method, not the model. */}
+        Analyse effectuée par Squiggle, consignes v{report.meta.promptVersion}
         {analysedOn ? `, le ${analysedOn}` : ''}. Elle porte sur le texte collé : l’adresse source, si vous en avez
         donné une, n’a pas été consultée.
       </p>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from './components/Landing';
 import { Layout } from './components/Layout';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
@@ -21,13 +22,21 @@ function Redirect({ to }: { to: string }) {
 
 function NotFound() {
   return (
-    <div className="mx-auto w-full max-w-md px-5 py-24 text-center">
-      <p className="font-mono text-sm text-accent">404</p>
-      <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight">Page introuvable</h1>
-      <p className="mt-3 text-muted">Le lien est peut-être ancien ou mal orthographié.</p>
-      <a href="/" className="mt-6 inline-block rounded-lg bg-accent px-5 py-3 font-medium text-accentForeground hover:bg-accentHover">
-        Revenir à l’accueil
-      </a>
+    <div className={`${PAGE} py-16 md:py-24`}>
+      <p className="m-0 font-display text-base font-semibold text-accentInk tabular-nums">404</p>
+      <h1 className={`${TITLE} mt-3`}>Page introuvable</h1>
+      <p className="mt-3 text-lg text-muted">Le lien est peut-être ancien ou mal orthographié.</p>
+      <div className="mt-8 flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
+        <a href="/" className={PRIMARY_BUTTON}>
+          Revenir à l’accueil
+        </a>
+        <a href="/analyser" className={SECONDARY_BUTTON}>
+          Analyser un article
+        </a>
+        <a href="/transparence" className={SECONDARY_BUTTON}>
+          Transparence
+        </a>
+      </div>
     </div>
   );
 }
@@ -85,8 +94,7 @@ export function App() {
       page = <NotFound />;
   }
 
-  // The landing pages carry their own header and footer and have no site chrome.
-  if (route === '/' || route === '/tarifs' || route === '/enseignants') return page;
-
-  return <Layout>{page}</Layout>;
+  // Inside the app, the header leads to the reader's account rather than to sign-in.
+  const inApp = route === '/analyser' || route === '/compte' || route === '/account' || route === '/pont';
+  return <Layout account={inApp ? 'Mon compte' : 'Se connecter'}>{page}</Layout>;
 }
