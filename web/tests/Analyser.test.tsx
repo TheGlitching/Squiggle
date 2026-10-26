@@ -78,6 +78,9 @@ function serve(who: Account | null, stages: { audit?: () => Response } = {}) {
         credentials: init?.credentials,
       });
       const path = url.split('?')[0];
+      // The account answers a tick after the first render, as a network does: the
+      // button stays disabled until then, and a test must wait for it.
+      if (path === '/web/account') await new Promise((resolve) => setTimeout(resolve, 20));
       if (path === '/web/account') return who ? jsonResponse({ ok: true, ...who }) : jsonResponse({ ok: false, error: 'invalid_session' }, 401);
       if (path === '/web/analyze/check') return jsonResponse({ ok: true, hit: false });
       if (path === '/web/analyze/audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
@@ -86,6 +89,13 @@ function serve(who: Account | null, stages: { audit?: () => Response } = {}) {
     }),
   );
   return seen;
+}
+
+/** The analyse button once the account has loaded: until then it is rightly disabled. */
+async function analyseButton(): Promise<HTMLElement> {
+  const button = await screen.findByRole('button', { name: 'Analyser le texte' });
+  await waitFor(() => expect(button).toBeEnabled());
+  return button;
 }
 
 function at(path: string) {
@@ -147,7 +157,7 @@ describe('Analyser, signed in', () => {
     render(<Analyser />);
     paste(TEXT);
     fireEvent.change(screen.getByLabelText(/Adresse de l’article/), { target: { value: 'https://presse.example/cantines' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    fireEvent.click(await analyseButton());
 
     expect(await screen.findByText('58')).toBeInTheDocument();
     const stages = seen.filter((s) => s.url.startsWith('/web/analyze/'));
@@ -172,7 +182,7 @@ describe('Analyser, signed in', () => {
     const seen = serve(account());
     render(<Analyser />);
     paste(TEXT);
-    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    fireEvent.click(await analyseButton());
     await screen.findByText('58');
     expect(seen.find((s) => s.url.startsWith('/web/analyze/check'))?.url).not.toContain('url=');
     expect(seen.find((s) => s.url === '/web/analyze/audit')?.body).not.toHaveProperty('url');
@@ -182,7 +192,7 @@ describe('Analyser, signed in', () => {
     const seen = serve(account());
     render(<Analyser />);
     paste('https://presse.example/cantines');
-    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    fireEvent.click(await analyseButton());
     expect(screen.getByRole('alert')).toHaveTextContent(/au moins 200 caractères/);
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
@@ -193,7 +203,7 @@ describe('Analyser, signed in', () => {
     });
     render(<Analyser />);
     paste(TEXT);
-    fireEvent.click(await screen.findByRole('button', { name: 'Analyser le texte' }));
+    fireEvent.click(await analyseButton());
     expect(await screen.findByRole('alert')).toHaveTextContent(/Le modèle n’a pas répondu/);
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
   });
