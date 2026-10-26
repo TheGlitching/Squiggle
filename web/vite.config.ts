@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
+import { createServer } from 'vite';
 import { defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
@@ -51,8 +52,73 @@ function serviceWorker(): Plugin {
   };
 }
 
+/** Where the built page lives: `/enseignants` is `enseignants.html`, which Cloudflare serves without a redirect. */
+const pageFile = (path: string) => (path === '/' ? 'index.html' : `${path.slice(1)}.html`);
+
+/**
+ * Before the app loads, a page served for another address (the fallback `index.html` on
+ * `/compte`, or the service worker's `/` on any page) empties itself rather than show
+ * the wrong page until the app replaces it.
+ */
+const STALE_PAGE_GUARD =
+  "<script>if (document.getElementById('root').dataset.path !== location.pathname) document.getElementById('root').replaceChildren();</script>";
+
+/**
+ * Writes every public page (`src/seo.ts`) as its own HTML file, with its own head and
+ * its content rendered in, and `sitemap.xml` beside them. A crawler or a link preview
+ * reads only the HTML and never runs the app. The browser then renders the app over
+ * it with `createRoot`, not `hydrateRoot`: a page that reads the reader's device on
+ * first render (a draft, the install hint) differs from the build's copy, and that
+ * must not be an error.
+ */
+function prerender(): Plugin {
+  type Entry = typeof import('./src/prerender');
+  return {
+    name: 'squiggle-prerender',
+    // The dev server shows the home page's head on every page.
+    transformIndexHtml: {
+      order: 'pre',
+      async handler(html, { server }) {
+        if (!server) return html;
+        const { PUBLIC_PAGES, headFor } = (await server.ssrLoadModule('/src/seo.ts')) as Entry;
+        return html.replace('<!--page-head-->', headFor(PUBLIC_PAGES[0]));
+      },
+    },
+    async closeBundle() {
+      if (this.environment?.config.command !== 'build') return;
+      const dist = (file: string) => new URL(`./dist/${file}`, import.meta.url);
+      const template = readFileSync(dist('index.html'), 'utf8');
+      if (!template.includes('<!--page-head-->') || !template.includes('<div id="root"></div>')) {
+        this.error('index.html no longer has the <!--page-head--> and empty #root this plugin fills in');
+      }
+      const server = await createServer({
+        configFile: false,
+        root: new URL('.', import.meta.url).pathname,
+        logLevel: 'error',
+        server: { middlewareMode: true, hmr: false, ws: false },
+        appType: 'custom',
+      });
+      try {
+        const { PUBLIC_PAGES, headFor, render, sitemap } = (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
+        for (const page of PUBLIC_PAGES) {
+          const html = template
+            .replace('<!--page-head-->', headFor(page))
+            .replace(
+              '<div id="root"></div>',
+              `<div id="root" data-path="${page.path}">${render(page.path)}</div>\n    ${STALE_PAGE_GUARD}`,
+            );
+          writeFileSync(dist(pageFile(page.path)), html);
+        }
+        writeFileSync(dist('sitemap.xml'), sitemap());
+      } finally {
+        await server.close();
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), serviceWorker()],
+  plugins: [react(), serviceWorker(), prerender()],
   // The API origin is same-origin in production. A local dev build points at
   // a local server with VITE_API_BASE_URL; it is never a secret.
   server: { port: 5174, strictPort: true },

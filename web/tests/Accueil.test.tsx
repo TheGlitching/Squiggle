@@ -20,6 +20,7 @@ import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
 import { TAGLINE } from '../src/offer';
+import { PUBLIC_PAGES, headFor } from '../src/seo';
 import { MOBILE } from './helpers';
 
 afterEach(() => {
@@ -80,7 +81,7 @@ describe('Accueil', () => {
   });
 
   it('repeats the headline in the page title and the link preview', () => {
-    const html = readFileSync(resolve(__dirname, '../index.html'), 'utf8');
+    const html = headFor(PUBLIC_PAGES[0]);
     const title = `Squiggle : ${TAGLINE.charAt(0).toLowerCase()}${TAGLINE.slice(1, -1)}`;
     expect(html).toContain(`<title>${title}</title>`);
     expect(html).toContain(`<meta property="og:title" content="${title}" />`);
@@ -420,7 +421,7 @@ describe('Accueil', () => {
   });
 
   it('describes the free offer honestly to search engines and link previews', () => {
-    const html = readFileSync(resolve(__dirname, '../index.html'), 'utf8');
+    const html = `${headFor(PUBLIC_PAGES[0])}${readFileSync(resolve(__dirname, '../index.html'), 'utf8')}`;
     const meta = (attr: string, key: string) => html.match(new RegExp(`${attr}="${key}"\\s+content="([^"]+)"`))?.[1];
     expect(meta('name', 'description')).toContain('3 analyses offertes');
     expect(meta('name', 'description')).not.toMatch(/par jour/);

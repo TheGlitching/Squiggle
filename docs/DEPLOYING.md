@@ -8,7 +8,7 @@ each a separate Worker with its own secrets and its own database.
 | Path | Served by |
 |---|---|
 | `/health`, `/auth/*`, `/v1/*`, `/web/*`, `/webhooks/*`, `/admin/*` | the Worker (`server/src/index.ts`) |
-| everything else | the files of `web/dist`, or `index.html` when no file matches, so the client-side router owns `/compte`, `/pont` and the other pages |
+| everything else | the files of `web/dist`, or `index.html` when no file matches, so the client-side router owns `/compte`, `/pont` and the other pages. Each public page is built as its own file with its own head (`/enseignants` is `enseignants.html`, see `web/src/seo.ts`), beside `robots.txt` and `sitemap.xml` |
 
 The list of Worker paths is `assets.run_worker_first` in `server/wrangler.jsonc`.
 `server/tests/deploy.test.ts` fails when the Worker gains a route that list does not

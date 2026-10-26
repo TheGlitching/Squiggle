@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-
 import { Exercice } from '../components/Exercice';
 import { ClassFigure, SquiggleMark } from '../components/Iso';
 import {
@@ -52,14 +50,6 @@ const FRAME = [
 const REQUEST = 'Demander l’accès enseignant';
 
 export function Enseignants() {
-  useEffect(() => {
-    const previous = document.title;
-    document.title = 'Squiggle pour les enseignants';
-    return () => {
-      document.title = previous;
-    };
-  }, []);
-
   return (
     <>
       <div
