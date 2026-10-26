@@ -5,7 +5,7 @@ import type {
   StreamCallbacks,
 } from '../types/byok';
 import type { GroundedAnswer, SearchResult } from './base';
-import { BaseLLMClient } from './base';
+import { BaseLLMClient, providerError } from './base';
 
 export class OpenAIClient extends BaseLLMClient {
   protected get defaultBaseUrl(): string {
@@ -13,7 +13,7 @@ export class OpenAIClient extends BaseLLMClient {
   }
 
   protected get defaultModel(): string {
-    return 'gpt-4o';
+    return 'gpt-6.1-sol';
   }
 
   protected get providerName(): 'openai' | 'openrouter' {
@@ -22,6 +22,10 @@ export class OpenAIClient extends BaseLLMClient {
 
   protected get baseUrl(): string {
     return this.config.baseUrl || this.defaultBaseUrl;
+  }
+
+  protected get model(): string {
+    return this.config.model || this.defaultModel;
   }
 
   protected getHeaders(): Record<string, string> {
@@ -33,89 +37,52 @@ export class OpenAIClient extends BaseLLMClient {
   }
 
   /**
-   * Only the search-preview family accepts `web_search_options`; every other
-   * chat-completions model rejects the field, so support is tied to the
-   * configured model id rather than assumed for the whole provider.
+   * OpenAI's current models are all reasoning models: they reject
+   * `max_tokens` in favour of `max_completion_tokens`, and any `temperature`
+   * but the default. Older models accept `max_completion_tokens` too, so one
+   * shape serves every model the reader can pick.
    */
-  protected get searchCapableModelPattern(): RegExp {
-    return /search-preview/i;
+  protected samplingParams(options: CompletionOptions): Record<string, unknown> {
+    return options.maxTokens ? { max_completion_tokens: options.maxTokens } : {};
   }
 
-  override supportsWebSearch(): boolean {
-    return this.searchCapableModelPattern.test(this.config.model || this.defaultModel);
-  }
-
-  /**
-   * Split out so OpenRouter, which searches via the `openrouter:web_search`
-   * server tool instead of this field, can override without duplicating the
-   * request.
-   */
-  protected resolveWebSearchModel(): string {
-    return this.config.model || this.defaultModel;
-  }
-
-  protected buildWebSearchExtras(): Record<string, unknown> {
-    return { web_search_options: {} };
-  }
-
-  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+  protected formatMessages(options: CompletionOptions): Array<{ role: string; content: string }> {
     const { system, messages } = this.formatSystemAndUserMessages(options);
-
-    const formattedMessages = [];
+    const formatted = [];
     if (system) {
-      formattedMessages.push({ role: 'system', content: system });
+      formatted.push({ role: 'system', content: system });
     }
     for (const m of messages) {
-      formattedMessages.push({ role: m.role, content: m.content });
+      formatted.push({ role: m.role, content: m.content });
     }
+    return formatted;
+  }
 
-    const body: Record<string, unknown> = {
-      model: this.config.model || this.defaultModel,
-      messages: formattedMessages,
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxTokens,
-    };
-
-    if (options.jsonSchema) {
-      body.response_format = {
+  protected responseFormat(options: CompletionOptions): Record<string, unknown> {
+    if (!options.jsonSchema) return {};
+    return {
+      response_format: {
         type: 'json_schema',
         json_schema: {
           name: 'analysis_response',
           strict: true,
           schema: options.jsonSchema,
         },
-      };
-    }
+      },
+    };
+  }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
+  private chatBody(options: CompletionOptions): Record<string, unknown> {
+    return {
+      model: this.model,
+      messages: this.formatMessages(options),
+      ...this.samplingParams(options),
+      ...this.responseFormat(options),
+    };
+  }
 
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || `${this.providerName} API request failed`;
-      try {
-        errorData = await response.json();
-        if (typeof errorData === 'object' && errorData !== null && 'error' in errorData) {
-          const errObj = (errorData as { error?: { message?: string } }).error;
-          if (errObj?.message) {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-
-      throw new BYOKError({
-        provider: this.providerName,
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
+  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+    const response = await this.postJson(`${this.baseUrl}/chat/completions`, this.getHeaders(), this.chatBody(options), options.abortSignal);
 
     const data = await response.json() as {
       model?: string;
@@ -127,7 +94,7 @@ export class OpenAIClient extends BaseLLMClient {
 
     return {
       content,
-      model: data.model || this.config.model,
+      model: data.model || this.model,
       usage: {
         promptTokens: data.usage?.prompt_tokens,
         completionTokens: data.usage?.completion_tokens,
@@ -139,281 +106,168 @@ export class OpenAIClient extends BaseLLMClient {
   }
 
   async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {
-    const { system, messages } = this.formatSystemAndUserMessages(options);
-
-    const formattedMessages = [];
-    if (system) {
-      formattedMessages.push({ role: 'system', content: system });
-    }
-    for (const m of messages) {
-      formattedMessages.push({ role: m.role, content: m.content });
-    }
-
-    const body: Record<string, unknown> = {
-      model: this.config.model || this.defaultModel,
-      messages: formattedMessages,
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxTokens,
-      stream: true,
-      stream_options: { include_usage: true },
-    };
-
-    if (options.jsonSchema) {
-      body.response_format = {
-        type: 'json_schema',
-        json_schema: {
-          name: 'analysis_response',
-          strict: true,
-          schema: options.jsonSchema,
-        },
-      };
-    }
-
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || `${this.providerName} streaming request failed`;
-      try {
-        errorData = await response.json();
-        if (typeof errorData === 'object' && errorData !== null && 'error' in errorData) {
-          const errObj = (errorData as { error?: { message?: string } }).error;
-          if (errObj?.message) {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-
-      const err = new BYOKError({
-        provider: this.providerName,
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-      callbacks.onError?.(err);
-      throw err;
-    }
-
-    if (!response.body) {
-      const err = new BYOKError({
-        provider: this.providerName,
-        message: 'Response body is empty',
-      });
-      callbacks.onError?.(err);
-      throw err;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
     let fullText = '';
-    let buffer = '';
     let inputTokens = 0;
     let outputTokens = 0;
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const response = await this.postJson(
+        `${this.baseUrl}/chat/completions`,
+        this.getHeaders(),
+        { ...this.chatBody(options), stream: true, stream_options: { include_usage: true } },
+        options.abortSignal
+      );
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      await this.readServerSentEvents(response, (event) => {
+        const parsed = event as {
+          error?: unknown;
+          choices?: Array<{ delta?: { content?: string } }>;
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const dataStr = trimmed.replace(/^data:\s*/, '');
-          if (dataStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(dataStr) as {
-              choices?: Array<{ delta?: { content?: string } }>;
-              usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-            };
-
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullText += delta;
-              callbacks.onChunk(delta);
-            }
-
-            if (parsed.usage) {
-              inputTokens = parsed.usage.prompt_tokens || inputTokens;
-              outputTokens = parsed.usage.completion_tokens || outputTokens;
-            }
-          } catch {
-            // Ignore parse errors on individual SSE chunks
-          }
+        // OpenRouter reports a provider failure after the 200 as a chunk
+        // carrying `error`; what streamed before it is not an answer.
+        if (parsed.error) {
+          throw providerError(this.providerName, event);
         }
-      }
 
-      callbacks.onComplete?.(fullText);
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          fullText += delta;
+          callbacks.onChunk(delta);
+        }
 
-      return {
-        content: fullText,
-        model: this.config.model,
-        usage: {
-          promptTokens: inputTokens,
-          completionTokens: outputTokens,
-          totalTokens: inputTokens + outputTokens,
-        },
-        provider: this.providerName,
-      };
+        if (parsed.usage) {
+          inputTokens = parsed.usage.prompt_tokens || inputTokens;
+          outputTokens = parsed.usage.completion_tokens || outputTokens;
+        }
+      });
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       callbacks.onError?.(error);
       throw error;
     }
-  }
 
-  override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
-    if (!this.supportsWebSearch()) {
-      throw new Error(`${this.providerName} model "${this.config.model || this.defaultModel}" does not support web search`);
-    }
+    callbacks.onComplete?.(fullText);
 
-    const body: Record<string, unknown> = {
-      model: this.resolveWebSearchModel(),
-      messages: [{ role: 'user', content: query }],
-      ...this.buildWebSearchExtras(),
+    return {
+      content: fullText,
+      model: this.model,
+      usage: {
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      },
+      provider: this.providerName,
     };
-
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || `${this.providerName} web search request failed`;
-      try {
-        errorData = await response.json();
-        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          const errObj = errorData.error;
-          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: this.providerName,
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
-
-    const data = await response.json() as { choices?: unknown };
-    const firstChoice = Array.isArray(data.choices) ? data.choices[0] : undefined;
-    const message = firstChoice && typeof firstChoice === 'object' && 'message' in firstChoice ? firstChoice.message : undefined;
-    const annotations = message && typeof message === 'object' && 'annotations' in message ? message.annotations : undefined;
-
-    return this.parseAnnotations(annotations, opts?.maxResults);
   }
 
   /**
-   * Grounded answers require the same search-preview model gating as
-   * `webSearch`, since `web_search_options` is rejected by every other
-   * chat-completions model.
+   * Search runs through the Responses API's `web_search` tool, which every
+   * current model accepts. Chat Completions only searches with dedicated
+   * search models, the `-search-preview` ones of which were shut down on
+   * 2026-07-23, and those search on every call - unusable for the audit.
    */
+  override supportsWebSearch(): boolean {
+    return true;
+  }
+
+  override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
+    const output = await this.respondWithSearch({ input: query });
+    const results = this.dedupeCitations(this.parseResponsesCitations(output));
+    return opts?.maxResults ? results.slice(0, opts.maxResults) : results;
+  }
+
   override supportsGroundedAnswer(): boolean {
     return this.supportsWebSearch();
   }
 
   override async groundedAnswer(options: CompletionOptions & { maxSearches?: number }): Promise<GroundedAnswer> {
-    if (!this.supportsGroundedAnswer()) {
-      throw new Error(`${this.providerName} model "${this.config.model || this.defaultModel}" does not support grounded answers`);
-    }
-
     const { system, messages } = this.formatSystemAndUserMessages(options);
-    const formattedMessages = [];
-    if (system) {
-      formattedMessages.push({ role: 'system', content: system });
-    }
-    for (const m of messages) {
-      formattedMessages.push({ role: m.role, content: m.content });
-    }
-
     const body: Record<string, unknown> = {
-      model: this.resolveWebSearchModel(),
-      messages: formattedMessages,
-      ...this.buildWebSearchExtras(),
+      input: messages.map((m) => ({ role: m.role, content: m.content })),
     };
-
-    if (options.maxTokens) {
-      body.max_tokens = options.maxTokens;
-    }
-
+    if (system) body.instructions = system;
+    if (options.maxSearches && options.maxSearches > 0) body.max_tool_calls = options.maxSearches;
+    if (options.maxTokens) body.max_output_tokens = options.maxTokens;
     if (options.jsonSchema) {
-      body.response_format = {
-        type: 'json_schema',
-        json_schema: {
-          name: 'analysis_response',
-          strict: true,
-          schema: options.jsonSchema,
-        },
-      };
+      body.text = { format: { type: 'json_schema', name: 'analysis_response', strict: true, schema: options.jsonSchema } };
     }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || `${this.providerName} grounded answer request failed`;
-      try {
-        errorData = await response.json();
-        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          const errObj = errorData.error;
-          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: this.providerName,
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
-
-    const data = await response.json() as { choices?: unknown };
-    const firstChoice = Array.isArray(data.choices) ? data.choices[0] : undefined;
-    const message = firstChoice && typeof firstChoice === 'object' && 'message' in firstChoice ? firstChoice.message : undefined;
-
-    const content = message && typeof message === 'object' && 'content' in message && typeof message.content === 'string'
-      ? message.content.trim()
-      : '';
+    const output = await this.respondWithSearch(body, options.abortSignal);
+    const content = this.extractResponsesText(output).trim();
     if (!content) {
-      throw new Error(`${this.providerName} grounded answer returned no answer text`);
+      throw new BYOKError({ provider: this.providerName, message: 'grounded answer returned no answer text' });
     }
 
-    const annotations = message && typeof message === 'object' && 'annotations' in message ? message.annotations : undefined;
-    const citations = this.dedupeCitations(this.parseAnnotations(annotations, options.maxSearches));
+    return { content, citations: this.dedupeCitations(this.parseResponsesCitations(output)) };
+  }
 
-    return { content, citations };
+  private async respondWithSearch(body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown[]> {
+    const response = await this.postJson(
+      `${this.baseUrl}/responses`,
+      this.getHeaders(),
+      {
+        model: this.model,
+        tools: [{ type: 'web_search' }],
+        // Every page the search consulted, not only the ones the answer cites.
+        include: ['web_search_call.action.sources'],
+        ...body,
+      },
+      signal
+    );
+    const data = await response.json() as { output?: unknown };
+    return Array.isArray(data.output) ? data.output : [];
+  }
+
+  private messageParts(output: unknown[]): Array<Record<string, unknown>> {
+    const parts: Array<Record<string, unknown>> = [];
+    for (const item of output) {
+      if (!item || typeof item !== 'object' || !('type' in item) || item.type !== 'message' || !('content' in item) || !Array.isArray(item.content)) {
+        continue;
+      }
+      for (const part of item.content) {
+        if (part && typeof part === 'object' && 'type' in part && part.type === 'output_text') {
+          parts.push(part as Record<string, unknown>);
+        }
+      }
+    }
+    return parts;
+  }
+
+  private extractResponsesText(output: unknown[]): string {
+    return this.messageParts(output)
+      .map((part) => (typeof part.text === 'string' ? part.text : ''))
+      .join('');
   }
 
   /**
-   * OpenAI and OpenRouter both return citations as `url_citation` annotations
-   * on the assistant message; OpenRouter extends this client and reuses the
-   * parser for its own web-search server-tool responses.
+   * The answer's own `url_citation` annotations first (they carry a title),
+   * then every source the `web_search_call` items consulted.
+   */
+  private parseResponsesCitations(output: unknown[]): SearchResult[] {
+    const results: SearchResult[] = [];
+    for (const part of this.messageParts(output)) {
+      results.push(...this.parseAnnotations(part.annotations));
+    }
+    for (const item of output) {
+      if (!item || typeof item !== 'object' || !('type' in item) || item.type !== 'web_search_call' || !('action' in item)) {
+        continue;
+      }
+      const action = item.action;
+      const sources = action && typeof action === 'object' && 'sources' in action && Array.isArray(action.sources) ? action.sources : [];
+      for (const source of sources) {
+        if (source && typeof source === 'object' && 'url' in source && typeof source.url === 'string' && source.url.length > 0) {
+          results.push({ title: source.url, url: source.url, snippet: '' });
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * A `url_citation` annotation is nested under `url_citation` in Chat
+   * Completions (OpenRouter) and flat in the Responses API (OpenAI).
    */
   protected parseAnnotations(annotations: unknown, maxResults?: number): SearchResult[] {
     if (!Array.isArray(annotations)) {
@@ -422,10 +276,10 @@ export class OpenAIClient extends BaseLLMClient {
 
     const results: SearchResult[] = [];
     for (const entry of annotations) {
-      if (!entry || typeof entry !== 'object' || !('url_citation' in entry)) {
+      if (!entry || typeof entry !== 'object') {
         continue;
       }
-      const citation = entry.url_citation;
+      const citation = 'url_citation' in entry ? entry.url_citation : entry;
       if (!citation || typeof citation !== 'object' || !('url' in citation) || typeof citation.url !== 'string' || citation.url.length === 0) {
         continue;
       }

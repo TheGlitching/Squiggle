@@ -220,7 +220,10 @@ export class AnalysisPipeline {
           messages: [{ role: 'user', content: userPrompt }],
           systemPrompt,
           temperature: 0.1,
-          maxTokens: 4096,
+          // The cap counts the reasoning of the current Anthropic, OpenAI and
+          // Gemini models as well as the report itself: 4096 left a
+          // reasoning model a truncated report, or none at all.
+          maxTokens: 16000,
           abortSignal: this.abortController?.signal,
         },
         {
