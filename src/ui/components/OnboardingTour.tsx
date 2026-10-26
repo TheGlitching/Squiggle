@@ -90,7 +90,7 @@ export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
     title: 'Un compte, ou votre propre clé',
     badge: 'Deux façons',
     placement: 'bottom',
-    content: `Sans réglage, avec un compte Squiggle : 3 analyses offertes. Ou gratuitement avec votre propre clé d’IA, à régler ici. ${OWN_KEY_BILLING}`,
+    content: `Avec un compte Squiggle, aucune clé à créer : 3 analyses offertes. Ou gratuitement avec votre propre clé d’IA, à régler ici. ${OWN_KEY_BILLING}`,
     methodologyTip: 'Avec un compte, l’article est analysé sur nos serveurs, qui ne le conservent pas. Avec votre clé, il part de votre navigateur directement vers votre fournisseur.',
   },
   {

@@ -37,7 +37,7 @@ const SHOTS: Record<string, Shot> = {
   },
   'shot-2': {
     title: 'Chaque constat pointe sa phrase.',
-    lead: 'Choisissez un constat : le passage s’éclaire dans l’article. Vous jugez sur pièces.',
+    lead: 'Choisissez un constat : le passage s’éclaire dans l’article. Vous vérifiez par vous-même.',
     figure: <StepFigure step="rapport" />,
     panel: 'state=report&select=f2',
     page: 'active=f2',
@@ -58,7 +58,7 @@ const SHOTS: Record<string, Shot> = {
   },
   'shot-5': {
     title: 'Gratuit avec votre clé, ou un compte.',
-    lead: 'Avec votre clé, Squiggle ne vous facture rien : votre fournisseur d’IA facture l’usage, quelques centimes par analyse.',
+    lead: 'Avec votre clé, Squiggle ne vous facture rien : votre fournisseur d’IA facture chaque analyse, au tarif du modèle choisi.',
     figure: <DeviceFigure device="navigateur" />,
     panel: 'state=ownkey',
     page: '',
@@ -126,7 +126,7 @@ function Paths({ panel }: { panel: string }) {
         <PanelCut panel={panel} top={432} bottom={604} left={24} scale={1.4} />
       </Path>
       <Path
-        kicker="Sans réglage"
+        kicker="Aucune clé à créer"
         title="Avec un compte Squiggle"
         text="Rien à configurer. Ensuite 4,99 € par mois pour 10 analyses par jour, sans engagement."
       >
