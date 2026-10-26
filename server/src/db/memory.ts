@@ -99,6 +99,7 @@ export class MemoryDb implements Db {
       planPeriodStart: null,
       stripeCustomerId: null,
       stripeSubId: null,
+      subscriptionFree: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -199,6 +200,13 @@ export class MemoryDb implements Db {
     user.plan = plan;
     user.planExpiresAt = period?.end ?? null;
     user.planPeriodStart = period?.start ?? null;
+    user.updatedAt = now;
+  }
+
+  async setSubscriptionFree(userId: string, free: boolean, now: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    user.subscriptionFree = free;
     user.updatedAt = now;
   }
 
@@ -585,15 +593,24 @@ export class MemoryDb implements Db {
     const sinceDay = utcDayOf(since);
     const accountsPerWeek = new Array<number>(weeks).fill(0);
     const totals = new Map<string, number>();
+    const active = new Set<string>();
     let finalizes = 0;
+    let starts = 0;
     for (const daily of this.usageDaily.values()) {
       totals.set(daily.userId, (totals.get(daily.userId) ?? 0) + daily.analyses);
-      if (daily.day >= sinceDay) finalizes += daily.analyses;
+      if (daily.day >= sinceDay) {
+        finalizes += daily.analyses;
+        starts += daily.started;
+        if (daily.analyses > 0 || daily.started > 0) active.add(daily.userId);
+      }
     }
     let accountsFinalized = 0;
     let trialCompleted = 0;
     let trialCompletedPaid = 0;
     let activeSubscribers = 0;
+    let activeFreeSubscribers = 0;
+    let activationCohort = 0;
+    let activatedWithinWeek = 0;
     for (const user of this.users.values()) {
       // The newest week is closed on `now`, so an account made this instant belongs to it.
       if (user.createdAt >= since) accountsPerWeek[Math.min(weeks - 1, Math.floor((user.createdAt - since) / WEEK_MS))]++;
@@ -601,9 +618,19 @@ export class MemoryDb implements Db {
       if (total > 0) accountsFinalized++;
       if (total >= trialAnalyses) {
         trialCompleted++;
-        if (user.stripeCustomerId !== null) trialCompletedPaid++;
+        if (user.stripeCustomerId !== null && !user.subscriptionFree) trialCompletedPaid++;
       }
-      if (user.plan === 'active' && user.planExpiresAt !== null && user.planExpiresAt > now) activeSubscribers++;
+      if (user.plan === 'active' && user.planExpiresAt !== null && user.planExpiresAt > now) {
+        if (user.subscriptionFree) activeFreeSubscribers++;
+        else activeSubscribers++;
+      }
+      if (user.createdAt >= since - WEEK_MS && user.createdAt < now - WEEK_MS) {
+        activationCohort++;
+        const firstWeek = [...this.usageDaily.values()].some(
+          (d) => d.userId === user.id && d.analyses > 0 && d.day <= user.createdAt + WEEK_MS,
+        );
+        if (firstWeek) activatedWithinWeek++;
+      }
     }
     const events = (type: string) =>
       [...this.stripeEvents.values()].filter((e) => e.type === type && e.receivedAt >= since).length;
@@ -619,9 +646,14 @@ export class MemoryDb implements Db {
       trialCompleted,
       trialCompletedPaid,
       activeSubscribers,
+      activeFreeSubscribers,
       subscriptionsStarted: events('checkout.session.completed'),
       subscriptionsCancelled: events('customer.subscription.deleted'),
       finalizes,
+      starts,
+      activeAccounts: active.size,
+      activationCohort,
+      activatedWithinWeek,
       counters,
     };
   }

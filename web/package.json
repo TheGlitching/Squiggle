@@ -2,7 +2,7 @@
   "name": "@squiggle/web",
   "version": "0.1.1",
   "private": true,
-  "description": "Squiggle's public web app: sign-in, subscription, quota, transparency, and the extension bridge. French only, no telemetry.",
+  "description": "Squiggle's public web app: sign-in, subscription, quota, transparency, and the extension bridge. French only, no tracker.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "5.3.0",
     "@fontsource-variable/newsreader": "5.3.0",
+    "@squiggle/shared": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

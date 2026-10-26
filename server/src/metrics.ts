@@ -10,6 +10,11 @@
  * over every account since the start, because a cohort is only meaningful whole.
  * Event figures (cache, stage failures, subscriptions, analyses) are over the
  * window, `weeks` whole weeks ending now.
+ *
+ * The counters (`metric_counters`) are totals per UTC day and per fixed name,
+ * some bumped by the server, some sent by the web app with nothing attached
+ * (`POST /web/count`). `headline` gathers the five figures read every week:
+ * ask for `?weeks=1` to read them over the last week.
  */
 import type { Db, MetricName } from './db/types';
 import { TRIAL_ANALYSES } from './billing/quota';
@@ -24,12 +29,29 @@ function stage(calls: number, failed: number) {
   return { calls, failed, failureRate: ratio(failed, calls) };
 }
 
+/** The counters whose name starts with `prefix`, keyed by the rest of the name. */
+function family(counters: Record<MetricName, number>, prefix: string): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(counters)
+      .filter(([name]) => name.startsWith(prefix))
+      .map(([name, n]) => [name.slice(prefix.length), n]),
+  );
+}
+
 export interface Metrics {
   windowWeeks: number;
   accounts: { total: number; perWeek: number[] };
   activation: { withFinalize: number; share: number | null };
   trial: { completed: number; completionShare: number | null; convertedToPaid: number; conversion: number | null };
-  subscriptions: { active: number; started: number; cancelled: number; cancellationRate: number | null };
+  /** `active` pays; `activeFree` is subscribed through a 100 % promotion code. */
+  subscriptions: {
+    active: number;
+    activeFree: number;
+    started: number;
+    startedFree: number;
+    cancelled: number;
+    cancellationRate: number | null;
+  };
   cache: { checks: number; hits: number; hitRate: number | null };
   stages: {
     audit: ReturnType<typeof stage>;
@@ -37,6 +59,30 @@ export interface Metrics {
     sourceCheck: ReturnType<typeof stage>;
   };
   analyses: { finalized: number; costPerAnalysisUsd: number | null };
+  audience: {
+    views: Record<string, number>;
+    entries: Record<string, number>;
+    campaigns: Record<string, number>;
+    clicks: Record<string, number>;
+  };
+  funnel: {
+    signin: Record<string, number>;
+    checkout: Record<string, number>;
+    runsStarted: Record<string, number>;
+    finalized: Record<string, number>;
+    refused: Record<string, number>;
+  };
+  headline: {
+    /** New accounts, beside where visits came from: the two are never linked. */
+    newAccounts: { count: number; entries: Record<string, number>; campaigns: Record<string, number> };
+    /** Of the accounts created a week before the window, the share that finished an analysis in their first week. */
+    activationWithinWeek: { cohort: number; activated: number; share: number | null };
+    successRate: { started: number; finalized: number; share: number | null };
+    /** Revenue itself is read in Stripe, net of discounts. */
+    subscribers: { paying: number; free: number; cancelled: number };
+    aiCost: { finalized: number; costPerAnalysisUsd: number | null };
+    activeAccounts: number;
+  };
 }
 
 /**
@@ -52,6 +98,15 @@ export async function collectLaunchMetrics(
 ): Promise<Metrics> {
   const raw = await db.collectMetrics({ now, weeks, trialAnalyses: TRIAL_ANALYSES });
   const c = raw.counters;
+  const analyses = {
+    finalized: raw.finalizes,
+    costPerAnalysisUsd:
+      providerCostUsd !== undefined && raw.finalizes > 0
+        ? Math.round((providerCostUsd / raw.finalizes) * 10000) / 10000
+        : null,
+  };
+  const entries = family(c, 'entry_');
+  const campaigns = family(c, 'ref_');
   return {
     windowWeeks: weeks,
     accounts: { total: raw.accountsTotal, perWeek: raw.accountsPerWeek },
@@ -64,12 +119,17 @@ export async function collectLaunchMetrics(
     },
     subscriptions: {
       active: raw.activeSubscribers,
+      activeFree: raw.activeFreeSubscribers,
       started: raw.subscriptionsStarted,
+      startedFree: c.checkout_free,
       cancelled: raw.subscriptionsCancelled,
       // Cancellations over the subscribers there were at the start: those still
       // active plus those who left, ignoring new arrivals, which is close enough
       // at the volumes a launch sees.
-      cancellationRate: ratio(raw.subscriptionsCancelled, raw.activeSubscribers + raw.subscriptionsCancelled),
+      cancellationRate: ratio(
+        raw.subscriptionsCancelled,
+        raw.activeSubscribers + raw.activeFreeSubscribers + raw.subscriptionsCancelled,
+      ),
     },
     cache: { checks: c.check, hits: c.cache_hit, hitRate: ratio(c.cache_hit, c.check) },
     stages: {
@@ -77,12 +137,30 @@ export async function collectLaunchMetrics(
       research: stage(c.research, c.research_failed),
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },
-    analyses: {
-      finalized: raw.finalizes,
-      costPerAnalysisUsd:
-        providerCostUsd !== undefined && raw.finalizes > 0
-          ? Math.round((providerCostUsd / raw.finalizes) * 10000) / 10000
-          : null,
+    analyses,
+    audience: { views: family(c, 'view_'), entries, campaigns, clicks: family(c, 'click_') },
+    funnel: {
+      signin: family(c, 'signin_'),
+      checkout: family(c, 'checkout_'),
+      runsStarted: family(c, 'run_started_'),
+      finalized: family(c, 'finalize_'),
+      refused: family(c, 'refused_'),
+    },
+    headline: {
+      newAccounts: { count: raw.accountsPerWeek.reduce((a, b) => a + b, 0), entries, campaigns },
+      activationWithinWeek: {
+        cohort: raw.activationCohort,
+        activated: raw.activatedWithinWeek,
+        share: ratio(raw.activatedWithinWeek, raw.activationCohort),
+      },
+      successRate: { started: raw.starts, finalized: raw.finalizes, share: ratio(raw.finalizes, raw.starts) },
+      subscribers: {
+        paying: raw.activeSubscribers,
+        free: raw.activeFreeSubscribers,
+        cancelled: raw.subscriptionsCancelled,
+      },
+      aiCost: analyses,
+      activeAccounts: raw.activeAccounts,
     },
   };
 }
