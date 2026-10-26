@@ -38,7 +38,7 @@ export function installLabelFor(url: string, userAgent = ''): string {
 
 /** True inside the app installed on the home screen, which has its own cookies on iOS. */
 export function isStandalone(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
 }
 
 interface InstallPromptEvent extends Event {
@@ -80,7 +80,7 @@ function subscribe(listener: () => void) {
  */
 export function useInstall(): { kind: 'prompt'; prompt: () => void } | { kind: 'ios' } | null {
   const event = useSyncExternalStore(subscribe, () => deferred, () => null);
-  const ua = navigator.userAgent;
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   const ios =
     (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) && !/CriOS|FxiOS/.test(ua);
 

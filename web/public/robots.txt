@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /auth/
+Disallow: /v1/
+Disallow: /web/
+Disallow: /webhooks/
+Disallow: /admin/
+
+Sitemap: https://squiggle.fr/sitemap.xml
