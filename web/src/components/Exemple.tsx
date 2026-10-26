@@ -1,4 +1,12 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
 
 import {
   CATEGORY_LABELS,
@@ -88,7 +96,7 @@ function FindingCard({ index }: { index: number }) {
   );
 }
 
-function Report({ selected, cardRef }: { selected: number; cardRef: RefObject<HTMLDivElement> }) {
+function Report({ selected, cardRef, live }: { selected: number; cardRef: RefObject<HTMLDivElement>; live: boolean }) {
   return (
     <div
       data-ui
@@ -100,7 +108,8 @@ function Report({ selected, cardRef }: { selected: number; cardRef: RefObject<HT
       <p className="m-0 text-base text-muted">
         {PASSAGES} passages fragiles, {STRENGTHS} point fort.
       </p>
-      <div id={CARD_ID} ref={cardRef} aria-live="polite" className="border-t border-border pt-5">
+      {/* Announced only when the reader picks a passage, never while the example turns on its own. */}
+      <div id={CARD_ID} ref={cardRef} aria-live={live ? 'polite' : 'off'} className="border-t border-border pt-5">
         <FindingCard index={selected} />
       </div>
     </div>
@@ -113,6 +122,8 @@ type Line = { ax: number; ay: number; bx: number; by: number };
  * The example: an article as the reader sees it with Squiggle's highlights, and
  * the report beside it. Picking a highlight shows its finding, as clicking one
  * does in the product; on a wide screen a leader line ties the two together.
+ * Left alone and in view, it walks through the passages in turn; a pointer over
+ * it or the focus in it stops that, and so does a preference for reduced motion.
  */
 export function Exemple() {
   const [selected, setSelected] = useState(HERO_REPORT.selected);
@@ -121,6 +132,24 @@ export function Exemple() {
   const sheetRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const marks = useRef<Array<HTMLElement | null>>([]);
+  const [held, setHeld] = useState(false);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.4 });
+    observer.observe(scene);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const still =
+      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (held || !inView || still) return;
+    const timer = window.setInterval(() => setSelected((current) => (current + 1) % EXAMPLES.length), 3500);
+    return () => window.clearInterval(timer);
+  }, [held, inView]);
 
   useLayoutEffect(() => {
     const scene = sceneRef.current;
@@ -192,7 +221,16 @@ export function Exemple() {
   const y1 = line ? line.by - top : 0;
 
   return (
-    <div ref={sceneRef} className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-20">
+    <div
+      ref={sceneRef}
+      onPointerEnter={() => setHeld(true)}
+      onPointerLeave={() => setHeld(false)}
+      onFocus={() => setHeld(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHeld(false);
+      }}
+      className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-20"
+    >
       <article
         ref={sheetRef}
         aria-label="Un article d’exemple, surligné par Squiggle"
@@ -210,7 +248,7 @@ export function Exemple() {
       </article>
 
       <div className="lg:sticky lg:top-6 lg:self-start">
-        <Report selected={selected} cardRef={cardRef} />
+        <Report selected={selected} cardRef={cardRef} live={held} />
       </div>
 
       {line ? (

@@ -162,6 +162,8 @@ describe('Analyser, signed in', () => {
     expect(await screen.findByText('58')).toBeInTheDocument();
     const stages = seen.filter((s) => s.url.startsWith('/web/analyze/'));
     expect(stages.map((s) => s.url.split('?')[0])).toEqual(['/web/analyze/check', '/web/analyze/audit', '/web/analyze/finalize']);
+    // The model behind a report changes over time; the page never names it.
+    expect(screen.queryByText(/test-model/)).toBeNull();
     for (const stage of stages) expect(stage.credentials).toBe('include');
     expect(stages[1].body).toMatchObject({ url: 'https://presse.example/cantines', citedSources: [] });
     expect(seen.some((s) => s.url.includes('presse.example') && !s.url.startsWith('/web/'))).toBe(false);

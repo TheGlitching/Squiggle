@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -119,7 +119,7 @@ describe('Accueil', () => {
   it('has every section a first-time reader looks for', () => {
     home();
     for (const name of [
-      'Sur un exemple',
+      'Un exemple',
       'Comment ça marche',
       'La même grille pour tous',
       'Où que vous lisiez',
@@ -147,7 +147,14 @@ describe('Accueil', () => {
     home();
     const list = within(screen.getByRole('list', { name: 'Les cinq domaines' }));
     expect(list.getAllByRole('listitem')).toHaveLength(5);
-    expect(list.getByText('Robustesse factuelle et sourcing').closest('li')).toHaveTextContent('35 points sur 100');
+  });
+
+  // The weights are the engine's to change: the page says what is read, never the points.
+  it('names what the grid reads without printing its weights', () => {
+    home();
+    const text = screen.getByRole('region', { name: 'La même grille pour tous' }).textContent ?? '';
+    for (const [, weight] of DOMAINS) expect(text).not.toMatch(new RegExp(`\\b${weight}\\b`));
+    expect(text).not.toMatch(/points/);
   });
 
   it('names the four verification states with the extension’s own labels', () => {
@@ -177,8 +184,10 @@ describe('Accueil', () => {
   it('keeps the privacy paragraph honest and links Transparence', () => {
     home();
     const section = region('Vos données');
-    expect(section.getByText(/transite par notre serveur/)).toBeInTheDocument();
     expect(section.getByText(/Aucune publicité, aucun traceur/)).toBeInTheDocument();
+    expect(section.getByText('sans votre identité')).toBeInTheDocument();
+    // How the server stores text is a question for publishers, answered on Transparence.
+    expect(section.queryByText(/serveur|n’écrit pas/)).toBeNull();
     expect(within(section.getByRole('list', { name: 'Le trajet d’un article' })).getAllByRole('listitem')).toHaveLength(
       3,
     );
@@ -187,13 +196,15 @@ describe('Accueil', () => {
     expect(screen.queryByText(/^sécurisé$/i)).toBeNull();
   });
 
-  it('states the monthly price, the free analyses and the education offer', () => {
+  it('sells one plan with one sign-up action, then the trial and the education offer', () => {
     home();
     const pricing = region('Tarifs');
     expect(pricing.getByRole('link', { name: 'S’abonner : 4,99 €/mois' })).toHaveAttribute('href', '/connexion');
-    expect(pricing.getByText('3 analyses offertes, sans carte bancaire.')).toBeInTheDocument();
-    expect(pricing.getByText(/10 analyses par jour/)).toBeInTheDocument();
-    expect(pricing.getByText('Sur demande, pour la classe.')).toBeInTheDocument();
+    expect(pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })).toHaveLength(1);
+    const included = within(pricing.getByRole('list', { name: 'Ce qui est compris' }));
+    expect(included.getByText('10 analyses par jour')).toBeInTheDocument();
+    expect(pricing.getByText(/3 analyses offertes, sans carte bancaire/)).toBeInTheDocument();
+    expect(pricing.getByText(/Gratuit pour les enseignants, sur demande/)).toBeInTheDocument();
     expect(pricing.getByRole('link', { name: 'Offre enseignants' })).toHaveAttribute('href', '/enseignants');
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });
@@ -281,10 +292,66 @@ describe('Accueil', () => {
     agent.mockRestore();
   });
 
-  it('keeps the example one tap away and states the offer without a card', () => {
+  it('keeps the example one tap away and leaves the price out of the hero', () => {
     home();
     expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#exemple');
-    expect(screen.getByText('3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois.')).toBeInTheDocument();
+    const hero = screen.getByRole('heading', { level: 1 }).parentElement!;
+    expect(hero.textContent).not.toMatch(/analyses offertes|€/);
+  });
+
+  it('walks through the passages while left alone, and stops under the pointer', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+        observe() {
+          this.callback([{ isIntersecting: true } as IntersectionObserverEntry], this as never);
+        }
+        disconnect() {}
+      },
+    );
+    home();
+    const report = within(screen.getByRole('group', { name: 'Le rapport Squiggle sur cet article' }));
+    expect(report.getByText('Chiffre mis en doute')).toBeInTheDocument();
+    act(() => void vi.advanceTimersByTime(3500));
+    expect(report.queryByText('Chiffre mis en doute')).toBeNull();
+    const scene = screen.getByRole('article', { name: /article d’exemple/ }).parentElement!;
+    fireEvent.pointerEnter(scene);
+    const before = report
+      .getAllByText(/./)
+      .map((node) => node.textContent)
+      .join('|');
+    act(() => void vi.advanceTimersByTime(7000));
+    expect(
+      report
+        .getAllByText(/./)
+        .map((node) => node.textContent)
+        .join('|'),
+    ).toBe(before);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('stays on one passage when the reader prefers reduced motion', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+        observe() {
+          this.callback([{ isIntersecting: true } as IntersectionObserverEntry], this as never);
+        }
+        disconnect() {}
+      },
+    );
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }));
+    home();
+    act(() => void vi.advanceTimersByTime(10000));
+    const report = within(screen.getByRole('group', { name: 'Le rapport Squiggle sur cet article' }));
+    expect(report.getByText('Chiffre mis en doute')).toBeInTheDocument();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('describes the free offer honestly to search engines and link previews', () => {

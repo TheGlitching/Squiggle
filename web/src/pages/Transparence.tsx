@@ -1,11 +1,16 @@
 import { SquiggleMark } from '../components/Iso';
 import { Page } from '../components/Layout';
 import { Trajet } from '../components/Trajet';
+import { Link } from '../router';
 import { HOSTED_ANALYSIS } from '../../../shared/src/hosted/disclosure';
 
-const { modelLabel, inferenceHosts } = HOSTED_ANALYSIS;
+const { inferenceHosts } = HOSTED_ANALYSIS;
 
-/** Who runs the model: the pinned hosts by name, or, until they are pinned, OpenRouter's choice. */
+/**
+ * Who runs the model, for the privacy policy, which must name its processors:
+ * the pinned hosts by name, or, until they are pinned, OpenRouter's choice.
+ * This page describes the engine without naming it, because the model changes.
+ */
 export const INFERENCE_HOSTS_TEXT =
   inferenceHosts.length > 0
     ? inferenceHosts.join(', ')
@@ -62,13 +67,8 @@ export const RETENTION = [
 
 const SUBPROCESSORS = [
   [
-    'OpenRouter',
-    `Passerelle d’analyse : route chaque requête vers le modèle ${modelLabel}`,
-    'Le texte de l’article et les extraits des sources citées, sans identité de lecteur',
-  ],
-  [
-    INFERENCE_HOSTS_LABEL,
-    `Exécution du modèle ${modelLabel}, un modèle à poids ouverts`,
+    'Fournisseur du modèle d’IA',
+    'Exécution de l’analyse par un modèle d’IA, choisi et mis à jour au fil du temps',
     'Le texte de l’article et les extraits des sources citées, sans identité de lecteur',
   ],
   ['Google (connexion)', 'Authentification, si vous choisissez « continuer avec Google »', 'Votre identité Google'],
@@ -141,18 +141,21 @@ export function Transparence() {
               label="Le trajet d’une analyse"
               nodes={[
                 { name: 'Votre navigateur', note: 'la page lue, ou le texte collé' },
-                { name: 'Notre serveur', note: 'n’écrit pas le texte' },
-                { name: 'OpenRouter', note: 'choisit l’hébergeur' },
-                { name: modelLabel, note: 'un modèle à poids ouverts' },
+                { name: 'Notre serveur', note: 'ne garde pas le texte' },
+                { name: 'Un modèle d’IA', note: 'choisi et mis à jour au fil du temps' },
               ]}
-              links={['le texte de l’article', 'sans votre identité', 'la requête']}
+              links={['le texte de l’article', 'sans votre identité']}
             />
           </div>
           <p className="mt-8 mb-0 max-w-[68ch] text-lg leading-relaxed text-muted">
-            L’analyse tourne sur {modelLabel}, un modèle à poids ouverts, exécuté par {INFERENCE_HOSTS_TEXT}. Utiliser
-            un modèle à poids ouverts ne signifie pas envoyer le texte vers des serveurs en Chine. Squiggle ne traite
-            que des articles publics : la page que vous lisez, son adresse et les pages qu’elle cite. Un texte collé sur
-            le site suit le même trajet, et aucune identité de lecteur n’accompagne une requête.
+            L’analyse est confiée à un modèle d’IA, choisi pour la qualité de son raisonnement, sa vitesse et son coût,
+            et remplacé quand un meilleur apparaît. Squiggle ne traite que des articles publics : la page que vous
+            lisez, son adresse et les pages qu’elle cite. Un texte collé sur le site suit le même trajet, et aucune
+            identité de lecteur n’accompagne une requête. Les prestataires qui exécutent le modèle sont nommés dans la{' '}
+            <Link to="/confidentialite" className="underline underline-offset-4 hover:text-foreground">
+              politique de confidentialité
+            </Link>
+            , avec les garanties de leurs transferts.
           </p>
           <dl className="mt-10 grid gap-8 md:grid-cols-3 md:gap-10">
             <div>

@@ -80,33 +80,12 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
 ];
 
-const PRICES: Array<{ name: string; price: ReactNode; text: string; action?: ReactNode }> = [
-  { name: 'Essai', price: 'Gratuit', text: `${FREE_ANALYSES} analyses offertes, sans carte bancaire.` },
-  {
-    name: 'Abonnement',
-    price: (
-      <>
-        {PRICE_MONTHLY}
-        <span className="text-base font-normal text-muted"> par mois</span>
-      </>
-    ),
-    text: `${DAILY_ANALYSES} analyses par jour. Sans engagement.`,
-    action: (
-      <Link to="/connexion" className={PRIMARY_BUTTON}>
-        {SUBSCRIBE_LABEL}
-      </Link>
-    ),
-  },
-  {
-    name: 'Enseignants',
-    price: 'Gratuit',
-    text: 'Sur demande, pour la classe.',
-    action: (
-      <Link to="/enseignants" className={SECONDARY_BUTTON}>
-        Offre enseignants
-      </Link>
-    ),
-  },
+/** What the subscription opens, in the reader's terms. */
+const INCLUDED = [
+  `${DAILY_ANALYSES} analyses par jour`,
+  'Le site, l’appli et le bouton du navigateur',
+  'Le rapport complet : passages, raisons, note',
+  'Aucune publicité, aucun traceur',
 ];
 
 /** What passes from one stage to the next: down the page on a phone, across it on a wide screen. */
@@ -154,9 +133,6 @@ export function Accueil() {
                 Voir un exemple
               </a>
             </div>
-            <p className="mt-5 mb-0 text-base text-muted">
-              {FREE_ANALYSES} analyses offertes, sans carte bancaire. Ensuite {PRICE_MONTHLY} par mois.
-            </p>
           </div>
 
           <figure className="m-0 lg:-mt-36">
@@ -182,9 +158,13 @@ export function Accueil() {
         </div>
       </div>
 
-      <Section id="exemple" title="Sur un exemple" intro="Touchez un passage surligné.">
-        <Exemple />
-      </Section>
+      {/* The example speaks for itself: no heading, only its name for assistive technology. */}
+      <section id="exemple" aria-label="Un exemple" className="scroll-mt-4 border-t border-lineSoft py-16 md:py-24">
+        <div className={PAGE}>
+          <p className={`mb-8 ${LEAD} ${MEASURE}`}>Touchez un passage surligné pour lire sa raison.</p>
+          <Exemple />
+        </div>
+      </section>
 
       <Section id="comment" title="Comment ça marche" intro="Une à deux minutes, de l’article au rapport.">
         <ol className="m-0 grid list-none gap-0 p-0 lg:grid-cols-4 lg:gap-8">
@@ -207,32 +187,20 @@ export function Accueil() {
         </ol>
       </Section>
 
-      <Section id="grille" title="La même grille pour tous" intro="Cinq domaines, cent points.">
+      <Section id="grille" title="La même grille pour tous" intro="Cinq questions, posées à chaque article.">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-20">
-          <div>
-            {/* The hundred points, to scale. */}
-            <div aria-hidden="true" className="flex h-10 gap-1">
-              {DOMAINS.map(([label, weight]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-center rounded-md border border-accent/60 bg-accentSoft font-mono text-sm font-semibold text-accentInk"
-                  style={{ flex: weight }}
-                >
-                  {weight}
-                </div>
-              ))}
+          {/* The weights are the engine's and will move; the page names what is read, not the points. */}
+          <div className="grid items-start gap-8 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:gap-10">
+            <div className="mx-auto w-full max-w-60 md:pt-2">
+              <StepFigure step="lecture" />
             </div>
-            <ol aria-label="Les cinq domaines" className="mt-6 grid list-none gap-0 p-0">
-              {DOMAINS.map(([label, weight, question]) => (
-                <li
-                  key={label}
-                  className="grid gap-x-6 gap-y-1 border-b border-lineSoft py-4 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)_3rem]"
-                >
-                  <span className="font-medium">{label}</span>
-                  <span className="text-muted">{question}</span>
-                  <span className="font-mono text-muted md:text-right">
-                    {weight}
-                    <span className="sr-only"> points sur 100</span>
+            <ol aria-label="Les cinq domaines" className="m-0 grid list-none gap-0 p-0">
+              {DOMAINS.map(([label, , question]) => (
+                <li key={label} className="flex gap-4 border-b border-lineSoft py-4 last:border-b-0">
+                  <SquiggleMark />
+                  <span className="grid gap-1">
+                    <span className="font-medium">{label}</span>
+                    <span className="text-muted">{question}</span>
                   </span>
                 </li>
               ))}
@@ -280,7 +248,7 @@ export function Accueil() {
             </div>
             <h3 className={H3}>Sur le site</h3>
             <p className="m-0 text-base leading-relaxed text-muted">Collez le texte. Rien à installer.</p>
-            <Link to="/analyser" className={`${QUIET_LINK} w-fit`}>
+            <Link to="/analyser" className={`${SECONDARY_BUTTON} w-fit`}>
               Analyser un article
             </Link>
           </li>
@@ -293,7 +261,7 @@ export function Accueil() {
               Installez l’appli. Sur Android, partagez-lui un article.
             </p>
             {install?.kind === 'prompt' ? (
-              <button type="button" onClick={install.prompt} className={`${QUIET_LINK} w-fit`}>
+              <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} w-fit`}>
                 Installer l’appli
               </button>
             ) : null}
@@ -305,26 +273,23 @@ export function Accueil() {
             <div className="max-w-56">
               <DeviceFigure device="navigateur" />
             </div>
-            <h3 className={H3}>Sur ordinateur, en option</h3>
+            <h3 className={H3}>Dans votre navigateur</h3>
             <p className="m-0 text-base leading-relaxed text-muted">
-              Un bouton dans Chrome ou Firefox : un clic sur l’article ouvert.
+              Un bouton dans Chrome ou Firefox, sur ordinateur : un clic sur l’article ouvert.
             </p>
             {storeUrl ? (
-              <a href={storeUrl} className={`${QUIET_LINK} w-fit`}>
+              <a href={storeUrl} className={`${SECONDARY_BUTTON} w-fit`}>
                 {installLabelFor(storeUrl)}
               </a>
             ) : mobile ? null : (
-              <p className="m-0 text-base text-muted">
-                Pour{' '}
-                <a href={CHROME_URL} className={QUIET_LINK}>
+              <div className="flex flex-wrap gap-3">
+                <a href={CHROME_URL} className={SECONDARY_BUTTON}>
                   Chrome
-                </a>{' '}
-                et{' '}
-                <a href={FIREFOX_URL} className={QUIET_LINK}>
+                </a>
+                <a href={FIREFOX_URL} className={SECONDARY_BUTTON}>
                   Firefox
                 </a>
-                .
-              </p>
+              </div>
             )}
           </li>
         </ul>
@@ -333,16 +298,16 @@ export function Accueil() {
       <Section
         id="donnees"
         title="Vos données"
-        intro="Aucune publicité, aucun traceur. Le texte de l’article transite par notre serveur le temps de l’analyse, puis n’est pas conservé."
+        intro="Aucune publicité, aucun traceur. Ce que vous lisez ne sert qu’à votre analyse."
       >
         <Trajet
           label="Le trajet d’un article"
           nodes={[
-            { name: 'Votre navigateur', note: 'la page ou le texte collé' },
-            { name: 'Notre serveur', note: 'n’écrit pas le texte' },
-            { name: 'Le service d’analyse', note: 'rend le rapport' },
+            { name: 'Votre article', note: 'la page ou le texte collé' },
+            { name: 'L’analyse', note: 'une à deux minutes' },
+            { name: 'Votre rapport', note: 'passages surlignés et raisons' },
           ]}
-          links={['le texte de l’article', 'sans votre identité']}
+          links={['sans votre identité', 'les constats']}
         />
         <p className="mt-8 mb-0">
           <Link to="/transparence" className={QUIET_LINK}>
@@ -352,20 +317,39 @@ export function Accueil() {
       </Section>
 
       <Section id="tarifs" title="Tarifs" intro="Essayez d’abord. Payez seulement si l’outil vous sert.">
-        <ul className="m-0 grid list-none p-0">
-          {PRICES.map(({ name, price, text, action }) => (
-            <li
-              key={name}
-              className="grid items-center gap-x-8 gap-y-2 border-t border-lineSoft py-6 last:border-b md:grid-cols-[12rem_14rem_minmax(0,1fr)_auto]"
-            >
-              <h3 className={H3}>{name}</h3>
-              <p className="m-0 font-display text-3xl font-semibold tracking-[-0.02em]">{price}</p>
-              <p className="m-0 text-base text-muted">{text}</p>
-              <div className="max-md:mt-2">{action}</div>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-6 mb-0 text-base text-muted">Avec votre propre clé d’API, l’extension est gratuite.</p>
+        <div className="grid gap-10 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-14 md:p-10">
+          <div className="grid content-start gap-5">
+            <h3 className={H3}>Abonnement</h3>
+            <p className="m-0 flex items-baseline gap-2">
+              <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">
+                {PRICE_MONTHLY}
+              </span>
+              <span className="text-lg text-muted">par mois</span>
+            </p>
+            <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment.</p>
+            <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+              {SUBSCRIBE_LABEL}
+            </Link>
+            <p className="m-0 text-base text-muted">
+              Commencez par {FREE_ANALYSES} analyses offertes, sans carte bancaire.
+            </p>
+          </div>
+          <ul aria-label="Ce qui est compris" className="m-0 grid list-none content-center gap-4 p-0 text-lg">
+            {INCLUDED.map((text) => (
+              <li key={text} className="flex gap-3">
+                <SquiggleMark />
+                {text}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="mt-6 mb-0 text-base text-muted">
+          Gratuit pour les enseignants, sur demande :{' '}
+          <Link to="/enseignants" className={QUIET_LINK}>
+            Offre enseignants
+          </Link>
+          . Avec votre propre clé d’API, l’extension est gratuite.
+        </p>
       </Section>
 
       <Section id="faq" title="Questions fréquentes">
