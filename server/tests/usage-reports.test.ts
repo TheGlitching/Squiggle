@@ -40,9 +40,12 @@ describe('usage: ledger + daily counter', () => {
     await db.recordAnalysis({ userId: user.id, now: T0 + 30 * 60 * 1000 });
     await db.recordAnalysis({ userId: user.id, now: day + DAY + 1000 });
 
-    expect(await db.getDailyUsage(user.id, day)).toBe(2);
-    expect(await db.getDailyUsage(user.id, day + DAY)).toBe(1);
-    expect(await db.getDailyUsage(user.id, day + 2 * DAY)).toBe(0);
+    expect(await db.countAnalysesSince(user.id, T0)).toBe(3);
+    expect(await db.countAnalysesSince(user.id, T0 + 1)).toBe(2);
+    expect(await db.countAnalysesSince(user.id, day + DAY + 1001)).toBe(0);
+    // Run starts add up from the day asked for, that day included.
+    expect(await db.recordRunStart(user.id, day + DAY, day + DAY)).toBe(1);
+    expect(await db.recordRunStart(user.id, day + 2 * DAY, day)).toBe(2);
     expect(await db.sumUsage(user.id)).toBe(3);
 
     // A different user's activity does not leak in.

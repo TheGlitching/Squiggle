@@ -15,6 +15,7 @@ import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
   Plan,
+  PlanPeriod,
   BridgeCodeRow,
   CreateAnalysisRunArgs,
   CreateBridgeCodeArgs,
@@ -95,6 +96,7 @@ export class MemoryDb implements Db {
       // billing/quota.ts for what the plans mean).
       plan: 'trial',
       planExpiresAt: null,
+      planPeriodStart: null,
       stripeCustomerId: null,
       stripeSubId: null,
       createdAt: now,
@@ -191,11 +193,12 @@ export class MemoryDb implements Db {
     return null;
   }
 
-  async setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void> {
+  async setPlan(userId: string, plan: Plan, period: PlanPeriod | null, now: number): Promise<void> {
     const user = this.users.get(userId);
     if (!user) return;
     user.plan = plan;
-    user.planExpiresAt = planExpiresAt;
+    user.planExpiresAt = period?.end ?? null;
+    user.planPeriodStart = period?.start ?? null;
     user.updatedAt = now;
   }
 
@@ -427,7 +430,7 @@ export class MemoryDb implements Db {
     return row;
   }
 
-  async recordRunStart(userId: string, now: number): Promise<{ today: number; total: number }> {
+  async recordRunStart(userId: string, now: number, sinceDay: number): Promise<number> {
     const day = utcDayOf(now);
     const k = `${userId}\u0000${day}`;
     let daily = this.usageDaily.get(k);
@@ -436,13 +439,15 @@ export class MemoryDb implements Db {
       this.usageDaily.set(k, daily);
     }
     daily.started += 1;
-    let total = 0;
-    for (const row of this.usageDaily.values()) if (row.userId === userId) total += row.started;
-    return { today: daily.started, total };
+    let started = 0;
+    for (const row of this.usageDaily.values()) if (row.userId === userId && row.day >= sinceDay) started += row.started;
+    return started;
   }
 
-  async getDailyUsage(userId: string, day: number): Promise<number> {
-    return this.usageDaily.get(`${userId}\u0000${day}`)?.analyses ?? 0;
+  async countAnalysesSince(userId: string, since: number): Promise<number> {
+    let count = 0;
+    for (const row of this.usageLog.values()) if (row.userId === userId && row.createdAt >= since) count += 1;
+    return count;
   }
 
   async sumUsage(userId: string): Promise<number> {

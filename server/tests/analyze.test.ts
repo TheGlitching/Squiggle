@@ -384,7 +384,7 @@ describe('analysis stages', () => {
 
     // A refused page opens no run, so it costs the reader none of their starts.
     const user = await env.db.getUserByEmail('marie@example.org');
-    expect((await env.db.recordRunStart(user!.id, env.clock.now())).total).toBe(1);
+    expect(await env.db.recordRunStart(user!.id, env.clock.now(), 0)).toBe(1);
   });
 
   it('still analyses an article right at the cap', async () => {

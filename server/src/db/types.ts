@@ -13,13 +13,22 @@
 
 export type Plan = 'none' | 'trial' | 'active';
 
+/** A paid period as Stripe reports it, epoch ms: the allowance resets at `end`. */
+export interface PlanPeriod {
+  start: number;
+  end: number;
+}
+
 export interface UserRow {
   id: string;
   email: string | null;
   emailVerified: boolean;
   googleSub: string | null;
   plan: Plan;
+  /** End of the paid period; the plan lapses on its own past it. */
   planExpiresAt: number | null;
+  /** Start of the paid period, which a subscription's allowance is counted from. */
+  planPeriodStart: number | null;
   /** Stripe Customer id (billing, Phase 2d). null until a checkout exists. */
   stripeCustomerId: string | null;
   /** Stripe subscription id. null unless/after a subscription is active. */
@@ -383,11 +392,11 @@ export interface Db {
   getUserByStripeCustomerId(customerId: string): Promise<UserRow | null>;
 
   /**
-   * Set the plan and its expiry. Called ONLY from the webhook handler: the
-   * client never declares itself subscribed, so this must never be reachable
-   * from a request a client controls.
+   * Set the plan and its paid period. Called ONLY from the webhook handler:
+   * the client never declares itself subscribed, so this must never be
+   * reachable from a request a client controls.
    */
-  setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void>;
+  setPlan(userId: string, plan: Plan, period: PlanPeriod | null, now: number): Promise<void>;
 
   /** Attach (or update) the Stripe customer and subscription identifiers. */
   setStripeIds(
@@ -465,12 +474,13 @@ export interface Db {
 
   /**
    * Count one run start on the day's row, atomically, and return the account's
-   * starts that day and ever. Unlike `recordAnalysis`, this moves no credit.
+   * starts on every UTC day from `sinceDay` on, this one included. Unlike
+   * `recordAnalysis`, this moves no credit.
    */
-  recordRunStart(userId: string, now: number): Promise<{ today: number; total: number }>;
+  recordRunStart(userId: string, now: number, sinceDay: Day): Promise<number>;
 
-  /** Analyses on one UTC day (0 if none). */
-  getDailyUsage(userId: string, day: Day): Promise<number>;
+  /** Analyses finished at or after `since`, read from the ledger. */
+  countAnalysesSince(userId: string, since: number): Promise<number>;
 
   /** Total analyses ever recorded for the user (the trial budget is cumulative). */
   sumUsage(userId: string): Promise<number>;

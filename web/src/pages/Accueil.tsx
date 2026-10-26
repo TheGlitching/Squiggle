@@ -26,7 +26,7 @@ import { CONTACT_URL } from '../components/Layout';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
 import { installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
 import {
-  DAILY_ANALYSES,
+  MONTHLY_ANALYSES,
   FREE_ANALYSES,
   GITHUB_URL,
   OWN_KEY_TOP_MODEL_MONTHLY,
@@ -93,7 +93,7 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
   [
     'Gratuit avec ma propre clé : qu’est-ce que je paie ?',
-    `Rien à Squiggle. La partie IA de l’analyse tourne sur votre propre compte chez un fournisseur d’IA (${OWN_KEY_PROVIDERS}), qui vous facture directement chaque analyse, au tarif du modèle choisi. Avec un modèle haut de gamme, par exemple Claude Opus : ${OWN_KEY_TOP_MODEL_MONTHLY} pour ${DAILY_ANALYSES} analyses par jour. ${API_KEY_MEANS} Sans compte chez un fournisseur, le compte Squiggle est plus simple : rien à installer, aucune clé à créer.`,
+    `Rien à Squiggle. La partie IA de l’analyse tourne sur votre propre compte chez un fournisseur d’IA (${OWN_KEY_PROVIDERS}), qui vous facture directement chaque analyse, au tarif du modèle choisi. Avec un modèle haut de gamme, par exemple Claude Opus : ${OWN_KEY_TOP_MODEL_MONTHLY} pour ${MONTHLY_ANALYSES} analyses. ${API_KEY_MEANS} Sans compte chez un fournisseur, le compte Squiggle est plus simple : rien à installer, aucune clé à créer.`,
   ],
   ['Et les articles payants ?', 'Squiggle analyse ce que vous pouvez lire, et signale un texte partiel.'],
   ['Comment résilier ?', 'À tout moment, depuis Mon compte, jusqu’à la fin de la période en cours.'],
@@ -138,7 +138,7 @@ const COMPARISON: Array<[string, ReactNode, ReactNode]> = [
   ],
   [
     'Analyses',
-    `${DAILY_ANALYSES} par jour`,
+    `${MONTHLY_ANALYSES} par mois`,
     'Sans limite, chacune facturée par votre fournisseur',
   ],
   [
@@ -147,7 +147,7 @@ const COMPARISON: Array<[string, ReactNode, ReactNode]> = [
     <>
       La facture de votre fournisseur, qui dépend du modèle choisi. Avec un modèle haut de gamme, par exemple
       Claude&nbsp;Opus&nbsp;: <strong className="font-semibold text-foreground">{OWN_KEY_TOP_MODEL_MONTHLY}</strong> pour{' '}
-      {DAILY_ANALYSES} analyses par jour.
+      {MONTHLY_ANALYSES} analyses.
     </>,
   ],
   ['Le rapport', 'Passages surlignés, raisons, note sur 100', 'Passages surlignés, raisons, note sur 100'],

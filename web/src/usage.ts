@@ -20,6 +20,12 @@ export interface AccountView {
   canSubscribe: boolean;
 }
 
+/** When an exhausted subscription gets its analyses back: the renewal, which ends the paid period. */
+function resetMoment(resetsAt: number | null): string {
+  if (resetsAt === null) return 'au renouvellement de l’abonnement';
+  return `le ${new Date(resetsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`;
+}
+
 export function describeAccount(account: Account): AccountView {
   const { plan, usage } = account;
 
@@ -52,7 +58,7 @@ export function describeAccount(account: Account): AccountView {
       return {
         state: 'active',
         title: 'Abonnement actif',
-        detail: `Il vous reste ${usage.remaining} analyse${usage.remaining > 1 ? 's' : ''} aujourd’hui.`,
+        detail: `Il vous reste ${usage.remaining} analyse${usage.remaining > 1 ? 's' : ''} ce mois-ci.`,
         canAnalyse: true,
         needsSubscription: false,
         canSubscribe: false,
@@ -60,8 +66,8 @@ export function describeAccount(account: Account): AccountView {
     }
     return {
       state: 'quota_exhausted',
-      title: 'Quota du jour atteint',
-      detail: 'Vos analyses du jour sont utilisées. Le compteur repart à minuit UTC.',
+      title: 'Quota du mois atteint',
+      detail: `Vos ${usage.limit} analyses de ce mois sont utilisées. Le compteur repart ${resetMoment(usage.resetsAt)}.`,
       canAnalyse: false,
       needsSubscription: false,
       canSubscribe: false,

@@ -30,7 +30,7 @@ import {
   MAX_SEARCHES_PER_RESEARCH,
   MAX_SOURCE_CHECKS_PER_RUN,
 } from '../src/analyze/stages';
-import { ACTIVE_ANALYSES_PER_DAY, effectivePlan, STARTS_PER_CREDIT, TRIAL_ANALYSES } from '../src/billing/quota';
+import { ACTIVE_ANALYSES_PER_PERIOD, effectivePlan, STARTS_PER_CREDIT, TRIAL_ANALYSES } from '../src/billing/quota';
 import { CONCURRENT_RUN_WINDOW_MS } from '../src/usage/abuse';
 
 const ARTICLE_URL = 'https://presse.example/politique/emploi-2026';
@@ -281,21 +281,30 @@ describe('runs that are never finished', () => {
     expect((await abandon(env, who)).json.error).toBe('starts_exhausted');
   });
 
-  it('gives a subscriber their starts back at midnight UTC', async () => {
+  it('gives a subscriber their starts back when the period renews, not at midnight', async () => {
     const env = makeTestEnv({ fetchImpl: pageFetch() });
     const who = await signedIn(env, 'marie@example.org');
-    await env.db.setPlan(who.userId, 'active', env.clock.now() + 30 * 24 * 60 * 60 * 1000, env.clock.now());
-    // Start at a UTC midnight, so every start below lands on the same day.
     const day = 24 * 60 * 60 * 1000;
-    env.clock.set(Math.ceil(env.clock.now() / day) * day);
+    const start = Math.ceil(env.clock.now() / day) * day;
+    const end = start + 30 * day;
+    env.clock.set(start);
+    await env.db.setPlan(who.userId, 'active', { start, end }, env.clock.now());
 
-    const allowed = STARTS_PER_CREDIT * ACTIVE_ANALYSES_PER_DAY;
-    for (let i = 0; i < allowed; i += 1) expect((await abandon(env, who)).status).toBe(200);
+    // The period's starts, spread over several days: they add up.
+    const allowed = STARTS_PER_CREDIT * ACTIVE_ANALYSES_PER_PERIOD;
+    for (let i = 0; i < allowed; i += 1) {
+      expect((await abandon(env, who)).status).toBe(200);
+      if (i % 40 === 39) env.clock.advance(day);
+    }
     const refused = await abandon(env, who);
     expect(refused.json.error).toBe('starts_exhausted');
-    expect(refused.json.message).toMatch(/minuit UTC/);
+    expect(refused.json.message).toMatch(/renouvellement/);
 
-    env.clock.set(Math.ceil(env.clock.now() / day) * day);
+    env.clock.advance(day);
+    expect((await abandon(env, who)).json.error).toBe('starts_exhausted');
+
+    env.clock.set(end);
+    await env.db.setPlan(who.userId, 'active', { start: end, end: end + 30 * day }, env.clock.now());
     expect((await abandon(env, who)).status).toBe(200);
   });
 

@@ -5,7 +5,7 @@ import { DonneesCompte } from '../components/DonneesCompte';
 import { DeviceFigure } from '../components/Iso';
 import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { frenchDate } from '../format';
-import { DAILY_ANALYSES, SUBSCRIBE_LABEL, VAT_NOTE } from '../offer';
+import { MONTHLY_ANALYSES, SUBSCRIBE_LABEL, VAT_NOTE } from '../offer';
 import { Link, navigate, usePath } from '../router';
 import { describeAccount } from '../usage';
 
@@ -180,7 +180,7 @@ export function Compte() {
                   {SUBSCRIBE_LABEL}
                 </button>
                 <p className="mt-3 mb-0 text-sm text-muted">
-                  {DAILY_ANALYSES} analyses par jour, sans engagement, renouvelé chaque mois. {VAT_NOTE}.{' '}
+                  {MONTHLY_ANALYSES} analyses par mois, sans engagement, renouvelé chaque mois. {VAT_NOTE}.{' '}
                   <Link to="/cgv" className="underline underline-offset-4 hover:text-foreground">
                     Conditions de vente
                   </Link>

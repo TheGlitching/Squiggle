@@ -12,7 +12,7 @@ import {
   Section,
 } from '../components/Landing';
 import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
-import { DAILY_ANALYSES } from '../offer';
+import { MONTHLY_ANALYSES } from '../offer';
 import { Link } from '../router';
 
 /** The request, written for the teacher: the three facts we need to grant the offer. */
@@ -28,7 +28,7 @@ const OFFER: Array<[string, string]> = [
 ];
 
 const INCLUDED = [
-  `${DAILY_ANALYSES} analyses par jour`,
+  `${MONTHLY_ANALYSES} analyses par mois`,
   'Le site, l’appli et le bouton du navigateur',
   'Le rapport complet, à projeter en classe',
   'Aucune publicité, aucun traceur',

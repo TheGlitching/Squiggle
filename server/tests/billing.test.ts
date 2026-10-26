@@ -3,8 +3,8 @@
  * signatures. No account, no key, no network.
  *
  * The journey the acceptance criteria describe is one test at the bottom:
- * trial → paywall → activation → the tenth analysis of the day → the
- * eleventh refused → cancellation → back to nothing.
+ * trial → paywall → activation → the sixtieth analysis of the period → the
+ * sixty-first refused → renewal → cancellation → back to nothing.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -20,9 +20,11 @@ import {
   STRIPE_PRICE_ID,
   type TestEnv,
 } from './helpers';
-import { ACTIVE_ANALYSES_PER_DAY, TRIAL_ANALYSES } from '../src/billing/quota';
+import { ACTIVE_ANALYSES_PER_PERIOD, TRIAL_ANALYSES } from '../src/billing/quota';
 import { parseStripeSignature, WEBHOOK_TOLERANCE_SECONDS } from '../src/billing/stripe';
 import { DAY_MS } from '../src/usage/limits';
+
+const DAY_S = DAY_MS / 1000;
 
 const ARTICLE_URL = 'https://presse.example/politique/emploi-2026';
 const BLOCKS = [
@@ -193,8 +195,8 @@ describe('checkout and portal', () => {
 });
 
 describe('quotas', () => {
-  it('allows ten analyses a day on an active plan', () => {
-    expect(ACTIVE_ANALYSES_PER_DAY).toBe(10);
+  it('allows sixty analyses per billing period on an active plan', () => {
+    expect(ACTIVE_ANALYSES_PER_PERIOD).toBe(60);
   });
 
   it('reports the entitlement on the account endpoint', async () => {
@@ -215,7 +217,7 @@ describe('quotas', () => {
     const who = await signedIn(env, 'marie@example.org');
     // A period end in the past: a cancellation we somehow never heard about
     // must still lapse rather than granting an unbounded subscription.
-    await env.db.setPlan(who.userId, 'active', env.clock.now() - 1, env.clock.now());
+    await env.db.setPlan(who.userId, 'active', { start: env.clock.now() - 30 * DAY_MS, end: env.clock.now() - 1 }, env.clock.now());
 
     const res = await call(env, who, '/v1/account');
     expect(res.json.plan).toBe('none');
@@ -236,7 +238,7 @@ describe('quotas', () => {
     expect((account.json.usage as { used: number }).used).toBe(0);
   });
 
-  it('walks the whole journey: trial, paywall, activation, daily cap, cancellation', async () => {
+  it('walks the whole journey: trial, paywall, activation, period cap, renewal, cancellation', async () => {
     const env = makeTestEnv();
     const who = await signedIn(env, 'marie@example.org');
 
@@ -268,28 +270,49 @@ describe('quotas', () => {
       },
     });
     expect(checkoutDone.status).toBe(200);
+    const periodStart = Math.floor(env.clock.now() / 1000);
+    const periodEnd = periodStart + 30 * DAY_S;
     await postStripeEvent(
       env,
       subscriptionEvent('customer.subscription.updated', who.userId, {
-        current_period_end: Math.floor((env.clock.now() + 30 * DAY_MS) / 1000),
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
       }),
     );
 
     const account = await call(env, who, '/v1/account');
     expect(account.json.plan).toBe('active');
-    expect((account.json.usage as { limit: number }).limit).toBe(ACTIVE_ANALYSES_PER_DAY);
+    // The trial's analyses were run before the period and do not count against it.
+    expect(account.json.usage).toEqual({
+      used: 0,
+      limit: ACTIVE_ANALYSES_PER_PERIOD,
+      remaining: ACTIVE_ANALYSES_PER_PERIOD,
+      resetsAt: periodEnd * 1000,
+    });
 
-    // 4. Ten a day pass; the eleventh does not.
-    for (let i = 0; i < ACTIVE_ANALYSES_PER_DAY; i += 1) {
-      expect((await analyse(env, who, `${ARTICLE_URL}/day1-${i}`)).status).toBe(200);
+    // 4. Sixty in the period pass; the sixty-first does not.
+    for (let i = 0; i < ACTIVE_ANALYSES_PER_PERIOD; i += 1) {
+      expect((await analyse(env, who, `${ARTICLE_URL}/p1-${i}`)).status).toBe(200);
     }
-    const eleventh = await analyse(env, who, `${ARTICLE_URL}/day1-10`);
-    expect(eleventh.status).toBe(429);
-    expect(eleventh.json.error).toBe('quota_exhausted');
+    const over = await analyse(env, who, `${ARTICLE_URL}/p1-over`);
+    expect(over.status).toBe(429);
+    expect(over.json.error).toBe('quota_exhausted');
+    expect(over.json.message).toMatch(/renouvellement/);
 
-    // 5. Tomorrow the daily count resets - unlike the trial.
+    // 5. A new day changes nothing: the allowance is the period's, not the day's.
     env.clock.advance(DAY_MS);
-    expect((await analyse(env, who, `${ARTICLE_URL}/day2-0`)).status).toBe(200);
+    expect((await analyse(env, who, `${ARTICLE_URL}/p1-next-day`)).json.error).toBe('quota_exhausted');
+
+    // The renewal starts a new period, and the count with it.
+    env.clock.set(periodEnd * 1000);
+    await postStripeEvent(
+      env,
+      subscriptionEvent('customer.subscription.updated', who.userId, {
+        current_period_start: periodEnd,
+        current_period_end: periodEnd + 30 * DAY_S,
+      }),
+    );
+    expect((await analyse(env, who, `${ARTICLE_URL}/p2-0`)).status).toBe(200);
 
     // 6. A failed payment suspends immediately: Stripe retries for days and
     //    every retry would otherwise be free analyses.
@@ -300,14 +323,17 @@ describe('quotas', () => {
     });
     expect((await analyse(env, who, `${ARTICLE_URL}/after-fail`)).json.error).toBe('subscription_required');
 
-    // 7. The retry succeeds: the subscription event reinstates them.
+    // 7. The retry succeeds: the subscription event reinstates them, in the
+    //    same period, with what they had already used still counted.
     await postStripeEvent(
       env,
       subscriptionEvent('customer.subscription.updated', who.userId, {
-        current_period_end: Math.floor((env.clock.now() + 30 * DAY_MS) / 1000),
+        current_period_start: periodEnd,
+        current_period_end: periodEnd + 30 * DAY_S,
       }),
     );
     expect((await analyse(env, who, `${ARTICLE_URL}/after-recovery`)).status).toBe(200);
+    expect(((await call(env, who, '/v1/account')).json.usage as { used: number }).used).toBe(2);
 
     // 8. They cancel for good.
     await postStripeEvent(env, subscriptionEvent('customer.subscription.deleted', who.userId, { status: 'canceled' }));
@@ -343,7 +369,8 @@ describe('quotas', () => {
   it('activates a subscription a 100 % promotion code brought to zero, through the webhook alone', async () => {
     const env = makeTestEnv();
     const who = await signedIn(env, 'marie@example.org');
-    const periodEnd = Math.floor((env.clock.now() + 30 * DAY_MS) / 1000);
+    const periodStart = Math.floor(env.clock.now() / 1000);
+    const periodEnd = periodStart + 30 * DAY_S;
     const discount = { coupon: { percent_off: 100, duration: 'forever' }, promotion_code: 'promo_test_1' };
 
     // The sequence Stripe sends for a session with nothing due: no payment,
@@ -368,7 +395,7 @@ describe('quotas', () => {
       subscriptionEvent('customer.subscription.created', who.userId, {
         discounts: [discount],
         default_payment_method: null,
-        items: { data: [{ current_period_end: periodEnd }] },
+        items: { data: [{ current_period_start: periodStart, current_period_end: periodEnd }] },
       }),
     );
     const invoice = await postStripeEvent(env, {
@@ -390,38 +417,104 @@ describe('quotas', () => {
     const row = (await env.db.getUserById(who.userId))!;
     expect(row.plan).toBe('active');
     expect(row.planExpiresAt).toBe(periodEnd * 1000);
+    expect(row.planPeriodStart).toBe(periodStart * 1000);
     expect(row.stripeSubId).toBe('sub_test_1');
     expect((await analyse(env, who)).status).toBe(200);
 
+    // A free period carries the same allowance as a paid one.
+    expect((await call(env, who, '/v1/account')).json.usage).toEqual({
+      used: 1,
+      limit: ACTIVE_ANALYSES_PER_PERIOD,
+      remaining: ACTIVE_ANALYSES_PER_PERIOD - 1,
+      resetsAt: periodEnd * 1000,
+    });
+
     // Each renewal of a forever code is another zero-amount period, reported
-    // like any paid one.
-    env.clock.advance(30 * DAY_MS);
-    const nextEnd = Math.floor((env.clock.now() + 30 * DAY_MS) / 1000);
+    // like any paid one, and it restarts the count like any paid one.
+    env.clock.set(periodEnd * 1000);
+    const nextEnd = periodEnd + 30 * DAY_S;
     await postStripeEvent(
       env,
       subscriptionEvent('customer.subscription.updated', who.userId, {
         discounts: [discount],
-        items: { data: [{ current_period_end: nextEnd }] },
+        items: { data: [{ current_period_start: periodEnd, current_period_end: nextEnd }] },
       }),
     );
     expect((await env.db.getUserById(who.userId))!.planExpiresAt).toBe(nextEnd * 1000);
+    expect(((await call(env, who, '/v1/account')).json.usage as { used: number }).used).toBe(0);
   });
 
   describe('subscription period', () => {
     const periodAt = (env: TestEnv, days: number) => Math.floor((env.clock.now() + days * DAY_MS) / 1000);
 
-    it('reads the period end from the items (API 2025-03-31 and later)', async () => {
+    it('reads the period from the items (API 2025-03-31 and later), start and end from the same item', async () => {
       const env = makeTestEnv();
       const who = await signedIn(env, 'marie@example.org');
       await postStripeEvent(
         env,
         subscriptionEvent('customer.subscription.created', who.userId, {
-          items: { data: [{ current_period_end: periodAt(env, 30) }, { current_period_end: periodAt(env, 60) }] },
+          items: {
+            data: [
+              { current_period_start: periodAt(env, 0), current_period_end: periodAt(env, 60) },
+              { current_period_start: periodAt(env, -2), current_period_end: periodAt(env, 30) },
+            ],
+          },
         }),
       );
       const row = (await env.db.getUserById(who.userId))!;
       expect(row.plan).toBe('active');
       expect(row.planExpiresAt).toBe(periodAt(env, 30) * 1000);
+      expect(row.planPeriodStart).toBe(periodAt(env, -2) * 1000);
+    });
+
+    it('counts an analysis from the very start of the period, and none from before it', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      await analyse(env, who, `${ARTICLE_URL}/trial`);
+      // The period starts a second after that trial analysis.
+      const start = periodAt(env, 0) + 1;
+      env.clock.set(start * 1000);
+      await postStripeEvent(
+        env,
+        subscriptionEvent('customer.subscription.created', who.userId, {
+          items: { data: [{ current_period_start: start, current_period_end: start + 30 * DAY_S }] },
+        }),
+      );
+      expect(((await call(env, who, '/v1/account')).json.usage as { used: number }).used).toBe(0);
+      await analyse(env, who, `${ARTICLE_URL}/at-start`);
+      expect(((await call(env, who, '/v1/account')).json.usage as { used: number }).used).toBe(1);
+    });
+
+    it('keeps the stored start when a later event for the same period omits it', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      const start = periodAt(env, -3);
+      const end = periodAt(env, 27);
+      await postStripeEvent(
+        env,
+        subscriptionEvent('customer.subscription.created', who.userId, {
+          items: { data: [{ current_period_start: start, current_period_end: end }] },
+        }),
+      );
+      // A cancellation scheduled for the period end: same period, no start in this payload.
+      await postStripeEvent(
+        env,
+        subscriptionEvent('customer.subscription.updated', who.userId, { cancel_at_period_end: true, current_period_end: end }),
+      );
+      expect((await env.db.getUserById(who.userId))!.planPeriodStart).toBe(start * 1000);
+    });
+
+    it('counts the last 30 days for an active row stored before the period start was', async () => {
+      const env = makeTestEnv();
+      const who = await signedIn(env, 'marie@example.org');
+      await env.db.setPlan(who.userId, 'active', { start: env.clock.now(), end: env.clock.now() + 60 * DAY_MS }, env.clock.now());
+      (await env.db.getUserById(who.userId))!.planPeriodStart = null;
+      await analyse(env, who, `${ARTICLE_URL}/old`);
+      env.clock.advance(20 * DAY_MS);
+      await analyse(env, who, `${ARTICLE_URL}/recent`);
+      expect(((await call(env, who, '/v1/account')).json.usage as { used: number }).used).toBe(2);
+      env.clock.advance(11 * DAY_MS);
+      expect(((await call(env, who, '/v1/account')).json.usage as { used: number }).used).toBe(1);
     });
 
     it('still reads the legacy subscription-level field', async () => {
@@ -438,7 +531,7 @@ describe('quotas', () => {
       const env = makeTestEnv();
       const who = await signedIn(env, 'marie@example.org');
       const provisional = env.clock.now() + 7 * DAY_MS;
-      await env.db.setPlan(who.userId, 'active', provisional, env.clock.now());
+      await env.db.setPlan(who.userId, 'active', { start: env.clock.now(), end: provisional }, env.clock.now());
       await postStripeEvent(env, subscriptionEvent('customer.subscription.updated', who.userId));
       const row = (await env.db.getUserById(who.userId))!;
       expect(row.plan).toBe('active');
@@ -452,6 +545,7 @@ describe('quotas', () => {
       const row = (await env.db.getUserById(who.userId))!;
       expect(row.plan).toBe('active');
       expect(row.planExpiresAt).toBe(env.clock.now() + 7 * DAY_MS);
+      expect(row.planPeriodStart).toBe(env.clock.now());
     });
   });
 });

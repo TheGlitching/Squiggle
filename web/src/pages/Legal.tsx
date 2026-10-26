@@ -15,7 +15,7 @@
 import type { ReactNode } from 'react';
 
 import { CONTACT_EMAIL, CONTACT_URL, Page } from '../components/Layout';
-import { DAILY_ANALYSES, FREE_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../offer';
+import { FREE_ANALYSES, MONTHLY_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../offer';
 import { Link } from '../router';
 import { INFERENCE_HOSTS_LABEL, RETENTION } from './Transparence';
 
@@ -151,7 +151,8 @@ export function Cgv() {
         <p>
           Squiggle analyse la rigueur d’un article de presse que vous lisez et produit un rapport (voir les{' '}
           <A to="/conditions">conditions d’utilisation</A>). Un compte donne droit à {FREE_ANALYSES} analyses offertes,
-          sans carte bancaire. L’abonnement donne droit à {DAILY_ANALYSES} analyses par jour, comptées sur la journée UTC.
+          sans carte bancaire. L’abonnement donne droit à {MONTHLY_ANALYSES} analyses par mois d’abonnement. Le compteur repart à chaque
+          renouvellement mensuel ; les analyses non utilisées ne sont pas reportées.
           Un rapport déjà présent dans le cache partagé est servi sans consommer d’analyse.
         </p>
         <p>
@@ -270,7 +271,7 @@ export function Cgv() {
 
 const PROCESSING = [
   ['Créer et faire fonctionner votre compte (connexion, sessions, extension connectée)', 'Exécution du contrat (art. 6.1.b)'],
-  ['Produire l’analyse demandée et tenir le quota du jour', 'Exécution du contrat (art. 6.1.b)'],
+  ['Produire l’analyse demandée et tenir le quota de l’abonnement', 'Exécution du contrat (art. 6.1.b)'],
   ['Encaisser l’abonnement et tenir le journal d’usage, preuve de ce qui a été fourni', 'Exécution du contrat (art. 6.1.b)'],
   ['Conserver les pièces de facturation', 'Obligation légale (art. 6.1.c)'],
   ['Protéger le service contre les abus : limites de fréquence, signature des requêtes, journaux techniques', 'Intérêt légitime (art. 6.1.f) : la sécurité du service'],

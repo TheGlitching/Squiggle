@@ -51,23 +51,29 @@ describe('Compte', () => {
     expect(screen.getByRole('button', { name: /s’abonner/i })).toBeInTheDocument();
   });
 
-  it('shows an active subscription with its daily allowance and a manage action', async () => {
+  it('shows an active subscription with what is left this period and a manage action', async () => {
     renderWith(
       makeAccount({
         plan: 'active',
-        usage: { used: 1, limit: 5, remaining: 4, resetsAt: null },
+        usage: { used: 1, limit: 60, remaining: 59, resetsAt: null },
       }),
     );
     expect(await screen.findByText('Abonnement actif')).toBeInTheDocument();
-    expect(screen.getByText('Il vous reste 4 analyses aujourd’hui.')).toBeInTheDocument();
+    expect(screen.getByText('Il vous reste 59 analyses ce mois-ci.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /gérer ou résilier/i })).toBeInTheDocument();
   });
 
-  it('shows an exhausted daily quota without asking to pay again', async () => {
+  it('shows an exhausted monthly quota, with the renewal date, without asking to pay again', async () => {
+    const renewal = Date.UTC(2026, 10, 26, 12);
     renderWith(
-      makeAccount({ plan: 'active', usage: { used: 5, limit: 5, remaining: 0, resetsAt: 1 } }),
+      makeAccount({
+        plan: 'active',
+        planExpiresAt: renewal,
+        usage: { used: 60, limit: 60, remaining: 0, resetsAt: renewal },
+      }),
     );
-    expect(await screen.findByText('Quota du jour atteint')).toBeInTheDocument();
+    expect(await screen.findByText('Quota du mois atteint')).toBeInTheDocument();
+    expect(screen.getByText('Vos 60 analyses de ce mois sont utilisées. Le compteur repart le 26 novembre.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /s’abonner/i })).toBeNull();
     expect(screen.getByRole('button', { name: /gérer ou résilier/i })).toBeInTheDocument();
   });
@@ -88,7 +94,7 @@ describe('Compte', () => {
     pending.unmount();
 
     installAccountFetch(
-      makeAccount({ plan: 'active', usage: { used: 0, limit: 10, remaining: 10, resetsAt: null } }),
+      makeAccount({ plan: 'active', usage: { used: 0, limit: 60, remaining: 60, resetsAt: null } }),
     );
     window.history.pushState({}, '', '/compte?paiement=ok');
     render(<Compte />);

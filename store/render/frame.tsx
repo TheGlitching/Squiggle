@@ -128,7 +128,7 @@ function Paths({ panel }: { panel: string }) {
       <Path
         kicker="Aucune clé à créer"
         title="Avec un compte Squiggle"
-        text="Rien à configurer. Ensuite 4,99 € par mois pour 10 analyses par jour, sans engagement."
+        text={'Rien à configurer. Ensuite 60 analyses par mois pour 4,99\u00a0€, sans engagement.'}
       >
         <PanelCut panel={panel} top={206} bottom={328} left={28} scale={1.4} />
       </Path>
