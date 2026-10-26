@@ -166,81 +166,48 @@ describe('GeminiClient web search', () => {
   });
 });
 
-describe('OpenAIClient web search', () => {
-  it('reports no support on a non-search model', () => {
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o' });
-    expect(client.supportsWebSearch()).toBe(false);
-  });
+/** A Responses API answer: the assistant message's output_text and its flat annotations. */
+function responsesMessage(text: string, annotations: unknown[] = []) {
+  return { output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text, annotations }] }] };
+}
 
-  it('reports support on a search-preview model', () => {
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+describe('OpenAIClient web search', () => {
+  it('supports web search on any model, through the Responses API tool', () => {
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     expect(client.supportsWebSearch()).toBe(true);
   });
 
-  it('throws rather than searching when the configured model does not support it', async () => {
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o' });
-    await expect(client.webSearch('query')).rejects.toThrow(/does not support web search/);
-  });
-
   it('parses url_citation annotations into SearchResult[]', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      choices: [
-        {
-          message: {
-            content: 'Here is the answer, sourced.',
-            annotations: [
-              {
-                type: 'url_citation',
-                url_citation: {
-                  url: 'https://example.com/source-a',
-                  title: 'Source A',
-                  content: 'Relevant excerpt from source A.',
-                  start_index: 0,
-                  end_index: 10,
-                },
-              },
-            ],
-          },
-        },
-      ],
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(responsesMessage('Here is the answer, sourced.', [
+      { type: 'url_citation', url: 'https://example.com/source-a', title: 'Source A', start_index: 0, end_index: 10 },
+    ])));
     vi.stubGlobal('fetch', fetchMock);
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     const results = await client.webSearch('query');
 
-    expect(results).toEqual([
-      { title: 'Source A', url: 'https://example.com/source-a', snippet: 'Relevant excerpt from source A.' },
-    ]);
-    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(results).toEqual([{ title: 'Source A', url: 'https://example.com/source-a', snippet: '' }]);
+    const [url, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/responses');
     const requestBody = JSON.parse(requestInit.body as string);
-    expect(requestBody.web_search_options).toEqual({});
+    expect(requestBody.tools).toEqual([{ type: 'web_search' }]);
+    expect(requestBody.input).toBe('query');
   });
 
   it('yields no results, without throwing, when annotations are absent', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      choices: [{ message: { content: 'No citations here.' } }],
-    })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(responsesMessage('No citations here.'))));
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     await expect(client.webSearch('query')).resolves.toEqual([]);
   });
 
   it('drops an annotation that has no usable url', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      choices: [
-        {
-          message: {
-            annotations: [
-              { type: 'url_citation', url_citation: { title: 'No url' } },
-              { type: 'url_citation', url_citation: { url: 'https://example.com/valid', title: 'Valid' } },
-            ],
-          },
-        },
-      ],
-    })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(responsesMessage('Answer.', [
+      { type: 'url_citation', title: 'No url' },
+      { type: 'url_citation', url: 'https://example.com/valid', title: 'Valid' },
+    ]))));
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     const results = await client.webSearch('query');
     expect(results).toEqual([{ title: 'Valid', url: 'https://example.com/valid', snippet: '' }]);
   });

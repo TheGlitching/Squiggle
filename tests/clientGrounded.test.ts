@@ -253,65 +253,39 @@ describe('GeminiClient grounded answer', () => {
   });
 });
 
-describe('OpenAIClient grounded answer', () => {
-  it('reports no support on a non-search model', () => {
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o' });
-    expect(client.supportsGroundedAnswer()).toBe(false);
-  });
+/** A Responses API answer: the assistant message's output_text and its flat annotations. */
+function responsesMessage(text: string, annotations: unknown[] = []) {
+  return { output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text, annotations }] }] };
+}
 
-  it('reports support on a search-preview model', () => {
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+describe('OpenAIClient grounded answer', () => {
+  it('supports grounded answers on any model, through the Responses API tool', () => {
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     expect(client.supportsGroundedAnswer()).toBe(true);
   });
 
-  it('throws rather than requesting a grounded answer when the configured model does not support it', async () => {
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o' });
-    await expect(client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] })).rejects.toThrow(/does not support grounded answers/);
-  });
-
-  it('reads the message content and url_citation annotations, including their real snippet, from a realistic payload', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      choices: [
-        {
-          message: {
-            content: 'The claim is confirmed by the sourced article.',
-            annotations: [
-              {
-                type: 'url_citation',
-                url_citation: {
-                  url: 'https://example.com/source-a',
-                  title: 'Source A',
-                  content: 'The exact page text the model actually read.',
-                  start_index: 0,
-                  end_index: 10,
-                },
-              },
-            ],
-          },
-        },
-      ],
-    }));
+  it('reads the output_text and its url_citation annotations from a realistic payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(responsesMessage('The claim is confirmed by the sourced article.', [
+      { type: 'url_citation', url: 'https://example.com/source-a', title: 'Source A', start_index: 0, end_index: 10 },
+    ])));
     vi.stubGlobal('fetch', fetchMock);
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     const result = await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
 
     expect(result.content).toBe('The claim is confirmed by the sourced article.');
-    expect(result.citations).toEqual([
-      { title: 'Source A', url: 'https://example.com/source-a', snippet: 'The exact page text the model actually read.' },
-    ]);
+    expect(result.citations).toEqual([{ title: 'Source A', url: 'https://example.com/source-a', snippet: '' }]);
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const requestBody = JSON.parse(requestInit.body as string);
-    expect(requestBody.web_search_options).toEqual({});
+    expect(requestBody.tools).toEqual([{ type: 'web_search' }]);
+    expect(requestBody.input).toEqual([{ role: 'user', content: 'q' }]);
   });
 
   it('yields the answer text when annotations are absent', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      choices: [{ message: { content: 'No citations were needed.' } }],
-    })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(responsesMessage('No citations were needed.'))));
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     const result = await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
 
     expect(result.content).toBe('No citations were needed.');
@@ -319,53 +293,38 @@ describe('OpenAIClient grounded answer', () => {
   });
 
   it('drops an annotation that has no usable url', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(responsesMessage('Answer text.', [
+      { type: 'url_citation', title: 'No url' },
+      { type: 'url_citation', url: 'https://example.com/valid', title: 'Valid' },
+    ]))));
+
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
+    const result = await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
+
+    expect(result.citations).toEqual([{ title: 'Valid', url: 'https://example.com/valid', snippet: '' }]);
+  });
+
+  it('de-duplicates a cited url that the search sources list again', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      choices: [
-        {
-          message: {
-            content: 'Answer text.',
-            annotations: [
-              { type: 'url_citation', url_citation: { title: 'No url' } },
-              { type: 'url_citation', url_citation: { url: 'https://example.com/valid', title: 'Valid', content: 'Excerpt.' } },
-            ],
-          },
-        },
+      output: [
+        { type: 'web_search_call', action: { type: 'search', sources: [{ type: 'url', url: 'https://example.com/a' }] } },
+        ...responsesMessage('Answer text.', [
+          { type: 'url_citation', url: 'https://example.com/a', title: 'Example A' },
+          { type: 'url_citation', url: 'https://example.com/a', title: 'Example A again' },
+        ]).output,
       ],
     })));
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     const result = await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
 
-    expect(result.citations).toEqual([{ title: 'Valid', url: 'https://example.com/valid', snippet: 'Excerpt.' }]);
+    expect(result.citations).toEqual([{ title: 'Example A', url: 'https://example.com/a', snippet: '' }]);
   });
 
-  it('de-duplicates annotations that repeat the same url', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      choices: [
-        {
-          message: {
-            content: 'Answer text.',
-            annotations: [
-              { type: 'url_citation', url_citation: { url: 'https://example.com/a', title: 'Example A', content: 'First excerpt.' } },
-              { type: 'url_citation', url_citation: { url: 'https://example.com/a', title: 'Example A again', content: 'Second excerpt.' } },
-            ],
-          },
-        },
-      ],
-    })));
+  it('throws rather than resolving an empty answer when the output text is blank', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(responsesMessage(''))));
 
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
-    const result = await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
-
-    expect(result.citations).toEqual([{ title: 'Example A', url: 'https://example.com/a', snippet: 'First excerpt.' }]);
-  });
-
-  it('throws rather than resolving an empty answer when the message content is blank', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      choices: [{ message: { content: '' } }],
-    })));
-
-    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-search-preview' });
+    const client = new OpenAIClient({ provider: 'openai', apiKey: 'k', model: 'gpt-6-luna' });
     await expect(client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] })).rejects.toThrow(/no answer text/);
   });
 });

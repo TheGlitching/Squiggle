@@ -1,3 +1,6 @@
+import { BYOKError } from '../types/byok';
+import type { CompletionOptions } from '../types/byok';
+import type { GroundedAnswer, SearchResult } from './base';
 import { OpenAIClient } from './openai';
 
 /**
@@ -70,7 +73,7 @@ export class OpenRouterClient extends OpenAIClient {
   }
 
   protected override get defaultModel(): string {
-    return 'anthropic/claude-3.5-sonnet';
+    return 'deepseek/deepseek-v4.1-flash';
   }
 
   protected override get providerName(): 'openai' | 'openrouter' {
@@ -88,36 +91,67 @@ export class OpenRouterClient extends OpenAIClient {
   }
 
   /**
+   * OpenRouter takes `max_tokens` and `temperature` for every model and
+   * drops what the routed provider does not support, so the low temperature
+   * the analysis asks for still reaches the models that honour it.
+   */
+  protected override samplingParams(options: CompletionOptions): Record<string, unknown> {
+    return { temperature: options.temperature ?? 0.2, max_tokens: options.maxTokens };
+  }
+
+  /**
    * Web search on OpenRouter is a server tool rather than a per-model
-   * capability, so every routed model can search, unlike the bare OpenAI
-   * provider it extends.
+   * capability, so every routed model can search. It is requested through
+   * the `openrouter:web_search` tool instead of the deprecated `:online`
+   * model suffix, which silently fell back to Exa for models like DeepSeek
+   * with no native search.
    */
   override supportsWebSearch(): boolean {
     return true;
   }
 
-  /**
-   * The plain model id. Search is requested through the
-   * `openrouter:web_search` server tool instead of the deprecated `:online`
-   * suffix, which silently fell back to Exa for models like DeepSeek with no
-   * native search.
-   */
-  protected override resolveWebSearchModel(): string {
-    return this.config.model || this.defaultModel;
+  private get webSearchTool(): Record<string, unknown> {
+    return {
+      type: 'openrouter:web_search',
+      parameters: {
+        engine: OPENROUTER_WEB_SEARCH.engine,
+        mode: OPENROUTER_WEB_SEARCH.mode,
+        max_results: OPENROUTER_WEB_SEARCH.maxResults,
+      },
+    };
   }
 
-  protected override buildWebSearchExtras(): Record<string, unknown> {
-    return {
-      tools: [
-        {
-          type: 'openrouter:web_search',
-          parameters: {
-            engine: OPENROUTER_WEB_SEARCH.engine,
-            mode: OPENROUTER_WEB_SEARCH.mode,
-            max_results: OPENROUTER_WEB_SEARCH.maxResults,
-          },
-        },
-      ],
+  private async searchingCompletion(body: Record<string, unknown>, signal?: AbortSignal): Promise<{ content?: unknown; annotations?: unknown }> {
+    const response = await this.postJson(
+      `${this.baseUrl}/chat/completions`,
+      this.getHeaders(),
+      { model: this.model, ...body, tools: [this.webSearchTool] },
+      signal
+    );
+    const data = await response.json() as { choices?: Array<{ message?: { content?: unknown; annotations?: unknown } }> };
+    return data.choices?.[0]?.message ?? {};
+  }
+
+  override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
+    const message = await this.searchingCompletion({ messages: [{ role: 'user', content: query }] });
+    return this.parseAnnotations(message.annotations, opts?.maxResults);
+  }
+
+  override async groundedAnswer(options: CompletionOptions & { maxSearches?: number }): Promise<GroundedAnswer> {
+    const body: Record<string, unknown> = {
+      messages: this.formatMessages(options),
+      ...this.responseFormat(options),
     };
+    if (options.maxTokens) {
+      body.max_tokens = options.maxTokens;
+    }
+
+    const message = await this.searchingCompletion(body, options.abortSignal);
+    const content = typeof message.content === 'string' ? message.content.trim() : '';
+    if (!content) {
+      throw new BYOKError({ provider: 'openrouter', message: 'grounded answer returned no answer text' });
+    }
+
+    return { content, citations: this.dedupeCitations(this.parseAnnotations(message.annotations, options.maxSearches)) };
   }
 }

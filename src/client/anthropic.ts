@@ -1,4 +1,4 @@
-import { BYOKError } from '@squiggle/shared';
+import { BYOKError, providerError } from '@squiggle/shared';
 import type {
   CompletionOptions,
   CompletionResponse,
@@ -7,61 +7,60 @@ import type {
 import type { GroundedAnswer, SearchResult } from '@squiggle/shared';
 import { BaseLLMClient } from '@squiggle/shared';
 
+/**
+ * Raw HTTP against the Messages API, on API version 2026-10-21.
+ *
+ * No request carries `temperature`: that version rejects every sampling
+ * parameter on every model, and the current models (Claude 4.7 and later)
+ * already rejected anything but the default under 2023-06-01.
+ */
 export class AnthropicClient extends BaseLLMClient {
   private get baseUrl(): string {
     return this.config.baseUrl || 'https://api.anthropic.com/v1';
   }
 
-  async complete(options: CompletionOptions): Promise<CompletionResponse> {
-    const { system, messages } = this.formatSystemAndUserMessages(options);
+  private get model(): string {
+    return this.config.model || 'claude-opus-5-5';
+  }
 
-    const body: Record<string, unknown> = {
-      model: this.config.model || 'claude-3-5-sonnet-20241022',
-      max_tokens: options.maxTokens || 4096,
-      temperature: options.temperature ?? 0.2,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    };
-
-    if (system) {
-      body.system = system;
-    }
-
-    const headers: Record<string, string> = {
+  private get headers(): Record<string, string> {
+    return {
       'content-type': 'application/json',
       'x-api-key': this.config.apiKey,
-      'anthropic-version': '2023-06-01',
+      'anthropic-version': '2026-10-21',
       'anthropic-dangerous-direct-browser-access': 'true',
       ...this.config.customHeaders,
     };
+  }
 
-    const response = await fetch(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: any;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: 'anthropic',
-        statusCode: response.status,
-        message: errorData?.error?.message || response.statusText || 'Anthropic API request failed',
-        raw: errorData,
-      });
+  private buildBody(options: CompletionOptions, maxTokens: number): Record<string, unknown> {
+    const { system, messages } = this.formatSystemAndUserMessages(options);
+    const body: Record<string, unknown> = {
+      model: this.model,
+      max_tokens: options.maxTokens || maxTokens,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+    };
+    if (system) {
+      body.system = system;
     }
+    if (options.jsonSchema) {
+      body.output_config = { format: { type: 'json_schema', schema: options.jsonSchema } };
+    }
+    return body;
+  }
 
-    const data = await response.json();
-    const content = data.content?.[0]?.text || '';
+  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+    const response = await this.postJson(`${this.baseUrl}/messages`, this.headers, this.buildBody(options, 16000), options.abortSignal);
+    const data = await response.json() as {
+      content?: unknown;
+      model?: string;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
 
     return {
-      content,
-      model: data.model || this.config.model,
+      // Current models think by default, so the answer is not the first block.
+      content: this.extractText(data.content),
+      model: data.model || this.model,
       usage: {
         promptTokens: data.usage?.input_tokens,
         completionTokens: data.usage?.output_tokens,
@@ -73,120 +72,62 @@ export class AnthropicClient extends BaseLLMClient {
   }
 
   async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {
-    const { system, messages } = this.formatSystemAndUserMessages(options);
-
-    const body: Record<string, unknown> = {
-      model: this.config.model || 'claude-3-5-sonnet-20241022',
-      max_tokens: options.maxTokens || 4096,
-      temperature: options.temperature ?? 0.2,
-      stream: true,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    };
-
-    if (system) {
-      body.system = system;
-    }
-
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      'x-api-key': this.config.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      ...this.config.customHeaders,
-    };
-
-    const response = await fetch(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: any;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = await response.text();
-      }
-      const err = new BYOKError({
-        provider: 'anthropic',
-        statusCode: response.status,
-        message: errorData?.error?.message || response.statusText || 'Anthropic streaming request failed',
-        raw: errorData,
-      });
-      callbacks.onError?.(err);
-      throw err;
-    }
-
-    if (!response.body) {
-      throw new BYOKError({
-        provider: 'anthropic',
-        message: 'Response body is empty',
-      });
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
     let fullText = '';
-    let buffer = '';
     let inputTokens = 0;
     let outputTokens = 0;
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const response = await this.postJson(
+        `${this.baseUrl}/messages`,
+        this.headers,
+        { ...this.buildBody(options, 16000), stream: true },
+        options.abortSignal
+      );
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const dataStr = trimmed.replace(/^data:\s*/, '');
-          if (dataStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(dataStr);
-            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-              const delta = parsed.delta.text;
-              fullText += delta;
-              callbacks.onChunk(delta);
-            } else if (parsed.type === 'message_start' && parsed.message?.usage) {
-              inputTokens = parsed.message.usage.input_tokens || 0;
-            } else if (parsed.type === 'message_delta' && parsed.usage) {
-              outputTokens = parsed.usage.output_tokens || 0;
-            }
-          } catch {
-            // Ignore parse errors on SSE events
-          }
+      await this.readServerSentEvents(response, (event) => {
+        const parsed = event as {
+          type?: string;
+          delta?: { text?: string };
+          message?: { usage?: { input_tokens?: number } };
+          usage?: { output_tokens?: number };
+        };
+        if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+          fullText += parsed.delta.text;
+          callbacks.onChunk(parsed.delta.text);
+        } else if (parsed.type === 'message_start') {
+          inputTokens = parsed.message?.usage?.input_tokens || 0;
+        } else if (parsed.type === 'message_delta') {
+          outputTokens = parsed.usage?.output_tokens || outputTokens;
+        } else if (parsed.type === 'error') {
+          // An overload can end a stream that started fine, after an HTTP 200.
+          throw providerError('anthropic', event);
         }
-      }
-
-      callbacks.onComplete?.(fullText);
-
-      return {
-        content: fullText,
-        model: this.config.model,
-        usage: {
-          promptTokens: inputTokens,
-          completionTokens: outputTokens,
-          totalTokens: inputTokens + outputTokens,
-        },
-        provider: 'anthropic',
-      };
-    } catch (err: any) {
-      callbacks.onError?.(err);
-      throw err;
+      });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      callbacks.onError?.(error);
+      throw error;
     }
+
+    callbacks.onComplete?.(fullText);
+
+    return {
+      content: fullText,
+      model: this.model,
+      usage: {
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      },
+      provider: 'anthropic',
+    };
   }
 
   /**
    * Claude's server-side search runs through the same messages endpoint as a
    * regular completion, gated by a tool declaration rather than a separate
-   * API surface.
+   * API surface. The basic `web_search_20250305` variant is the one every
+   * current model accepts.
    */
   override supportsWebSearch(): boolean {
     return true;
@@ -195,49 +136,14 @@ export class AnthropicClient extends BaseLLMClient {
   override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
     const maxUses = opts?.maxResults && opts.maxResults > 0 ? opts.maxResults : 5;
 
-    const body: Record<string, unknown> = {
-      model: this.config.model || 'claude-3-5-sonnet-20241022',
+    const body = {
+      model: this.model,
       max_tokens: 1024,
       messages: [{ role: 'user', content: query }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxUses }],
     };
 
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      'x-api-key': this.config.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      ...this.config.customHeaders,
-    };
-
-    const response = await fetch(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || 'Anthropic web search request failed';
-      try {
-        errorData = await response.json();
-        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          const errObj = errorData.error;
-          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: 'anthropic',
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
-
+    const response = await this.postJson(`${this.baseUrl}/messages`, this.headers, body);
     const data = await response.json() as { content?: unknown };
     return this.parseWebSearchResults(data.content, opts?.maxResults);
   }
@@ -252,65 +158,20 @@ export class AnthropicClient extends BaseLLMClient {
   }
 
   override async groundedAnswer(options: CompletionOptions & { maxSearches?: number }): Promise<GroundedAnswer> {
-    const { system, messages } = this.formatSystemAndUserMessages(options);
     const maxUses = options.maxSearches && options.maxSearches > 0 ? options.maxSearches : 5;
-
-    const body: Record<string, unknown> = {
-      model: this.config.model || 'claude-3-5-sonnet-20241022',
-      max_tokens: options.maxTokens || 4096,
-      temperature: options.temperature ?? 0.2,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
+    const body = {
+      ...this.buildBody({ ...options, jsonSchema: undefined }, 16000),
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxUses }],
     };
 
-    if (system) {
-      body.system = system;
-    }
-
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      'x-api-key': this.config.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      ...this.config.customHeaders,
-    };
-
-    const response = await fetch(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || 'Anthropic grounded answer request failed';
-      try {
-        errorData = await response.json();
-        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          const errObj = errorData.error;
-          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: 'anthropic',
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
-
+    const response = await this.postJson(`${this.baseUrl}/messages`, this.headers, body, options.abortSignal);
     const data = await response.json() as { content?: unknown };
     const blocks = Array.isArray(data.content) ? data.content : [];
 
     const content = this.extractText(blocks).trim();
 
     if (!content) {
-      throw new Error('anthropic grounded answer returned no answer text');
+      throw new BYOKError({ provider: 'anthropic', message: 'grounded answer returned no answer text' });
     }
 
     const citations = this.dedupeCitations([
@@ -322,8 +183,9 @@ export class AnthropicClient extends BaseLLMClient {
   }
 
   /**
-   * The final answer may be split across several `text` blocks interleaved
-   * with search tool-use blocks, so every text block is concatenated rather
+   * The answer may follow a thinking block and be split across several
+   * `text` blocks, interleaved with search tool-use blocks or cut where a
+   * citation starts, so every text block is concatenated as written rather
    * than assuming the answer lives in a single fixed position.
    */
   private extractText(blocks: unknown): string {
@@ -340,7 +202,7 @@ export class AnthropicClient extends BaseLLMClient {
         parts.push(block.text);
       }
     }
-    return parts.join('\n');
+    return parts.join('');
   }
 
   /**

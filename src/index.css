@@ -50,11 +50,11 @@
   If we ever want to remove these styles, we need to add an explicit border
   color utility to any element that depends on these defaults.
 */
-/* Tailwind 3 painted placeholders gray-400; 4 fades the text colour instead. */
+/* Placeholders take the palette's faint tone, not Tailwind's cool gray-400. */
 @layer base {
   input::placeholder,
   textarea::placeholder {
-    color: var(--color-gray-400);
+    color: var(--color-faint);
   }
 }
 

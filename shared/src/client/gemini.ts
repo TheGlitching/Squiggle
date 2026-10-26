@@ -31,7 +31,7 @@ export class GeminiClient extends BaseLLMClient {
   }
 
   private get modelName(): string {
-    return this.config.model || 'gemini-1.5-pro';
+    return this.config.model || 'gemini-3.8-flash';
   }
 
   private formatContents(options: CompletionOptions): { systemInstruction?: { parts: Array<{ text: string }> }; contents: Array<{ role: string; parts: Array<{ text: string }> }> } {
@@ -52,62 +52,38 @@ export class GeminiClient extends BaseLLMClient {
     return { systemInstruction, contents };
   }
 
-  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+  /**
+   * `responseJsonSchema` takes a plain JSON Schema (`additionalProperties`
+   * included). The older `responseSchema` takes an OpenAPI subset that
+   * rejects `additionalProperties` outright, and is deprecated.
+   */
+  private buildBody(options: CompletionOptions): Record<string, unknown> {
     const { systemInstruction, contents } = this.formatContents(options);
-
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        temperature: options.temperature ?? 0.2,
-        maxOutputTokens: options.maxTokens,
-      },
+    const generationConfig: Record<string, unknown> = {
+      temperature: options.temperature ?? 0.2,
+      maxOutputTokens: options.maxTokens,
     };
-
+    if (options.jsonSchema) {
+      generationConfig.responseMimeType = 'application/json';
+      generationConfig.responseJsonSchema = options.jsonSchema;
+    }
+    const body: Record<string, unknown> = { contents, generationConfig };
     if (systemInstruction) {
       body.systemInstruction = systemInstruction;
     }
+    return body;
+  }
 
-    if (options.jsonSchema) {
-      (body.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
-      (body.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema;
-    }
-
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent`;
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: this.authHeaders,
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || 'Gemini API request failed';
-      try {
-        errorData = await response.json();
-        if (typeof errorData === 'object' && errorData !== null && 'error' in errorData) {
-          const errObj = (errorData as { error?: { message?: string } }).error;
-          if (errObj?.message) {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-
-      throw new BYOKError({
-        provider: 'gemini',
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
+  async complete(options: CompletionOptions): Promise<CompletionResponse> {
+    const response = await this.postJson(
+      `${this.baseUrl}/models/${this.modelName}:generateContent`,
+      this.authHeaders,
+      this.buildBody(options),
+      options.abortSignal
+    );
 
     const data = await response.json() as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
+      candidates?: unknown[];
       usageMetadata?: {
         promptTokenCount?: number;
         candidatesTokenCount?: number;
@@ -115,10 +91,8 @@ export class GeminiClient extends BaseLLMClient {
       };
     };
 
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
     return {
-      content,
+      content: this.extractCandidateText(data.candidates?.[0]),
       model: this.modelName,
       usage: {
         promptTokens: data.usageMetadata?.promptTokenCount,
@@ -133,7 +107,7 @@ export class GeminiClient extends BaseLLMClient {
   /**
    * Grounding with Google Search is a per-request tool, available on every
    * model this client targets, so support does not depend on the configured
-   * model id the way OpenAI's search-preview gating does.
+   * model id.
    */
   override supportsWebSearch(): boolean {
     return true;
@@ -145,35 +119,7 @@ export class GeminiClient extends BaseLLMClient {
       tools: [{ google_search: {} }],
     };
 
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent`;
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: this.authHeaders,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || 'Gemini web search request failed';
-      try {
-        errorData = await response.json();
-        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          const errObj = errorData.error;
-          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: 'gemini',
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
+    const response = await this.postJson(`${this.baseUrl}/models/${this.modelName}:generateContent`, this.authHeaders, body);
 
     const data = await response.json() as { candidates?: unknown };
     const firstCandidate = Array.isArray(data.candidates) ? data.candidates[0] : undefined;
@@ -240,58 +186,21 @@ export class GeminiClient extends BaseLLMClient {
   }
 
   override async groundedAnswer(options: CompletionOptions & { maxSearches?: number }): Promise<GroundedAnswer> {
-    const { systemInstruction, contents } = this.formatContents(options);
+    const body = { ...this.buildBody({ ...options, jsonSchema: undefined }), tools: [{ google_search: {} }] };
 
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        temperature: options.temperature ?? 0.2,
-        maxOutputTokens: options.maxTokens,
-      },
-      tools: [{ google_search: {} }],
-    };
-
-    if (systemInstruction) {
-      body.systemInstruction = systemInstruction;
-    }
-
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:generateContent`;
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: this.authHeaders,
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || 'Gemini grounded answer request failed';
-      try {
-        errorData = await response.json();
-        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          const errObj = errorData.error;
-          if (errObj && typeof errObj === 'object' && 'message' in errObj && typeof errObj.message === 'string') {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-      throw new BYOKError({
-        provider: 'gemini',
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-    }
+    const response = await this.postJson(
+      `${this.baseUrl}/models/${this.modelName}:generateContent`,
+      this.authHeaders,
+      body,
+      options.abortSignal
+    );
 
     const data = await response.json() as { candidates?: unknown };
     const firstCandidate = Array.isArray(data.candidates) ? data.candidates[0] : undefined;
 
     const content = this.extractCandidateText(firstCandidate).trim();
     if (!content) {
-      throw new Error('gemini grounded answer returned no answer text');
+      throw new BYOKError({ provider: 'gemini', message: 'grounded answer returned no answer text' });
     }
 
     const groundingMetadata = firstCandidate && typeof firstCandidate === 'object' && 'groundingMetadata' in firstCandidate
@@ -304,8 +213,9 @@ export class GeminiClient extends BaseLLMClient {
   }
 
   /**
-   * A candidate's answer lives in `content.parts`, split across one part per
-   * text segment when the model interleaves prose with tool activity.
+   * A candidate's answer lives in `content.parts`, split across several parts
+   * when the model interleaves prose with tool activity, and preceded by
+   * `thought` parts when the model shares its reasoning. Those are not answer.
    */
   private extractCandidateText(candidate: unknown): string {
     if (!candidate || typeof candidate !== 'object' || !('content' in candidate)) {
@@ -318,136 +228,60 @@ export class GeminiClient extends BaseLLMClient {
 
     const parts: string[] = [];
     for (const part of candidateContent.parts) {
-      if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') {
+      if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string' && !('thought' in part && part.thought === true)) {
         parts.push(part.text);
       }
     }
-    return parts.join('\n');
+    return parts.join('');
   }
 
   async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {
-    const { systemInstruction, contents } = this.formatContents(options);
-
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        temperature: options.temperature ?? 0.2,
-        maxOutputTokens: options.maxTokens,
-      },
-    };
-
-    if (systemInstruction) {
-      body.systemInstruction = systemInstruction;
-    }
-
-    if (options.jsonSchema) {
-      (body.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
-      (body.generationConfig as Record<string, unknown>).responseSchema = options.jsonSchema;
-    }
-
-    const endpoint = `${this.baseUrl}/models/${this.modelName}:streamGenerateContent?alt=sse`;
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: this.authHeaders,
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
-
-    if (!response.ok) {
-      let errorData: unknown;
-      let errorMessage = response.statusText || 'Gemini streaming request failed';
-      try {
-        errorData = await response.json();
-        if (typeof errorData === 'object' && errorData !== null && 'error' in errorData) {
-          const errObj = (errorData as { error?: { message?: string } }).error;
-          if (errObj?.message) {
-            errorMessage = errObj.message;
-          }
-        }
-      } catch {
-        errorData = await response.text();
-      }
-
-      const err = new BYOKError({
-        provider: 'gemini',
-        statusCode: response.status,
-        message: errorMessage,
-        raw: errorData,
-      });
-      callbacks.onError?.(err);
-      throw err;
-    }
-
-    if (!response.body) {
-      const err = new BYOKError({
-        provider: 'gemini',
-        message: 'Response body is empty',
-      });
-      callbacks.onError?.(err);
-      throw err;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
     let fullText = '';
-    let buffer = '';
     let inputTokens = 0;
     let outputTokens = 0;
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const response = await this.postJson(
+        `${this.baseUrl}/models/${this.modelName}:streamGenerateContent?alt=sse`,
+        this.authHeaders,
+        this.buildBody(options),
+        options.abortSignal
+      );
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      await this.readServerSentEvents(response, (event) => {
+        const parsed = event as {
+          candidates?: unknown[];
+          usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        };
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const dataStr = trimmed.replace(/^data:\s*/, '');
-          if (dataStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(dataStr) as {
-              candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-              usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
-            };
-
-            const delta = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (delta) {
-              fullText += delta;
-              callbacks.onChunk(delta);
-            }
-
-            if (parsed.usageMetadata) {
-              inputTokens = parsed.usageMetadata.promptTokenCount || inputTokens;
-              outputTokens = parsed.usageMetadata.candidatesTokenCount || outputTokens;
-            }
-          } catch {
-            // Ignore parse errors on individual SSE chunks
-          }
+        const delta = this.extractCandidateText(parsed.candidates?.[0]);
+        if (delta) {
+          fullText += delta;
+          callbacks.onChunk(delta);
         }
-      }
 
-      callbacks.onComplete?.(fullText);
-
-      return {
-        content: fullText,
-        model: this.modelName,
-        usage: {
-          promptTokens: inputTokens,
-          completionTokens: outputTokens,
-          totalTokens: inputTokens + outputTokens,
-        },
-        provider: 'gemini',
-      };
+        if (parsed.usageMetadata) {
+          inputTokens = parsed.usageMetadata.promptTokenCount || inputTokens;
+          outputTokens = parsed.usageMetadata.candidatesTokenCount || outputTokens;
+        }
+      });
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       callbacks.onError?.(error);
       throw error;
     }
+
+    callbacks.onComplete?.(fullText);
+
+    return {
+      content: fullText,
+      model: this.modelName,
+      usage: {
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      },
+      provider: 'gemini',
+    };
   }
 }
