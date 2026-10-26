@@ -27,7 +27,8 @@ const CARD_ID = 'exemple-constat';
 const STRENGTHS = EXAMPLES.filter((finding) => finding.category === 'point-fort').length;
 const PASSAGES = EXAMPLES.length - STRENGTHS;
 
-function tone(severity: HighlightSeverity): CSSProperties {
+/** A severity's colours as the CSS variables the highlight and card styles read. */
+export function tone(severity: HighlightSeverity): CSSProperties {
   const { color, tint, text } = SEVERITY_COLORS[severity];
   return { '--sev-color': color, '--sev-tint': tint, '--sev-text': text } as CSSProperties;
 }

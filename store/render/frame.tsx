@@ -57,8 +57,8 @@ const SHOTS: Record<string, Shot> = {
     page: '',
   },
   'shot-5': {
-    title: 'Votre clé, ou un compte.',
-    lead: 'Gratuit avec votre propre clé d’API, ou sans réglage avec un compte Squiggle. Rien n’est lu avant votre clic.',
+    title: 'Gratuit avec votre clé, ou un compte.',
+    lead: 'Avec votre clé, Squiggle ne vous facture rien : votre fournisseur d’IA facture l’usage, quelques centimes par analyse.',
     figure: <DeviceFigure device="navigateur" />,
     panel: 'state=ownkey',
     page: '',
@@ -70,9 +70,9 @@ const asset = new URLSearchParams(location.search).get('asset') ?? 'shot-1';
 
 /**
  * A region of the real panel, cut out and enlarged. The offsets are the panel's own
- * layout at 392px (`panel.html?state=ownkey`); the own-key cut starts below its section
- * header and inside its border, whose title the card already says, and stops above the model field, so no
- * model name reaches the listing.
+ * layout at 392px (`panel.html?state=ownkey`). Each cut starts below its card's title,
+ * which the path above already says; the own-key cut keeps the panel's plain explanation
+ * of who bills what and stops above the provider buttons, so no model name reaches the listing.
  */
 function PanelCut({
   panel,
@@ -119,18 +119,18 @@ function Paths({ panel }: { panel: string }) {
   return (
     <div className="absolute top-[232px] right-[56px] left-[56px] grid grid-cols-2 items-stretch gap-8">
       <Path
-        kicker="Gratuit"
-        title="Avec votre propre clé d’API"
-        text="Anthropic, OpenAI, Google Gemini ou OpenRouter. La clé reste dans votre navigateur."
+        kicker="Gratuit, 0 €"
+        title="Avec votre propre clé d’IA"
+        text="La clé reste dans votre navigateur, rien ne passe par nos serveurs."
       >
-        <PanelCut panel={panel} top={442} bottom={644} left={28} scale={1.4} />
+        <PanelCut panel={panel} top={432} bottom={604} left={24} scale={1.4} />
       </Path>
       <Path
         kicker="Sans réglage"
         title="Avec un compte Squiggle"
-        text="3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois, sans engagement."
+        text="Rien à configurer. Ensuite 4,99 € par mois pour 10 analyses par jour, sans engagement."
       >
-        <PanelCut panel={panel} top={182} bottom={342} left={16} scale={1.4} />
+        <PanelCut panel={panel} top={206} bottom={328} left={28} scale={1.4} />
       </Path>
     </div>
   );

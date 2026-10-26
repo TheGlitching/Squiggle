@@ -55,6 +55,11 @@ const STEPS: Array<{ step: Step; title: string; text: string; then?: string }> =
   },
 ];
 
+/** Who bills an own-key analysis, named so a reader knows which key to bring. */
+const OWN_KEY_PROVIDERS = 'OpenAI, Anthropic, Google Gemini ou OpenRouter';
+const API_KEY_MEANS =
+  'Une clé d’API, c’est le code d’accès personnel que ce fournisseur vous donne sur son site : vous le collez une fois dans l’extension.';
+
 const COMMITMENTS = [
   'Les mêmes critères pour chaque article.',
   'Le texte est jugé, jamais son auteur.',
@@ -77,7 +82,11 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
   [
     'Que se passe-t-il après l’essai ?',
-    `Rien n’est prélevé : aucune carte n’est demandée. Pour continuer, abonnez-vous depuis Mon compte, ${PRICE_MONTHLY} par mois. Ou, dans l’extension, utilisez votre propre clé d’API : c’est gratuit.`,
+    `Rien n’est prélevé : aucune carte n’est demandée. Pour continuer, abonnez-vous depuis Mon compte, ${PRICE_MONTHLY} par mois. Ou passez à l’extension avec votre propre clé d’IA : Squiggle ne vous facture alors plus rien.`,
+  ],
+  [
+    'Gratuit avec ma propre clé : qu’est-ce que je paie ?',
+    `Rien à Squiggle. La partie IA de l’analyse tourne sur votre propre compte chez un fournisseur d’IA (${OWN_KEY_PROVIDERS}), qui vous facture directement à l’usage : en général quelques centimes par analyse. ${API_KEY_MEANS} Sans compte chez un fournisseur, le compte Squiggle est plus simple : rien à régler.`,
   ],
   ['Et les articles payants ?', 'Squiggle analyse ce que vous pouvez lire, et signale un texte partiel.'],
   ['Comment résilier ?', 'À tout moment, depuis Mon compte, jusqu’à la fin de la période en cours.'],
@@ -92,6 +101,14 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
 ];
 
+const WAYS_TO_PAY = [
+  ['Avec un compte, sans réglage :', `${FREE_ANALYSES} analyses offertes, puis ${PRICE_MONTHLY} par mois.`],
+  [
+    'Gratuit avec votre propre clé d’IA :',
+    'dans l’extension. Votre fournisseur d’IA vous facture directement, en général quelques centimes par analyse.',
+  ],
+] as const;
+
 /** What the subscription opens, in the reader's terms. */
 const INCLUDED = [
   `${DAILY_ANALYSES} analyses par jour`,
@@ -105,7 +122,7 @@ const ACTIONS = 'flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-
 const WAY_ACTION = `${SECONDARY_BUTTON} w-fit max-sm:w-full`;
 
 /** One way in: its drawing, what it is, and its action pinned to the bottom of the column. */
-function Way({ device, title, text, children }: { device: Device; title: string; text: string; children: ReactNode }) {
+function Way({ device, title, text, children }: { device: Device; title: string; text: ReactNode; children: ReactNode }) {
   return (
     <li className="flex flex-col gap-4">
       <div className="max-w-56">
@@ -158,6 +175,22 @@ export function Accueil() {
                 Voir un exemple
               </a>
             </div>
+            {/* The two ways to pay, stated where the reader decides; the sign-up stays the one button. */}
+            <ul aria-label="Deux façons de l’utiliser" className="mt-8 grid list-none gap-3 p-0 text-base leading-snug">
+              {WAYS_TO_PAY.map(([way, terms]) => (
+                <li key={way} className="flex gap-3">
+                  <SquiggleMark />
+                  <span>
+                    <span className="font-semibold">{way}</span> <span className="text-muted">{terms}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 mb-0">
+              <a href="#tarifs" className={QUIET_LINK}>
+                Comparer les deux
+              </a>
+            </p>
           </div>
 
           <figure className="m-0 lg:-mt-36">
@@ -208,28 +241,81 @@ export function Accueil() {
         </ol>
       </Section>
 
-      <Section id="grille" title="La même grille pour tous" intro="Cinq questions, posées à chaque article.">
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-20">
-          {/* The weights are the engine's and will move; the page names what is read, not the points. */}
-          <div className="grid items-start gap-8 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:gap-10">
-            <div className="mx-auto w-full max-w-60 md:pt-2">
-              <StepFigure step="lecture" />
-            </div>
-            <ol aria-label="Les cinq domaines" className="m-0 grid list-none gap-0 p-0">
-              {DOMAINS.map(([label, , question]) => (
-                <li key={label} className="flex gap-4 border-b border-lineSoft py-4 last:border-b-0">
-                  <SquiggleMark />
-                  <span className="grid gap-1">
-                    <span className="font-medium">{label}</span>
-                    <span className="text-muted">{question}</span>
+      <Section
+        id="grille"
+        title="La même grille pour tous"
+        intro="Cinq critères, appliqués à chaque article, quel qu’en soit l’auteur."
+      >
+        {/* The weights are the engine's and will move; the page names what is read, not the points.
+            A real table on a wide screen; on a phone each row stacks into its criterion, its
+            question and its example, and the header stays for assistive technology only. */}
+        <table className="w-full border-collapse text-left">
+          <caption className="sr-only">Les cinq critères de la grille</caption>
+          <thead className="max-md:sr-only">
+            <tr className="text-base text-muted">
+              <th scope="col" className="w-[32%] pb-4 font-medium">
+                Critère
+              </th>
+              <th scope="col" className="w-[28%] pb-4 font-medium">
+                Ce qui est vérifié
+              </th>
+              <th scope="col" className="pb-4 font-medium">
+                Exemple de passage relevé
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {DOMAINS.map(([label, , question, { before, mark, after, note }]) => (
+              <tr
+                key={label}
+                className="grid gap-2 border-t border-lineSoft py-6 max-md:pl-8.5 md:table-row md:py-0"
+              >
+                <th scope="row" className="font-medium md:py-6 md:pr-8 md:align-top">
+                  <span className="flex gap-3 text-lg leading-snug max-md:-ml-8.5">
+                    <SquiggleMark />
+                    {label}
                   </span>
-                </li>
-              ))}
-            </ol>
-          </div>
+                </th>
+                <td className="text-base leading-snug text-foreground md:py-6 md:pr-8 md:align-top md:text-lg">
+                  {question}
+                </td>
+                <td className="max-md:mt-2 md:py-6 md:align-top">
+                  <p className="m-0 font-serif text-lg leading-snug text-foreground italic">
+                    «&nbsp;{before}
+                    <span className="underline decoration-accent decoration-wavy decoration-[1.5px] underline-offset-[5px] [text-decoration-skip-ink:none]">
+                      {mark}
+                    </span>
+                    {after}&nbsp;»
+                  </p>
+                  <p className="mt-1 mb-0 text-base text-muted">{note}</p>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-          <div className="grid content-start gap-10">
-            <ul className="m-0 grid list-none gap-4 p-0">
+        <div className="mt-16 grid gap-14 md:mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-20">
+          <div>
+            <h3 className={H3}>Un fait n’est jamais déclaré «&nbsp;faux&nbsp;»</h3>
+            <p className={`mt-2 mb-0 text-base text-muted ${MEASURE}`}>
+              Quand l’article avance un fait, Squiggle dit ce que les sources permettent d’en dire, en quatre états.
+            </p>
+            <dl className="mt-6 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+              {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (
+                <div key={state} className="grid content-start justify-items-start gap-2">
+                  <dt>
+                    <span className={`inline-block rounded-md border px-3 py-1 text-sm font-medium ${chip}`}>
+                      {label}
+                    </span>
+                  </dt>
+                  <dd className="m-0 text-base text-muted">{hint}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div>
+            <h3 className={H3}>Trois engagements</h3>
+            <ul className="mt-6 mb-0 grid list-none gap-4 p-0">
               {COMMITMENTS.map((text) => (
                 <li key={text} className="flex gap-3 text-lg leading-snug">
                   <SquiggleMark />
@@ -237,22 +323,7 @@ export function Accueil() {
                 </li>
               ))}
             </ul>
-            <div>
-              <h3 className={H3}>Jamais «&nbsp;faux&nbsp;»</h3>
-              <dl className="mt-4 grid gap-3">
-                {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (
-                  <div key={state} className="grid gap-2">
-                    <dt>
-                      <span className={`inline-block rounded-md border px-3 py-1 text-sm font-medium ${chip}`}>
-                        {label}
-                      </span>
-                    </dt>
-                    <dd className="m-0 text-base text-muted">{hint}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-            <p className="m-0">
+            <p className="mt-8 mb-0">
               <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
                 Lire la méthode sur GitHub
                 <ExternalMark />
@@ -262,7 +333,11 @@ export function Accueil() {
         </div>
       </Section>
 
-      <Section id="partout" title="Où que vous lisiez" intro="Un seul compte, partout.">
+      <Section
+        id="partout"
+        title="Où que vous lisiez"
+        intro="Un seul compte, partout. Dans le navigateur, aussi gratuit avec votre propre clé d’IA."
+      >
         {/* Three columns of the same shape: the action sits on one line across them, whatever the text above. */}
         <ul className="m-0 grid list-none gap-12 p-0 md:grid-cols-3 md:gap-10">
           <Way device="site" title="Sur le site" text="Collez le texte. Rien à installer.">
@@ -288,7 +363,15 @@ export function Accueil() {
           <Way
             device="navigateur"
             title="Dans votre navigateur"
-            text="Un bouton dans votre navigateur, sur ordinateur : un clic sur l’article ouvert. Gratuit avec votre propre clé d’API."
+            text={
+              <>
+                Un bouton dans votre navigateur, sur ordinateur : un clic sur l’article ouvert. Avec votre compte, ou{' '}
+                <a href="#tarifs" className="font-semibold text-foreground underline decoration-accent underline-offset-4 hover:text-accentInk">
+                  gratuit avec votre propre clé d’IA
+                </a>
+                .
+              </>
+            }
           >
             {/* Only the store this browser installs from; none where no store exists (Safari, phones). */}
             {storeUrl ? (
@@ -328,13 +411,19 @@ export function Accueil() {
       </Section>
 
       {/* Two ways to pay for an analysis, not a comparison grid: the plan leads, with the one
-          sign-up action; the reader's own key sits beside it as a real choice, lighter. Both
-          cards pin their action to the bottom, so the buttons share a line side by side. */}
-      <Section id="tarifs" title="Tarifs" intro="Essayez d’abord. Payez seulement si l’outil vous sert.">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-          <div className="grid gap-10 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-14 md:p-10">
+          sign-up action; the reader's own key sits beside it as a real choice, its "0 €" and
+          who bills what said together. Both cards pin their action to the bottom, above a
+          one-line note, so the buttons share a line side by side. */}
+      <Section
+        id="tarifs"
+        title="Tarifs"
+        intro="Deux façons de l’utiliser : un compte, sans réglage, à essayer avant de payer ; ou l’extension, gratuite avec votre propre clé d’IA."
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Beside the list on a tablet; stacked, with the action at the foot, beside the other card. */}
+          <div className="grid gap-x-14 gap-y-8 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-2 md:grid-rows-[auto_1fr] md:p-10 lg:grid-cols-1 lg:grid-rows-[auto_auto_1fr]">
             <div className="flex flex-col gap-5">
-              <h3 className={H3}>Abonnement Squiggle</h3>
+              <h3 className={H3}>Avec un compte Squiggle</h3>
               <p className="m-0 flex items-baseline gap-2">
                 <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">
                   {PRICE_MONTHLY}
@@ -342,14 +431,11 @@ export function Accueil() {
                 <span className="text-lg text-muted">par mois</span>
               </p>
               <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment depuis Mon compte.</p>
-              <div className="mt-auto grid gap-3 pt-1">
-                <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
-                  Essayer gratuitement
-                </Link>
-                <p className="m-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
-              </div>
             </div>
-            <ul aria-label="Ce qui est compris" className="m-0 grid list-none content-center gap-4 p-0 text-lg">
+            <ul
+              aria-label="Ce qui est compris"
+              className="m-0 grid list-none content-center gap-4 p-0 text-lg md:row-span-2 lg:row-span-1"
+            >
               {INCLUDED.map((text) => (
                 <li key={text} className="flex gap-3">
                   <SquiggleMark />
@@ -357,6 +443,12 @@ export function Accueil() {
                 </li>
               ))}
             </ul>
+            <div className="grid gap-3 self-end pt-1">
+              <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+                Essayer gratuitement
+              </Link>
+              <p className="m-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
+            </div>
           </div>
           <div aria-labelledby="propre-cle" className="flex flex-col gap-5 rounded-card border border-border p-6 md:p-10" role="group">
             <h3 id="propre-cle" className={H3}>
@@ -366,9 +458,15 @@ export function Accueil() {
               <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">0 €</span>
               <span className="text-lg text-muted">dans l’extension</span>
             </p>
-            <p className="m-0 text-base text-muted">
-              Une clé d’API chez un fournisseur de modèle, collée dans l’extension. L’analyse part de votre
-              navigateur, la clé y reste, rien ne passe par nos serveurs.
+            <p className="m-0 text-base leading-relaxed">
+              Squiggle ne vous facture rien. La partie IA tourne sur votre propre compte chez un fournisseur d’IA (
+              {OWN_KEY_PROVIDERS}), qui vous facture directement : en général quelques centimes par analyse.
+            </p>
+            <p className="m-0 text-base leading-relaxed text-muted">
+              {API_KEY_MEANS} La clé reste dans votre navigateur, rien ne passe par nos serveurs.
+            </p>
+            <p className="m-0 text-base leading-relaxed text-muted">
+              Pas de compte chez un fournisseur ? Le compte Squiggle marche sans réglage.
             </p>
             <div className="mt-auto grid gap-3 pt-1">
               {storeUrl ? (
@@ -378,7 +476,7 @@ export function Accueil() {
               ) : (
                 <p className="m-0 text-base text-muted">Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.</p>
               )}
-              <p className="m-0 text-base">Vous ne payez que votre fournisseur.</p>
+              <p className="m-0 text-base">Vous ne payez que votre fournisseur d’IA.</p>
             </div>
           </div>
         </div>

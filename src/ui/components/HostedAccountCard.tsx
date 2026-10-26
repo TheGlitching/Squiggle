@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { describeHostedAccount, type HostedAccount } from '../../hosted/session';
 import { ACCOUNT_URL } from '../../hosted/config';
+import { ACCOUNT_TERMS, ACCOUNT_TITLE, API_KEY_MEANS, OWN_KEY_BILLING, OWN_KEY_TITLE } from '../ownKeyWording';
 
 /**
  * The hosted-mode card in the sidepanel: the trial promise when signed out, the
@@ -24,7 +25,10 @@ export interface HostedAccountCardProps {
   onSignOut: () => void;
   /** Offered beside sign-out when signed in, entitled, and not the active engine. */
   onUseHosted?: () => void;
-  /** The signed-out card's secondary path: a text link to the BYOK section. */
+  /**
+   * The signed-out card's other way in: the own-key option, stated as plainly as the
+   * account beside it and opening the BYOK section. Without it the card offers the account only.
+   */
   onUseOwnKey?: () => void;
 }
 
@@ -103,10 +107,10 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
       ) : (
         <>
           <h2 className="text-sm font-semibold text-ink">
-            3 analyses offertes
+            {ACCOUNT_TITLE}
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-muted">
-            Sans clé d’API : connectez votre compte Squiggle, l’analyse tourne sur nos serveurs.
+            {ACCOUNT_TERMS} L’analyse tourne sur nos serveurs.
           </p>
           <button
             type="button"
@@ -116,14 +120,24 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
           >
             {busy ? 'Ouverture…' : 'Se connecter'}
           </button>
+          {/* Both ways are real choices: the account keeps the one filled button, the
+              own key gets an outlined one and the same weight of explanation. */}
           {onUseOwnKey && (
-            <button
-              type="button"
-              onClick={onUseOwnKey}
-              className="mt-1 w-full py-1.5 text-center text-xs text-muted underline hover:text-ink"
-            >
-              Utiliser plutôt ma propre clé API
-            </button>
+            <div className="mt-4 border-t border-line pt-4">
+              <h2 className="flex items-baseline justify-between gap-3 text-sm font-semibold text-ink">
+                {OWN_KEY_TITLE}
+                <span className="font-display text-base">0&nbsp;€</span>
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted">{OWN_KEY_BILLING}</p>
+              <p className="mt-2 text-xs leading-relaxed text-muted">{API_KEY_MEANS}</p>
+              <button
+                type="button"
+                onClick={onUseOwnKey}
+                className="mt-3 w-full rounded-xl border border-line px-3 py-2.5 text-sm font-semibold text-ink hover:bg-panel-muted"
+              >
+                Utiliser ma propre clé
+              </button>
+            </div>
           )}
         </>
       )}

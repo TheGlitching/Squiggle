@@ -155,8 +155,8 @@ export function Cgv() {
           Un rapport déjà présent dans le cache partagé est servi sans consommer d’analyse.
         </p>
         <p>
-          L’extension reste gratuite avec votre propre clé d’API auprès d’un fournisseur de modèle : ce mode n’est pas
-          vendu et ces conditions de vente ne s’y appliquent pas.
+          L’extension reste gratuite avec votre propre clé d’API auprès d’un fournisseur d’IA, qui vous facture
+          directement son usage : ce mode n’est pas vendu et ces conditions de vente ne s’y appliquent pas.
         </p>
       </Article>
 

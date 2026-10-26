@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
-import { ClassFigure, SquiggleMark, StepFigure, type Step } from '../components/Iso';
+import { Exercice } from '../components/Exercice';
+import { ClassFigure, SquiggleMark } from '../components/Iso';
 import {
   H1,
   H3,
@@ -13,14 +14,33 @@ import {
   Section,
 } from '../components/Landing';
 import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
+import { DAILY_ANALYSES } from '../offer';
 import { Link } from '../router';
 
-/** A lesson, in the order it runs. */
-const USES: Array<[Step, string, string]> = [
-  ['article', 'Les élèves lisent d’abord', 'Ils notent ce qui leur paraît fragile, sans aide.'],
-  ['rapport', 'Vous lancez l’analyse', 'Chaque constat est surligné, avec sa phrase et sa raison.'],
-  ['lecture', 'La classe compare', '« Faux » ou « non vérifiable » ? On en débat sur pièces.'],
+/** The request, written for the teacher: the three facts we need to grant the offer. */
+export const TEACHER_REQUEST_URL = `${CONTACT_URL}?subject=${encodeURIComponent(
+  'Accès enseignant Squiggle',
+)}&body=${encodeURIComponent('Établissement :\nDiscipline :\nAdresse e-mail du compte Squiggle :\n')}`;
+
+/** The offer at a glance: who, what, how. */
+const OFFER: Array<[string, string]> = [
+  ['Pour qui', 'Enseignants et documentalistes'],
+  ['Ce qui est offert', 'L’abonnement complet, gratuit'],
+  ['Comment', 'Sur simple demande, par e-mail'],
 ];
+
+const INCLUDED = [
+  `${DAILY_ANALYSES} analyses par jour`,
+  'Le site, l’appli et le bouton du navigateur',
+  'Le rapport complet, à projeter en classe',
+  'Aucune publicité, aucun traceur',
+] as const;
+
+const REQUEST_STEPS = [
+  'Créez votre compte sur le site.',
+  `Écrivez-nous à ${CONTACT_EMAIL}, avec votre établissement et votre discipline.`,
+  'Nous activons l’offre sur votre compte.',
+] as const;
 
 const FRAME = [
   'Aucune publicité, aucun traceur.',
@@ -28,6 +48,8 @@ const FRAME = [
   'La méthode et le code sont publics.',
   'Une analyse peut se tromper : chaque constat cite sa phrase.',
 ] as const;
+
+const REQUEST = 'Demander l’accès enseignant';
 
 export function Enseignants() {
   useEffect(() => {
@@ -47,42 +69,36 @@ export function Enseignants() {
           <h1 className={`${H1} max-w-[16ch]`}>Squiggle pour les enseignants</h1>
           <p className={`mt-6 ${LEAD} ${MEASURE}`}>
             Un article de l’actualité, relu sous les yeux de la classe. Les élèves cherchent d’abord, le rapport vient
-            ensuite.
+            ensuite. Gratuit pour les enseignants, sur demande.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <a href={CONTACT_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-              Demander l’accès enseignant
+            <a href={TEACHER_REQUEST_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+              {REQUEST}
             </a>
-            {/* A plain anchor: a client-side navigation would drop the hash and not scroll. */}
-            <a href="/#exemple" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-              Voir un exemple
+            <a href="#exercice" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+              Essayer l’exercice
             </a>
           </div>
-          <p className="mt-5 mb-0 text-base text-muted">Gratuit pour les enseignants, sur demande.</p>
+          <dl className="mt-10 mb-0 grid gap-x-8 gap-y-4 sm:grid-cols-3">
+            {OFFER.map(([term, detail]) => (
+              <div key={term} className="grid content-start gap-1">
+                <dt className="text-base text-muted">{term}</dt>
+                <dd className="m-0 text-base leading-snug font-semibold">{detail}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
         <div className="mx-auto w-full max-w-sm">
           <ClassFigure />
         </div>
       </div>
 
-      <Section id="usages" title="Ce que vous pouvez en faire">
-        <ol className="m-0 grid list-none gap-10 p-0 md:grid-cols-3 md:gap-10">
-          {USES.map(([step, title, text], index) => (
-            <li
-              key={title}
-              className="grid content-start grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 md:grid-cols-1 md:gap-y-5"
-            >
-              <div className="md:max-w-64">
-                <StepFigure step={step} />
-              </div>
-              <div>
-                <p className="m-0 font-display text-base font-semibold text-muted tabular-nums">{index + 1}</p>
-                <h3 className={`${H3} mt-1`}>{title}</h3>
-                <p className="mt-2 mb-0 text-base leading-relaxed text-muted">{text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+      <Section
+        id="exercice"
+        title="L’exercice, en trois temps"
+        intro="Essayez-le comme vos élèves : marquez d’abord ce qui vous paraît fragile, puis comparez avec l’analyse."
+      >
+        <Exercice />
       </Section>
 
       <Section id="cadre" title="Un outil que l’on peut montrer en classe">
@@ -102,21 +118,44 @@ export function Enseignants() {
       </Section>
 
       <Section id="acces" title="Obtenir l’accès gratuit">
-        <ol className={`m-0 grid list-none gap-5 p-0 text-lg ${MEASURE}`}>
-          {[
-            'Créez votre compte sur le site.',
-            `Écrivez-nous à ${CONTACT_EMAIL}, avec votre établissement et votre discipline.`,
-            'Nous activons l’offre sur votre compte.',
-          ].map((text, index) => (
-            <li key={text} className="flex items-baseline gap-4">
-              <span className="font-display text-base font-semibold text-muted tabular-nums">{index + 1}</span>
-              <span>{text}</span>
-            </li>
-          ))}
-        </ol>
-        <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <a href={CONTACT_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-            Demander l’accès enseignant
+        <div className="grid gap-12 md:grid-cols-3 md:gap-10">
+          <div>
+            <h3 className={H3}>Pour qui</h3>
+            <p className="mt-4 mb-0 text-lg leading-snug">
+              Les enseignants et les professeurs documentalistes, quelle que soit la discipline, pour leurs cours.
+            </p>
+          </div>
+          <div>
+            <h3 className={H3}>Ce qui est offert</h3>
+            <ul aria-label="Ce qui est offert" className="mt-4 mb-0 grid list-none gap-3 p-0 text-lg leading-snug">
+              {INCLUDED.map((text) => (
+                <li key={text} className="flex gap-3">
+                  <SquiggleMark />
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className={H3}>Comment le demander</h3>
+            <ol aria-label="Comment le demander" className="mt-4 mb-0 grid list-none gap-3 p-0 text-lg leading-snug">
+              {REQUEST_STEPS.map((text, index) => (
+                <li key={text} className="flex items-baseline gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accentForeground"
+                  >
+                    {index + 1}
+                  </span>
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+        <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <a href={TEACHER_REQUEST_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+            {REQUEST}
           </a>
           <Link to="/" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
             Retour à l’accueil

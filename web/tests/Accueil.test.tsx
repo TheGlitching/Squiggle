@@ -72,7 +72,11 @@ describe('Accueil', () => {
     const { container } = home();
     const text = container.textContent ?? '';
     expect(text).not.toContain(HOSTED_ANALYSIS.modelLabel);
-    expect(text).not.toMatch(/OpenRouter|modèle de langage/);
+    // The own-key option names the providers a reader can bring a key from; outside
+    // that list, the gateway hosted analyses go through stays off the page.
+    expect(text.replaceAll('OpenAI, Anthropic, Google Gemini ou OpenRouter', '')).not.toMatch(
+      /OpenRouter|modèle de langage/,
+    );
   });
 
   it('repeats the headline in the page title and the link preview', () => {
@@ -152,8 +156,18 @@ describe('Accueil', () => {
       Object.values(SCORE_DOMAINS).map((domain) => [domain.label, domain.weight]),
     );
     home();
-    const list = within(screen.getByRole('list', { name: 'Les cinq domaines' }));
-    expect(list.getAllByRole('listitem')).toHaveLength(5);
+    const table = within(screen.getByRole('table', { name: 'Les cinq critères de la grille' }));
+    expect(table.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Critère',
+      'Ce qui est vérifié',
+      'Exemple de passage relevé',
+    ]);
+    // One row per domain, each naming the criterion, its question and a flagged passage.
+    const rows = table.getAllByRole('row').slice(1);
+    expect(rows.map((row) => within(row).getByRole('rowheader').textContent)).toEqual(DOMAINS.map(([label]) => label));
+    for (const [index, [, , question, example]] of DOMAINS.entries()) {
+      for (const part of [question, example.mark, example.note]) expect(rows[index].textContent).toContain(part);
+    }
   });
 
   // The weights are the engine's to change: the page says what is read, never the points.
@@ -203,6 +217,16 @@ describe('Accueil', () => {
     expect(screen.queryByText(/^sécurisé$/i)).toBeNull();
   });
 
+  it('states both ways to pay under the hero, the sign-up staying the one primary', () => {
+    home();
+    const ways = within(screen.getByRole('list', { name: 'Deux façons de l’utiliser' }));
+    expect(ways.getAllByRole('listitem')).toHaveLength(2);
+    expect(ways.getByText(/3 analyses offertes, puis 4,99 € par mois/)).toBeInTheDocument();
+    expect(ways.getByText('Gratuit avec votre propre clé d’IA :')).toBeInTheDocument();
+    expect(ways.getByText(/en général quelques centimes par analyse/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Comparer les deux' })).toHaveAttribute('href', '#tarifs');
+  });
+
   it('sells one plan with one sign-up action, then the trial and the education offer', () => {
     home();
     const pricing = region('Tarifs');
@@ -224,8 +248,15 @@ describe('Accueil', () => {
     home();
     const ownKey = within(region('Tarifs').getByRole('group', { name: 'Gratuit avec votre propre clé' }));
     expect(ownKey.getByText('0 €')).toBeInTheDocument();
-    expect(ownKey.getByText(/la clé y reste, rien ne passe par nos serveurs/)).toBeInTheDocument();
-    expect(ownKey.getByText(/Vous ne payez que votre fournisseur/)).toBeInTheDocument();
+    // Free of Squiggle, and who bills the AI part, said beside the price, in plain words.
+    expect(ownKey.getByText(/Squiggle ne vous facture rien/)).toHaveTextContent(
+      /vous facture directement : en général quelques centimes par analyse/,
+    );
+    expect(ownKey.getByText(/Une clé d’API, c’est le code d’accès personnel/)).toHaveTextContent(
+      /La clé reste dans votre navigateur, rien ne passe par nos serveurs/,
+    );
+    expect(ownKey.getByText(/Le compte Squiggle marche sans réglage/)).toBeInTheDocument();
+    expect(ownKey.getByText('Vous ne payez que votre fournisseur d’IA.')).toBeInTheDocument();
     expect(ownKey.getByRole('link', { name: 'Ajouter à Firefox' })).toHaveAttribute('href', FIREFOX_URL);
     cleanup();
     agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
@@ -322,11 +353,12 @@ describe('Accueil', () => {
     agent.mockRestore();
   });
 
-  it('keeps the example one tap away and leaves the price out of the hero', () => {
+  it('keeps the example one tap away, and the analysis the hero’s one primary action', () => {
     home();
     expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#exemple');
     const hero = screen.getByRole('heading', { level: 1 }).parentElement!;
-    expect(hero.textContent).not.toMatch(/analyses offertes|€/);
+    const primaries = [...hero.querySelectorAll('a, button')].filter((el) => el.className.includes('bg-accent '));
+    expect(primaries.map((el) => el.textContent)).toEqual(['Analyser un article']);
   });
 
   it('walks through the passages while left alone, and stops under the pointer', () => {
@@ -398,7 +430,7 @@ describe('Accueil', () => {
       if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
-    const lead = region('Tarifs').getByText('Essayez d’abord. Payez seulement si l’outil vous sert.');
+    const lead = region('Tarifs').getByText(/^Deux façons de l’utiliser/);
     expect(lead.className).toContain(MEASURE);
   });
 

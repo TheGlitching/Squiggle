@@ -477,8 +477,8 @@ function SidepanelApp() {
       </header>
 
       <main className="flex-1 py-4 space-y-5">
-        {/* A reader with no key is offered the hosted engine, not a dead end:
-            sign-in is the one primary, the own-key path a text link beneath. */}
+        {/* A reader with no key is offered both ways in, not a dead end: the account
+            with the one primary, and the own key, free, explained beside it. */}
         {showHostedCard && (
           <HostedAccountCard
             account={hostedAccount}

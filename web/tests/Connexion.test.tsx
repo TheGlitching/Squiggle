@@ -97,6 +97,16 @@ describe('Connexion', () => {
     expect(new URL(href, 'https://squiggle.fr').searchParams.get('next')).toBe(BRIDGE);
   });
 
+  // Google's branding: its own four-colour "G" beside the label, never the label alone.
+  it('draws the Google button with the official G', () => {
+    installFetch(() => jsonResponse({ ok: false, error: 'invalid_session' }, 401));
+    renderAt('/connexion');
+    const google = screen.getByRole('link', { name: 'Continuer avec Google' });
+    const fills = [...google.querySelectorAll('svg path')].map((path) => path.getAttribute('fill'));
+    expect(fills).toEqual(['#EA4335', '#4285F4', '#FBBC05', '#34A853']);
+    expect(google.className).toContain('bg-[#131314]');
+  });
+
   it('sends the Google link without a destination when there is none', () => {
     installFetch(() => jsonResponse({ ok: false, error: 'invalid_session' }, 401));
     renderAt('/connexion');

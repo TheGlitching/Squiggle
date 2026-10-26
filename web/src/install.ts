@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 /**
  * Where the install button sends the reader. One named constant per store,
@@ -46,31 +46,45 @@ interface InstallPromptEvent extends Event {
 }
 
 /**
+ * The browser's install prompt, held once for the whole page. It is captured as the
+ * module loads, so a prompt fired before React mounts is not lost, and every install
+ * button shares it: the event can only be used once.
+ */
+let deferred: InstallPromptEvent | null = null;
+const listeners = new Set<() => void>();
+
+function publish(next: InstallPromptEvent | null) {
+  deferred = next;
+  for (const listener of listeners) listener();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    publish(event as InstallPromptEvent);
+  });
+  window.addEventListener('appinstalled', () => publish(null));
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
  * How this browser installs the app, if it does and it is not installed yet:
  * Chromium hands over its own prompt, iOS Safari only has its Share menu.
  * An iPad's Safari reports a Mac, so it is told apart by its touch screen.
  */
 export function useInstall(): { kind: 'prompt'; prompt: () => void } | { kind: 'ios' } | null {
-  const [deferred, setDeferred] = useState<InstallPromptEvent | null>(null);
+  const event = useSyncExternalStore(subscribe, () => deferred, () => null);
   const ua = navigator.userAgent;
   const ios =
     (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) && !/CriOS|FxiOS/.test(ua);
 
-  useEffect(() => {
-    const keep = (event: Event) => {
-      event.preventDefault();
-      setDeferred(event as InstallPromptEvent);
-    };
-    const installed = () => setDeferred(null);
-    window.addEventListener('beforeinstallprompt', keep);
-    window.addEventListener('appinstalled', installed);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', keep);
-      window.removeEventListener('appinstalled', installed);
-    };
-  }, []);
-
   if (isStandalone()) return null;
-  if (deferred) return { kind: 'prompt', prompt: () => void deferred.prompt().finally(() => setDeferred(null)) };
+  if (event) return { kind: 'prompt', prompt: () => void event.prompt().finally(() => publish(null)) };
   return ios ? { kind: 'ios' } : null;
 }

@@ -2,7 +2,7 @@
  * The first screen a reader meets. A reader with no key used to land on
  * "Configurez votre clé pour commencer" with two filled primaries and a tour
  * that reopened on every open; this pins the replacement: the hosted offer with
- * one primary, the own-key path as a text link, and a tour shown once.
+ * one primary, the own key beside it as a free, explained second way, and a tour shown once.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
@@ -151,14 +151,18 @@ describe('sidepanel first screen', () => {
   });
 
   describe('signed out', () => {
-    it('offers the free analyses with one primary and the own key as a text link', async () => {
+    it('offers both ways in: the account with the one primary, the own key free and explained', async () => {
       await new SecureKeyStorage().setMode('hosted');
       await mount();
 
       expect(container.textContent).toContain('3 analyses offertes');
       expect(container.textContent).not.toContain('Configurez votre clé');
       expect(primaries().map((b) => b.textContent)).toEqual(['Se connecter']);
-      expect(button('Utiliser plutôt ma propre clé API')).toBeDefined();
+      // Free, and who bills what, stated beside the option rather than left to the reader.
+      expect(container.textContent).toContain('Gratuit avec votre propre clé d’IA');
+      expect(container.textContent).toContain('qui vous facture directement, en général quelques centimes par analyse');
+      expect(container.textContent).toContain('Une clé d’API, c’est le code d’accès personnel');
+      expect(button('Utiliser ma propre clé')).toBeDefined();
       expect(button('Lancer l’analyse critique')!.disabled).toBe(true);
     });
 
@@ -178,11 +182,11 @@ describe('sidepanel first screen', () => {
       expect(await new SecureKeyStorage().getMode()).toBe('hosted');
     });
 
-    it('opens the settings on the own-key section from the text link', async () => {
+    it('opens the settings on the own-key section from its button', async () => {
       await mount();
 
       await act(async () => {
-        button('Utiliser plutôt ma propre clé API')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        button('Utiliser ma propre clé')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
       await flush();
 
