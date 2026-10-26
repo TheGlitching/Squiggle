@@ -6,6 +6,11 @@
  * rather than producing an archive a store would reject on upload, because that
  * failure otherwise surfaces halfway through a release with the version already
  * consumed.
+ *
+ * It also refuses a build still pointing hosted mode at the placeholder origin
+ * (`vite.config.ts` falls back to it when SQUIGGLE_HOSTED_ORIGIN is unset): that
+ * package would install fine and pass review, and every account sign-in in it
+ * would go nowhere.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync } from 'node:fs';
@@ -16,6 +21,7 @@ const outDir = join(root, 'packages');
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
 
 const targets = ['chrome', 'firefox'];
+const PLACEHOLDER_HOST = 'squiggle.example';
 
 mkdirSync(outDir, { recursive: true });
 
@@ -30,17 +36,27 @@ for (const target of targets) {
   // browser, and the store refuses the packed equivalent. The packaging tests
   // assert this too; checking here keeps a manual `npm run package` honest.
   const reserved = [];
+  const placeholder = [];
   const walk = (dir, rel = '') => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith('_') && entry.name !== '_locales') {
         reserved.push(join(rel, entry.name));
       }
       if (entry.isDirectory()) walk(join(dir, entry.name), join(rel, entry.name));
+      else if (readFileSync(join(dir, entry.name)).includes(PLACEHOLDER_HOST)) {
+        placeholder.push(join(rel, entry.name));
+      }
     }
   };
   walk(dist);
   if (reserved.length > 0) {
     throw new Error(`dist/${target} contains names reserved by the browser: ${reserved.join(', ')}`);
+  }
+  if (placeholder.length > 0) {
+    throw new Error(
+      `dist/${target} points hosted mode at ${PLACEHOLDER_HOST} (${placeholder.join(', ')}) - ` +
+        'rebuild with SQUIGGLE_HOSTED_ORIGIN set to the production origin'
+    );
   }
 
   const archive = join(outDir, `squiggle-${target}-${version}.zip`);
