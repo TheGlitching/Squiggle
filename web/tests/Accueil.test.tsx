@@ -221,50 +221,63 @@ describe('Accueil', () => {
     home();
     const ways = within(screen.getByRole('list', { name: 'Deux façons de l’utiliser' }));
     expect(ways.getAllByRole('listitem')).toHaveLength(2);
-    expect(ways.getByText(/3 analyses offertes, puis 4,99 € par mois/)).toBeInTheDocument();
+    expect(ways.getByText('Avec un compte, rien à installer :')).toBeInTheDocument();
+    expect(ways.getByText(/sur le site et l’appli, aucune clé à créer\. 3 analyses offertes, puis 4,99 € par mois/)).toBeInTheDocument();
     expect(ways.getByText('Gratuit avec votre propre clé d’IA :')).toBeInTheDocument();
-    expect(ways.getByText(/en général quelques centimes par analyse/)).toBeInTheDocument();
+    expect(ways.getByText(/vous facture directement chaque analyse, au tarif du modèle choisi/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Comparer les deux' })).toHaveAttribute('href', '#tarifs');
   });
 
-  it('sells one plan with one sign-up action, then the trial and the education offer', () => {
+  // The two ways in are compared row for row, so a reader sees what the account adds.
+  it('compares the account and the reader’s own key on the same rows, with one sign-up action', () => {
     home();
     const pricing = region('Tarifs');
-    expect(pricing.getByRole('link', { name: 'Essayer gratuitement' })).toHaveAttribute('href', '/connexion');
+    const table = within(pricing.getByRole('table', { name: 'Le compte Squiggle et votre propre clé, comparés' }));
+    const [account, ownKey] = table.getAllByRole('columnheader');
+    expect(account).toHaveTextContent(/^Avec un compte Squiggle4,99 €par mois/);
+    // Free of Squiggle, and who bills the AI part, said beside the price, in plain words.
+    expect(ownKey).toHaveTextContent(/^Gratuit avec votre propre clé0 €chez Squiggle/);
+    expect(ownKey).toHaveTextContent(/Squiggle ne vous facture rien.*qui vous facture directement/);
+    const row = (name: string) =>
+      table.getAllByRole('row').find((r) => within(r).queryByRole('rowheader', { name }))!;
+    expect(row('Où l’utiliser')).toHaveTextContent(/Sur le site, dans l’appli de votre téléphone et dans le bouton du navigateur/);
+    expect(row('Où l’utiliser')).toHaveTextContent(/Dans l’extension du navigateur, sur ordinateur/);
+    expect(row('Ce qu’il faut préparer')).toHaveTextContent(/Rien à installer, aucune clé à créer/);
+    expect(row('Analyses')).toHaveTextContent(/10 par jour/);
+    expect(row('Ce que vous payez')).toHaveTextContent(/4,99 € par mois, tout compris/);
+    // A provider's model named as an example of what a reader can choose, never what the plan runs.
+    expect(row('Ce que vous payez')).toHaveTextContent(
+      /qui dépend du modèle choisi\. Avec un modèle haut de gamme, par exemple Claude Opus : environ 120 à 150 € par mois pour 10 analyses par jour/,
+    );
     expect(pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })).toHaveLength(1);
-    expect(pricing.getByText('4,99 €')).toBeInTheDocument();
-    const included = within(pricing.getByRole('list', { name: 'Ce qui est compris' }));
-    expect(included.getByText('10 analyses par jour')).toBeInTheDocument();
+    expect(pricing.getByRole('link', { name: 'Essayer gratuitement' })).toHaveAttribute('href', '/connexion');
     expect(pricing.getByText(/3 analyses offertes, sans carte bancaire/)).toBeInTheDocument();
+    expect(pricing.getByText(/Une clé d’API, c’est le code d’accès personnel/)).toHaveTextContent(
+      /La clé reste dans votre navigateur, rien ne passe par nos serveurs/,
+    );
     expect(pricing.getByText(/Enseignants : gratuit, sur demande/)).toBeInTheDocument();
     expect(pricing.getByRole('link', { name: 'L’offre enseignants' })).toHaveAttribute('href', '/enseignants');
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });
 
-  // Free with one's own key is a way to use the product, not a footnote under the plan.
-  it('offers the reader’s own key beside the plan, free, with the store to install from', () => {
+  it('offers the store to install the extension from, where this browser has one', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     agent.mockReturnValue('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0');
     home();
-    const ownKey = within(region('Tarifs').getByRole('group', { name: 'Gratuit avec votre propre clé' }));
-    expect(ownKey.getByText('0 €')).toBeInTheDocument();
-    // Free of Squiggle, and who bills the AI part, said beside the price, in plain words.
-    expect(ownKey.getByText(/Squiggle ne vous facture rien/)).toHaveTextContent(
-      /vous facture directement : en général quelques centimes par analyse/,
-    );
-    expect(ownKey.getByText(/Une clé d’API, c’est le code d’accès personnel/)).toHaveTextContent(
-      /La clé reste dans votre navigateur, rien ne passe par nos serveurs/,
-    );
-    expect(ownKey.getByText(/Le compte Squiggle marche sans réglage/)).toBeInTheDocument();
-    expect(ownKey.getByText('Vous ne payez que votre fournisseur d’IA.')).toBeInTheDocument();
-    expect(ownKey.getByRole('link', { name: 'Ajouter à Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+    const footer = () => within(region('Tarifs').getAllByRole('rowgroup').at(-1)!);
+    expect(footer().getByRole('link', { name: 'Ajouter à Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+    expect(footer().getByText('Vous ne payez que votre fournisseur d’IA.')).toBeInTheDocument();
     cleanup();
     agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
     home();
-    expect(
-      within(region('Tarifs').getByRole('group', { name: 'Gratuit avec votre propre clé' })).queryByRole('link'),
-    ).toBeNull();
+    expect(footer().getAllByRole('link').map((link) => link.textContent)).toEqual(['Essayer gratuitement']);
     agent.mockRestore();
+  });
+
+  // Wording readers did not understand, gone from the page.
+  it('keeps to plain words', () => {
+    const { container } = home();
+    expect(container.textContent).not.toMatch(/sur pièces|sans réglage|quelques centimes/);
   });
 
   it('answers the questions a hesitant reader asks, each openable on its own', () => {
@@ -430,7 +443,7 @@ describe('Accueil', () => {
       if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
-    const lead = region('Tarifs').getByText(/^Deux façons de l’utiliser/);
+    const lead = region('Tarifs').getByText(/^Le compte vous ouvre le site et l’appli/);
     expect(lead.className).toContain(MEASURE);
   });
 

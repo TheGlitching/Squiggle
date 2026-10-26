@@ -25,7 +25,14 @@ import {
 import { CONTACT_URL } from '../components/Layout';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
 import { installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
-import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, TAGLINE } from '../offer';
+import {
+  DAILY_ANALYSES,
+  FREE_ANALYSES,
+  GITHUB_URL,
+  OWN_KEY_TOP_MODEL_MONTHLY,
+  PRICE_MONTHLY,
+  TAGLINE,
+} from '../offer';
 import { Link } from '../router';
 
 /** The path of an analysis, and what passes from one stage to the next. */
@@ -69,7 +76,7 @@ const COMMITMENTS = [
 const FAQ: Array<[string, ReactNode]> = [
   [
     'Une analyse peut-elle se tromper ?',
-    'Oui. Chaque constat cite la phrase exacte et sa raison : vous jugez sur pièces.',
+    'Oui. Chaque constat cite la phrase exacte et sa raison : vous vérifiez par vous-même.',
   ],
   [
     'Mon article est-il envoyé quelque part ?',
@@ -86,7 +93,7 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
   [
     'Gratuit avec ma propre clé : qu’est-ce que je paie ?',
-    `Rien à Squiggle. La partie IA de l’analyse tourne sur votre propre compte chez un fournisseur d’IA (${OWN_KEY_PROVIDERS}), qui vous facture directement à l’usage : en général quelques centimes par analyse. ${API_KEY_MEANS} Sans compte chez un fournisseur, le compte Squiggle est plus simple : rien à régler.`,
+    `Rien à Squiggle. La partie IA de l’analyse tourne sur votre propre compte chez un fournisseur d’IA (${OWN_KEY_PROVIDERS}), qui vous facture directement chaque analyse, au tarif du modèle choisi. Avec un modèle haut de gamme, par exemple Claude Opus : ${OWN_KEY_TOP_MODEL_MONTHLY} pour ${DAILY_ANALYSES} analyses par jour. ${API_KEY_MEANS} Sans compte chez un fournisseur, le compte Squiggle est plus simple : rien à installer, aucune clé à créer.`,
   ],
   ['Et les articles payants ?', 'Squiggle analyse ce que vous pouvez lire, et signale un texte partiel.'],
   ['Comment résilier ?', 'À tout moment, depuis Mon compte, jusqu’à la fin de la période en cours.'],
@@ -102,20 +109,64 @@ const FAQ: Array<[string, ReactNode]> = [
 ];
 
 const WAYS_TO_PAY = [
-  ['Avec un compte, sans réglage :', `${FREE_ANALYSES} analyses offertes, puis ${PRICE_MONTHLY} par mois.`],
+  [
+    'Avec un compte, rien à installer :',
+    `sur le site et l’appli, aucune clé à créer. ${FREE_ANALYSES} analyses offertes, puis ${PRICE_MONTHLY} par mois.`,
+  ],
   [
     'Gratuit avec votre propre clé d’IA :',
-    'dans l’extension. Votre fournisseur d’IA vous facture directement, en général quelques centimes par analyse.',
+    'dans l’extension. Votre fournisseur d’IA vous facture directement chaque analyse, au tarif du modèle choisi.',
   ],
 ] as const;
 
-/** What the subscription opens, in the reader's terms. */
-const INCLUDED = [
-  `${DAILY_ANALYSES} analyses par jour`,
-  'Le site, l’appli et le bouton du navigateur',
-  'Le rapport complet : passages, raisons, note',
-  'Aucune publicité, aucun traceur',
+/**
+ * The two ways in, side by side on the same rows, so a reader compares like with like:
+ * the account's real difference is where it works and that it needs nothing set up.
+ * The report row says what both reports contain, never that their quality is the same:
+ * that depends on the model a reader plugs in.
+ */
+const COMPARISON: Array<[string, ReactNode, ReactNode]> = [
+  [
+    'Où l’utiliser',
+    'Sur le site, dans l’appli de votre téléphone et dans le bouton du navigateur',
+    'Dans l’extension du navigateur, sur ordinateur',
+  ],
+  [
+    'Ce qu’il faut préparer',
+    'Rien à installer, aucune clé à créer',
+    `Un compte chez un fournisseur d’IA (${OWN_KEY_PROVIDERS}), et une clé d’API à coller dans l’extension`,
+  ],
+  [
+    'Analyses',
+    `${DAILY_ANALYSES} par jour`,
+    'Sans limite, chacune facturée par votre fournisseur',
+  ],
+  [
+    'Ce que vous payez',
+    `${PRICE_MONTHLY} par mois, tout compris`,
+    <>
+      La facture de votre fournisseur, qui dépend du modèle choisi. Avec un modèle haut de gamme, par exemple
+      Claude&nbsp;Opus&nbsp;: <strong className="font-semibold text-foreground">{OWN_KEY_TOP_MODEL_MONTHLY}</strong> pour{' '}
+      {DAILY_ANALYSES} analyses par jour.
+    </>,
+  ],
+  ['Le rapport', 'Passages surlignés, raisons, note sur 100', 'Passages surlignés, raisons, note sur 100'],
+  ['Publicité et traceurs', 'Aucun', 'Aucun'],
 ];
+
+/**
+ * The comparison's cells. A table on a wide screen, the account's column outlined in the
+ * accent; on a phone the two prices sit side by side, then each row stacks its label above
+ * the two answers, each tagged with its way in, since the column heads are scrolled away.
+ */
+const LABEL_CELL =
+  'border-t border-lineSoft py-5 pr-6 text-left align-top text-base font-medium max-md:pb-1 md:w-[22%]';
+const ACCOUNT_CELL =
+  'border-lineSoft bg-surface px-4 py-5 align-top text-base leading-normal md:w-[39%] md:border-x md:border-t md:border-x-accent/50 md:px-8 max-md:rounded-control max-md:border max-md:border-accent/50 max-md:py-3';
+const OWN_KEY_CELL =
+  'border-lineSoft px-4 py-5 align-top text-base leading-normal text-muted md:w-[39%] md:border-t md:px-8 max-md:rounded-control max-md:border max-md:border-border max-md:py-3';
+/** The way in each answer belongs to, on a phone only: on a wide screen the column head says it. */
+const TAG = 'mb-1 block text-sm font-medium text-foreground md:hidden';
 
 /** A row of actions: buttons of one height, stacked full width on a phone. */
 const ACTIONS = 'flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch';
@@ -410,77 +461,97 @@ export function Accueil() {
         </p>
       </Section>
 
-      {/* Two ways to pay for an analysis, not a comparison grid: the plan leads, with the one
-          sign-up action; the reader's own key sits beside it as a real choice, its "0 €" and
-          who bills what said together. Both cards pin their action to the bottom, above a
-          one-line note, so the buttons share a line side by side. */}
+      {/* The two ways side by side, row for row. The account leads with the one sign-up action;
+          the reader's own key keeps its "0 €" and who bills what said together in its heading. */}
       <Section
         id="tarifs"
         title="Tarifs"
-        intro="Deux façons de l’utiliser : un compte, sans réglage, à essayer avant de payer ; ou l’extension, gratuite avec votre propre clé d’IA."
+        intro="Le compte vous ouvre le site et l’appli : rien à installer, aucune clé à créer. Avec votre propre clé d’IA, l’extension est gratuite, et votre fournisseur vous facture chaque analyse."
       >
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Beside the list on a tablet; stacked, with the action at the foot, beside the other card. */}
-          <div className="grid gap-x-14 gap-y-8 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-2 md:grid-rows-[auto_1fr] md:p-10 lg:grid-cols-1 lg:grid-rows-[auto_auto_1fr]">
-            <div className="flex flex-col gap-5">
-              <h3 className={H3}>Avec un compte Squiggle</h3>
-              <p className="m-0 flex items-baseline gap-2">
-                <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">
-                  {PRICE_MONTHLY}
+        <table className="w-full border-separate border-spacing-0 text-left max-md:block">
+          <caption className="sr-only">Le compte Squiggle et votre propre clé, comparés</caption>
+          <thead className="max-md:block">
+            <tr className="max-md:grid max-md:grid-cols-2 max-md:gap-3">
+              <td className="max-md:hidden" />
+              <th
+                scope="col"
+                className="rounded-t-card border-x border-t border-accent/50 bg-surface p-4 align-top font-normal md:w-[39%] md:px-8 md:pt-8 md:pb-6 max-md:rounded-card max-md:border"
+              >
+                <span className={`block ${H3}`}>Avec un compte Squiggle</span>
+                <span className="mt-4 flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-display text-4xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
+                    {PRICE_MONTHLY}
+                  </span>
+                  <span className="text-base text-muted md:text-lg">par mois</span>
                 </span>
-                <span className="text-lg text-muted">par mois</span>
-              </p>
-              <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment depuis Mon compte.</p>
-            </div>
-            <ul
-              aria-label="Ce qui est compris"
-              className="m-0 grid list-none content-center gap-4 p-0 text-lg md:row-span-2 lg:row-span-1"
-            >
-              {INCLUDED.map((text) => (
-                <li key={text} className="flex gap-3">
-                  <SquiggleMark />
-                  {text}
-                </li>
-              ))}
-            </ul>
-            <div className="grid gap-3 self-end pt-1">
-              <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
-                Essayer gratuitement
-              </Link>
-              <p className="m-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
-            </div>
-          </div>
-          <div aria-labelledby="propre-cle" className="flex flex-col gap-5 rounded-card border border-border p-6 md:p-10" role="group">
-            <h3 id="propre-cle" className={H3}>
-              Gratuit avec votre propre clé
-            </h3>
-            <p className="m-0 flex items-baseline gap-2">
-              <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">0 €</span>
-              <span className="text-lg text-muted">dans l’extension</span>
-            </p>
-            <p className="m-0 text-base leading-relaxed">
-              Squiggle ne vous facture rien. La partie IA tourne sur votre propre compte chez un fournisseur d’IA (
-              {OWN_KEY_PROVIDERS}), qui vous facture directement : en général quelques centimes par analyse.
-            </p>
-            <p className="m-0 text-base leading-relaxed text-muted">
-              {API_KEY_MEANS} La clé reste dans votre navigateur, rien ne passe par nos serveurs.
-            </p>
-            <p className="m-0 text-base leading-relaxed text-muted">
-              Pas de compte chez un fournisseur ? Le compte Squiggle marche sans réglage.
-            </p>
-            <div className="mt-auto grid gap-3 pt-1">
-              {storeUrl ? (
-                <a href={storeUrl} className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
-                  {installLabelFor(storeUrl, userAgent)}
-                </a>
-              ) : (
-                <p className="m-0 text-base text-muted">Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.</p>
-              )}
-              <p className="m-0 text-base">Vous ne payez que votre fournisseur d’IA.</p>
-            </div>
-          </div>
-        </div>
-        <ul className="mt-6 grid list-none gap-2 p-0 text-base text-muted sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-8">
+                <span className="mt-4 block text-base text-muted">Sans engagement, résiliable à tout moment.</span>
+              </th>
+              <th
+                id="propre-cle"
+                scope="col"
+                className="p-4 align-top font-normal md:w-[39%] md:px-8 md:pt-8 md:pb-6 max-md:rounded-card max-md:border max-md:border-border"
+              >
+                <span className={`block ${H3}`}>Gratuit avec votre propre clé</span>
+                <span className="mt-4 flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-display text-4xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
+                    0 €
+                  </span>
+                  <span className="text-base text-muted md:text-lg">chez Squiggle</span>
+                </span>
+                <span className="mt-4 block text-base text-muted">
+                  Squiggle ne vous facture rien : la partie IA tourne sur votre propre compte chez un fournisseur d’IA,
+                  qui vous facture directement.
+                </span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="max-md:block">
+            {COMPARISON.map(([label, account, ownKey]) => (
+              <tr key={label} className="max-md:mt-3 max-md:grid max-md:gap-2">
+                <th scope="row" className={LABEL_CELL}>
+                  {label}
+                </th>
+                <td className={ACCOUNT_CELL}>
+                  <span aria-hidden="true" className={TAG}>
+                    Avec un compte
+                  </span>
+                  {account}
+                </td>
+                <td className={OWN_KEY_CELL}>
+                  <span aria-hidden="true" className={TAG}>
+                    Avec votre propre clé
+                  </span>
+                  {ownKey}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="max-md:block">
+            <tr className="max-md:mt-6 max-md:grid max-md:gap-6">
+              <td className="max-md:hidden" />
+              <td className="rounded-b-card border-x border-b border-accent/50 bg-surface px-4 pt-6 pb-6 align-top md:border-t md:border-t-lineSoft md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:p-5">
+                <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+                  Essayer gratuitement
+                </Link>
+                <p className="mt-3 mb-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
+              </td>
+              <td className="border-lineSoft px-4 pt-6 pb-6 align-top md:border-t md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:border-border max-md:p-5">
+                {storeUrl ? (
+                  <a href={storeUrl} className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+                    {installLabelFor(storeUrl, userAgent)}
+                  </a>
+                ) : (
+                  <p className="m-0 text-base text-muted">Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.</p>
+                )}
+                <p className="mt-3 mb-0 text-base">Vous ne payez que votre fournisseur d’IA.</p>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+        <p className={`mt-8 mb-0 text-base leading-relaxed text-muted ${MEASURE}`}>
+          {API_KEY_MEANS} La clé reste dans votre navigateur, rien ne passe par nos serveurs.
+        </p>
+        <ul className="mt-4 grid list-none gap-2 p-0 text-base text-muted sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-8">
           <li>
             Enseignants : gratuit, sur demande.{' '}
             <Link to="/enseignants" className={QUIET_LINK}>
