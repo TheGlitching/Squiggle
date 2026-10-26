@@ -414,7 +414,7 @@ export class MemoryDb implements Db {
     const k = `${args.userId}\u0000${day}`;
     let daily = this.usageDaily.get(k);
     if (!daily) {
-      daily = { userId: args.userId, day, analyses: 0 };
+      daily = { userId: args.userId, day, analyses: 0, started: 0 };
       this.usageDaily.set(k, daily);
     }
     daily.analyses += 1;
@@ -425,6 +425,20 @@ export class MemoryDb implements Db {
     };
     this.usageLog.set(row.id, row);
     return row;
+  }
+
+  async recordRunStart(userId: string, now: number): Promise<{ today: number; total: number }> {
+    const day = utcDayOf(now);
+    const k = `${userId}\u0000${day}`;
+    let daily = this.usageDaily.get(k);
+    if (!daily) {
+      daily = { userId, day, analyses: 0, started: 0 };
+      this.usageDaily.set(k, daily);
+    }
+    daily.started += 1;
+    let total = 0;
+    for (const row of this.usageDaily.values()) if (row.userId === userId) total += row.started;
+    return { today: daily.started, total };
   }
 
   async getDailyUsage(userId: string, day: number): Promise<number> {

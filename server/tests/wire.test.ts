@@ -88,6 +88,39 @@ describe('extension client against the real server', () => {
     expect(await env.db.countUsageLog(user!.id)).toBe(1);
   });
 
+  it('stops a page of fifty articles before sending anything, with the sentence the server would give', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
+    const client = await hostedClient(env, 'marie@example.org');
+    const sent: string[] = [];
+    const inner = (client as unknown as { config: { fetchImpl: typeof fetch } }).config.fetchImpl;
+    (client as unknown as { config: { fetchImpl: typeof fetch } }).config.fetchImpl = ((url: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(String(url));
+      return inner(url, init);
+    }) as typeof fetch;
+
+    const article = 'Le chômage a baissé de 12 % en un an, selon le ministère. '.repeat(70);
+    const page = Array.from({ length: 50 }, (_, i) => ({
+      id: `b${i}`,
+      type: 'paragraph' as const,
+      text: article,
+      charStart: i * (article.length + 2),
+    }));
+
+    const err = await client.analyze({ url: ARTICLE_URL, title: 'Accueil', blocks: page }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HostedApiError);
+    expect((err as HostedApiError).code).toBe('article_too_long');
+    expect(sent).toEqual([]);
+
+    // A client that skipped its own check meets the same refusal, word for word.
+    const server = await hostedClient(env, 'paul@example.org');
+    const res = await (server as unknown as { call: (m: string, p: string, b: unknown) => Promise<unknown> })
+      .call('POST', '/v1/analyze/audit', { url: ARTICLE_URL, title: 'Accueil', blocks: page })
+      .catch((e: unknown) => e);
+    expect((res as HostedApiError).code).toBe('article_too_long');
+    expect((res as HostedApiError).message).toBe((err as HostedApiError).message);
+    expect(env.llm.calls).toEqual({ complete: 0, grounded: 0 });
+  });
+
   it('takes the cache hit without sending the article or spending a credit', async () => {
     const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
     const first = await hostedClient(env, 'marie@example.org');

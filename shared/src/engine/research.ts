@@ -40,6 +40,8 @@ export interface ResearchFindingsArgs {
   citedSources: CitedSource[];
   /** Forwarded to a grounded client's own search budget; ignored on the ungrounded route. */
   maxSearches?: number;
+  /** Output ceiling on each grounded judgement; unset leaves it to the provider. */
+  maxTokens?: number;
   /** Pins "today" into every judgement prompt; defaults to the real clock. */
   now?: Date;
   onProgress?: (msg: string, pct: number) => void;
@@ -456,6 +458,7 @@ async function judgeClaimGrounded(
   claim: { quote: string; claim: string },
   articleSources: CitedSource[],
   maxSearches: number | undefined,
+  maxTokens: number | undefined,
   now: Date,
   abortSignal?: AbortSignal,
   onDiagnostic?: (note: string) => void
@@ -469,7 +472,8 @@ async function judgeClaimGrounded(
       }
     ],
     abortSignal,
-    maxSearches
+    maxSearches,
+    maxTokens
   });
 
   const parsed = JudgementSchema.parse(parseLooseJson(answer.content));
@@ -525,7 +529,7 @@ async function judgeClaimGrounded(
  * all of them.
  */
 export async function researchFindings(args: ResearchFindingsArgs): Promise<ResearchFindingsResult> {
-  const { client, input, findings, citedSources, maxSearches, onProgress, onActivity, onDiagnostic, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal } = args;
+  const { client, input, findings, citedSources, maxSearches, maxTokens, onProgress, onActivity, onDiagnostic, fetchImpl, fetchPage, fetchTimeoutMs, abortSignal } = args;
   const now = args.now ?? new Date();
   void input; // kept in the signature for parity with the prompt builders and future per-article context
 
@@ -588,7 +592,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
 
     if (groundedCapable) {
       try {
-        const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, now, abortSignal, onDiagnostic);
+        const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, maxTokens, now, abortSignal, onDiagnostic);
         queries.push(finding.quote);
         claims.push(
           FactualClaimSchema.parse({
@@ -622,7 +626,12 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     // The article's own citations participate in the investigation: they are
     // handed to the agent as readable sources, exactly as the user asked -
     // always in the search process, not merely listed beside it.
-    const fairShare = Math.max(MIN_FAIR_SHARE, Math.floor(totalSearchesLeft / Math.max(1, factual.length - i)));
+    // The floor never reaches past what is left, or a long list of findings
+    // would keep searching once the stage-wide ceiling is spent.
+    const fairShare = Math.min(
+      totalSearchesLeft,
+      Math.max(MIN_FAIR_SHARE, Math.floor(totalSearchesLeft / Math.max(1, factual.length - i)))
+    );
     try {
       const { verdict, queries: claimQueries } = await researchClaimViaAgent(
         client,

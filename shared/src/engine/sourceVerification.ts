@@ -73,6 +73,8 @@ export interface VerifyCitedSourcesArgs {
   abortSignal?: AbortSignal;
   /** Bound on total pages fetched; stops paying for an article citing twenty links. */
   maxPages?: number;
+  /** Output ceiling on each page judgement; unset leaves it to the provider. */
+  maxTokens?: number;
   /** Per-fetch timeout; overridable in tests. */
   fetchTimeoutMs?: number;
   /** Injectable fetcher; defaults to the global, which host_permissions already authorises. */
@@ -120,7 +122,8 @@ async function judgeSourcePage(
   source: { title: string; url: string },
   pageText: string,
   now: Date,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  maxTokens?: number
 ): Promise<SourceCheck> {
   const completion = await client.complete({
     systemPrompt: FOURCHES_CAUDINES_SOURCE_JUDGEMENT_SYSTEM_PROMPT,
@@ -130,7 +133,8 @@ async function judgeSourcePage(
         content: buildSourceJudgementUserPrompt(claim, source, pageText, now)
       }
     ],
-    abortSignal
+    abortSignal,
+    maxTokens
   });
 
   const raw = extractJsonFromResponse(completion.content);
@@ -168,6 +172,7 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
     now = new Date(),
     abortSignal,
     maxPages = DEFAULT_MAX_PAGES,
+    maxTokens,
     fetchTimeoutMs = FETCH_TIMEOUT_MS,
     fetchImpl = fetch,
     onActivity,
@@ -255,7 +260,8 @@ export async function verifyCitedSources(args: VerifyCitedSourcesArgs): Promise<
             { title: candidate.text || candidate.domain || url, url },
             pageText,
             now,
-            abortSignal
+            abortSignal,
+            maxTokens
           )
         );
       } catch (err) {

@@ -165,6 +165,9 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
  */
 export class StubLlm extends BaseLLMClient {
   calls = { complete: 0, grounded: 0 };
+  /** What each call was asked for, in order: the cost ceilings are asserted on these. */
+  completeOptions: CompletionOptions[] = [];
+  groundedOptions: Array<CompletionOptions & { maxSearches?: number }> = [];
   /** Fail the next `complete` call (the audit or a source judgement). */
   failNextComplete = false;
   /** Fail the next grounded call (a research judgement). */
@@ -214,6 +217,7 @@ export class StubLlm extends BaseLLMClient {
 
   async complete(options: CompletionOptions): Promise<CompletionResponse> {
     this.calls.complete += 1;
+    this.completeOptions.push(options);
     if (this.failNextComplete) {
       this.failNextComplete = false;
       throw new Error('stub provider failure');
@@ -239,8 +243,9 @@ export class StubLlm extends BaseLLMClient {
     return res;
   }
 
-  override async groundedAnswer(): Promise<GroundedAnswer> {
+  override async groundedAnswer(options: CompletionOptions & { maxSearches?: number }): Promise<GroundedAnswer> {
     this.calls.grounded += 1;
+    this.groundedOptions.push(options);
     if (this.failNextGrounded) {
       this.failNextGrounded = false;
       throw new Error('stub grounded failure');

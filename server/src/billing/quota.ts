@@ -105,3 +105,35 @@ export function refusalFor(entitlement: Entitlement): ApiError | null {
   }
   return apiError('subscription_required', 'Un abonnement actif est nécessaire pour lancer une analyse.');
 }
+
+/**
+ * Runs an account may start per credit it is entitled to. A credit is only
+ * consumed at a successful finalize, so a run that fails, or that the reader
+ * abandons, is free to them and paid by us. Two starts per credit leave room
+ * for a retry after every failure, and stop an account from buying research
+ * indefinitely by never finishing a run.
+ */
+export const STARTS_PER_CREDIT = 2;
+
+/** Runs started, counted the way the plan is measured: today for a subscription, ever for a trial. */
+export interface RunStarts {
+  today: number;
+  total: number;
+}
+
+/**
+ * Null when the start just recorded is within the allowance, otherwise the
+ * error to return. Called only once `refusalFor` has let the account through,
+ * so the plan here is one that has credits left.
+ */
+export function startsRefusal(entitlement: Entitlement, starts: RunStarts): ApiError | null {
+  const started = entitlement.plan === 'trial' ? starts.total : starts.today;
+  if (started <= STARTS_PER_CREDIT * entitlement.limit) return null;
+
+  return apiError(
+    'starts_exhausted',
+    entitlement.plan === 'trial'
+      ? 'Trop d’analyses d’essai ont été lancées sans aller à leur terme. Abonnez-vous pour continuer.'
+      : 'Trop d’analyses ont été lancées aujourd’hui sans aller à leur terme. Le compteur repart à minuit UTC.',
+  );
+}

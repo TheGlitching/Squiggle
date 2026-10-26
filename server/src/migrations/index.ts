@@ -21,6 +21,7 @@ import { name as textHashName, sql as textHashSql } from './007_reports_text_has
 import { name as nextName, sql as nextSql } from './008_signin_next';
 import { name as emailChangeName, sql as emailChangeSql } from './009_email_change';
 import { name as metricsName, sql as metricsSql } from './010_metric_counters';
+import { name as startedName, sql as startedSql } from './011_usage_started';
 
 export interface Migration {
   name: string;
@@ -43,6 +44,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { name: nextName, sql: nextSql },
   { name: emailChangeName, sql: emailChangeSql },
   { name: metricsName, sql: metricsSql },
+  { name: startedName, sql: startedSql },
 ];
 
 function splitStatements(sql: string): string[] {

@@ -575,6 +575,43 @@ describe('researchFindings', () => {
     expect(diagnostics.join('\n')).toMatch(/step limit/i);
     expect(client.searches.length).toBeLessThan(8);
   });
+
+  it('keeps the stage-wide search ceiling when there are more findings than searches', async () => {
+    // Twenty findings, an agent that always asks for one more search. The
+    // per-finding floor of one search used to apply even once the stage's
+    // fourteen were spent, so every finding still searched.
+    const findings = Array.from({ length: 20 }, (_, i) => makeFinding({ id: `f${i}`, category: 'affirmation-non-etayee' }));
+    const client = new StubClient({
+      completions: Array.from({ length: 60 }, () => JSON.stringify({ action: 'search', query: 'q', note: 'encore' })),
+      canSearch: true,
+      searchImpl: async () => [{ title: 'r', url: 'https://n.example/r', snippet: 'preuve' }]
+    });
+
+    const result = await researchFindings({ client, input: sampleInput, findings, citedSources: [] });
+
+    expect(result.claims).toHaveLength(20);
+    expect(client.searches.length).toBe(14);
+  });
+
+  it('hands the grounded call the search and output ceilings it was given', async () => {
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => ({ content: JSON.stringify({ verification: 'non-verifiable', sources: [] }), citations: [] })
+    });
+
+    await researchFindings({
+      client,
+      input: sampleInput,
+      findings: [makeFinding({ category: 'affirmation-non-etayee' })],
+      citedSources: [],
+      maxSearches: 3,
+      maxTokens: 4096
+    });
+
+    expect(client.groundedCalls[0].maxSearches).toBe(3);
+    expect(client.groundedCalls[0].maxTokens).toBe(4096);
+  });
 });
 
 const pinnedNow = new Date('2026-08-19T10:00:00Z');

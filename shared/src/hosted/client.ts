@@ -28,6 +28,7 @@ import {
 import type { CitedSource } from '../engine/research';
 import type { AnalysisReport, FactualClaim, TextBlock } from '../engine/types';
 import type { PipelineProgressEvent } from '../engine/pipeline';
+import { articleLength, articleTooLongMessage, MAX_ARTICLE_CHARS } from './limits';
 import { articleTextHash } from './textHash';
 
 /** An error the server named. The panel branches on `code`, never on the text. */
@@ -148,6 +149,11 @@ export class HostedAnalysisClient {
     this.lastProgress = 0;
 
     try {
+      // 0. A text over the cap would only be refused by the audit, after the
+      //    preflight. Saying so here costs no call and no credit.
+      const chars = articleLength(input.blocks);
+      if (chars > MAX_ARTICLE_CHARS) throw new HostedApiError('article_too_long', articleTooLongMessage(chars), 413);
+
       // 1. The preflight is the whole point of the shared cache: on a hit the
       //    article is never sent anywhere and no credit is spent.
       this.report('preparing_prompt', 'Recherche d’une analyse déjà publiée...', 5);

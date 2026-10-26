@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 import { articleTextHash } from '../../shared/src/hosted/textHash';
 import { articleFromShare, blocksFromPaste, MIN_TEXT_CHARS, pasteProblem, webAddress } from '../src/paste';
 
@@ -57,7 +58,10 @@ describe('pasteProblem', () => {
 
   it('stops a paste the server would refuse, or that is no article at all', () => {
     expect(pasteProblem({ title: '', source: '', text: 'https://presse.example/a' })).toBe('too_short');
-    expect(pasteProblem({ title: '', source: '', text: 'x'.repeat(200_001) })).toBe('too_long');
+    expect(pasteProblem({ title: '', source: '', text: 'x'.repeat(MAX_ARTICLE_CHARS + 1) })).toBe('too_long');
+    // The title is part of what the server counts.
+    expect(pasteProblem({ title: '', source: '', text: 'x'.repeat(MAX_ARTICLE_CHARS) })).toBeNull();
+    expect(pasteProblem({ title: 'Titre', source: '', text: 'x'.repeat(MAX_ARTICLE_CHARS) })).toBe('too_long');
     expect(pasteProblem({ title: '', source: '', text: 'ligne\n'.repeat(2_001) + long })).toBe('too_many_lines');
     expect(pasteProblem({ title: '', source: 'javascript:alert(1)', text: long })).toBe('bad_source');
     expect(pasteProblem({ title: '', source: 'presse.example/a', text: long })).toBe('bad_source');

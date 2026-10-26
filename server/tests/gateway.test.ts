@@ -129,7 +129,8 @@ describe('the research stage on OpenRouter', () => {
     expect(body.tools).toEqual([
       {
         type: 'openrouter:web_search',
-        parameters: { engine: 'parallel', mode: 'basic', max_results: 5 },
+        // Bounded: each search is billed, and the tool would otherwise allow thirty.
+        parameters: { engine: 'parallel', mode: 'basic', max_results: 5, max_uses: 3 },
       },
     ]);
     expect(body.web_search_options).toBeUndefined();

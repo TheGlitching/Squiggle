@@ -3,18 +3,17 @@
  *
  * Every field a client can set is bounded here, before a single token is paid
  * for: an unbounded `blocks` array is an unbounded model bill, and an
- * unbounded string is an unbounded prompt. The caps are generous enough for a
- * long-form investigation (roughly 200 000 characters, an order of magnitude
- * above a newspaper feature) and small enough that no single request can cost
- * more than a few cents.
+ * unbounded string is an unbounded prompt. Each block and the block count are
+ * capped here; the article's total length is not, because a text over
+ * `MAX_ARTICLE_CHARS` is a reader-facing refusal (`article_too_long`, with a
+ * sentence the reader can act on) rather than a malformed request, so the
+ * audit stage checks it before anything else.
  *
  * These schemas are also the reason no stage handler needs to defend itself:
  * a handler only ever sees a parsed value of the declared shape.
  */
 import { z } from 'zod';
 
-/** Longest article accepted, in characters across all blocks. */
-export const MAX_ARTICLE_CHARS = 200_000;
 /** Most blocks a single article may be split into. */
 export const MAX_BLOCKS = 2_000;
 /** Longest single block. */
@@ -30,7 +29,10 @@ export const TextBlockSchema = z.object({
   id: z.string().min(1).max(64),
   type: z.enum(['heading', 'paragraph', 'quote', 'caption', 'list-item']),
   text: z.string().max(MAX_BLOCK_CHARS),
-  charStart: z.number().int().min(0).max(MAX_ARTICLE_CHARS),
+  // Bounded by the largest text the other caps let through, not by
+  // MAX_ARTICLE_CHARS: an over-long article must reach the audit stage and be
+  // refused there with its own message, not fail here on an offset.
+  charStart: z.number().int().min(0).max(MAX_BLOCKS * MAX_BLOCK_CHARS),
 });
 
 export const CitedSourceSchema = z.object({
@@ -63,11 +65,7 @@ const auditFields = {
   partialAccess: z.boolean().default(false),
 };
 
-const withinArticleCap = (v: { blocks: Array<{ text: string }> }) =>
-  v.blocks.reduce((total, b) => total + b.text.length, 0) <= MAX_ARTICLE_CHARS;
-const overArticleCap = { message: `l'article dépasse ${MAX_ARTICLE_CHARS} caractères`, path: ['blocks'] };
-
-export const AuditRequestSchema = z.object(auditFields).refine(withinArticleCap, overArticleCap);
+export const AuditRequestSchema = z.object(auditFields);
 
 /**
  * The web app's audit: a text the reader pasted. Its address is optional
@@ -76,8 +74,7 @@ export const AuditRequestSchema = z.object(auditFields).refine(withinArticleCap,
  * name none, and a run opened from it can never make the server read a page.
  */
 export const PastedAuditRequestSchema = z
-  .object({ ...auditFields, url: url.optional(), citedSources: z.array(CitedSourceSchema).max(0).default([]) })
-  .refine(withinArticleCap, overArticleCap);
+  .object({ ...auditFields, url: url.optional(), citedSources: z.array(CitedSourceSchema).max(0).default([]) });
 
 export type AuditRequest = z.infer<typeof PastedAuditRequestSchema>;
 

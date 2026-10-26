@@ -39,10 +39,13 @@
  */
 import {
   AnalysisReport,
+  articleLength,
   articleTextHash,
+  articleTooLongMessage,
   buildFourchesCaudinesUserPrompt,
   computeFourchesCaudinesScore,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
+  MAX_ARTICLE_CHARS,
   parseAndValidateLlmOutput,
   reconcileResearchedFindings,
   RESEARCHABLE_FINDING_CATEGORIES,
@@ -59,7 +62,7 @@ import {
 
 import type { Clock } from '../lib/clock';
 import type { Db, UserRow } from '../db/types';
-import { entitlementOf, refusalFor } from '../billing/quota';
+import { entitlementOf, refusalFor, startsRefusal } from '../billing/quota';
 import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
 import { countMetric } from '../metrics';
@@ -84,12 +87,33 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * The client drives the run, so without these the cost of an analysis is
  * whatever the client asks for: a model that returns two hundred findings, or
  * simply a client that keeps calling, would spend two hundred model calls
- * against a single credit. Both caps sit above what a real article produces —
- * a long investigation raises a handful of factual objections, and the engine's
- * own per-analysis page budget is eight — so a reader never meets them.
+ * against a single credit. A long investigation raises a handful of factual
+ * objections, and the engine's own per-analysis page budget is eight, so a
+ * real article rarely meets either cap; one that does keeps its other
+ * findings, reported as unverified.
+ *
+ * Together with the per-call caps below, they bound one analysis on the
+ * production model to under 30 cents in the worst case (the arithmetic is in
+ * the pull request that set them). Nearly all of it is web searches, at half
+ * a cent each, which is why the search count is capped per finding.
  */
-export const MAX_RESEARCH_CALLS_PER_RUN = 25;
+export const MAX_RESEARCH_CALLS_PER_RUN = 8;
 export const MAX_SOURCE_CHECKS_PER_RUN = 8;
+
+/**
+ * Web searches one research call may run. The provider's search tool lets the
+ * model search as often as it likes in one request (OpenRouter allows thirty),
+ * and every search is billed; three is enough to confirm or refute one claim.
+ */
+export const MAX_SEARCHES_PER_RESEARCH = 3;
+
+/**
+ * Output ceiling on every model call of a run, reasoning included. Without one
+ * a single answer is bounded only by the model's own maximum, hundreds of
+ * thousands of tokens. A verdict is a short JSON object; the audit is the
+ * longest answer and has always fitted in this.
+ */
+export const MAX_OUTPUT_TOKENS = 4096;
 
 /** Per-cited-page fetch timeout on the server. */
 const SOURCE_FETCH_TIMEOUT_MS = 10_000;
@@ -196,6 +220,15 @@ export async function analyzeAudit(
   if (!canonical) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
   const urlHash = await sha256Hex(canonical);
 
+  // A page that strings several articles together is refused, not truncated:
+  // an analysis of the first hundred thousand characters of a home page would
+  // be a verdict on something the reader never chose to read.
+  const chars = articleLength(payload.blocks);
+  if (chars > MAX_ARTICLE_CHARS) {
+    logEvent({ event: 'payload_rejected', requestId: s.requestId, userId: user.id, fields: ['blocks'], count: chars });
+    return apiError('article_too_long', articleTooLongMessage(chars));
+  }
+
   const now = s.clock.now();
 
   // Every ceiling is checked BEFORE the provider is called: an abusive client
@@ -260,7 +293,7 @@ export async function analyzeAudit(
         },
       ],
       temperature: 0.1,
-      maxTokens: 4096,
+      maxTokens: MAX_OUTPUT_TOKENS,
     });
     raw = completion.content;
   } catch {
@@ -323,9 +356,9 @@ export async function analyzeAudit(
 
 /**
  * What a run has to clear to start: the reader's own entitlement, one analysis
- * in flight per account, and an hourly ceiling for the whole service. That
- * last one is the only thing standing between a mass account compromise and an
- * unbounded model invoice.
+ * in flight per account, a ceiling on runs started per account, and an hourly
+ * ceiling for the whole service. That last one is the only thing standing
+ * between a mass account compromise and an unbounded model invoice.
  */
 async function enforceStartCeilings(
   s: AnalyzeServices,
@@ -336,7 +369,8 @@ async function enforceStartCeilings(
   // can act on, and checking it here means a reader out of credits never pays
   // for a token. The credit itself is consumed at a successful finalize, so a
   // run that dies on a provider timeout costs them nothing.
-  const refusal = refusalFor(await entitlementOf(s.db, user, now));
+  const entitlement = await entitlementOf(s.db, user, now);
+  const refusal = refusalFor(entitlement);
   if (refusal) return refusal;
 
   // Read-then-insert, so it is not atomic: two requests can still both read
@@ -349,6 +383,16 @@ async function enforceStartCeilings(
   if (active >= MAX_CONCURRENT_RUNS) {
     logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:concurrent', count: active });
     return apiError('rate_limited', 'Une analyse est déjà en cours. Attendez qu’elle se termine.');
+  }
+
+  // A credit is only consumed at finalize, so a run abandoned after its
+  // research costs us a full analysis and the reader nothing. Without a count
+  // of starts, one account could keep doing that every five minutes.
+  const starts = await s.db.recordRunStart(user.id, now);
+  const tooManyStarts = startsRefusal(entitlement, starts);
+  if (tooManyStarts) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:starts', count: starts.today });
+    return tooManyStarts;
   }
 
   const global = await s.db.recordAndCheckRate({
@@ -439,6 +483,8 @@ export async function analyzeResearch(
       findings: [finding],
       citedSources: state.citedSources,
       now: new Date(s.clock.now()),
+      maxSearches: MAX_SEARCHES_PER_RESEARCH,
+      maxTokens: MAX_OUTPUT_TOKENS,
       fetchPage: serverPageFetcher(s),
       fetchTimeoutMs: SOURCE_FETCH_TIMEOUT_MS,
     });
@@ -504,6 +550,7 @@ export async function analyzeSourceCheck(
       citedSources: [{ ...source, blockId: claim.blockId }],
       now: new Date(s.clock.now()),
       maxPages: 1,
+      maxTokens: MAX_OUTPUT_TOKENS,
       fetchTimeoutMs: SOURCE_FETCH_TIMEOUT_MS,
       fetchPage: serverPageFetcher(s),
     });
