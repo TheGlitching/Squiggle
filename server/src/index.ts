@@ -173,10 +173,11 @@ export interface LlmEnv {
 }
 
 /**
- * Where OpenRouter may run a hosted analysis: the European hosts the public
- * pages name, and nowhere else. With fallbacks off, a request none of them can
- * serve fails instead of reaching a host outside Europe; the audit turns that
- * into a "retry in a few minutes" that costs the reader nothing. Each host must
+ * Where OpenRouter may run a hosted analysis: the hosts the public pages name,
+ * European first, American only as a fallback, tried in their order, and
+ * nowhere else. With fallbacks off, a request none of them can serve fails
+ * instead of reaching a host the pages do not name; the audit turns that into
+ * a "retry in a few minutes" that costs the reader nothing. Each host must
  * also keep no prompt, train on none, and honour every parameter sent, so a
  * host that would drop the response schema is skipped too.
  */

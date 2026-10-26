@@ -8,11 +8,11 @@ const { inferenceHosts, webSearch } = HOSTED_ANALYSIS;
 
 /**
  * Who runs the model and who runs the web searches, for the privacy policy,
- * which must name its processors: the European hosts every hosted request is
+ * which must name its processors: the hosts every hosted request is
  * pinned to, and the search engine. This page describes them without naming
  * them, because the model changes.
  */
-export const INFERENCE_HOSTS_LABEL = `Hébergement du modèle : ${inferenceHosts.map((host) => host.name).join(', ')}`;
+export const INFERENCE_HOSTS_LABEL = `Hébergeurs du modèle : ${inferenceHosts.map((host) => host.name).join(', ')}`;
 export const WEB_SEARCH_LABEL = `Recherche web : ${webSearch.name}`;
 
 export const RETENTION = [
@@ -61,7 +61,7 @@ export const RETENTION = [
 const SUBPROCESSORS = [
   [
     'Fournisseur du modèle d’IA',
-    'Exécution de l’analyse par un modèle d’IA, chez un hébergeur européen',
+    'Exécution de l’analyse par un modèle d’IA, en Europe en priorité, aux États-Unis en secours',
     'Le texte de l’article et les extraits des sources citées, sans identité de lecteur',
   ],
   [
@@ -140,7 +140,7 @@ export function Transparence() {
               nodes={[
                 { name: 'Votre navigateur', note: 'la page lue, ou le texte collé' },
                 { name: 'Notre serveur', note: 'ne garde pas le texte' },
-                { name: 'Un modèle d’IA', note: 'chez un hébergeur européen' },
+                { name: 'Un modèle d’IA', note: 'en Europe en priorité, aux États-Unis en secours' },
               ]}
               links={['le texte de l’article', 'sans votre identité']}
             />
@@ -149,10 +149,10 @@ export function Transparence() {
             L’analyse est confiée à un modèle d’IA, choisi pour la qualité de son raisonnement, sa vitesse et son coût,
             et remplacé quand un meilleur apparaît. Squiggle ne traite que des articles publics : la page que vous
             lisez, son adresse et les pages qu’elle cite. Un texte collé sur le site suit le même trajet, et aucune
-            identité de lecteur n’accompagne une requête. Le modèle tourne chez un hébergeur européen, et nulle part
-            ailleurs : s’il ne peut pas répondre, l’analyse s’arrête sans vous coûter d’analyse, et vous réessayez
-            quelques minutes plus tard. Seules les recherches web de l’étape de vérification passent par un moteur de
-            recherche établi aux États-Unis, qui reçoit les requêtes de recherche, jamais l’article ni votre identité.
+            identité de lecteur n’accompagne une requête. Le modèle tourne en Europe en priorité, chez un hébergeur
+            européen, et aux États-Unis en secours seulement quand celui-ci ne peut pas répondre ; jamais en Chine. Les
+            recherches web de l’étape de vérification passent par un moteur de recherche établi aux États-Unis, qui
+            reçoit les requêtes de recherche, jamais l’article ni votre identité.
             Ces prestataires sont nommés dans la{' '}
             <Link to="/confidentialite" className="underline underline-offset-4 hover:text-foreground">
               politique de confidentialité

@@ -93,8 +93,9 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * findings, reported as unverified.
  *
  * Together with the per-call caps below, they bound one analysis on the
- * production model to under 45 cents in the worst case, at the price of
- * Nebius, the one host it is pinned to ($0.30 / $1.20 per million tokens);
+ * production model to under 45 cents in the worst case, at the price of the
+ * dearest hosts it is pinned to (Nebius, tried first, and Together AI, both
+ * $0.30 / $1.20 per million tokens);
  * the arithmetic is in the pull requests that set the caps and pinned the
  * hosts. About 12 cents of it is web searches, at half a cent each, which is
  * why the search count is capped per finding; they are close to half the
@@ -302,10 +303,10 @@ export async function analyzeAudit(
   } catch {
     // Close the reservation: an audit that never produced anything must not
     // hold the account's single slot for the next five minutes. The start is
-    // given back too. Hosted inference runs only on European hosts, with no
-    // fallback, so "none of them can serve right now" is an expected outcome,
-    // and a reader retrying through it must not run out of starts for runs
-    // that never began. No credit was consumed either: that happens at finalize.
+    // given back too. Hosted inference is pinned to a short list of hosts with
+    // no fallback beyond it, so "none of them can serve right now" is an
+    // expected outcome, and a reader retrying through it must not run out of
+    // starts for runs that never began. No credit was consumed either: that happens at finalize.
     // Every audit call failure is released, a billed timeout included: the
     // hourly global ceiling bounds that, and the release can be narrowed to
     // provider refusals if timeouts ever show up in the failure counters.

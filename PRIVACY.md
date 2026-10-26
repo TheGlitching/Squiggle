@@ -93,16 +93,17 @@ limite de votre essai ou de votre abonnement. Par défaut, l'analyse tourne sur 
 ouverts, via OpenRouter : il a été retenu pour le meilleur équilibre entre vitesse,
 qualité de raisonnement et coût. Un modèle à poids ouverts est servi par plusieurs
 hébergeurs d'inférence, et chaque requête fixe ceux qu'OpenRouter a le droit
-d'utiliser : **uniquement des hébergeurs européens**. Aujourd'hui, c'est **Nebius**
-(siège aux Pays-Bas), seul hébergeur européen de ce modèle sur OpenRouter, sans aucun
-relais hors d'Europe. Il doit s'engager à ne conserver aucune requête et à n'en servir
-aucune à l'entraînement d'un modèle. S'il ne peut pas répondre, l'analyse s'arrête
-plutôt que de partir chez un autre hébergeur : vous lisez « Service momentanément
-indisponible. Réessayez dans quelques minutes. », et la tentative ne vous coûte aucune
-analyse.
+d'utiliser : **en Europe en priorité, aux États-Unis en secours**. D'abord
+**Nebius** (siège aux Pays-Bas), seul hébergeur européen de ce modèle sur OpenRouter ;
+seulement s'il ne peut pas répondre, **DeepInfra**, **CoreWeave** et **Together AI**
+(États-Unis). Aucun n'a son siège en Chine. Chacun doit s'engager à ne conserver aucune
+requête et à n'en servir aucune à l'entraînement d'un modèle. Si aucun ne peut
+répondre, l'analyse s'arrête plutôt que de partir chez un autre hébergeur : vous lisez
+« Service momentanément indisponible. Réessayez dans quelques minutes. », et la
+tentative ne vous coûte aucune analyse.
 
-Une seule étape sort d'Europe : la **recherche web** de l'étape de vérification.
-OpenRouter ne propose aucun moteur de recherche en Europe ; elle passe par
+La **recherche web** de l'étape de vérification, elle, ne peut pas se faire en Europe :
+OpenRouter ne propose aucun moteur de recherche européen ; elle passe par
 **Parallel Web Systems** (États-Unis). Ce moteur reçoit les **requêtes de recherche**
 que le modèle rédige à partir des affirmations relevées dans l'article, quelques mots
 chacune, et rien d'autre : jamais le texte de l'article, jamais une identité de
@@ -181,7 +182,7 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 | Sous-traitant | Rôle | Ce qu'il voit |
 |---|---|---|
 | **OpenRouter** (États-Unis) | passerelle d'analyse, fournisseur par défaut : transmet chaque requête à l'hébergeur d'inférence | le texte de l'article et les extraits des sources citées |
-| **Hébergeur d'inférence** : Nebius (Pays-Bas), seul hébergeur autorisé, sans relais hors d'Europe ; modèle `deepseek/deepseek-v4.1-flash`, DeepSeek V4.1 Flash | exécution du modèle à poids ouverts, sans conservation des requêtes | idem, sans identité de lecteur |
+| **Hébergeurs d'inférence** : Nebius (Pays-Bas) en priorité, DeepInfra, CoreWeave et Together AI (États-Unis) en secours ; modèle `deepseek/deepseek-v4.1-flash`, DeepSeek V4.1 Flash | exécution du modèle à poids ouverts, sans conservation des requêtes | idem, sans identité de lecteur |
 | **Parallel Web Systems** (États-Unis), via OpenRouter | moteur de la recherche web de l'étape de vérification | les requêtes de recherche rédigées par le modèle, jamais l'article ni une identité de lecteur |
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini, ce qui n'est pas le cas aujourd'hui ; ses serveurs ne sont pas tous en Europe | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |

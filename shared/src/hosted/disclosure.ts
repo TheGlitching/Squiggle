@@ -12,15 +12,19 @@ export const HOSTED_ANALYSIS = {
   model: 'deepseek/deepseek-v4.1-flash',
   modelLabel: 'DeepSeek V4.1 Flash',
   /**
-   * The inference hosts OpenRouter may run this model on, and no other: the
-   * server sends this list as the provider preferences of every hosted
-   * request, with no fallback. Only European hosts are listed. Nebius,
+   * The inference hosts OpenRouter may run this model on, in the order it
+   * tries them, and no other: the server sends this list as the provider
+   * preferences of every hosted request. European hosts come first. Nebius,
    * headquartered in the Netherlands, is the only European host of this model
-   * on OpenRouter; when it cannot serve, the analysis fails and the reader is
-   * told to retry rather than the text leaving for a host outside Europe.
-   * `slug` is OpenRouter's provider slug.
+   * on OpenRouter; the American hosts behind it take over only when it cannot
+   * serve. None is headquartered in China. `slug` is OpenRouter's provider slug.
    */
-  inferenceHosts: [{ slug: 'nebius', name: 'Nebius', country: 'Pays-Bas' }],
+  inferenceHosts: [
+    { slug: 'nebius', name: 'Nebius', country: 'Pays-Bas' },
+    { slug: 'deepinfra', name: 'DeepInfra', country: 'États-Unis' },
+    { slug: 'coreweave', name: 'CoreWeave', country: 'États-Unis' },
+    { slug: 'together', name: 'Together AI', country: 'États-Unis' },
+  ],
   /**
    * Who runs the web searches of the research stage. OpenRouter's search
    * engines all run in the United States, and none is offered on its European

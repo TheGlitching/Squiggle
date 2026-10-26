@@ -411,10 +411,10 @@ describe('a checkout that is never confirmed', () => {
   });
 });
 
-describe('when no European host can run the model', () => {
+describe('when none of the pinned hosts can run the model', () => {
   it('fails the audit with a retry message, consumes no credit and gives the start back', async () => {
-    // The real hosted client, pinned to its European hosts with no fallback,
-    // and OpenRouter answering the way it does when none of them can serve.
+    // The real hosted client, pinned to its hosts with no fallback beyond
+    // them, and OpenRouter answering the way it does when none of them can serve.
     const llm = createHostedLlm({ OPENROUTER_API_KEY: 'k' })! as unknown as StubLlm;
     const env = makeTestEnv({ fetchImpl: pageFetch(), llm });
     const who = await signedIn(env, 'marie@example.org');

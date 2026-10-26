@@ -282,8 +282,8 @@ const TRANSFERS = [
   ['OpenRouter, Inc.', 'États-Unis', 'Clauses contractuelles types de la Commission européenne, dans l’accord de traitement d’OpenRouter'],
   [
     INFERENCE_HOSTS_LABEL,
-    'Pays-Bas',
-    'Hébergeur européen, sans relais hors d’Europe ; aucune conservation, aucun entraînement ; aucune identité de lecteur n’est transmise',
+    'Pays-Bas en priorité, États-Unis en secours',
+    'Engagements d’OpenRouter envers ses fournisseurs : aucune conservation, aucun entraînement ; aucune identité de lecteur n’est transmise',
   ],
   [
     WEB_SEARCH_LABEL,

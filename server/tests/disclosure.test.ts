@@ -38,12 +38,16 @@ describe('hosted disclosure', () => {
       data_collection: 'deny',
       zdr: true,
     });
-    expect(slugs).toEqual(['nebius']);
+    expect(slugs[0]).toBe('nebius');
   });
 
-  it('names only European hosts, so the pages can say the model runs in Europe', () => {
+  it('tries every European host before any other, and names none in China', () => {
     const european = ['Pays-Bas', 'France', 'Allemagne', 'Finlande', 'Suède', 'Irlande', 'Espagne', 'Italie', 'Belgique'];
-    for (const host of HOSTED_ANALYSIS.inferenceHosts) expect(european, host.name).toContain(host.country);
+    const countries = HOSTED_ANALYSIS.inferenceHosts.map((host) => host.country);
+    const firstOutside = countries.findIndex((country) => !european.includes(country));
+    expect(firstOutside).toBeGreaterThan(0);
+    expect(countries.slice(firstOutside).some((country) => european.includes(country))).toBe(false);
+    expect(countries).not.toContain('Chine');
   });
 
   it('names the web search engine the research stage actually calls', () => {
