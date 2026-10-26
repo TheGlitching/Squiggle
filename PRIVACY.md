@@ -1,6 +1,6 @@
 # Politique de confidentialité
 
-*Dernière mise à jour : 23 octobre 2026*
+*Dernière mise à jour : 26 octobre 2026*
 
 Squiggle est une extension de navigateur qui analyse la rigueur d'un article de presse,
 et un site, squiggle.fr, qui fait la même analyse sur le texte d'un article qu'on y
@@ -12,7 +12,7 @@ même trajet de données.
 
 | | **Clé personnelle (BYOK)** | **Squiggle hébergé** |
 |---|---|---|
-| Disponible | oui, c'est le mode actuel | **pas encore : en cours de construction** |
+| Disponible | oui | oui |
 | Il vous faut | une clé d'API à vous | un compte |
 | L'article part vers | le fournisseur que vous avez choisi | notre serveur, puis le fournisseur configuré |
 | Nous voyons | rien | l'article, le temps de l'analyser |
@@ -86,18 +86,18 @@ Supprimer l'extension supprime les deux.
 
 # 2. Mode « Squiggle hébergé »
 
-> **Ce mode n'est pas encore déployé.** Cette section décrit ce qu'il fera, publiée au
-> fur et à mesure de sa construction plutôt qu'à sa mise en service. Tant qu'il n'est
-> pas disponible, rien de ce qui suit ne se produit.
-
 Le mode hébergé existe pour les lecteurs qui ne veulent pas gérer une clé d'API.
 L'analyse tourne alors sur notre infrastructure, avec notre propre clé, via le
-fournisseur configuré (OpenRouter par défaut, Google Gemini en alternative), contre
-des crédits. Par défaut, l'analyse tourne sur **DeepSeek V4.1 Flash**, un modèle à poids
+fournisseur configuré (OpenRouter par défaut, Google Gemini en alternative), dans la
+limite de votre essai ou de votre abonnement. Par défaut, l'analyse tourne sur **DeepSeek V4.1 Flash**, un modèle à poids
 ouverts, via OpenRouter : il a été retenu pour le meilleur équilibre entre vitesse,
 qualité de raisonnement et coût. Un modèle à poids ouverts est servi par plusieurs
-hébergeurs d'inférence, choisis via OpenRouter ; l'utiliser ne signifie pas envoyer le
-texte vers des serveurs en Chine. Squiggle ne traite que des **articles publics** : le
+hébergeurs d'inférence, et chaque requête fixe ceux qu'OpenRouter a le droit
+d'utiliser : **Nebius** (siège aux Pays-Bas), seul hébergeur européen de ce modèle,
+en priorité, puis **DeepInfra**, **CoreWeave** et **Together AI** (États-Unis) s'il ne
+peut pas répondre. Aucun n'a son siège en Chine. Chacun doit s'engager à ne conserver
+aucune requête et à n'en servir aucune à l'entraînement d'un modèle ; si aucun ne peut
+répondre, l'analyse échoue plutôt que de partir chez un autre hébergeur. Squiggle ne traite que des **articles publics** : le
 texte de la page que vous lisez, son adresse et les pages qu'elle cite. Aucune donnée
 privée ne part vers le modèle, et aucune identité de lecteur n'accompagne une requête. **Le choix vous appartient à chaque instant** : c'est un
 sélecteur dans les réglages, et un compte est nécessaire pour l'activer.
@@ -172,7 +172,7 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 | Sous-traitant | Rôle | Ce qu'il voit |
 |---|---|---|
 | **OpenRouter** | passerelle d'analyse, fournisseur par défaut | le texte de l'article et les extraits des sources citées |
-| **Hébergeurs d'inférence** (choisis via OpenRouter ; modèle `deepseek/deepseek-v4.1-flash`, DeepSeek V4.1 Flash) | exécution du modèle à poids ouverts | idem, sans identité de lecteur |
+| **Hébergeurs d'inférence** : Nebius (Pays-Bas) en priorité, DeepInfra, CoreWeave et Together AI (États-Unis) en relais ; modèle `deepseek/deepseek-v4.1-flash`, DeepSeek V4.1 Flash | exécution du modèle à poids ouverts, sans conservation des requêtes | idem, sans identité de lecteur |
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |
 | **Cloudflare** (Workers) | hébergement du serveur | le trafic, sans contenu d'article dans les journaux |

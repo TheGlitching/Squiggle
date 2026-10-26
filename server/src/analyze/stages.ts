@@ -93,9 +93,13 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * findings, reported as unverified.
  *
  * Together with the per-call caps below, they bound one analysis on the
- * production model to under 30 cents in the worst case (the arithmetic is in
- * the pull request that set them). Nearly all of it is web searches, at half
- * a cent each, which is why the search count is capped per finding.
+ * production model to under 45 cents in the worst case, at the price of the
+ * dearest hosts it is pinned to (Nebius, tried first, and Together AI, both
+ * $0.30 / $1.20 per million tokens);
+ * the arithmetic is in the pull requests that set the caps and pinned the
+ * hosts. About 12 cents of it is web searches, at half a cent each, which is
+ * why the search count is capped per finding; they are close to half the
+ * cost of a typical analysis.
  */
 export const MAX_RESEARCH_CALLS_PER_RUN = 8;
 export const MAX_SOURCE_CHECKS_PER_RUN = 8;

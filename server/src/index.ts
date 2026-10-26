@@ -49,6 +49,7 @@ import {
   OpenRouterClient,
   PROMPT_VERSION,
   type BaseLLMClient,
+  type OpenRouterProviderPreferences,
 } from '@squiggle/shared';
 
 import {
@@ -172,6 +173,22 @@ export interface LlmEnv {
 }
 
 /**
+ * Where OpenRouter may run a hosted analysis: the hosts the public pages name,
+ * tried in their order, and nowhere else. With fallbacks off, a request none
+ * of them can serve fails instead of reaching a host the pages do not name.
+ * Each must also keep no prompt, train on none, and honour every parameter
+ * sent, so a host that would drop the response schema is skipped too.
+ */
+const HOSTED_PROVIDER_PREFERENCES: OpenRouterProviderPreferences = {
+  order: HOSTED_ANALYSIS.inferenceHosts.map((host) => host.slug),
+  only: HOSTED_ANALYSIS.inferenceHosts.map((host) => host.slug),
+  allow_fallbacks: false,
+  require_parameters: true,
+  data_collection: 'deny',
+  zdr: true,
+};
+
+/**
  * Builds the hosted LLM client from deployment config, so the provider and the
  * model are settings rather than something baked into a build. OpenRouter is
  * the default; `gemini` is kept selectable.
@@ -201,7 +218,7 @@ export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
       // The default is the exact OpenRouter catalogue id, tilde-free: the API
       // rejects anything that is not exactly right.
       model: env.OPENROUTER_MODEL || HOSTED_ANALYSIS.model,
-    });
+    }, HOSTED_PROVIDER_PREFERENCES);
   }
 
   return undefined;

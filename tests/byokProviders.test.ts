@@ -324,6 +324,31 @@ describe('OpenRouter', () => {
     expect(calls[0].body.temperature).toBe(0.1);
   });
 
+  it('sends its provider preferences on every request: completion, stream and web search', async () => {
+    const preferences = { order: ['nebius', 'deepinfra'], allow_fallbacks: false, zdr: true };
+    const calls = stubFetch((call) => call.body.stream
+      ? sse([{ choices: [{ index: 0, delta: { content: 'OK' } }] }])
+      : json({ choices: [{ message: { content: 'OK', annotations: [] } }] }));
+    const client = new OpenRouterClient({ provider: 'openrouter', apiKey: KEY, model: 'deepseek/deepseek-v4.1-flash' }, preferences);
+
+    await client.complete({ messages: [{ role: 'user', content: 'q' }] });
+    await client.stream({ messages: [{ role: 'user', content: 'q' }] }, { onChunk: () => {} });
+    await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
+    await client.webSearch('q');
+
+    expect(calls).toHaveLength(4);
+    for (const call of calls) expect(call.body.provider).toEqual(preferences);
+  });
+
+  it('leaves the routing to OpenRouter when given no preferences, as on a reader\'s own key', async () => {
+    const calls = stubFetch(() => json({ choices: [{ message: { content: 'OK' } }] }));
+    const client = new OpenRouterClient({ provider: 'openrouter', apiKey: KEY, model: 'deepseek/deepseek-v4.1-flash' });
+
+    await client.complete({ messages: [{ role: 'user', content: 'q' }] });
+
+    expect(calls[0].body).not.toHaveProperty('provider');
+  });
+
   it('fails a stream that ends on an error chunk, instead of returning the partial text', async () => {
     stubFetch(() => sse([
       { choices: [{ index: 0, delta: { content: '{"partial' } }] },
