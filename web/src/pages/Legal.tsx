@@ -281,8 +281,8 @@ const TRANSFERS = [
   ['OpenRouter, Inc.', 'États-Unis', 'Clauses contractuelles types de la Commission européenne, dans l’accord de traitement d’OpenRouter'],
   [
     INFERENCE_HOSTS_LABEL,
-    'Selon l’hébergeur, hors UE possible',
-    'Engagements d’OpenRouter envers ses fournisseurs ; aucune identité de lecteur n’est transmise',
+    'Pays-Bas en priorité, États-Unis en relais',
+    'Engagements d’OpenRouter envers ses fournisseurs : aucune conservation, aucun entraînement ; aucune identité de lecteur n’est transmise',
   ],
   ['Cloudflare, Inc. (hébergement)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Stripe (paiement)', 'Irlande, et États-Unis pour Stripe, Inc.', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
