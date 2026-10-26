@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { BrandLockup } from './Brand';
+import { InstallHint } from './InstallHint';
 import { ExternalMark } from './Iso';
 import { LEAD, MEASURE, PAGE, QUIET_LINK, TITLE } from './Landing';
 import { GITHUB_URL, LEGAL_PAGES, TAGLINE } from '../offer';
@@ -52,6 +53,7 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
           </nav>
         </div>
       </header>
+      <InstallHint />
 
       <main className="flex-1">{children}</main>
 
