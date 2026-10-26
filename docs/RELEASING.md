@@ -23,29 +23,35 @@ Only this first upload is manual. Every later version goes through the pipeline.
 
 ### Listing assets
 
-Generated, so they cannot drift from the icon:
+Every image is generated, so none can drift from what it shows. The icon:
 
 ```bash
 python3 scripts/build-icon.py
 ```
 
+The promotional tiles and the screenshots:
+
+```bash
+node scripts/build-store-assets.mjs        # every image, into store/
+node scripts/build-store-assets.mjs --only screenshot-2
+```
+
+Each image is a page of `store/render/` photographed by headless Chrome at its exact
+size. A screenshot holds the extension's real side panel and the real in-page
+highlights, mounted on the site's example article (`web/src/demo.ts`) and rendered by
+their own code, so a change to the panel shows up in the next render. The drawings and
+type are the site's (`web/src/components/Iso.tsx`, `web/src/index.css`).
+
 | Asset | Size | Where |
 |---|---|---|
 | Extension icon | 128x128, artwork inset to 96 | `src/assets/icon-128.png`, already in the zip |
-| Small promotional tile | 440x280 | `store/promo-small-440x280.png` **(required)** |
-| Marquee tile | 1400x560 | `store/promo-marquee-1400x560.png` (optional, needed to be featured) |
+| Small promotional tile | 440x280 | `store/promo-small-440x280.png` (without it the item ranks below those that have one) |
+| Marquee tile | 1400x560 | `store/promo-marquee-1400x560.png` (needed to be featured) |
+| Screenshots | 1280x800, full bleed | `store/screenshot-1-1280x800.png` to `-5`, for Chrome and AMO alike |
 
-Screenshots have to come from a real browser, so they are the one thing not generated
-here. One is the minimum, five the maximum, and they must be full bleed at exactly
-1280x800 or 640x400. Capture the panel open beside an analysed article, then:
-
-```bash
-scripts/store-screenshot.sh ~/Desktop/shot.png
-```
-
-That crops to 16:10 before scaling. Cropping the other way round, or letting `sips`
-fit the image, pads it with borders - which is exactly what the store asks you not to
-submit.
+The store shows screenshots downscaled to 640x400, which is why the caption type is
+large. The order, the captions and the reason the tiles carry no sentence are in
+[`../store/listing.fr.md`](../store/listing.fr.md).
 
 ### 2. Allow the pipeline to talk to the store
 
@@ -191,9 +197,12 @@ Run the lint on the built package before uploading; the validator AMO runs is th
 npx web-ext lint -s dist/firefox
 ```
 
-It reports no error. Two `UNSAFE_VAR_ASSIGNMENT` warnings point at `innerHTML` inside
-the bundled React runtime (the `SquiggleBadge-*.js` chunk); the extension's own code
-never assigns `innerHTML`. They are expected and AMO review accepts them.
+It reports no error and three expected warnings. Two `UNSAFE_VAR_ASSIGNMENT` point at
+`innerHTML` inside the bundled React runtime (the `SquiggleBadge-*.js` chunk); the
+extension's own code never assigns `innerHTML`, and AMO review accepts them. One
+`KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION` notes that Firefox for Android only reads
+`data_collection_permissions` from 142; the add-on is not offered on Android, which has no
+sidebar, so it does not apply.
 
 `data_collection_permissions` in the Firefox manifest is only understood from Firefox 140,
 which is why `strict_min_version` is `140.0`. Lowering one without the other either

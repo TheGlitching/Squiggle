@@ -24,7 +24,6 @@ PAPER = (250, 249, 245)  # the panel's newsprint, #faf9f5
 ACCENT = (144, 97, 240)
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src/assets")
-STORE_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "store")
 WEB_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web/public")
 
 # The store shows the 128px icon from the package, and asks for the artwork to
@@ -244,71 +243,8 @@ def inset(pixels, artwork_size, canvas_size):
     return out
 
 
-def render_promo(width, height, mark_height):
-    """A promotional tile: the mark in paper, on a full bleed of the accent.
-
-    The store's guidance for these is to communicate the brand rather than show
-    the interface, to avoid text, to fill the region, and to survive being halved.
-    A saturated field carrying only the mark does all four, and needs no badge
-    outline because the field already is the badge.
-    """
-    ss = 2
-    hi_w, hi_h = width * ss, height * ss
-    scale = (mark_height * ss) / GRID
-    off_x = (hi_w - GRID * scale) / 2
-    off_y = (hi_h - GRID * scale) / 2
-
-    marks = bytearray(hi_w * hi_h)
-
-    for bar in BARS:
-        bx0, by0, bx1, by1 = bar
-        for py in range(int(off_y + by0 * scale), int(off_y + by1 * scale) + 1):
-            if not 0 <= py < hi_h:
-                continue
-            row = py * hi_w
-            for px in range(int(off_x + bx0 * scale), int(off_x + bx1 * scale) + 1):
-                if 0 <= px < hi_w and inside_bar((px + 0.5 - off_x) / scale, (py + 0.5 - off_y) / scale, bar):
-                    marks[row + px] = 1
-
-    radius = (WAVE["stroke"] / 2) * scale
-    reach = int(math.ceil(radius))
-    for (gx, gy) in wave_points():
-        cx, cy = off_x + gx * scale, off_y + gy * scale
-        for dy in range(-reach, reach + 1):
-            py = int(cy) + dy
-            if not 0 <= py < hi_h:
-                continue
-            row = py * hi_w
-            for dx in range(-reach, reach + 1):
-                px = int(cx) + dx
-                if 0 <= px < hi_w and math.hypot(dx, dy) <= radius:
-                    marks[row + px] = 1
-
-    area = ss * ss
-    out = []
-    for y in range(height):
-        for x in range(width):
-            mark = 0
-            for sy in range(ss):
-                row = (y * ss + sy) * hi_w
-                for sx in range(ss):
-                    if marks[row + x * ss + sx]:
-                        mark += 1
-            t = mark / area
-            out.append(
-                (
-                    int(ACCENT[0] * (1 - t) + PAPER[0] * t),
-                    int(ACCENT[1] * (1 - t) + PAPER[1] * t),
-                    int(ACCENT[2] * (1 - t) + PAPER[2] * t),
-                    255,
-                )
-            )
-    return out
-
-
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    os.makedirs(STORE_OUT, exist_ok=True)
 
     for size in (16, 32, 48):
         write_png(os.path.join(OUT, f"icon-{size}.png"), render(size), size)
@@ -327,7 +263,3 @@ if __name__ == "__main__":
     write_svg(os.path.join(WEB_OUT, "favicon.svg"), crop=True)
     write_png(os.path.join(WEB_OUT, "favicon-32.png"), render(32), 32)
     print("wrote web/public/favicon.svg and favicon-32.png")
-
-    for (w, h, mark, name) in ((440, 280, 205, "promo-small-440x280"), (1400, 560, 410, "promo-marquee-1400x560")):
-        write_png(os.path.join(STORE_OUT, f"{name}.png"), render_promo(w, h, mark), w, h)
-        print(f"wrote store/{name}.png")
