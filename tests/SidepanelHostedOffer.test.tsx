@@ -160,7 +160,7 @@ describe('sidepanel first screen', () => {
       expect(primaries().map((b) => b.textContent)).toEqual(['Se connecter']);
       // Free, and who bills what, stated beside the option rather than left to the reader.
       expect(container.textContent).toContain('Gratuit avec votre propre clé d’IA');
-      expect(container.textContent).toContain('qui vous facture directement, en général quelques centimes par analyse');
+      expect(container.textContent).toContain('qui vous facture directement chaque analyse, au tarif du modèle choisi');
       expect(container.textContent).toContain('Une clé d’API, c’est le code d’accès personnel');
       expect(button('Utiliser ma propre clé')).toBeDefined();
       expect(button('Lancer l’analyse critique')!.disabled).toBe(true);
