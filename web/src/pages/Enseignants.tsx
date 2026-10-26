@@ -40,7 +40,7 @@ const MODE: Array<[string, string]> = [
   ],
   [
     'Une fiche à photocopier',
-    'La fiche élève numérote les phrases comme le tableau, sans rien de l’analyse. Le corrigé suit votre ordre. Chacun tient sur une page A4.',
+    'La fiche élève numérote les phrases comme le tableau, sans rien de l’analyse. Le corrigé suit votre ordre. Les deux s’impriment en A4.',
   ],
 ];
 

@@ -2,7 +2,7 @@
  * The paper of the lesson: the student sheet (/classe/fiche), with the article's
  * sentences numbered as on the board and nothing of the analysis, and the
  * teacher's answer sheet (/classe/corrige), in the order chosen for the board.
- * Both are an A4 page on screen and print as one (`@media print` in index.css).
+ * Both look like A4 paper on screen and print on A4 (`@media print` in index.css).
  */
 import { useMemo, type ReactNode } from 'react';
 
