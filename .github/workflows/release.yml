@@ -53,8 +53,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-
+      # The production origin hosted mode talks to. Without it vite.config.ts falls
+      # back to a placeholder host, and the Package step below refuses that build.
       - name: Build both targets
+        env:
+          SQUIGGLE_HOSTED_ORIGIN: https://squiggle.fr
         run: npm run build:all
 
       - name: Test

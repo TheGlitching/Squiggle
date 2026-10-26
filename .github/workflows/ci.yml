@@ -38,7 +38,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-
       # The packaging tests read dist/, so both targets must be built first.
       - name: Build both targets
         run: npm run build:all
@@ -48,7 +47,11 @@ jobs:
 
       # Proves the artefact a release would upload is actually buildable and
       # loadable, so a broken package is caught here rather than at the store.
+      # It rebuilds with the release workflow's origin, because scripts/package.mjs
+      # refuses a build still pointing hosted mode at the placeholder.
       - name: Package
+        env:
+          SQUIGGLE_HOSTED_ORIGIN: https://squiggle.fr
         run: npm run package
 
       - uses: actions/upload-artifact@v4

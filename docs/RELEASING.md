@@ -12,7 +12,7 @@ and creating it requires the one-off developer registration fee.
 
 1. Go to the [developer dashboard](https://chrome.google.com/webstore/devconsole).
 2. Create a new item and upload `packages/squiggle-chrome-0.1.0.zip` by hand, once.
-   Build it with `npm run package`.
+   Build it with `SQUIGGLE_HOSTED_ORIGIN=https://squiggle.fr npm run package`.
 3. Save it as a draft. Fill in the listing: description, screenshots, category,
    privacy declarations. The extension stores an API key locally and never sends
    page content anywhere except the provider the reader configures, which is worth
@@ -124,8 +124,16 @@ time, and a test fails if they ever disagree. The release also refuses outright 
 the tag and `package.json` disagree, because the store spends the version slot
 either way and a mislabelled build cannot be taken back.
 
-The pipeline then typechecks, lints, builds both targets, runs the tests, packages,
+The pipeline then typechecks, builds both targets, runs the tests, packages,
 uploads to the store, publishes, and attaches both zips to a GitHub release.
+
+The build step sets `SQUIGGLE_HOSTED_ORIGIN=https://squiggle.fr` inline in
+`.github/workflows/release.yml`: it is not a secret, and keeping it in the workflow
+means the value is reviewed with the code. Without it `vite.config.ts` falls back to
+the placeholder `https://squiggle.example`, and the build would ship a hosted mode
+that signs in nowhere. `scripts/package.mjs` refuses any build that still contains
+that placeholder, so a missing origin fails the release before anything is uploaded.
+The same applies to a local `npm run package`: set the variable first.
 
 ## Publishing to a few testers first
 
@@ -178,14 +186,14 @@ Requirements: Node.js 20 and npm 10, on Linux or macOS.
 
   unzip squiggle-source-<version>.zip && cd squiggle-source
   npm ci
-  SQUIGGLE_HOSTED_ORIGIN=<production origin> npm run build:firefox
+  SQUIGGLE_HOSTED_ORIGIN=https://squiggle.fr npm run build:firefox
 
 The package is dist/firefox. Zipping its contents gives the submitted add-on
 (scripts/package.mjs does that for both browsers).
 
 SQUIGGLE_HOSTED_ORIGIN is the only build-time setting: the origin of Squiggle's own
-server, written into the code. Use the same value as the submitted package, which is
-the hosted origin on the privacy policy.
+server, written into the code. https://squiggle.fr is the value the submitted package
+was built with, and the hosted origin on the privacy policy.
 
 File names under dist/firefox/assets carry a hash that depends on the directory the
 build ran in, so they differ between checkouts. Their contents do not.
@@ -216,7 +224,8 @@ The privacy answers, permission justifications and reviewer notes are written on
 [`store-disclosure.md`](store-disclosure.md), and the listing text in
 [`../store/listing.fr.md`](../store/listing.fr.md). Before uploading:
 
-- [ ] `npm run typecheck`, `npm run build:all`, `npm test`
+- [ ] `npm run typecheck`, `SQUIGGLE_HOSTED_ORIGIN=https://squiggle.fr npm run build:all`,
+      `npm test`
 - [ ] `npx web-ext lint -s dist/firefox` reports no error
 - [ ] the Chrome zip declares no content script and no host permission beyond the four
       providers: the packaging tests pin both
