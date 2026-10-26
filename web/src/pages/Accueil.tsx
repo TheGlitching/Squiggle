@@ -193,7 +193,7 @@ export function Accueil() {
               key={step}
               className="relative grid content-start grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 lg:grid-cols-1 lg:gap-y-6"
             >
-              <div className="lg:pr-6">
+              <div className="lg:pr-12 lg:pl-1">
                 <StepFigure step={step} />
               </div>
               <div>
