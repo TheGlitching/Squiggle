@@ -199,14 +199,14 @@ describe('Analyser, signed in', () => {
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 
-  it('keeps the text and says what failed when the model does not answer', async () => {
+  it('keeps the text and asks for a retry in a few minutes when the model cannot answer', async () => {
     serve(account(), {
       audit: () => jsonResponse({ ok: false, error: 'provider_unavailable', message: 'x' }, 502),
     });
     render(<Analyser />);
     paste(TEXT);
     fireEvent.click(await analyseButton());
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Le modèle n’a pas répondu/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/momentanément indisponible.*quelques minutes/);
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
   });
 

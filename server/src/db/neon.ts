@@ -530,6 +530,13 @@ export class NeonDb implements Db {
     return num(rows[0].started);
   }
 
+  async releaseRunStart(userId: string, now: number): Promise<void> {
+    await this.q`
+      UPDATE usage_daily SET started = started - 1
+      WHERE user_id = ${userId} AND day = ${utcDayOf(now)} AND started > 0
+    `;
+  }
+
   async countAnalysesSince(userId: string, since: number): Promise<number> {
     const rows = await this.q`SELECT COUNT(*) AS n FROM usage_log WHERE user_id = ${userId} AND created_at >= ${since}`;
     return num(rows[0].n);

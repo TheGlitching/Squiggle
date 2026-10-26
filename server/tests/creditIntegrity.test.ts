@@ -10,7 +10,7 @@
  * Each of these was found by re-reading the stages rather than by a failing
  * test, so each one gets a test that would have failed.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { generateSigningKeyPair } from '@squiggle/shared';
 
@@ -24,6 +24,7 @@ import {
   StubLlm,
   type TestEnv,
 } from './helpers';
+import { createHostedLlm } from '../src/index';
 import {
   MAX_OUTPUT_TOKENS,
   MAX_RESEARCH_CALLS_PER_RUN,
@@ -407,5 +408,39 @@ describe('a checkout that is never confirmed', () => {
     const after = await env.db.getUserById(who.userId);
     expect(after!.plan).toBe('active');
     expect(after!.planExpiresAt).toBe(periodEndSec * 1000);
+  });
+});
+
+describe('when none of the pinned hosts can run the model', () => {
+  it('fails the audit with a retry message, consumes no credit and gives the start back', async () => {
+    // The real hosted client, pinned to its hosts with no fallback beyond
+    // them, and OpenRouter answering the way it does when none of them can serve.
+    const llm = createHostedLlm({ OPENROUTER_API_KEY: 'k' })! as unknown as StubLlm;
+    const env = makeTestEnv({ fetchImpl: pageFetch(), llm });
+    const who = await signedIn(env, 'marie@example.org');
+    const refusal = vi.fn(async () =>
+      Response.json({ error: { code: 404, message: 'No allowed providers are available for the selected model.' } }, { status: 404 }),
+    );
+    vi.stubGlobal('fetch', refusal);
+    try {
+      // More failed attempts than the trial has starts: none of them may count.
+      for (let i = 0; i <= STARTS_PER_CREDIT * TRIAL_ANALYSES; i += 1) {
+        const audit = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+        expect(audit.status).toBe(502);
+        expect(audit.json.error).toBe('provider_unavailable');
+        expect(audit.json.message).toBe('Service momentanément indisponible. Réessayez dans quelques minutes.');
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(refusal).toHaveBeenCalledTimes(STARTS_PER_CREDIT * TRIAL_ANALYSES + 1);
+    expect(await env.db.sumUsage(who.userId)).toBe(0);
+
+    // The host is back: the reader still has the whole trial.
+    const account = await call(env, who, '/v1/account');
+    expect(account.json.usage).toMatchObject({ used: 0, remaining: TRIAL_ANALYSES });
+    // Every start was given back, so all of the trial's starts are still there.
+    expect(await env.db.recordRunStart(who.userId, env.clock.now(), 0)).toBe(1);
   });
 });

@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
-import { HOSTED_ANALYSIS } from '@squiggle/shared';
+import { HOSTED_ANALYSIS, OPENROUTER_WEB_SEARCH } from '@squiggle/shared';
 import { createHostedLlm } from '../src/index';
 import { parseJsonc } from '../scripts/config.mjs';
 
@@ -39,6 +39,19 @@ describe('hosted disclosure', () => {
       zdr: true,
     });
     expect(slugs[0]).toBe('nebius');
+  });
+
+  it('tries every European host before any other, and names none in China', () => {
+    const european = ['Pays-Bas', 'France', 'Allemagne', 'Finlande', 'Suède', 'Irlande', 'Espagne', 'Italie', 'Belgique'];
+    const countries = HOSTED_ANALYSIS.inferenceHosts.map((host) => host.country);
+    const firstOutside = countries.findIndex((country) => !european.includes(country));
+    expect(firstOutside).toBeGreaterThan(0);
+    expect(countries.slice(firstOutside).some((country) => european.includes(country))).toBe(false);
+    expect(countries).not.toContain('Chine');
+  });
+
+  it('names the web search engine the research stage actually calls', () => {
+    expect(HOSTED_ANALYSIS.webSearch.engine).toBe(OPENROUTER_WEB_SEARCH.engine);
   });
 
   it('is the model wrangler.jsonc deploys, in every environment', () => {
