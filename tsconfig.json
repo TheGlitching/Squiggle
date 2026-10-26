@@ -22,5 +22,5 @@
       "@squiggle/shared": ["shared/src/index.ts"]
     }
   },
-  "include": ["src", "tests", "shared/src", "shared/tests", "vite.config.ts"]
+  "include": ["src", "tests", "shared/src", "shared/tests", "store/render", "vite.config.ts"]
 }

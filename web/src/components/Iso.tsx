@@ -237,9 +237,10 @@ const articleLines = (top: number, step: number, count: number, left: number, wi
 
 /**
  * The hero: the article you read, and Squiggle's reading laid over it, with the
- * three things it adds pinned and explained in the legend.
+ * three things it adds pinned and explained in the legend. Without a legend
+ * beside it (the store's promotional tiles), the pins are left out.
  */
-export function HeroFigure() {
+export function HeroFigure({ pins = true }: { pins?: boolean }) {
   const v = iso(250, 92);
   const W = 210;
   const D = 272;
@@ -310,9 +311,13 @@ export function HeroFigure() {
         </g>
       </g>
 
-      <Pin at={[at(1, 72, Z)[0] - 22, at(1, 72, Z)[1] - 4]} label="1" i={0} />
-      <Pin at={[v.P(286, notes[2].y, Z)[0] + 20, v.P(286, notes[2].y, Z)[1] + 2]} label="2" i={1} />
-      <Pin at={[v.P(ring[0] + 26, ring[1], Z)[0] + 16, v.P(ring[0] + 26, ring[1], Z)[1] - 6]} label="3" i={2} />
+      {pins ? (
+        <>
+          <Pin at={[at(1, 72, Z)[0] - 22, at(1, 72, Z)[1] - 4]} label="1" i={0} />
+          <Pin at={[v.P(286, notes[2].y, Z)[0] + 20, v.P(286, notes[2].y, Z)[1] + 2]} label="2" i={1} />
+          <Pin at={[v.P(ring[0] + 26, ring[1], Z)[0] + 16, v.P(ring[0] + 26, ring[1], Z)[1] - 6]} label="3" i={2} />
+        </>
+      ) : null}
     </svg>
   );
 }
