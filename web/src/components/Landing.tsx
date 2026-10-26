@@ -3,16 +3,20 @@ import type { ReactNode } from 'react';
 const TRANSITION =
   'transition-[transform,background-color,border-color,color] duration-160 ease-out active:scale-[0.97] motion-reduce:active:scale-100';
 
-export const PRIMARY_BUTTON = `inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 py-3 text-base font-semibold text-accentForeground hover:bg-accentHover ${TRANSITION}`;
+// The primary button carries a transparent border so it is exactly as tall as the outlined secondary one.
+export const PRIMARY_BUTTON = `inline-flex min-h-12 items-center justify-center gap-2 rounded-control border border-transparent bg-accent px-5 py-3 text-base font-semibold text-accentForeground hover:bg-accentHover ${TRANSITION}`;
 export const SECONDARY_BUTTON = `inline-flex min-h-12 items-center justify-center gap-2 rounded-control border border-borderControl bg-transparent px-5 py-3 text-base font-medium text-foreground hover:border-accent hover:text-accentInk ${TRANSITION}`;
-/** An underlined text link; `py-1` keeps its target well above 24 px. */
+/**
+ * An underlined text link; `py-1` keeps its visible box tight, and an invisible
+ * overlay grows the touch target to 44 px without moving the text around it.
+ */
 export const QUIET_LINK =
-  'inline-block border-b border-borderControl py-1 text-muted transition-colors duration-160 ease-out hover:border-accent hover:text-accentInk';
+  "relative inline-block border-b border-borderControl py-1 text-muted transition-colors duration-160 ease-out after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] hover:border-accent hover:text-accentInk";
 
 /** Page width shared by the header, every section and the footer. */
 export const PAGE = 'mx-auto w-full max-w-6xl px-4 sm:px-6';
-/** The reading measure: no line of running text is longer than this. */
-export const MEASURE = 'max-w-[68ch]';
+/** The reading measure: about 70 characters a line in these faces, never past 75. */
+export const MEASURE = 'max-w-[55ch]';
 
 /**
  * The type scale. The display sizes follow the viewport between a phone and a

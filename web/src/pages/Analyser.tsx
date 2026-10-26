@@ -173,7 +173,7 @@ export function Analyser() {
   return (
     <div className={`${PAGE} pt-8 sm:py-14`}>
       <h1 className={TITLE}>Analyser un article</h1>
-      <p className="mt-3 mb-0 max-w-[68ch] text-lg leading-relaxed text-muted">
+      <p className="mt-3 mb-0 max-w-[55ch] text-lg leading-relaxed text-muted">
         Collez le texte. Le rapport arrive en une à deux minutes.
       </p>
 
@@ -295,7 +295,7 @@ function Aside() {
   return (
     <aside
       aria-label="Bon à savoir"
-      className="grid max-w-[68ch] content-start gap-6 text-base leading-relaxed text-muted lg:pt-9"
+      className="grid max-w-[55ch] content-start gap-6 text-base leading-relaxed text-muted lg:pt-9"
     >
       <div>
         <h2 className="m-0 font-display text-lg font-semibold text-foreground">Un seul compte</h2>
@@ -321,7 +321,7 @@ function Aside() {
               : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil ».'}
           </p>
           {install.kind === 'prompt' ? (
-            <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3`}>
+            <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3 max-sm:w-full`}>
               Installer l’appli
             </button>
           ) : null}

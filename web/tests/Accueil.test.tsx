@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOSTED_ANALYSIS } from '../../shared/src/hosted/disclosure';
 import { SCORE_DOMAINS } from '../../shared/src/engine/types';
 import { App } from '../src/App';
+import { MEASURE } from '../src/components/Landing';
 import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
@@ -33,6 +34,9 @@ function home() {
 }
 
 const region = (name: string) => within(screen.getByRole('region', { name }));
+
+/** The explanation card the reader sees: the others wait, hidden, in the same place. */
+const shownCard = () => within(document.querySelector<HTMLElement>('[data-current]')!);
 
 describe('Accueil', () => {
   it('leads with what the reader gets, as the page heading, and a way to sign in', () => {
@@ -101,25 +105,28 @@ describe('Accueil', () => {
     expect(report.getByText('61')).toBeInTheDocument();
     expect(report.getByText('Article fragile')).toBeInTheDocument();
     expect(report.getByText('5 passages fragiles, 1 point fort.')).toBeInTheDocument();
-    expect(report.getByText('Chiffre mis en doute')).toBeInTheDocument();
-    expect(report.getByText('Douteuse')).toBeInTheDocument();
+    expect(shownCard().getByText('Chiffre mis en doute')).toBeInTheDocument();
+    expect(shownCard().getByText('Douteuse')).toBeInTheDocument();
+    // Only one card is ever exposed to assistive technology.
+    expect(document.querySelectorAll('[data-current]')).toHaveLength(1);
 
     const passage = article.getByRole('button', { name: /Selon un expert/ });
     expect(passage).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(passage);
     expect(passage).toHaveAttribute('aria-pressed', 'true');
-    expect(report.getByText('Autorité non nommée')).toBeInTheDocument();
-    expect(report.queryByText('Douteuse')).toBeNull();
+    expect(shownCard().getByText('Autorité non nommée')).toBeInTheDocument();
+    expect(shownCard().queryByText('Douteuse')).toBeNull();
 
     await userEvent.click(article.getByRole('button', { name: /bibliothécaires et enseignants/ }));
-    expect(report.getByText('Point fort')).toBeInTheDocument();
-    expect(report.getByText('Témoins de terrain')).toBeInTheDocument();
+    expect(shownCard().getByText('Point fort')).toBeInTheDocument();
+    expect(shownCard().getByText('Témoins de terrain')).toBeInTheDocument();
+    expect(report.getByText('61')).toBeInTheDocument();
   });
 
   it('has every section a first-time reader looks for', () => {
     home();
     for (const name of [
-      'Un exemple',
+      'Touchez un passage surligné',
       'Comment ça marche',
       'La même grille pour tous',
       'Où que vous lisiez',
@@ -199,13 +206,14 @@ describe('Accueil', () => {
   it('sells one plan with one sign-up action, then the trial and the education offer', () => {
     home();
     const pricing = region('Tarifs');
-    expect(pricing.getByRole('link', { name: 'S’abonner : 4,99 €/mois' })).toHaveAttribute('href', '/connexion');
+    expect(pricing.getByRole('link', { name: 'Essayer gratuitement' })).toHaveAttribute('href', '/connexion');
     expect(pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })).toHaveLength(1);
+    expect(pricing.getByText('4,99 €')).toBeInTheDocument();
     const included = within(pricing.getByRole('list', { name: 'Ce qui est compris' }));
     expect(included.getByText('10 analyses par jour')).toBeInTheDocument();
     expect(pricing.getByText(/3 analyses offertes, sans carte bancaire/)).toBeInTheDocument();
-    expect(pricing.getByText(/Gratuit pour les enseignants, sur demande/)).toBeInTheDocument();
-    expect(pricing.getByRole('link', { name: 'Offre enseignants' })).toHaveAttribute('href', '/enseignants');
+    expect(pricing.getByText(/Enseignants : gratuit, sur demande/)).toBeInTheDocument();
+    expect(pricing.getByRole('link', { name: 'L’offre enseignants' })).toHaveAttribute('href', '/enseignants');
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });
 
@@ -236,10 +244,11 @@ describe('Accueil', () => {
     );
   });
 
-  it('offers the browser button as an option, naming the store it opens', () => {
+  it('offers the browser button for the reader’s own browser, with the store it installs from', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     for (const [ua, label, href] of [
       ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', 'Ajouter à Chrome', CHROME_URL],
+      ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0', 'Ajouter à Edge', CHROME_URL],
       ['Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0', 'Ajouter à Firefox', FIREFOX_URL],
     ]) {
       agent.mockReturnValue(ua);
@@ -250,13 +259,15 @@ describe('Accueil', () => {
     agent.mockRestore();
   });
 
-  it('names both stores where neither applies, and none on a phone', () => {
+  // Safari and phones have no store: no link to one, only where it exists.
+  it('shows no store link where the browser has no store, on a computer or a phone', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
     home();
     expect(screen.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Chrome' })).toHaveAttribute('href', CHROME_URL);
-    expect(screen.getByRole('link', { name: 'Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+    expect(
+      region('Où que vous lisiez').getByText(/Disponible pour Chrome, Edge, Opera, Brave et Firefox/),
+    ).toBeInTheDocument();
     cleanup();
     for (const ua of MOBILE) {
       agent.mockReturnValue(ua);
@@ -312,23 +323,14 @@ describe('Accueil', () => {
       },
     );
     home();
-    const report = within(screen.getByRole('group', { name: 'Le rapport Squiggle sur cet article' }));
-    expect(report.getByText('Chiffre mis en doute')).toBeInTheDocument();
+    expect(shownCard().getByText('Chiffre mis en doute')).toBeInTheDocument();
     act(() => void vi.advanceTimersByTime(3500));
-    expect(report.queryByText('Chiffre mis en doute')).toBeNull();
+    expect(shownCard().queryByText('Chiffre mis en doute')).toBeNull();
     const scene = screen.getByRole('article', { name: /article d’exemple/ }).parentElement!;
     fireEvent.pointerEnter(scene);
-    const before = report
-      .getAllByText(/./)
-      .map((node) => node.textContent)
-      .join('|');
+    const before = document.querySelector('[data-current]')!.textContent;
     act(() => void vi.advanceTimersByTime(7000));
-    expect(
-      report
-        .getAllByText(/./)
-        .map((node) => node.textContent)
-        .join('|'),
-    ).toBe(before);
+    expect(document.querySelector('[data-current]')!.textContent).toBe(before);
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -348,8 +350,7 @@ describe('Accueil', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }));
     home();
     act(() => void vi.advanceTimersByTime(10000));
-    const report = within(screen.getByRole('group', { name: 'Le rapport Squiggle sur cet article' }));
-    expect(report.getByText('Chiffre mis en doute')).toBeInTheDocument();
+    expect(shownCard().getByText('Chiffre mis en doute')).toBeInTheDocument();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -371,7 +372,7 @@ describe('Accueil', () => {
     }
   });
 
-  it('sets running text at 16 px or more, and section leads on a 68ch measure', () => {
+  it('sets running text at 16 px or more, and section leads on the reading measure', () => {
     const { container } = home();
     // The example's report keeps the product's own scale for its labels.
     for (const p of container.querySelectorAll('main p, main dd, main li')) {
@@ -379,7 +380,7 @@ describe('Accueil', () => {
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
     const lead = region('Tarifs').getByText('Essayez d’abord. Payez seulement si l’outil vous sert.');
-    expect(lead.className).toContain('max-w-[68ch]');
+    expect(lead.className).toContain(MEASURE);
   });
 
   it('keeps every navigation link a comfortable target, not a bare line of text', () => {

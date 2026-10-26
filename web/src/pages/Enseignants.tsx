@@ -76,7 +76,7 @@ export function Enseignants() {
                 <StepFigure step={step} />
               </div>
               <div>
-                <p className="m-0 font-mono text-base font-semibold text-accentInk">{index + 1}</p>
+                <p className="m-0 font-display text-base font-semibold text-muted tabular-nums">{index + 1}</p>
                 <h3 className={`${H3} mt-1`}>{title}</h3>
                 <p className="mt-2 mb-0 text-base leading-relaxed text-muted">{text}</p>
               </div>
@@ -109,7 +109,7 @@ export function Enseignants() {
             'Nous activons l’offre sur votre compte.',
           ].map((text, index) => (
             <li key={text} className="flex items-baseline gap-4">
-              <span className="font-mono text-base font-semibold text-accentInk">{index + 1}</span>
+              <span className="font-display text-base font-semibold text-muted tabular-nums">{index + 1}</span>
               <span>{text}</span>
             </li>
           ))}

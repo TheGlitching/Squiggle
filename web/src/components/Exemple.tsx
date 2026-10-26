@@ -55,11 +55,11 @@ function Score() {
         />
       </svg>
       <div>
-        <p className="m-0 flex items-baseline gap-1.5 leading-none">
-          <span className="font-mono text-4xl font-semibold tracking-tight">{SCORE}</span>
+        <p className="m-0 flex items-baseline gap-2 leading-none">
+          <span className="font-display text-4xl font-semibold tracking-tight tabular-nums">{SCORE}</span>
           <span className="text-base text-muted">sur 100</span>
         </p>
-        <p className="mt-1.5 mb-0 text-base font-semibold" style={{ color: SEVERITY_COLORS[BAND.tone].text }}>
+        <p className="mt-2 mb-0 text-base font-semibold" style={{ color: SEVERITY_COLORS[BAND.tone].text }}>
           {BAND.title}
         </p>
       </div>
@@ -68,20 +68,25 @@ function Score() {
 }
 
 /** The finding the reader picked in the article. */
-function FindingCard({ index }: { index: number }) {
+function FindingCard({ index, current }: { index: number; current: boolean }) {
   const finding = EXAMPLES[index];
   const style = tone(findingTone(finding.severity, finding.category));
   const verification = VERIFICATION_STATES.find((state) => state.state === finding.verification);
   return (
-    <div key={index} className="hero-card grid gap-2.5" style={style}>
-      <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <div
+      className="exemple-card grid content-start gap-3"
+      data-current={current || undefined}
+      aria-hidden={!current}
+      style={style}
+    >
+      <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-(--sev-text)">
           <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-(--sev-color)" />
           {CATEGORY_LABELS[finding.category]}
         </span>
         {verification ? (
           <span
-            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-sm font-medium ${verification.chip}`}
+            className={`inline-flex items-center rounded-md border px-2 py-1 text-sm font-medium ${verification.chip}`}
           >
             {verification.label}
           </span>
@@ -91,7 +96,7 @@ function FindingCard({ index }: { index: number }) {
       <p className="m-0 border-l-2 border-l-(--sev-color) pl-3 font-serif text-lg leading-snug text-muted italic">
         {`« ${`${finding.before}${finding.mark}${finding.after}`.trim()} »`}
       </p>
-      <p className="m-0 text-base leading-relaxed text-foreground/85">{finding.detail}</p>
+      <p className="m-0 text-base leading-relaxed text-foreground">{finding.detail}</p>
     </div>
   );
 }
@@ -108,15 +113,19 @@ function Report({ selected, cardRef, live }: { selected: number; cardRef: RefObj
       <p className="m-0 text-base text-muted">
         {PASSAGES} passages fragiles, {STRENGTHS} point fort.
       </p>
-      {/* Announced only when the reader picks a passage, never while the example turns on its own. */}
-      <div id={CARD_ID} ref={cardRef} aria-live={live ? 'polite' : 'off'} className="border-t border-border pt-5">
-        <FindingCard index={selected} />
+      {/* Every card shares one grid cell, so the tallest sets the height and a swap never moves the page.
+          Announced only when the reader picks a passage, never while the example turns on its own. */}
+      <div id={CARD_ID} ref={cardRef} aria-live={live ? 'polite' : 'off'} className="grid border-t border-border pt-5">
+        {EXAMPLES.map((_, index) => (
+          <FindingCard key={index} index={index} current={index === selected} />
+        ))}
       </div>
     </div>
   );
 }
 
 type Line = { ax: number; ay: number; bx: number; by: number };
+type Ring = { x: number; y: number; w: number; h: number };
 
 /**
  * The example: an article as the reader sees it with Squiggle's highlights, and
@@ -128,6 +137,7 @@ type Line = { ax: number; ay: number; bx: number; by: number };
 export function Exemple() {
   const [selected, setSelected] = useState(HERO_REPORT.selected);
   const [line, setLine] = useState<Line | null>(null);
+  const [rings, setRings] = useState<Ring[]>([]);
   const sceneRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -160,6 +170,19 @@ export function Exemple() {
       const sheet = sheetRef.current;
       const wide = typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1024px)').matches;
       const rects = mark?.getClientRects?.();
+      // One ring per line the passage spans; each glides from where it was, so the
+      // selection moves between passages instead of jumping.
+      if (mark && sheet && rects?.length) {
+        const page = sheet.getBoundingClientRect();
+        setRings(
+          Array.from(rects, (r) => ({
+            x: r.left - page.left - 2,
+            y: r.top - page.top - 2,
+            w: r.width + 4,
+            h: r.height + 4,
+          })),
+        );
+      }
       if (!wide || !card || !sheet || !rects?.length) return setLine(null);
       const box = scene.getBoundingClientRect();
       const end = rects[rects.length - 1];
@@ -234,8 +257,25 @@ export function Exemple() {
       <article
         ref={sheetRef}
         aria-label="Un article d’exemple, surligné par Squiggle"
-        className="self-start rounded-card bg-paper px-5 py-7 text-paperInk sm:px-8 md:px-12 md:py-11"
+        className="relative self-start rounded-card bg-paper px-5 py-7 text-paperInk sm:px-8 md:px-12 md:py-11"
       >
+        {/* A fixed set of rings, so a passage on fewer lines fades its spare rings out in place. */}
+        {[0, 1, 2].map((index) => {
+          const ring = rings[index] ?? rings[rings.length - 1];
+          return ring ? (
+            <span
+              key={index}
+              aria-hidden="true"
+              className="exemple-ring"
+              style={{
+                transform: `translate(${ring.x}px, ${ring.y}px)`,
+                width: ring.w,
+                height: ring.h,
+                opacity: index < rings.length ? 1 : 0,
+              }}
+            />
+          ) : null;
+        })}
         <p className="m-0 text-base font-medium text-paperMuted">{HERO_ARTICLE.byline}, un article d’exemple</p>
         <p className="mt-2 mb-0 font-serif text-3xl leading-tight font-semibold tracking-tight md:text-4xl">
           {HERO_ARTICLE.title}

@@ -76,6 +76,22 @@ export function squiggle(x: number, y: number, width: number, amp = 2.2, step = 
   return d;
 }
 
+/** The "opens elsewhere" arrow, drawn in the links' own stroke. */
+export function ExternalMark() {
+  return (
+    <svg viewBox="0 0 12 12" className="ml-1 inline-block h-3 w-3 align-baseline" aria-hidden="true">
+      <path
+        d="M 3 9 L 9 3 M 4.5 3 H 9 V 7.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** A list bullet in the product's own mark. */
 export function SquiggleMark() {
   return (
@@ -203,7 +219,7 @@ function ScoreRing({
           fontSize={r * 0.9}
           fontWeight={600}
           fill="#ece9e3"
-          fontFamily="var(--font-mono)"
+          fontFamily="var(--font-display)"
         >
           {label}
         </text>

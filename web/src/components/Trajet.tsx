@@ -24,7 +24,7 @@ export function Trajet({
           className={`flex flex-col lg:min-w-0 lg:flex-row lg:items-center ${index > 0 ? 'lg:flex-[1_1_9rem]' : 'lg:flex-[1_1_0%]'}`}
         >
           {index > 0 ? (
-            <p className="m-0 grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-x-3 py-2 pl-5 font-serif text-lg leading-tight text-accentInk italic lg:flex lg:w-36 lg:shrink-0 lg:flex-col lg:gap-1.5 lg:px-2 lg:py-0 lg:text-center lg:text-base">
+            <p className="m-0 grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-x-3 py-2 pl-5 font-serif text-lg leading-tight text-foreground italic lg:flex lg:w-36 lg:shrink-0 lg:flex-col lg:gap-2 lg:px-2 lg:py-0 lg:text-center lg:text-base">
               <svg viewBox="0 0 12 40" className="h-10 w-3 lg:hidden" aria-hidden="true">
                 <path
                   d="M 6 2 V 36 M 1.5 30 L 6 37 L 10.5 30"

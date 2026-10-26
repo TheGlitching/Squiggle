@@ -2,7 +2,15 @@ import type { ReactNode } from 'react';
 
 import { Exemple } from '../components/Exemple';
 import { Trajet } from '../components/Trajet';
-import { DeviceFigure, HeroFigure, SquiggleMark, StepFigure, type Step } from '../components/Iso';
+import {
+  DeviceFigure,
+  ExternalMark,
+  HeroFigure,
+  SquiggleMark,
+  StepFigure,
+  type Device,
+  type Step,
+} from '../components/Iso';
 import {
   H1,
   H3,
@@ -16,8 +24,8 @@ import {
 } from '../components/Landing';
 import { CONTACT_URL } from '../components/Layout';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
-import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
-import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, SUBSCRIBE_LABEL, TAGLINE } from '../offer';
+import { installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
+import { DAILY_ANALYSES, FREE_ANALYSES, GITHUB_URL, PRICE_MONTHLY, TAGLINE } from '../offer';
 import { Link } from '../router';
 
 /** The path of an analysis, and what passes from one stage to the next. */
@@ -67,6 +75,10 @@ const FAQ: Array<[string, ReactNode]> = [
       </Link>
     </>,
   ],
+  [
+    'Que se passe-t-il après l’essai ?',
+    `Rien n’est prélevé : aucune carte n’est demandée. Pour continuer, abonnez-vous depuis Mon compte, ${PRICE_MONTHLY} par mois.`,
+  ],
   ['Et les articles payants ?', 'Squiggle analyse ce que vous pouvez lire, et signale un texte partiel.'],
   ['Comment résilier ?', 'À tout moment, depuis Mon compte, jusqu’à la fin de la période en cours.'],
   [
@@ -88,11 +100,29 @@ const INCLUDED = [
   'Aucune publicité, aucun traceur',
 ];
 
+/** A row of actions: buttons of one height, stacked full width on a phone. */
+const ACTIONS = 'flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch';
+const WAY_ACTION = `${SECONDARY_BUTTON} w-fit max-sm:w-full`;
+
+/** One way in: its drawing, what it is, and its action pinned to the bottom of the column. */
+function Way({ device, title, text, children }: { device: Device; title: string; text: string; children: ReactNode }) {
+  return (
+    <li className="flex flex-col gap-4">
+      <div className="max-w-56">
+        <DeviceFigure device={device} />
+      </div>
+      <h3 className={H3}>{title}</h3>
+      <p className="m-0 text-base leading-relaxed text-muted">{text}</p>
+      <div className="mt-auto pt-2">{children}</div>
+    </li>
+  );
+}
+
 /** What passes from one stage to the next: down the page on a phone, across it on a wide screen. */
 function Then({ label }: { label: string }) {
   const arrow = 'fill-none stroke-accent [stroke-width:1.5] [vector-effect:non-scaling-stroke]';
   return (
-    <p className="col-span-2 m-0 grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-5 py-3 font-serif text-lg leading-tight text-accentInk italic lg:absolute lg:top-6 lg:-right-14 lg:z-10 lg:flex lg:h-20 lg:w-28 lg:flex-col lg:justify-end lg:gap-2 lg:p-0 lg:text-center lg:text-base">
+    <p className="col-span-2 m-0 grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-5 py-3 font-serif text-lg leading-tight text-foreground italic lg:absolute lg:top-6 lg:-right-14 lg:z-10 lg:flex lg:h-20 lg:w-28 lg:flex-col lg:justify-end lg:gap-2 lg:p-0 lg:text-center lg:text-base">
       <svg viewBox="0 0 12 44" className="mx-auto h-11 w-3 lg:hidden" aria-hidden="true">
         <path d="M 6 2 V 40 M 1.5 34 L 6 41 L 10.5 34" className={arrow} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -120,16 +150,11 @@ export function Accueil() {
               Squiggle relit l’article que vous lisez. Il surligne ce qui est fragile, dit pourquoi, et montre aussi ce
               qui tient.
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
+            <div className={`mt-8 ${ACTIONS}`}>
               <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
                 Analyser un article
               </Link>
-              {install?.kind === 'prompt' ? (
-                <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-                  Installer l’appli
-                </button>
-              ) : null}
-              <a href="#exemple" className={QUIET_LINK}>
+              <a href="#exemple" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
                 Voir un exemple
               </a>
             </div>
@@ -141,10 +166,10 @@ export function Accueil() {
               <ol className="m-0 grid list-none gap-x-6 gap-y-2 p-0 text-base text-muted sm:grid-cols-3">
                 {['Le passage fragile, surligné.', 'La raison, en une phrase.', 'Une note sur 100.'].map(
                   (text, index) => (
-                    <li key={text} className="flex items-baseline gap-2.5">
+                    <li key={text} className="flex items-baseline gap-3">
                       <span
                         aria-hidden="true"
-                        className="inline-flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accentForeground"
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accentForeground"
                       >
                         {index + 1}
                       </span>
@@ -158,13 +183,9 @@ export function Accueil() {
         </div>
       </div>
 
-      {/* The example speaks for itself: no heading, only its name for assistive technology. */}
-      <section id="exemple" aria-label="Un exemple" className="scroll-mt-4 border-t border-lineSoft py-16 md:py-24">
-        <div className={PAGE}>
-          <p className={`mb-8 ${LEAD} ${MEASURE}`}>Touchez un passage surligné pour lire sa raison.</p>
-          <Exemple />
-        </div>
-      </section>
+      <Section id="exemple" title="Touchez un passage surligné" intro="Le rapport donne sa raison, à côté.">
+        <Exemple />
+      </Section>
 
       <Section id="comment" title="Comment ça marche" intro="Une à deux minutes, de l’article au rapport.">
         <ol className="m-0 grid list-none gap-0 p-0 lg:grid-cols-4 lg:gap-8">
@@ -177,7 +198,7 @@ export function Accueil() {
                 <StepFigure step={step} />
               </div>
               <div>
-                <p className="m-0 font-mono text-base font-semibold text-accentInk">{index + 1}</p>
+                <p className="m-0 font-display text-base font-semibold text-muted tabular-nums">{index + 1}</p>
                 <h3 className={`${H3} mt-1`}>{title}</h3>
                 <p className="mt-2 mb-0 text-base leading-relaxed text-muted">{text}</p>
               </div>
@@ -220,9 +241,9 @@ export function Accueil() {
               <h3 className={H3}>Jamais «&nbsp;faux&nbsp;»</h3>
               <dl className="mt-4 grid gap-3">
                 {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (
-                  <div key={state} className="grid gap-1.5">
+                  <div key={state} className="grid gap-2">
                     <dt>
-                      <span className={`inline-block rounded-md border px-2.5 py-0.5 text-sm font-medium ${chip}`}>
+                      <span className={`inline-block rounded-md border px-3 py-1 text-sm font-medium ${chip}`}>
                         {label}
                       </span>
                     </dt>
@@ -233,7 +254,8 @@ export function Accueil() {
             </div>
             <p className="m-0">
               <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
-                Lire la méthode sur GitHub <span aria-hidden="true">↗</span>
+                Lire la méthode sur GitHub
+                <ExternalMark />
               </a>
             </p>
           </div>
@@ -241,57 +263,46 @@ export function Accueil() {
       </Section>
 
       <Section id="partout" title="Où que vous lisiez" intro="Un seul compte, partout.">
+        {/* Three columns of the same shape: the action sits on one line across them, whatever the text above. */}
         <ul className="m-0 grid list-none gap-12 p-0 md:grid-cols-3 md:gap-10">
-          <li className="grid content-start gap-4">
-            <div className="max-w-56">
-              <DeviceFigure device="site" />
-            </div>
-            <h3 className={H3}>Sur le site</h3>
-            <p className="m-0 text-base leading-relaxed text-muted">Collez le texte. Rien à installer.</p>
-            <Link to="/analyser" className={`${SECONDARY_BUTTON} w-fit`}>
+          <Way device="site" title="Sur le site" text="Collez le texte. Rien à installer.">
+            <Link to="/analyser" className={WAY_ACTION}>
               Analyser un article
             </Link>
-          </li>
-          <li className="grid content-start gap-4">
-            <div className="max-w-56">
-              <DeviceFigure device="appli" />
-            </div>
-            <h3 className={H3}>Sur votre téléphone</h3>
-            <p className="m-0 text-base leading-relaxed text-muted">
-              Installez l’appli. Sur Android, partagez-lui un article.
-            </p>
+          </Way>
+          <Way
+            device="appli"
+            title="Sur votre téléphone"
+            text="Installez l’appli. Sur Android, partagez-lui un article."
+          >
             {install?.kind === 'prompt' ? (
-              <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} w-fit`}>
+              <button type="button" onClick={install.prompt} className={WAY_ACTION}>
                 Installer l’appli
               </button>
-            ) : null}
-            {install?.kind === 'ios' ? (
-              <p className="m-0 text-base text-muted">Sur iPhone : Partager, puis « Sur l’écran d’accueil ».</p>
-            ) : null}
-          </li>
-          <li className="grid content-start gap-4">
-            <div className="max-w-56">
-              <DeviceFigure device="navigateur" />
-            </div>
-            <h3 className={H3}>Dans votre navigateur</h3>
-            <p className="m-0 text-base leading-relaxed text-muted">
-              Un bouton dans Chrome ou Firefox, sur ordinateur : un clic sur l’article ouvert.
-            </p>
-            {storeUrl ? (
-              <a href={storeUrl} className={`${SECONDARY_BUTTON} w-fit`}>
-                {installLabelFor(storeUrl)}
-              </a>
-            ) : mobile ? null : (
-              <div className="flex flex-wrap gap-3">
-                <a href={CHROME_URL} className={SECONDARY_BUTTON}>
-                  Chrome
-                </a>
-                <a href={FIREFOX_URL} className={SECONDARY_BUTTON}>
-                  Firefox
-                </a>
-              </div>
+            ) : install?.kind === 'ios' ? (
+              <p className="m-0 text-base text-muted">Dans Safari : Partager, puis « Sur l’écran d’accueil ».</p>
+            ) : (
+              <p className="m-0 text-base text-muted">Ouvrez squiggle.fr sur votre téléphone pour l’installer.</p>
             )}
-          </li>
+          </Way>
+          <Way
+            device="navigateur"
+            title="Dans votre navigateur"
+            text="Un bouton dans votre navigateur, sur ordinateur : un clic sur l’article ouvert."
+          >
+            {/* Only the store this browser installs from; none where no store exists (Safari, phones). */}
+            {storeUrl ? (
+              <a href={storeUrl} className={WAY_ACTION}>
+                {installLabelFor(storeUrl, userAgent)}
+              </a>
+            ) : (
+              <p className="m-0 text-base text-muted">
+                {mobile
+                  ? 'Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.'
+                  : 'Disponible pour Chrome, Edge, Opera, Brave et Firefox.'}
+              </p>
+            )}
+          </Way>
         </ul>
       </Section>
 
@@ -316,23 +327,24 @@ export function Accueil() {
         </p>
       </Section>
 
+      {/* One plan, so one card rather than a comparison grid; the trial is the way in, named on the button. */}
       <Section id="tarifs" title="Tarifs" intro="Essayez d’abord. Payez seulement si l’outil vous sert.">
         <div className="grid gap-10 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-14 md:p-10">
           <div className="grid content-start gap-5">
-            <h3 className={H3}>Abonnement</h3>
+            <h3 className={H3}>Abonnement Squiggle</h3>
             <p className="m-0 flex items-baseline gap-2">
               <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">
                 {PRICE_MONTHLY}
               </span>
               <span className="text-lg text-muted">par mois</span>
             </p>
-            <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment.</p>
-            <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
-              {SUBSCRIBE_LABEL}
-            </Link>
-            <p className="m-0 text-base text-muted">
-              Commencez par {FREE_ANALYSES} analyses offertes, sans carte bancaire.
-            </p>
+            <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment depuis Mon compte.</p>
+            <div className="grid gap-3 pt-1">
+              <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+                Essayer gratuitement
+              </Link>
+              <p className="m-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
+            </div>
           </div>
           <ul aria-label="Ce qui est compris" className="m-0 grid list-none content-center gap-4 p-0 text-lg">
             {INCLUDED.map((text) => (
@@ -343,13 +355,15 @@ export function Accueil() {
             ))}
           </ul>
         </div>
-        <p className="mt-6 mb-0 text-base text-muted">
-          Gratuit pour les enseignants, sur demande :{' '}
-          <Link to="/enseignants" className={QUIET_LINK}>
-            Offre enseignants
-          </Link>
-          . Avec votre propre clé d’API, l’extension est gratuite.
-        </p>
+        <ul className="mt-6 grid list-none gap-2 p-0 text-base text-muted sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-8">
+          <li>
+            Enseignants : gratuit, sur demande.{' '}
+            <Link to="/enseignants" className={QUIET_LINK}>
+              L’offre enseignants
+            </Link>
+          </li>
+          <li>Avec votre propre clé d’API, l’extension est gratuite.</li>
+        </ul>
       </Section>
 
       <Section id="faq" title="Questions fréquentes">

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { PAGE, PRIMARY_BUTTON, TITLE } from './components/Landing';
+import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from './components/Landing';
 import { Layout } from './components/Layout';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
@@ -23,12 +23,20 @@ function Redirect({ to }: { to: string }) {
 function NotFound() {
   return (
     <div className={`${PAGE} py-16 md:py-24`}>
-      <p className="m-0 font-mono text-base font-semibold text-accentInk">404</p>
+      <p className="m-0 font-display text-base font-semibold text-accentInk tabular-nums">404</p>
       <h1 className={`${TITLE} mt-3`}>Page introuvable</h1>
       <p className="mt-3 text-lg text-muted">Le lien est peut-être ancien ou mal orthographié.</p>
-      <a href="/" className={`${PRIMARY_BUTTON} mt-8`}>
-        Revenir à l’accueil
-      </a>
+      <div className="mt-8 flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
+        <a href="/" className={PRIMARY_BUTTON}>
+          Revenir à l’accueil
+        </a>
+        <a href="/analyser" className={SECONDARY_BUTTON}>
+          Analyser un article
+        </a>
+        <a href="/transparence" className={SECONDARY_BUTTON}>
+          Transparence
+        </a>
+      </div>
     </div>
   );
 }

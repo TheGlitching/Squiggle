@@ -13,11 +13,11 @@ import { describeAccount } from '../usage';
 function Usage({ remaining, limit }: { remaining: number; limit: number }) {
   return (
     <div>
-      <p className="m-0 flex items-baseline gap-1.5">
-        <span className="font-mono text-4xl font-semibold tracking-tight">{remaining}</span>
+      <p className="m-0 flex items-baseline gap-2">
+        <span className="font-display text-4xl font-semibold tracking-tight tabular-nums">{remaining}</span>
         <span className="text-base text-muted">/ {limit} analyses restantes</span>
       </p>
-      <div aria-hidden="true" className="mt-3 flex gap-1.5">
+      <div aria-hidden="true" className="mt-3 flex gap-2">
         {Array.from({ length: limit }, (_, index) => (
           <span
             key={index}
@@ -99,7 +99,11 @@ export function Compte() {
       <div className={`${PAGE} py-12 md:py-20`}>
         <h1 className={TITLE}>Mon compte</h1>
         <p className="mt-3 text-lg text-muted">Connectez-vous pour voir votre abonnement et votre usage.</p>
-        {error ? <p role="alert" className="mt-4 text-base text-criticalInk">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="mt-4 text-base text-criticalInk">
+            {error}
+          </p>
+        ) : null}
         <Link to="/connexion?next=/compte" className={`${PRIMARY_BUTTON} mt-8`}>
           Se connecter
         </Link>
@@ -112,7 +116,7 @@ export function Compte() {
 
   return (
     <div className={`${PAGE} py-12 md:py-20`}>
-      <div className="max-w-3xl">
+      <div className="max-w-[55ch]">
         <h1 className={TITLE}>Mon compte</h1>
         <p className="mt-3 mb-0 text-lg text-muted">{account.email}</p>
 
@@ -130,7 +134,10 @@ export function Compte() {
         ) : null}
 
         {error ? (
-          <p role="alert" className="mt-6 mb-0 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk">
+          <p
+            role="alert"
+            className="mt-6 mb-0 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk"
+          >
             {error}
           </p>
         ) : null}
@@ -165,7 +172,11 @@ export function Compte() {
                     paierai les jours déjà écoulés.
                   </span>
                 </label>
-                <button onClick={subscribe} disabled={busy || !startNow} className={`${PRIMARY_BUTTON} disabled:opacity-50`}>
+                <button
+                  onClick={subscribe}
+                  disabled={busy || !startNow}
+                  className={`${PRIMARY_BUTTON} max-sm:w-full disabled:opacity-50`}
+                >
                   {SUBSCRIBE_LABEL}
                 </button>
                 <p className="mt-3 mb-0 text-sm text-muted">
@@ -177,14 +188,21 @@ export function Compte() {
               </div>
             ) : null}
             {view.state === 'active' || view.state === 'quota_exhausted' ? (
-              <button onClick={manage} disabled={busy} className={`${SECONDARY_BUTTON} disabled:opacity-60`}>
+              <button
+                onClick={manage}
+                disabled={busy}
+                className={`${SECONDARY_BUTTON} max-sm:w-full disabled:opacity-60`}
+              >
                 Gérer ou résilier mon abonnement
               </button>
             ) : null}
           </div>
         </section>
 
-        <section aria-labelledby="extension-titre" className="mt-12 grid items-center gap-x-10 gap-y-4 border-t border-lineSoft pt-10 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <section
+          aria-labelledby="extension-titre"
+          className="mt-12 grid items-center gap-x-10 gap-y-4 border-t border-lineSoft pt-10 sm:grid-cols-[minmax(0,1fr)_12rem]"
+        >
           <div>
             <h2 id="extension-titre" className="m-0 font-display text-2xl font-semibold tracking-[-0.01em]">
               Le bouton dans votre navigateur
@@ -192,7 +210,7 @@ export function Compte() {
             <p className="mt-2 mb-0 text-base text-muted">
               Pour analyser d’un clic l’article ouvert dans Chrome ou Firefox, connectez l’extension à ce compte.
             </p>
-            <Link to="/pont" className={`${SECONDARY_BUTTON} mt-5`}>
+            <Link to="/pont" className={`${SECONDARY_BUTTON} mt-5 max-sm:w-full`}>
               Connecter l’extension
             </Link>
           </div>

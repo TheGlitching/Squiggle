@@ -22,9 +22,11 @@ import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './Landing';
 import { Link } from '../router';
 
 const inputClass =
-  'mt-2 block w-full rounded-control border border-borderControl bg-surface px-4 py-3 text-base outline-hidden focus:border-accentHover';
+  'mt-2 block w-full max-w-md rounded-control border border-borderControl bg-surface px-4 py-3 text-base outline-hidden focus:border-accentHover';
 const secondaryButton = `${SECONDARY_BUTTON} disabled:opacity-60`;
 const primaryButton = `${PRIMARY_BUTTON} disabled:opacity-60`;
+const dangerButton =
+  'inline-flex min-h-12 items-center justify-center rounded-control border border-transparent bg-critical px-5 py-3 text-base font-semibold text-criticalForeground transition-colors duration-160 ease-out hover:bg-criticalHover disabled:opacity-60';
 
 interface Props {
   account: Account;
@@ -166,12 +168,12 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
             Nous envoyons un code à cette adresse. Votre adresse actuelle reste active tant que vous ne l’avez
             pas confirmé.
           </p>
-          <div className="flex flex-wrap gap-3">
-            <button type="submit" disabled={busy} className={primaryButton}>
-              {busy ? 'Envoi…' : 'Envoyer le code'}
-            </button>
+          <div className="flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
             <button type="button" onClick={cancel} className={secondaryButton}>
               Annuler
+            </button>
+            <button type="submit" disabled={busy} className={primaryButton}>
+              {busy ? 'Envoi…' : 'Envoyer le code'}
             </button>
           </div>
         </form>
@@ -198,12 +200,12 @@ function EmailBlock({ email, onChanged }: { email: string | null; onChanged: (em
               maxLength={12}
             />
           </label>
-          <div className="flex flex-wrap gap-3">
-            <button type="submit" disabled={busy} className={primaryButton}>
-              {busy ? 'Confirmation…' : 'Confirmer l’adresse'}
-            </button>
+          <div className="flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
             <button type="button" onClick={cancel} className={secondaryButton}>
               Annuler
+            </button>
+            <button type="submit" disabled={busy} className={primaryButton}>
+              {busy ? 'Confirmation…' : 'Confirmer l’adresse'}
             </button>
           </div>
         </form>
@@ -370,10 +372,8 @@ function DeleteBlock({ onDeleted }: { onDeleted: () => void }) {
             </p>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button onClick={erase} disabled={busy} className={primaryButton}>
-              {busy ? 'Suppression…' : 'Supprimer définitivement mon compte'}
-            </button>
+          {/* The way back first, on the left; the irreversible act on the right, in the destructive colour. */}
+          <div className="mt-4 flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
             <button
               onClick={() => {
                 setOpen(false);
@@ -384,6 +384,9 @@ function DeleteBlock({ onDeleted }: { onDeleted: () => void }) {
               className={secondaryButton}
             >
               Annuler
+            </button>
+            <button onClick={erase} disabled={busy} className={dangerButton}>
+              {busy ? 'Suppression…' : 'Supprimer définitivement mon compte'}
             </button>
           </div>
         </div>

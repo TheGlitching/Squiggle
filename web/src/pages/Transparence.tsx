@@ -106,10 +106,10 @@ function Table({
               <td
                 key={i}
                 data-label={head[i]}
-                className={`py-3 pr-6 max-md:block max-md:py-0.5 max-md:pr-0 ${
+                className={`py-3 pr-6 max-md:block max-md:py-1 max-md:pr-0 ${
                   i === 0
                     ? `text-foreground ${strong ? 'font-medium' : ''} max-md:font-medium`
-                    : 'text-muted max-md:before:mr-1.5 max-md:before:text-faint max-md:before:content-[attr(data-label)_":"]'
+                    : 'text-muted max-md:before:mr-2 max-md:before:text-faint max-md:before:content-[attr(data-label)_":"]'
                 }`}
               >
                 {cell}
@@ -147,7 +147,7 @@ export function Transparence() {
               links={['le texte de l’article', 'sans votre identité']}
             />
           </div>
-          <p className="mt-8 mb-0 max-w-[68ch] text-lg leading-relaxed text-muted">
+          <p className="mt-8 mb-0 max-w-[55ch] text-lg leading-relaxed text-muted">
             L’analyse est confiée à un modèle d’IA, choisi pour la qualité de son raisonnement, sa vitesse et son coût,
             et remplacé quand un meilleur apparaît. Squiggle ne traite que des articles publics : la page que vous
             lisez, son adresse et les pages qu’elle cite. Un texte collé sur le site suit le même trajet, et aucune
@@ -190,7 +190,7 @@ export function Transparence() {
           <div className="mt-8">
             <Table head={['Donnée', 'Où', 'Durée']} rows={RETENTION} />
           </div>
-          <p className="mt-6 mb-0 max-w-[68ch] text-base leading-relaxed text-muted">
+          <p className="mt-6 mb-0 max-w-[55ch] text-base leading-relaxed text-muted">
             Une ligne de journal ne peut contenir qu’un nom d’événement, un nombre, un identifiant opaque ou l’empreinte
             d’une adresse : aucun champ de texte libre. Une requête refusée est journalisée par le nom du champ, jamais
             par sa valeur. Nos mesures de lancement sont des totaux tirés du serveur, jamais d’un traceur, et ne
@@ -211,7 +211,7 @@ export function Transparence() {
           <h2 id="jamais-titre" className={H2_PAGE}>
             Ce qui n’est jamais fait
           </h2>
-          <ul className="mt-6 grid list-none gap-3 p-0 text-lg leading-snug">
+          <ul className="mt-6 grid max-w-[55ch] list-none gap-3 p-0 text-lg leading-relaxed">
             {[
               'Aucune donnée n’est vendue.',
               'Aucune donnée n’est utilisée pour entraîner un modèle.',

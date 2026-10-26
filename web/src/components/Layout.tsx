@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { BrandLockup } from './Brand';
+import { ExternalMark } from './Iso';
 import { LEAD, MEASURE, PAGE, QUIET_LINK, TITLE } from './Landing';
 import { GITHUB_URL, LEGAL_PAGES, TAGLINE } from '../offer';
 import { Link } from '../router';
@@ -24,7 +25,7 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
   return (
     <div className="flex min-h-screen flex-col bg-background text-base text-foreground">
       <header className="border-b border-lineSoft">
-        <div className={`${PAGE} flex items-center justify-between gap-x-6 py-3.5`}>
+        <div className={`${PAGE} flex items-center justify-between gap-x-6 py-4`}>
           <Link to="/" aria-label="Squiggle, accueil" className="inline-block shrink-0 py-1">
             <BrandLockup />
           </Link>
@@ -44,7 +45,7 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
             </Link>
             <Link
               to={account === 'Se connecter' ? '/connexion' : '/compte'}
-              className="inline-block py-2 text-base font-medium whitespace-nowrap text-foreground transition-colors duration-160 ease-out hover:text-accentInk sm:rounded-control sm:border sm:border-borderControl sm:px-3.5 sm:hover:border-accent"
+              className="inline-block py-2 text-base font-medium whitespace-nowrap text-foreground transition-colors duration-160 ease-out hover:text-accentInk sm:rounded-control sm:border sm:border-borderControl sm:px-4 sm:hover:border-accent"
             >
               {account}
             </Link>
@@ -65,7 +66,8 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
             <p className="m-0">{TAGLINE} Aucune publicité, aucun traceur.</p>
             <p className="m-0">
               <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
-                Le code source est sur GitHub <span aria-hidden="true">↗</span>
+                Le code source est sur GitHub
+                <ExternalMark />
               </a>
             </p>
           </div>
@@ -108,7 +110,12 @@ export function Page({
     <div className={`${PAGE} py-12 md:py-20`}>
       <h1 className={`${TITLE} ${MEASURE}`}>{title}</h1>
       {lead ? <p className={`mt-5 ${LEAD} ${MEASURE}`}>{lead}</p> : null}
-      <div className={`mt-10 md:mt-14 ${wide ? '' : 'max-w-3xl'}`}>{children}</div>
+      {/* Running text keeps the measure; a table may use the page's width. */}
+      <div
+        className={`mt-10 md:mt-14 [&_dd]:max-w-[55ch] [&_li]:max-w-[55ch] [&_p]:max-w-[55ch] ${wide ? '' : 'max-w-3xl'}`}
+      >
+        {children}
+      </div>
     </div>
   );
 }
