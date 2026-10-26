@@ -77,7 +77,7 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
   [
     'Que se passe-t-il après l’essai ?',
-    `Rien n’est prélevé : aucune carte n’est demandée. Pour continuer, abonnez-vous depuis Mon compte, ${PRICE_MONTHLY} par mois.`,
+    `Rien n’est prélevé : aucune carte n’est demandée. Pour continuer, abonnez-vous depuis Mon compte, ${PRICE_MONTHLY} par mois. Ou, dans l’extension, utilisez votre propre clé d’API : c’est gratuit.`,
   ],
   ['Et les articles payants ?', 'Squiggle analyse ce que vous pouvez lire, et signale un texte partiel.'],
   ['Comment résilier ?', 'À tout moment, depuis Mon compte, jusqu’à la fin de la période en cours.'],
@@ -288,7 +288,7 @@ export function Accueil() {
           <Way
             device="navigateur"
             title="Dans votre navigateur"
-            text="Un bouton dans votre navigateur, sur ordinateur : un clic sur l’article ouvert."
+            text="Un bouton dans votre navigateur, sur ordinateur : un clic sur l’article ouvert. Gratuit avec votre propre clé d’API."
           >
             {/* Only the store this browser installs from; none where no store exists (Safari, phones). */}
             {storeUrl ? (
@@ -327,33 +327,60 @@ export function Accueil() {
         </p>
       </Section>
 
-      {/* One plan, so one card rather than a comparison grid; the trial is the way in, named on the button. */}
+      {/* Two ways to pay for an analysis, not a comparison grid: the plan leads, with the one
+          sign-up action; the reader's own key sits beside it as a real choice, lighter. Both
+          cards pin their action to the bottom, so the buttons share a line side by side. */}
       <Section id="tarifs" title="Tarifs" intro="Essayez d’abord. Payez seulement si l’outil vous sert.">
-        <div className="grid gap-10 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-14 md:p-10">
-          <div className="grid content-start gap-5">
-            <h3 className={H3}>Abonnement Squiggle</h3>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+          <div className="grid gap-10 rounded-card border border-accent/50 bg-surface p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-14 md:p-10">
+            <div className="flex flex-col gap-5">
+              <h3 className={H3}>Abonnement Squiggle</h3>
+              <p className="m-0 flex items-baseline gap-2">
+                <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">
+                  {PRICE_MONTHLY}
+                </span>
+                <span className="text-lg text-muted">par mois</span>
+              </p>
+              <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment depuis Mon compte.</p>
+              <div className="mt-auto grid gap-3 pt-1">
+                <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+                  Essayer gratuitement
+                </Link>
+                <p className="m-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
+              </div>
+            </div>
+            <ul aria-label="Ce qui est compris" className="m-0 grid list-none content-center gap-4 p-0 text-lg">
+              {INCLUDED.map((text) => (
+                <li key={text} className="flex gap-3">
+                  <SquiggleMark />
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div aria-labelledby="propre-cle" className="flex flex-col gap-5 rounded-card border border-border p-6 md:p-10" role="group">
+            <h3 id="propre-cle" className={H3}>
+              Gratuit avec votre propre clé
+            </h3>
             <p className="m-0 flex items-baseline gap-2">
-              <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">
-                {PRICE_MONTHLY}
-              </span>
-              <span className="text-lg text-muted">par mois</span>
+              <span className="font-display text-6xl leading-none font-semibold tracking-[-0.03em]">0 €</span>
+              <span className="text-lg text-muted">dans l’extension</span>
             </p>
-            <p className="m-0 text-base text-muted">Sans engagement, résiliable à tout moment depuis Mon compte.</p>
-            <div className="grid gap-3 pt-1">
-              <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
-                Essayer gratuitement
-              </Link>
-              <p className="m-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
+            <p className="m-0 text-base text-muted">
+              Une clé d’API chez un fournisseur de modèle, collée dans l’extension. L’analyse part de votre
+              navigateur, la clé y reste, rien ne passe par nos serveurs.
+            </p>
+            <div className="mt-auto grid gap-3 pt-1">
+              {storeUrl ? (
+                <a href={storeUrl} className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+                  {installLabelFor(storeUrl, userAgent)}
+                </a>
+              ) : (
+                <p className="m-0 text-base text-muted">Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.</p>
+              )}
+              <p className="m-0 text-base">Vous ne payez que votre fournisseur.</p>
             </div>
           </div>
-          <ul aria-label="Ce qui est compris" className="m-0 grid list-none content-center gap-4 p-0 text-lg">
-            {INCLUDED.map((text) => (
-              <li key={text} className="flex gap-3">
-                <SquiggleMark />
-                {text}
-              </li>
-            ))}
-          </ul>
         </div>
         <ul className="mt-6 grid list-none gap-2 p-0 text-base text-muted sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-8">
           <li>
@@ -362,7 +389,6 @@ export function Accueil() {
               L’offre enseignants
             </Link>
           </li>
-          <li>Avec votre propre clé d’API, l’extension est gratuite.</li>
         </ul>
       </Section>
 

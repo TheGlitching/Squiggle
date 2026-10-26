@@ -217,6 +217,25 @@ describe('Accueil', () => {
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });
 
+  // Free with one's own key is a way to use the product, not a footnote under the plan.
+  it('offers the reader’s own key beside the plan, free, with the store to install from', () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get');
+    agent.mockReturnValue('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0');
+    home();
+    const ownKey = within(region('Tarifs').getByRole('group', { name: 'Gratuit avec votre propre clé' }));
+    expect(ownKey.getByText('0 €')).toBeInTheDocument();
+    expect(ownKey.getByText(/la clé y reste, rien ne passe par nos serveurs/)).toBeInTheDocument();
+    expect(ownKey.getByText(/Vous ne payez que votre fournisseur/)).toBeInTheDocument();
+    expect(ownKey.getByRole('link', { name: 'Ajouter à Firefox' })).toHaveAttribute('href', FIREFOX_URL);
+    cleanup();
+    agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
+    home();
+    expect(
+      within(region('Tarifs').getByRole('group', { name: 'Gratuit avec votre propre clé' })).queryByRole('link'),
+    ).toBeNull();
+    agent.mockRestore();
+  });
+
   it('answers the questions a hesitant reader asks, each openable on its own', () => {
     const { container } = home();
     const faq = region('Questions fréquentes');
