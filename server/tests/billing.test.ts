@@ -158,6 +158,9 @@ describe('checkout and portal', () => {
     // Our id travels with the session, so the webhook never has to guess.
     expect(sent.form['metadata[user_id]']).toBe(who.userId);
     expect(sent.form['subscription_data[metadata][user_id]']).toBe(who.userId);
+    // A promotion code can be typed, and a fully discounted one needs no card.
+    expect(sent.form.allow_promotion_codes).toBe('true');
+    expect(sent.form.payment_method_collection).toBe('if_required');
   });
 
   it('refuses a portal session for an account that never paid', async () => {
@@ -335,6 +338,73 @@ describe('quotas', () => {
       );
       expect({ status, plan: (await env.db.getUserById(who.userId))!.plan }).toEqual({ status, plan: expected });
     }
+  });
+
+  it('activates a subscription a 100 % promotion code brought to zero, through the webhook alone', async () => {
+    const env = makeTestEnv();
+    const who = await signedIn(env, 'marie@example.org');
+    const periodEnd = Math.floor((env.clock.now() + 30 * DAY_MS) / 1000);
+    const discount = { coupon: { percent_off: 100, duration: 'forever' }, promotion_code: 'promo_test_1' };
+
+    // The sequence Stripe sends for a session with nothing due: no payment,
+    // no card, an active subscription and a zero invoice.
+    await postStripeEvent(env, {
+      id: 'evt_free_checkout',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_free',
+          customer: 'cus_test_1',
+          subscription: 'sub_test_1',
+          amount_total: 0,
+          payment_status: 'no_payment_required',
+          total_details: { amount_discount: 1200 },
+          metadata: { user_id: who.userId },
+        },
+      },
+    });
+    await postStripeEvent(
+      env,
+      subscriptionEvent('customer.subscription.created', who.userId, {
+        discounts: [discount],
+        default_payment_method: null,
+        items: { data: [{ current_period_end: periodEnd }] },
+      }),
+    );
+    const invoice = await postStripeEvent(env, {
+      id: 'evt_free_invoice',
+      type: 'invoice.paid',
+      data: {
+        object: {
+          id: 'in_test_free',
+          customer: 'cus_test_1',
+          amount_due: 0,
+          amount_paid: 0,
+          status: 'paid',
+          metadata: { user_id: who.userId },
+        },
+      },
+    });
+    expect(invoice.status).toBe(200);
+
+    const row = (await env.db.getUserById(who.userId))!;
+    expect(row.plan).toBe('active');
+    expect(row.planExpiresAt).toBe(periodEnd * 1000);
+    expect(row.stripeSubId).toBe('sub_test_1');
+    expect((await analyse(env, who)).status).toBe(200);
+
+    // Each renewal of a forever code is another zero-amount period, reported
+    // like any paid one.
+    env.clock.advance(30 * DAY_MS);
+    const nextEnd = Math.floor((env.clock.now() + 30 * DAY_MS) / 1000);
+    await postStripeEvent(
+      env,
+      subscriptionEvent('customer.subscription.updated', who.userId, {
+        discounts: [discount],
+        items: { data: [{ current_period_end: nextEnd }] },
+      }),
+    );
+    expect((await env.db.getUserById(who.userId))!.planExpiresAt).toBe(nextEnd * 1000);
   });
 
   describe('subscription period', () => {
