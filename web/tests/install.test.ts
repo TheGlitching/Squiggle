@@ -10,9 +10,7 @@ import { CHROME_URL, FIREFOX_URL, installLabelFor, installUrlFor, isMobile } fro
 
 describe('installUrlFor', () => {
   it('sends Firefox to AMO', () => {
-    expect(installUrlFor('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0')).toBe(
-      FIREFOX_URL,
-    );
+    expect(installUrlFor('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0')).toBe(FIREFOX_URL);
   });
 
   it('sends every Chromium browser to the Chrome Web Store', () => {
@@ -42,5 +40,13 @@ describe('installLabelFor', () => {
   it('names the store the button opens', () => {
     expect(installLabelFor(CHROME_URL)).toBe('Ajouter à Chrome');
     expect(installLabelFor(FIREFOX_URL)).toBe('Ajouter à Firefox');
+  });
+
+  it('names the reader’s own Chromium browser, which installs from the Chrome Web Store', () => {
+    const base = 'Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36';
+    expect(installLabelFor(CHROME_URL, `${base} Edg/126.0.0.0`)).toBe('Ajouter à Edge');
+    expect(installLabelFor(CHROME_URL, `${base} OPR/112.0.0.0`)).toBe('Ajouter à Opera');
+    expect(installLabelFor(CHROME_URL, `${base} Brave/126`)).toBe('Ajouter à Brave');
+    expect(installLabelFor(CHROME_URL, base)).toBe('Ajouter à Chrome');
   });
 });

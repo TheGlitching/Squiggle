@@ -24,9 +24,16 @@ export function installUrlFor(userAgent: string): string | null {
   }
   return null;
 }
-/** The install button names the store it opens. */
-export function installLabelFor(url: string): string {
-  return url === FIREFOX_URL ? 'Ajouter à Firefox' : 'Ajouter à Chrome';
+/**
+ * The install button names the reader's own browser: Edge, Opera and Brave
+ * install from the Chrome Web Store, but their readers know their browser's name.
+ */
+export function installLabelFor(url: string, userAgent = ''): string {
+  if (url === FIREFOX_URL) return 'Ajouter à Firefox';
+  if (/Edg\//.test(userAgent)) return 'Ajouter à Edge';
+  if (/OPR\//.test(userAgent)) return 'Ajouter à Opera';
+  if (/Brave/.test(userAgent)) return 'Ajouter à Brave';
+  return 'Ajouter à Chrome';
 }
 
 /** True inside the app installed on the home screen, which has its own cookies on iOS. */

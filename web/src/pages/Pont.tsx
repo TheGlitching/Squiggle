@@ -68,9 +68,9 @@ export function Pont() {
 
   if (!params) {
     return (
-      <div className="mx-auto w-full max-w-lg px-5 py-16">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Connecter l’extension</h1>
-        <p className="mt-3 text-muted">
+      <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-20 [&>*]:max-w-xl">
+        <h1 className="m-0 font-display text-4xl leading-[1.05] font-semibold tracking-[-0.03em] md:text-5xl">Connecter l’extension</h1>
+        <p className="mt-3 text-lg text-muted">
           Cette page relie l’extension à votre compte. Ouvrez l’extension dans votre navigateur et
           cliquez sur « Se connecter » : elle vous amènera ici avec tout ce qu’il faut.
         </p>
@@ -85,15 +85,15 @@ export function Pont() {
   }
 
   if (account === undefined) {
-    return <p className="mx-auto max-w-lg px-5 py-16 text-muted">Chargement…</p>;
+    return <p className="mx-auto w-full max-w-6xl px-4 py-12 text-muted sm:px-6 md:py-20">Chargement…</p>;
   }
 
   if (account === null) {
     const next = encodeURIComponent(path);
     return (
-      <div className="mx-auto w-full max-w-lg px-5 py-16">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Connectez-vous d’abord</h1>
-        <p className="mt-3 text-muted">
+      <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-20 [&>*]:max-w-xl">
+        <h1 className="m-0 font-display text-4xl leading-[1.05] font-semibold tracking-[-0.03em] md:text-5xl">Connectez-vous d’abord</h1>
+        <p className="mt-3 text-lg text-muted">
           L’extension utilise votre compte Squiggle. Connectez-vous, puis la connexion reprendra
           automatiquement.
         </p>
@@ -108,8 +108,8 @@ export function Pont() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg px-5 py-16">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">Connexion de l’extension</h1>
+    <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-20 [&>*]:max-w-xl">
+      <h1 className="m-0 font-display text-4xl leading-[1.05] font-semibold tracking-[-0.03em] md:text-5xl">Connexion de l’extension</h1>
 
       {status === 'code' && code ? (
         <div className="mt-8 rounded-2xl border border-border bg-surface p-6 text-center">
