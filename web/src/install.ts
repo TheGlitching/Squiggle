@@ -80,7 +80,7 @@ function subscribe(listener: () => void) {
  */
 export function useInstall(): { kind: 'prompt'; prompt: () => void } | { kind: 'ios' } | null {
   const event = useSyncExternalStore(subscribe, () => deferred, () => null);
-  const ua = navigator.userAgent;
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   const ios =
     (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) && !/CriOS|FxiOS/.test(ua);
 
