@@ -8,19 +8,10 @@ const { inferenceHosts } = HOSTED_ANALYSIS;
 
 /**
  * Who runs the model, for the privacy policy, which must name its processors:
- * the pinned hosts by name, or, until they are pinned, OpenRouter's choice.
+ * the hosts every hosted request is pinned to, in the order they are tried.
  * This page describes the engine without naming it, because the model changes.
  */
-export const INFERENCE_HOSTS_TEXT =
-  inferenceHosts.length > 0
-    ? inferenceHosts.join(', ')
-    : 'des hébergeurs d’inférence choisis par OpenRouter parmi ceux qui servent ce modèle';
-
-/** The inference hosts as a row label: named once pinned, OpenRouter's choice until then. */
-export const INFERENCE_HOSTS_LABEL =
-  inferenceHosts.length > 0
-    ? `Hébergeurs d’inférence : ${INFERENCE_HOSTS_TEXT}`
-    : 'Hébergeurs d’inférence (choisis via OpenRouter)';
+export const INFERENCE_HOSTS_LABEL = `Hébergeurs d’inférence : ${inferenceHosts.map((host) => host.name).join(', ')}`;
 
 export const RETENTION = [
   [

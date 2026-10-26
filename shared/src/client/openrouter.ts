@@ -1,5 +1,5 @@
 import { BYOKError } from '../types/byok';
-import type { CompletionOptions } from '../types/byok';
+import type { CompletionOptions, ProviderConfig } from '../types/byok';
 import type { GroundedAnswer, SearchResult } from './base';
 import { OpenAIClient } from './openai';
 
@@ -73,7 +73,37 @@ export async function listOpenRouterModels(
   }
 }
 
+/**
+ * OpenRouter's provider routing preferences, sent as the `provider` object of
+ * a request. Only the fields Squiggle sets are typed.
+ */
+export interface OpenRouterProviderPreferences {
+  /** Provider slugs, tried in this order. */
+  order?: readonly string[];
+  /** The only provider slugs the request may be routed to. */
+  only?: readonly string[];
+  /** `false`: fail rather than try a provider outside `order`. */
+  allow_fallbacks?: boolean;
+  /** Skip providers that would ignore a parameter, the response schema included. */
+  require_parameters?: boolean;
+  /** `deny`: skip providers that may store or train on the request. */
+  data_collection?: 'allow' | 'deny';
+  /** Route only to zero-data-retention endpoints. */
+  zdr?: boolean;
+}
+
 export class OpenRouterClient extends OpenAIClient {
+  private readonly providerPreferences?: OpenRouterProviderPreferences;
+
+  /**
+   * Without preferences OpenRouter picks among every host of the model, which
+   * is what a BYOK reader gets on their own key. Hosted mode passes them.
+   */
+  constructor(config: ProviderConfig, providerPreferences?: OpenRouterProviderPreferences) {
+    super(config);
+    this.providerPreferences = providerPreferences;
+  }
+
   protected override get defaultBaseUrl(): string {
     return 'https://openrouter.ai/api/v1';
   }
@@ -94,6 +124,17 @@ export class OpenRouterClient extends OpenAIClient {
       'X-Title': 'Squiggle',
       ...this.config.customHeaders,
     };
+  }
+
+  /**
+   * Every request of this client goes through here (completion, stream, web
+   * search), so the provider preferences cannot be left off one of them.
+   */
+  protected override postJson(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<Response> {
+    const routed = this.providerPreferences
+      ? { ...(body as Record<string, unknown>), provider: this.providerPreferences }
+      : body;
+    return super.postJson(url, headers, routed, signal);
   }
 
   /**
