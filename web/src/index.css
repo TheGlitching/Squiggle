@@ -200,6 +200,39 @@
     transition: background-color 160ms var(--ease-out);
   }
 
+  /* A sentence of the classroom exercise. Marked, it takes the student's own pencil
+     squiggle and a faint accent wash; once the analysis is revealed only the wash
+     stays, so it never fights the severity underline of Squiggle's highlight. */
+  .exercice-phrase {
+    border-radius: 3px;
+    padding: 1px 0;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    transition: background-color 160ms var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .exercice-phrase[role='button']:hover {
+      background-color: rgb(28 27 31 / 0.06);
+    }
+  }
+
+  .exercice-phrase.is-marked,
+  .exercice-phrase.is-marked[role='button']:hover {
+    background-color: rgb(144 97 240 / 0.16);
+  }
+
+  .exercice-phrase.is-marked[role='button'] {
+    text-decoration: underline wavy 1.5px var(--color-accent);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 6px;
+  }
+
+  .exercice-phrase[role='button']:focus-visible {
+    outline: 2px solid var(--color-paperInk);
+    outline-offset: 2px;
+  }
+
   /* The example's selection: one ring that glides from passage to passage
      (on-screen movement, so ease-in-out), and explanation cards that swap in
      place, the outgoing one leaving faster than the new one arrives. Both are

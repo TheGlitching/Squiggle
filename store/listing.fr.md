@@ -7,9 +7,12 @@ que le lecteur lit. Le ton et les chiffres suivent squiggle.fr (`web/src/offer.t
 l’offre change là-bas, elle change ici.
 
 Deux façons de s’en servir, présentées à égalité : gratuitement avec sa propre clé d’API,
-ou sans réglage avec un compte Squiggle. Les fournisseurs pris en charge sont nommés parce
-qu’un lecteur doit savoir quelle clé apporter ; aucun nom de modèle, et rien sur
-l’infrastructure du mode hébergé.
+ou sans réglage avec un compte Squiggle. « Gratuit » reste en avant, et s’explique juste à
+côté, en mots simples : Squiggle ne facture rien, le fournisseur d’IA du lecteur facture
+l’usage, en général quelques centimes par analyse, et une clé d’API est le code d’accès que
+ce fournisseur donne. Les fournisseurs pris en charge sont nommés parce qu’un lecteur doit
+savoir quelle clé apporter ; aucun nom de modèle, et rien sur l’infrastructure du mode
+hébergé. Le panneau dit la même chose (`src/ui/ownKeyWording.ts`).
 
 ## Nom
 
@@ -28,7 +31,7 @@ Un deuxième avis sur l’article que vous lisez : passages fragiles surlignés,
 
 **AMO** (250 caractères au plus ; champ « Résumé » de la fiche) :
 
-Un deuxième avis sur l’article de presse que vous lisez : passages fragiles surlignés, raisons, chiffres confrontés aux sources, note sur 100. Gratuit avec votre propre clé d’API, ou sans réglage avec un compte Squiggle : 3 analyses offertes.
+Un deuxième avis sur l’article de presse que vous lisez : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre propre clé d’API (votre fournisseur d’IA facture l’usage), ou sans réglage avec un compte Squiggle : 3 analyses offertes.
 
 ## Catégorie
 
@@ -48,7 +51,7 @@ Un deuxième avis sur l’article que vous lisez.
 Un clic sur l’icône, et Squiggle relit l’article ouvert. Il surligne les passages fragiles, dit pourquoi, et montre aussi ce qui est solide. Le rapport s’ouvre à côté de l’article, avec une note sur 100.
 
 DEUX FAÇONS DE S’EN SERVIR
-• Gratuitement, avec votre propre clé d’API (Anthropic, OpenAI, Google Gemini ou OpenRouter). Collez-la dans l’extension : l’analyse part directement de votre navigateur vers ce fournisseur, la clé reste dans votre navigateur et rien ne passe par nos serveurs. Vous ne payez que votre fournisseur.
+• Gratuitement, avec votre propre clé d’API. Squiggle ne vous facture rien : la partie IA tourne sur votre propre compte chez un fournisseur d’IA (Anthropic, OpenAI, Google Gemini ou OpenRouter), qui vous facture directement, en général quelques centimes par analyse. Une clé d’API, c’est le code d’accès personnel que ce fournisseur vous donne sur son site : collez-le une fois dans l’extension. L’analyse part alors de votre navigateur vers ce fournisseur, la clé y reste et rien ne passe par nos serveurs.
 • Sans aucun réglage, avec un compte Squiggle : 3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois pour 10 analyses par jour, sans engagement.
 
 Chaque constat cite la phrase exacte : choisissez-le, le passage s’éclaire dans la page. Vous jugez sur pièces.
@@ -114,7 +117,7 @@ AMO affiche une légende sous chaque capture : reprendre le titre de l’image.
 2. **Chaque constat pointe sa phrase.** Un constat choisi, son passage mis en évidence.
 3. **Les chiffres confrontés aux sources.** Le chiffre mis en doute et la source lue.
 4. **Cinq questions pour chaque article.** Les notes par domaine, l’une ouverte.
-5. **Gratuit avec votre clé, ou sans réglage.** Les deux façons de commencer, côte à côte.
+5. **Gratuit avec votre clé, ou un compte.** Les deux façons de commencer, côte à côte, et qui facture quoi.
 
 ## Objectif unique, autorisations, confidentialité
 

@@ -13,13 +13,14 @@ import {
   type HostedAccount,
 } from '../../hosted/session';
 import { TRANSPARENCY_URL } from '../../hosted/config';
+import { API_KEY_MEANS, OWN_KEY_BILLING, OWN_KEY_TITLE } from '../ownKeyWording';
 
 /**
  * Analysis-engine configuration.
  *
- * Hosted mode leads: the reader can be analysing in two taps without owning a
- * key, and that is the product. BYOK is still fully supported, but it is the
- * advanced path and lives behind a collapsed disclosure underneath.
+ * Two ways in, both stated plainly. The account comes first because it needs no
+ * setup; the own key, free of any charge from Squiggle, sits beneath it behind a
+ * disclosure whose summary already says what it costs and who bills it.
  */
 
 interface ProviderPreset {
@@ -305,8 +306,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
               Moteur d’analyse
             </h2>
             <p className="mt-0.5 text-xs leading-relaxed text-muted">
-              Sans clé d’API : connectez votre compte Squiggle et l’analyse tourne sur nos serveurs.
-              Vous préférez votre propre clé ? Dépliez la section avancée.
+              Deux façons d’analyser : avec un compte Squiggle, ou gratuitement avec votre propre clé d’IA.
             </p>
           </div>
           <button
@@ -342,14 +342,18 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
             </p>
           </section>
 
-          {/* BYOK below, collapsed by default: the advanced path. */}
+          {/* BYOK below, collapsed by default; its summary alone says what it costs. */}
           <details open={startOnOwnKey || undefined} className="rounded-xl border border-line">
-            <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-ink">
-              Utiliser ma propre clé{' '}
-              <span className="font-normal text-muted">(avancé)</span>
+            <summary className="cursor-pointer list-none px-3 py-3">
+              <span className="flex items-baseline justify-between gap-3 text-sm font-semibold text-ink">
+                {OWN_KEY_TITLE}
+                <span className="font-display text-base">0&nbsp;€</span>
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-muted">{OWN_KEY_BILLING}</span>
             </summary>
 
             <div className="space-y-4 border-t border-line p-3">
+              <p className="text-xs leading-relaxed text-ink/80">{API_KEY_MEANS}</p>
               <div>
                 <span className="block text-xs font-semibold uppercase tracking-wider text-muted">
                   Fournisseur

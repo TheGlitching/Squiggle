@@ -97,14 +97,71 @@ export const SCORE_BANDS: Record<ScoreBand, { title: string; tone: HighlightSeve
   problematique: { title: 'Article problématique', tone: 'critical' },
 };
 
-/** The five domains of the grid. A test pins these to the engine's own definitions. */
-export const DOMAINS = [
-  ['Robustesse factuelle et sourcing', 35, 'Les chiffres sont-ils sourcés\u00a0?'],
-  ['Solidité logique et argumentative', 25, 'Les conclusions découlent-elles des faits\u00a0?'],
-  ['Cadrage et procédés rhétoriques', 25, 'Les mots orientent-ils le jugement\u00a0?'],
-  ['Déontologie et transparence', 10, 'Sait-on qui parle, et à quel titre\u00a0?'],
-  ['Soin de la langue', 5, 'La langue est-elle assez précise\u00a0?'],
-] as const;
+/** A passage the grid would flag: the flagged words apart, and what is wrong with them. */
+export interface DomainExample {
+  before: string;
+  mark: string;
+  after: string;
+  note: string;
+}
+
+/**
+ * The five domains of the grid: label, weight, the question it asks, and one passage it
+ * would flag, drawn from the domain's own criteria in `SCORE_DOMAINS`. A test pins the
+ * labels and weights to the engine's own definitions.
+ */
+export const DOMAINS: ReadonlyArray<readonly [string, number, string, DomainExample]> = [
+  [
+    'Robustesse factuelle et sourcing',
+    35,
+    'Les chiffres sont-ils sourcés ?',
+    {
+      before: 'Selon ',
+      mark: 'une étude',
+      after: ', 78 % des Français seraient concernés.',
+      note: 'Quelle étude ? Ni institut, ni date.',
+    },
+  ],
+  [
+    'Solidité logique et argumentative',
+    25,
+    'Les conclusions découlent-elles des faits ?',
+    {
+      before: 'Puisque les jeunes sont sur les réseaux, ',
+      mark: 'ils ne lisent plus',
+      after: '.',
+      note: 'Un faux dilemme : l’un n’empêche pas l’autre.',
+    },
+  ],
+  [
+    'Cadrage et procédés rhétoriques',
+    25,
+    'Les mots orientent-ils le jugement ?',
+    { before: 'La situation est ', mark: 'un désastre absolu', after: '.', note: 'Le mot fait le travail du chiffre.' },
+  ],
+  [
+    'Déontologie et transparence',
+    10,
+    'Sait-on qui parle, et à quel titre ?',
+    {
+      before: 'Le ministre ',
+      mark: 'veut surtout plaire à son électorat',
+      after: '.',
+      note: 'Une intention prêtée, sans preuve.',
+    },
+  ],
+  [
+    'Soin de la langue',
+    5,
+    'La langue est-elle assez précise ?',
+    {
+      before: 'Les chiffres qu’ils ont ',
+      mark: 'publié',
+      after: ' hier…',
+      note: 'Un accord manqué : « publiés ».',
+    },
+  ],
+];
 
 export interface DemoExample {
   /** The domain the finding is scored in, or `Point fort` for a strength. */

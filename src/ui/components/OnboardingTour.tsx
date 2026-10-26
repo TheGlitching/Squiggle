@@ -4,6 +4,7 @@ import { SCORE_DOMAINS, type ScoreBand } from '@squiggle/shared';
 import { determineScoreBand, getScoreBandLabel } from '@squiggle/shared';
 import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
 import { darkTheme } from '../tokens/colors';
+import { OWN_KEY_BILLING } from '../ownKeyWording';
 
 export interface TourStep {
   id: string;
@@ -86,11 +87,11 @@ export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
   {
     id: 'your-own-key',
     targetSelector: '[data-tour="settings"]',
-    title: 'L’analyse tourne chez votre fournisseur',
-    badge: 'Votre clé',
+    title: 'Un compte, ou votre propre clé',
+    badge: 'Deux façons',
     placement: 'bottom',
-    content: 'Squiggle n’héberge aucun service. Vous renseignez ici votre propre clé API, et l’article est analysé par le modèle de votre choix, appelé depuis votre navigateur. Sans clé, aucune analyse n’est possible.',
-    methodologyTip: 'Le modèle qui a rendu le verdict est indiqué en bas du panneau : vous savez toujours d’où vient ce que vous lisez.',
+    content: `Sans réglage, avec un compte Squiggle : 3 analyses offertes. Ou gratuitement avec votre propre clé d’IA, à régler ici. ${OWN_KEY_BILLING}`,
+    methodologyTip: 'Avec un compte, l’article est analysé sur nos serveurs, qui ne le conservent pas. Avec votre clé, il part de votre navigateur directement vers votre fournisseur.',
   },
   {
     id: 'run-analysis',
