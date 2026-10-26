@@ -17,7 +17,7 @@ import type { ReactNode } from 'react';
 import { CONTACT_EMAIL, CONTACT_URL, Page } from '../components/Layout';
 import { FREE_ANALYSES, MONTHLY_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../offer';
 import { Link } from '../router';
-import { INFERENCE_HOSTS_LABEL, RETENTION } from './Transparence';
+import { INFERENCE_HOSTS_LABEL, RETENTION, WEB_SEARCH_LABEL } from './Transparence';
 
 const UPDATED = '23 octobre 2026';
 
@@ -282,8 +282,13 @@ const TRANSFERS = [
   ['OpenRouter, Inc.', 'États-Unis', 'Clauses contractuelles types de la Commission européenne, dans l’accord de traitement d’OpenRouter'],
   [
     INFERENCE_HOSTS_LABEL,
-    'Pays-Bas en priorité, États-Unis en relais',
-    'Engagements d’OpenRouter envers ses fournisseurs : aucune conservation, aucun entraînement ; aucune identité de lecteur n’est transmise',
+    'Pays-Bas',
+    'Hébergeur européen, sans relais hors d’Europe ; aucune conservation, aucun entraînement ; aucune identité de lecteur n’est transmise',
+  ],
+  [
+    WEB_SEARCH_LABEL,
+    'États-Unis',
+    'Engagements d’OpenRouter envers ses fournisseurs ; seules les requêtes de recherche sont transmises, jamais l’article ni une identité',
   ],
   ['Cloudflare, Inc. (hébergement)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Stripe (paiement)', 'Irlande, et États-Unis pour Stripe, Inc.', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],

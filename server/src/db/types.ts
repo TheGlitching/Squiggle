@@ -479,6 +479,12 @@ export interface Db {
    */
   recordRunStart(userId: string, now: number, sinceDay: Day): Promise<number>;
 
+  /**
+   * Take back one start counted on the day of `now`, for a run the provider
+   * refused before doing any work. Never takes the day's count below zero.
+   */
+  releaseRunStart(userId: string, now: number): Promise<void>;
+
   /** Analyses finished at or after `since`, read from the ledger. */
   countAnalysesSince(userId: string, since: number): Promise<number>;
 
