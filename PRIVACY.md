@@ -148,7 +148,7 @@ lecteur qui colle le même texte.
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
 | Analyse en cours (constats, sans l'article) | base de données | 1 heure |
 | Journal d'usage : qu'un compte a lancé une analyse, et quand | base de données | 12 mois, **sans aucun contenu et sans dire de quel article** |
-| Compteur d'analyses du jour | base de données | tant que le compte existe |
+| Compteur d'analyses du jour (lancées, et menées à terme) | base de données | tant que le compte existe |
 | Adresse e-mail | base de données | tant que le compte existe |
 | Identifiant Google (`sub`), si connexion Google | base de données | tant que le compte existe |
 | Clé publique de votre installation | base de données | tant que vous ne la révoquez pas |

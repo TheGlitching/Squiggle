@@ -366,11 +366,25 @@ describe('OpenRouterClient grounded answer', () => {
     expect(requestBody.tools).toEqual([
       {
         type: 'openrouter:web_search',
-        parameters: { engine: 'parallel', mode: 'basic', max_results: 5 },
+        // Every search is billed; unbounded, the model may run thirty in one request.
+        parameters: { engine: 'parallel', mode: 'basic', max_results: 5, max_uses: 3 },
       },
     ]);
     expect(requestBody.plugins).toBeUndefined();
     expect(requestBody.web_search_options).toBeUndefined();
+  });
+
+  it('caps the searches and the answer at what the caller names', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ choices: [{ message: { content: 'ok' } }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new OpenRouterClient({ provider: 'openrouter', apiKey: 'k', model: 'deepseek/deepseek-v4.1-flash' });
+    await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }], maxSearches: 2, maxTokens: 900 });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const requestBody = JSON.parse(requestInit.body as string);
+    expect(requestBody.tools[0].parameters.max_uses).toBe(2);
+    expect(requestBody.max_tokens).toBe(900);
   });
 
   it('yields the answer text when annotations are absent', async () => {

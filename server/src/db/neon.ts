@@ -506,6 +506,19 @@ export class NeonDb implements Db {
     return { id, userId: args.userId, createdAt: args.now };
   }
 
+  async recordRunStart(userId: string, now: number): Promise<{ today: number; total: number }> {
+    const day = utcDayOf(now);
+    // The increment is atomic, so two starts racing each see a distinct count.
+    const rows = await this.q`
+      INSERT INTO usage_daily (user_id, day, analyses, started)
+      VALUES (${userId}, ${day}, 0, 1)
+      ON CONFLICT (user_id, day) DO UPDATE SET started = usage_daily.started + 1
+      RETURNING started
+    `;
+    const totals = await this.q`SELECT COALESCE(SUM(started), 0) AS total FROM usage_daily WHERE user_id = ${userId}`;
+    return { today: num(rows[0].started), total: num(totals[0].total) };
+  }
+
   async getDailyUsage(userId: string, day: number): Promise<number> {
     const rows = await this.q`SELECT analyses FROM usage_daily WHERE user_id = ${userId} AND day = ${day}`;
     return rows[0] ? num(rows[0].analyses) : 0;

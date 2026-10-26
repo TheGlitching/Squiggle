@@ -24,11 +24,17 @@ export const OPENROUTER_CATALOG_URL = 'https://openrouter.ai/api/v1/models';
  * included) at $0.005/request, versus the $0.007 Exa fallback the deprecated
  * `:online` suffix selected. A later French-source quality spike can switch
  * `mode` to `turbo` ($0.001, English/Japanese only) here, in one place.
+ *
+ * The model decides how often to search inside one request, and OpenRouter
+ * lets it go up to thirty times, each one billed. `maxUses` is the ceiling
+ * when the caller names none: a lone query needs one search, a grounded
+ * judgement of one claim a few.
  */
 export const OPENROUTER_WEB_SEARCH = {
   engine: 'parallel',
   mode: 'basic',
   maxResults: 5,
+  maxUses: 3,
 } as const;
 
 /**
@@ -110,22 +116,27 @@ export class OpenRouterClient extends OpenAIClient {
     return true;
   }
 
-  private get webSearchTool(): Record<string, unknown> {
+  private webSearchTool(maxUses: number): Record<string, unknown> {
     return {
       type: 'openrouter:web_search',
       parameters: {
         engine: OPENROUTER_WEB_SEARCH.engine,
         mode: OPENROUTER_WEB_SEARCH.mode,
         max_results: OPENROUTER_WEB_SEARCH.maxResults,
+        max_uses: maxUses,
       },
     };
   }
 
-  private async searchingCompletion(body: Record<string, unknown>, signal?: AbortSignal): Promise<{ content?: unknown; annotations?: unknown }> {
+  private async searchingCompletion(
+    body: Record<string, unknown>,
+    maxUses: number,
+    signal?: AbortSignal
+  ): Promise<{ content?: unknown; annotations?: unknown }> {
     const response = await this.postJson(
       `${this.baseUrl}/chat/completions`,
       this.getHeaders(),
-      { model: this.model, ...body, tools: [this.webSearchTool] },
+      { model: this.model, ...body, tools: [this.webSearchTool(maxUses)] },
       signal
     );
     const data = await response.json() as { choices?: Array<{ message?: { content?: unknown; annotations?: unknown } }> };
@@ -133,7 +144,7 @@ export class OpenRouterClient extends OpenAIClient {
   }
 
   override async webSearch(query: string, opts?: { maxResults?: number }): Promise<SearchResult[]> {
-    const message = await this.searchingCompletion({ messages: [{ role: 'user', content: query }] });
+    const message = await this.searchingCompletion({ messages: [{ role: 'user', content: query }] }, 1);
     return this.parseAnnotations(message.annotations, opts?.maxResults);
   }
 
@@ -146,7 +157,8 @@ export class OpenRouterClient extends OpenAIClient {
       body.max_tokens = options.maxTokens;
     }
 
-    const message = await this.searchingCompletion(body, options.abortSignal);
+    const maxUses = options.maxSearches && options.maxSearches > 0 ? options.maxSearches : OPENROUTER_WEB_SEARCH.maxUses;
+    const message = await this.searchingCompletion(body, maxUses, options.abortSignal);
     const content = typeof message.content === 'string' ? message.content.trim() : '';
     if (!content) {
       throw new BYOKError({ provider: 'openrouter', message: 'grounded answer returned no answer text' });

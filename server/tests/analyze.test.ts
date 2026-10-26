@@ -22,7 +22,7 @@ import {
 } from './helpers';
 import { MemoryDb } from '../src/db/memory';
 import { canonicalArticleUrl } from '../src/analyze/canonicalUrl';
-import { MAX_ARTICLE_CHARS } from '../src/analyze/schemas';
+import { MAX_ARTICLE_CHARS } from '@squiggle/shared';
 
 const ARTICLE_URL = 'https://presse.example/politique/emploi-2026';
 
@@ -360,22 +360,44 @@ describe('analysis stages', () => {
     expect(stolen.json.error).toBe('run_not_found');
   });
 
-  it('rejects an oversized article before calling the provider', async () => {
+  it('refuses a page of fifty articles with a sentence the reader can act on, before calling the provider', async () => {
     const env = makeTestEnv();
     const who = await signedIn(env, 'marie@example.org');
     const before = { ...env.llm.calls };
 
-    const huge = Array.from({ length: 20 }, (_, i) => ({
+    // Fifty articles of about 4 000 characters each, read as one page, with
+    // offsets as the extension computes them.
+    const article = 'Le chômage a baissé de 12 % en un an, selon le ministère. '.repeat(70);
+    const page = Array.from({ length: 50 }, (_, i) => ({
       id: `b${i}`,
       type: 'paragraph' as const,
-      text: 'x'.repeat(Math.ceil(MAX_ARTICLE_CHARS / 10)),
-      charStart: 0,
+      text: article,
+      charStart: i * (article.length + 2),
     }));
-    const res = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: huge });
+    const res = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: page });
 
-    expect(res.status).toBe(400);
-    expect(res.json.error).toBe('invalid_payload');
+    expect(res.status).toBe(413);
+    expect(res.json.error).toBe('article_too_long');
+    expect(res.json.message).toMatch(/plusieurs articles/);
+    expect(res.json.message).toContain((50 * article.length).toLocaleString('fr-FR'));
     expect(env.llm.calls).toEqual(before);
+
+    // A refused page opens no run, so it costs the reader none of their starts.
+    const user = await env.db.getUserByEmail('marie@example.org');
+    expect((await env.db.recordRunStart(user!.id, env.clock.now())).total).toBe(1);
+  });
+
+  it('still analyses an article right at the cap', async () => {
+    const env = makeTestEnv();
+    const who = await signedIn(env, 'marie@example.org');
+    const blocks = Array.from({ length: 10 }, (_, i) => ({
+      id: `b${i}`,
+      type: 'paragraph' as const,
+      text: 'x'.repeat(MAX_ARTICLE_CHARS / 10),
+      charStart: i * (MAX_ARTICLE_CHARS / 10 + 2),
+    }));
+    const res = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks });
+    expect(res.status).toBe(200);
   });
 
   it('never accepts an unsigned analysis request', async () => {

@@ -198,6 +198,8 @@ export interface UsageDailyRow {
   userId: string;
   day: Day;
   analyses: number;
+  /** Runs opened that day, finished or not; bounds what abandoned runs can cost. */
+  started: number;
 }
 
 /**
@@ -460,6 +462,12 @@ export interface Db {
    * Neon), so the daily quota and the ledger can never diverge.
    */
   recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow>;
+
+  /**
+   * Count one run start on the day's row, atomically, and return the account's
+   * starts that day and ever. Unlike `recordAnalysis`, this moves no credit.
+   */
+  recordRunStart(userId: string, now: number): Promise<{ today: number; total: number }>;
 
   /** Analyses on one UTC day (0 if none). */
   getDailyUsage(userId: string, day: Day): Promise<number>;
