@@ -100,7 +100,7 @@ function Table({ head, rows }: { head: readonly [string, string, string]; rows: 
 export function Transparence() {
   return (
     <Page title="Transparence" lead="Où va votre article, ce que nous gardons, et à qui. Y compris quand ce n’est pas flatteur.">
-      <div className="grid gap-16">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-16">
         <section aria-labelledby="trajet-titre">
           <h2 id="trajet-titre" className="m-0 text-2xl font-semibold tracking-tight sm:text-3xl">
             Le trajet d’une analyse
@@ -108,7 +108,7 @@ export function Transparence() {
           <div className="mt-6 rounded-card bg-surface p-6 sm:p-8">
             <Trajet />
           </div>
-          <p className="mt-6 mb-0 text-base leading-relaxed text-muted">
+          <p className="mt-6 mb-0 text-base leading-relaxed">
             Le modèle est {modelLabel}, un modèle à poids ouverts, joint par OpenRouter et exécuté par{' '}
             {INFERENCE_HOSTS_TEXT}. Utiliser un modèle à poids ouverts ne signifie pas envoyer le texte vers des
             serveurs en Chine. Squiggle ne traite que des articles publics : le texte de la page que vous lisez, son
@@ -119,7 +119,7 @@ export function Transparence() {
             {FACTS.map(([title, text]) => (
               <div key={title}>
                 <dt className="text-lg leading-snug font-semibold">{title}</dt>
-                <dd className="m-0 mt-2 text-base leading-relaxed text-muted">{text}</dd>
+                <dd className="m-0 mt-2 text-base leading-relaxed">{text}</dd>
               </div>
             ))}
           </dl>
@@ -130,12 +130,12 @@ export function Transparence() {
             Ce que nous conservons, et combien de temps
           </h2>
           <Table head={['Donnée', 'Où', 'Durée']} rows={RETENTION} />
-          <p className="mt-6 mb-0 text-base leading-relaxed text-muted">
+          <p className="mt-6 mb-0 text-base leading-relaxed">
             Une ligne de journal ne contient qu’un nom d’événement, un nombre, un identifiant opaque ou l’empreinte d’une
             adresse : aucun champ de texte libre n’existe pour y écrire un paragraphe, même par accident. Une requête
             refusée est journalisée par le nom du champ, jamais par sa valeur.
           </p>
-          <p className="mt-4 mb-0 text-base leading-relaxed text-muted">
+          <p className="mt-4 mb-0 text-base leading-relaxed">
             Nous mesurons le lancement avec ce que le serveur détient déjà, jamais avec un traceur : nombre de comptes
             par semaine, analyses terminées, essais menés à terme, abonnements et résiliations (d’après Stripe), réponses
             du cache, échecs par étape, coût moyen d’une analyse. Ce sont des totaux, qui ne désignent ni un lecteur ni

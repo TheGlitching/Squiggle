@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
+import { useInView } from '../inView';
+
 import { BrandLockup } from './Brand';
 import { CONTACT_URL } from './Layout';
 import { useInstall } from '../install';
@@ -13,7 +15,7 @@ export const PRIMARY_BUTTON = `inline-flex min-h-12 items-center justify-center 
 export const SECONDARY_BUTTON = `inline-flex min-h-12 items-center justify-center gap-2 rounded-control border border-borderControl bg-transparent px-5 py-3 text-base font-medium text-foreground hover:border-accent hover:text-accentInk disabled:opacity-60 ${TRANSITION}`;
 /** An underlined text link; `py-1` keeps its target well above 24 px. */
 export const QUIET_LINK =
-  'inline-block border-b border-borderControl py-1 text-muted transition-colors duration-160 ease-out hover:border-accent hover:text-accentInk';
+  'inline-block py-1 text-muted underline decoration-borderControl decoration-1 underline-offset-[6px] transition-colors duration-160 ease-out hover:text-accentInk hover:decoration-accent';
 
 /** Page width shared by the header, every section and the footer. */
 export const PAGE = 'mx-auto w-full max-w-6xl px-5 sm:px-6';
@@ -178,6 +180,10 @@ export function Section({
   aside?: ReactNode;
   children: ReactNode;
 }) {
+  // The band's parts rise in, heading first, the first time it comes into view.
+  const [shown, setShown] = useState(false);
+  const ref = useInView<HTMLDivElement>(() => setShown(true), 0.15);
+  const reveal = `reveal ${shown ? 'is-in' : ''}`;
   const heading = (
     <>
       <h2
@@ -197,13 +203,13 @@ export function Section({
       className={`scroll-mt-4 py-16 md:py-28 ${tone === 'raised' ? 'bg-surface' : ''}`}
     >
       {layout === 'split' ? (
-        <div className={`${PAGE} grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16`}>
+        <div ref={ref} className={`${PAGE} ${reveal} grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16`}>
           <div className="lg:sticky lg:top-8 lg:self-start">{heading}</div>
           <div>{children}</div>
         </div>
       ) : (
-        <div className={PAGE}>
-          {heading}
+        <div ref={ref} className={`${PAGE} ${reveal}`}>
+          <div>{heading}</div>
           <div className={intro ? 'mt-10 md:mt-14' : 'mt-8 md:mt-12'}>{children}</div>
         </div>
       )}

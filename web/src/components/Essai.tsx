@@ -140,7 +140,7 @@ export function Essai() {
 
   let order = 0;
   return (
-    <div className="grid overflow-hidden bg-surface max-sm:-mx-5 sm:rounded-card sm:border sm:border-border lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+    <div data-ui className="grid overflow-hidden bg-surface max-sm:-mx-5 sm:rounded-card lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <article
         aria-label="Un article d’exemple, déjà collé"
         ref={sheet}

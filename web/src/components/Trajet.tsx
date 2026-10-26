@@ -27,7 +27,7 @@ const ICONS = {
     <Icon>
       <rect x="4" y="7" width="32" height="26" rx="4" {...STROKE} />
       <path d="M4 14h32" {...STROKE} />
-      <path d="M10 20h16M10 25h12" {...STROKE} className="text-accentHover" stroke="currentColor" />
+      <path d="M10 20h16M10 25h12" {...STROKE} />
     </Icon>
   ),
   serveur: (
@@ -64,7 +64,7 @@ function Arrow({ vertical }: { vertical: boolean }) {
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className={`h-6 w-6 shrink-0 text-accentHover ${vertical ? 'ml-2 rotate-90' : 'max-md:ml-2 max-md:rotate-90'}`}
+      className={`h-6 w-6 shrink-0 text-muted ${vertical ? 'ml-2 rotate-90' : 'max-md:ml-2 max-md:rotate-90'}`}
     >
       <path d="M3 12h17M14 6l6 6-6 6" {...STROKE} />
     </svg>

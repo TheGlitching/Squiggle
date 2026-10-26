@@ -99,10 +99,9 @@ function Grille() {
           <li key={label} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
             <span aria-hidden="true" className="mt-1.5 h-3 w-3 rounded-full" style={{ background: DOMAIN_TONES[index] }} />
             <div>
-              <h3 className="m-0 text-lg leading-snug font-semibold">
-                {label}{' '}<span className="font-normal whitespace-nowrap text-muted tabular-nums">· {weight} pts</span>
-              </h3>
-              <p className="mt-1 mb-0 text-base leading-relaxed text-muted">{question}</p>
+              <h3 className="m-0 text-lg leading-snug font-semibold">{label}</h3>
+              <p className="m-0 text-base text-muted tabular-nums">{weight} points sur 100</p>
+              <p className="mt-1 mb-0 text-base leading-relaxed">{question}</p>
             </div>
           </li>
         ))}
@@ -121,14 +120,14 @@ function Partout() {
     <ul className="m-0 grid list-none gap-8 p-0">
       <li>
         <h3 className="m-0 text-xl font-semibold">Sur le site</h3>
-        <p className="mt-1 mb-3 text-base leading-relaxed text-muted">Collez le texte d’un article. Rien à installer.</p>
+        <p className="mt-1 mb-3 text-base leading-relaxed">Collez le texte d’un article. Rien à installer.</p>
         <Link to="/analyser" className={QUIET_LINK}>
           Analyser un texte
         </Link>
       </li>
       <li>
         <h3 className="m-0 text-xl font-semibold">Sur téléphone</h3>
-        <p className="mt-1 mb-3 text-base leading-relaxed text-muted">
+        <p className="mt-1 mb-3 text-base leading-relaxed">
           Installez l’appli sur l’écran d’accueil. Sur Android, partagez un article vers Squiggle.
         </p>
         {install?.kind === 'prompt' ? (
@@ -145,7 +144,7 @@ function Partout() {
       </li>
       <li>
         <h3 className="m-0 text-xl font-semibold">Sur ordinateur</h3>
-        <p className="mt-1 mb-3 text-base leading-relaxed text-muted">
+        <p className="mt-1 mb-3 text-base leading-relaxed">
           Ajoutez le bouton Squiggle à votre navigateur : un clic sur l’article ouvert, sans copier-coller.
         </p>
         {/* A phone installs no browser button: the stores are offered where they work. */}
@@ -188,7 +187,7 @@ export function Accueil() {
             {STEPS.map(([title, text]) => (
               <li key={title}>
                 <h3 className="m-0 text-2xl leading-snug font-semibold tracking-tight">{title}</h3>
-                <p className="mt-2 mb-0 text-lg leading-relaxed text-pretty text-muted">{text}</p>
+                <p className="mt-2 mb-0 text-lg leading-relaxed text-pretty">{text}</p>
               </li>
             ))}
           </ol>
@@ -199,14 +198,14 @@ export function Accueil() {
       <Section id="grille" title="Une note sur 100, cinq questions">
         <Grille />
         <h3 className="mt-16 mb-0 text-2xl font-semibold tracking-tight">Jamais « vrai » ou « faux »</h3>
-        <p className={`mt-2 mb-0 text-lg leading-relaxed text-muted ${MEASURE}`}>Un fait relevé reçoit l’un de ces états.</p>
+        <p className={`mt-2 mb-0 text-lg leading-relaxed ${MEASURE}`}>Un fait relevé reçoit l’un de ces états.</p>
         <dl className="m-0 mt-6 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           {VERIFICATION_STATES.map(({ state, label, chip }) => (
             <div key={state}>
               <dt>
                 <span className={`inline-block rounded-md border px-2.5 py-1 text-sm font-medium ${chip}`}>{label}</span>
               </dt>
-              <dd className="m-0 mt-2 text-base leading-relaxed text-muted">{STATE_LINES[state]}</dd>
+              <dd className="m-0 mt-2 text-base leading-relaxed">{STATE_LINES[state]}</dd>
             </div>
           ))}
         </dl>
@@ -224,7 +223,7 @@ export function Accueil() {
           {NEUTRALITY.map(([title, text]) => (
             <li key={title}>
               <h3 className="m-0 text-xl leading-snug font-semibold">{title}</h3>
-              <p className="mt-2 mb-0 text-base leading-relaxed text-muted">{text}</p>
+              <p className="mt-2 mb-0 text-base leading-relaxed">{text}</p>
             </li>
           ))}
         </ul>
@@ -243,7 +242,7 @@ export function Accueil() {
         aside={
           <div className="mt-6 grid gap-4">
             <p className="m-0 text-xl leading-relaxed font-semibold">Votre article n’est pas conservé.</p>
-            <p className={`m-0 text-lg leading-relaxed text-muted ${MEASURE}`}>
+            <p className={`m-0 text-lg leading-relaxed ${MEASURE}`}>
               Il transite par notre serveur le temps de l’analyse. Aucune publicité, aucun traceur.
             </p>
             <p className="m-0">
@@ -262,28 +261,27 @@ export function Accueil() {
       <Section id="tarifs" title="Tarifs" intro="Essayez d’abord. Payez seulement si l’outil vous sert.">
         <div className="grid gap-4 md:grid-cols-3">
           <article className="flex flex-col rounded-card bg-surface p-6">
-            <h3 className="m-0 text-lg font-semibold text-muted">Essai</h3>
-            <p className="mt-2 mb-0 font-display text-4xl font-semibold tracking-tight">Gratuit</p>
-            <p className="mt-3 mb-0 text-base leading-relaxed text-muted">
+            <h3 className="m-0 font-display text-3xl font-semibold tracking-tight">Essai gratuit</h3>
+            <p className="mt-3 mb-0 text-base leading-relaxed">
               {FREE_ANALYSES} analyses offertes à l’inscription, sans carte bancaire.
             </p>
           </article>
-          <article className="flex flex-col rounded-card bg-accentSoft p-6 ring-2 ring-accent">
-            <h3 className="m-0 text-lg font-semibold text-accentInk">Abonnement</h3>
-            <p className="mt-2 mb-0 font-display text-4xl font-semibold tracking-tight">
+          <article className="flex flex-col rounded-card border-2 border-accent bg-accentSoft p-6">
+            <h3 className="m-0 font-display text-3xl font-semibold tracking-tight">
               {PRICE_MONTHLY}
-              <span className="text-lg font-normal text-muted"> par mois</span>
+              <span className="text-lg font-normal"> par mois</span>
+            </h3>
+            <p className="mt-3 mb-6 text-base leading-relaxed">
+              L’abonnement : {DAILY_ANALYSES} analyses par jour. Sans engagement.
             </p>
-            <p className="mt-3 mb-6 text-base leading-relaxed text-muted">{DAILY_ANALYSES} analyses par jour. Sans engagement.</p>
             <Link to="/connexion" className={`${PRIMARY_BUTTON} mt-auto`}>
               {SUBSCRIBE_LABEL}
             </Link>
           </article>
           <article className="flex flex-col rounded-card bg-surface p-6">
-            <h3 className="m-0 text-lg font-semibold text-muted">Votre propre clé</h3>
-            <p className="mt-2 mb-0 font-display text-4xl font-semibold tracking-tight">Gratuit</p>
-            <p className="mt-3 mb-0 text-base leading-relaxed text-muted">
-              Avec votre clé d’API, le bouton pour navigateur ne coûte rien.
+            <h3 className="m-0 font-display text-3xl font-semibold tracking-tight">Gratuit avec votre clé</h3>
+            <p className="mt-3 mb-0 text-base leading-relaxed">
+              Avec votre propre clé d’API, le bouton pour navigateur ne coûte rien.
             </p>
           </article>
         </div>
@@ -308,7 +306,7 @@ export function Accueil() {
           </p>
         }
       >
-        <div className="grid gap-3">
+        <div className={`grid gap-3 ${MEASURE}`}>
           {FAQ.map(([question, answer]) => (
             <details key={question} className="group rounded-card bg-background">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 px-5 py-3 text-lg font-medium [&::-webkit-details-marker]:hidden">
@@ -320,7 +318,7 @@ export function Accueil() {
                   +
                 </span>
               </summary>
-              <p className="m-0 px-5 pb-5 text-base leading-relaxed text-muted">{answer}</p>
+              <p className="m-0 px-5 pb-5 text-base leading-relaxed">{answer}</p>
             </details>
           ))}
         </div>

@@ -60,7 +60,7 @@ export function Enseignants() {
           {USES.map(([title, text]) => (
             <li key={title}>
               <h3 className="m-0 text-2xl leading-snug font-semibold tracking-tight">{title}</h3>
-              <p className="mt-2 mb-0 text-lg leading-relaxed text-muted">{text}</p>
+              <p className="mt-2 mb-0 text-lg leading-relaxed">{text}</p>
             </li>
           ))}
         </ul>
@@ -93,7 +93,7 @@ export function Enseignants() {
           ].map(([title, text]) => (
             <li key={title}>
               <h3 className="m-0 text-xl font-semibold">{title}</h3>
-              <p className="mt-1 mb-0 text-lg leading-relaxed text-muted">{text}</p>
+              <p className="mt-1 mb-0 text-lg leading-relaxed">{text}</p>
             </li>
           ))}
         </ol>
