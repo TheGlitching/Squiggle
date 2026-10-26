@@ -22,6 +22,8 @@ interface Shot {
   /** Query strings for the panel and the article. */
   panel: string;
   page: string;
+  /** The two ways to start, side by side, in place of the browser window. */
+  paths?: boolean;
 }
 
 /** One idea per image, in the order the listing tells the story. */
@@ -55,15 +57,84 @@ const SHOTS: Record<string, Shot> = {
     page: '',
   },
   'shot-5': {
-    title: 'Sans clé d’API : 3 analyses offertes.',
-    lead: 'Un compte suffit, sans carte bancaire. Ou votre propre clé d’API. Rien n’est lu avant votre clic.',
+    title: 'Votre clé, ou un compte.',
+    lead: 'Gratuit avec votre propre clé d’API, ou sans réglage avec un compte Squiggle. Rien n’est lu avant votre clic.',
     figure: <DeviceFigure device="navigateur" />,
-    panel: 'state=offer',
-    page: 'clean',
+    panel: 'state=ownkey',
+    page: '',
+    paths: true,
   },
 };
 
 const asset = new URLSearchParams(location.search).get('asset') ?? 'shot-1';
+
+/**
+ * A region of the real panel, cut out and enlarged. The offsets are the panel's own
+ * layout at 392px (`panel.html?state=ownkey`); the own-key cut starts below its section
+ * header and inside its border, whose title the card already says, and stops above the model field, so no
+ * model name reaches the listing.
+ */
+function PanelCut({
+  panel,
+  top,
+  bottom,
+  left,
+  scale,
+}: {
+  panel: string;
+  top: number;
+  bottom: number;
+  left: number;
+  scale: number;
+}) {
+  const width = 392 - 2 * left;
+  return (
+    <div
+      className="relative overflow-hidden rounded-[10px]"
+      style={{ width: width * scale, height: (bottom - top) * scale }}
+    >
+      <iframe
+        title="Squiggle"
+        src={`panel.html?${panel}`}
+        className="absolute top-0 left-0 h-[800px] w-[392px] origin-top-left border-0"
+        style={{ transform: `scale(${scale}) translate(${-left}px, ${-top}px)` }}
+      />
+    </div>
+  );
+}
+
+/** One way to start: what it costs, in a line, over the part of the panel that does it. */
+function Path({ kicker, title, text, children }: { kicker: string; title: string; text: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-[16px] border border-border bg-surface p-7">
+      <p className="m-0 font-sans text-[15px] font-bold tracking-[0.08em] text-accentInk uppercase">{kicker}</p>
+      <h2 className="m-0 font-display text-[32px] leading-tight font-semibold tracking-[-0.02em] text-foreground">{title}</h2>
+      <p className="m-0 mb-3 text-[19px] leading-snug text-muted">{text}</p>
+      <div className="flex flex-1 items-center justify-center">{children}</div>
+    </div>
+  );
+}
+
+function Paths({ panel }: { panel: string }) {
+  return (
+    <div className="absolute top-[232px] right-[56px] left-[56px] grid grid-cols-2 items-stretch gap-8">
+      <Path
+        kicker="Gratuit"
+        title="Avec votre propre clé d’API"
+        text="Anthropic, OpenAI, Google Gemini ou OpenRouter. La clé reste dans votre navigateur."
+      >
+        <PanelCut panel={panel} top={442} bottom={644} left={28} scale={1.4} />
+      </Path>
+      <Path
+        kicker="Sans réglage"
+        title="Avec un compte Squiggle"
+        text="3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois, sans engagement."
+      >
+        <PanelCut panel={panel} top={182} bottom={342} left={16} scale={1.4} />
+      </Path>
+    </div>
+  );
+}
 
 /** The browser around the two pages: tab strip, address bar, side panel header. */
 function Browser({ panel, page }: { panel: string; page: string }) {
@@ -109,7 +180,7 @@ function Screenshot({ shot }: { shot: Shot }) {
       <div className="absolute top-[18px] right-[64px] flex h-[180px] w-[250px] justify-center [&>svg]:h-full [&>svg]:w-auto">
         {shot.figure}
       </div>
-      <Browser panel={shot.panel} page={shot.page} />
+      {shot.paths ? <Paths panel={shot.panel} /> : <Browser panel={shot.panel} page={shot.page} />}
     </div>
   );
 }

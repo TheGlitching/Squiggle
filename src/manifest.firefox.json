@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Squiggle - Analyse critique de presse",
-  "description": "Un deuxième avis sur l’article que vous lisez : passages fragiles surlignés, raisons, sources consultées et note sur 100.",
+  "description": "Un deuxième avis sur l’article que vous lisez : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre clé d’API.",
   "permissions": [
     "activeTab",
     "storage",

@@ -39,7 +39,9 @@ node scripts/build-store-assets.mjs --only screenshot-2
 Each image is a page of `store/render/` photographed by headless Chrome at its exact
 size. A screenshot holds the extension's real side panel and the real in-page
 highlights, mounted on the site's example article (`web/src/demo.ts`) and rendered by
-their own code, so a change to the panel shows up in the next render. The drawings and
+their own code, so a change to the panel shows up in the next render. The fifth puts the
+two ways to start side by side (own key, account), each over the part of the real panel
+that does it. The drawings and
 type are the site's (`web/src/components/Iso.tsx`, `web/src/index.css`).
 
 | Asset | Size | Where |

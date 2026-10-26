@@ -4,7 +4,7 @@
  * global whose background answers `GET_TAB_STATE` with the fixture report, as
  * the real one does for a tab it has analysed.
  *
- * Query: `state=report|offer`, `select=<finding id>` clicks that finding's
+ * Query: `state=report|offer|ownkey` (`ownkey` is the offer with the own-key settings opened), `select=<finding id>` clicks that finding's
  * card, `expand=<domain key>` opens that domain, `scroll=<CSS selector>` brings
  * that element to the top of the panel (by default, the selected card).
  */
@@ -99,6 +99,12 @@ async function main() {
     await until(() => document.querySelector('[data-tour="finding-card"] > *'));
   } else {
     await until(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Se connecter'));
+  }
+  if (state === 'ownkey') {
+    const ownKey = await until(() =>
+      [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('propre clé')),
+    );
+    (ownKey as HTMLElement).click();
   }
 
   const select = params.get('select');

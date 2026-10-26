@@ -6,8 +6,10 @@ Les réponses sur les données et les autorisations sont dans
 que le lecteur lit. Le ton et les chiffres suivent squiggle.fr (`web/src/offer.ts`) : si
 l’offre change là-bas, elle change ici.
 
-Aucun nom de modèle ni de fournisseur dans la fiche : elle décrit ce que l’outil fait pour
-le lecteur, pas l’infrastructure qui le fait tourner.
+Deux façons de s’en servir, présentées à égalité : gratuitement avec sa propre clé d’API,
+ou sans réglage avec un compte Squiggle. Les fournisseurs pris en charge sont nommés parce
+qu’un lecteur doit savoir quelle clé apporter ; aucun nom de modèle, et rien sur
+l’infrastructure du mode hébergé.
 
 ## Nom
 
@@ -22,11 +24,11 @@ recherche dans la boutique : la seconde moitié porte les mots qu’un lecteur t
 **Chrome Web Store** (132 caractères au plus ; c’est la `description` des manifestes, et
 `tests/packaging.test.ts` vérifie la limite) :
 
-Un deuxième avis sur l’article que vous lisez : passages fragiles surlignés, raisons, sources consultées et note sur 100.
+Un deuxième avis sur l’article que vous lisez : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre clé d’API.
 
 **AMO** (250 caractères au plus ; champ « Résumé » de la fiche) :
 
-Un deuxième avis sur l’article de presse que vous lisez. Squiggle surligne les passages fragiles (chiffre sans source, sophisme, cadrage), dit pourquoi, confronte les chiffres aux sources et montre aussi ce qui est solide. 3 analyses offertes.
+Un deuxième avis sur l’article de presse que vous lisez : passages fragiles surlignés, raisons, chiffres confrontés aux sources, note sur 100. Gratuit avec votre propre clé d’API, ou sans réglage avec un compte Squiggle : 3 analyses offertes.
 
 ## Catégorie
 
@@ -45,6 +47,10 @@ Un deuxième avis sur l’article que vous lisez.
 
 Un clic sur l’icône, et Squiggle relit l’article ouvert. Il surligne les passages fragiles, dit pourquoi, et montre aussi ce qui est solide. Le rapport s’ouvre à côté de l’article, avec une note sur 100.
 
+DEUX FAÇONS DE S’EN SERVIR
+• Gratuitement, avec votre propre clé d’API (Anthropic, OpenAI, Google Gemini ou OpenRouter). Collez-la dans l’extension : l’analyse part directement de votre navigateur vers ce fournisseur, la clé reste dans votre navigateur et rien ne passe par nos serveurs. Vous ne payez que votre fournisseur.
+• Sans aucun réglage, avec un compte Squiggle : 3 analyses offertes, sans carte bancaire. Ensuite 4,99 € par mois pour 10 analyses par jour, sans engagement.
+
 Chaque constat cite la phrase exacte : choisissez-le, le passage s’éclaire dans la page. Vous jugez sur pièces.
 
 CE QUE SQUIGGLE REGARDE
@@ -61,15 +67,10 @@ Avant de mettre un fait en doute, Squiggle lit les sources citées et en cherche
 POUR QUI
 Pour toute personne qui lit la presse en ligne et veut garder l’esprit critique face à la désinformation, sans attendre un fact-checking. Pour la classe aussi : l’offre enseignants est gratuite.
 
-ESSAI ET TARIFS
-• 3 analyses offertes à l’inscription, sans carte bancaire.
-• Abonnement : 4,99 € par mois, 10 analyses par jour, sans engagement.
-• Avec votre propre clé d’API, l’extension est gratuite et l’analyse part directement de votre navigateur.
-
 VOS DONNÉES
 • Rien n’est lu avant votre clic. Squiggle n’a accès qu’à la page où vous l’ouvrez ; aucun script ne tourne sur les autres pages.
-• Le texte de l’article est envoyé le temps de l’analyse, sans votre identité, et n’est pas conservé. Le rapport, qui cite des extraits, est gardé 30 jours.
-• Votre propre clé d’API n’atteint jamais nos serveurs.
+• Avec votre clé : l’article va de votre navigateur au fournisseur choisi, et nulle part ailleurs.
+• Avec un compte : le texte de l’article est envoyé le temps de l’analyse, sans votre identité, et n’est pas conservé. Le rapport, qui cite des extraits, est gardé 30 jours.
 • Aucune publicité, aucun traceur, aucun code distant. La méthode et le code sont publics.
 
 Les articles payants sont analysés jusqu’où vous pouvez les lire, et un texte partiel est signalé.
@@ -88,9 +89,10 @@ squiggle.fr
 ## Images
 
 Générées, pour ne pas dériver du produit : `node scripts/build-store-assets.mjs` écrit
-toutes les images dans `store/`. Chaque capture montre le vrai panneau de l’extension et
-les vrais surlignages de la page, rendus par leur propre code sur l’article d’exemple de
-squiggle.fr (voir `store/render/`).
+toutes les images dans `store/`. Les quatre premières captures montrent le vrai panneau
+de l’extension et les vrais surlignages de la page, rendus par leur propre code sur
+l’article d’exemple de squiggle.fr ; la cinquième place côte à côte les deux façons de
+commencer, chacune avec la partie du vrai panneau qui la met en œuvre (voir `store/render/`).
 
 | Image | Taille | Boutique |
 |---|---|---|
@@ -112,7 +114,7 @@ AMO affiche une légende sous chaque capture : reprendre le titre de l’image.
 2. **Chaque constat pointe sa phrase.** Un constat choisi, son passage mis en évidence.
 3. **Les chiffres confrontés aux sources.** Le chiffre mis en doute et la source lue.
 4. **Cinq questions pour chaque article.** Les notes par domaine, l’une ouverte.
-5. **Sans clé d’API : 3 analyses offertes.** L’écran de départ, un seul bouton « Se connecter ».
+5. **Gratuit avec votre clé, ou sans réglage.** Les deux façons de commencer, côte à côte.
 
 ## Objectif unique, autorisations, confidentialité
 
