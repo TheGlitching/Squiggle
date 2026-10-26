@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SecureKeyStorage, type AnalysisMode } from '../../crypto/storage';
 import { createLLMClient } from '../../client/factory';
-import type { LLMProvider, ProviderConfig } from '@squiggle/shared';
+import { PROVIDER_LABELS, type LLMProvider, type ProviderConfig } from '@squiggle/shared';
 import { HostedAccountCard } from './HostedAccountCard';
 import { SiteAccessCard } from './SiteAccessCard';
 import {
@@ -25,41 +25,16 @@ import { TRANSPARENCY_URL } from '../../hosted/config';
 interface ProviderPreset {
   id: LLMProvider;
   label: string;
-  /** A greyed example of the id shape this provider expects. */
+  /** A greyed example of the id shape this provider expects: a current model. */
   modelPlaceholder: string;
   keyHint: string;
-  keyUrl: string;
 }
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: 'anthropic',
-    label: 'Anthropic',
-    modelPlaceholder: 'claude-sonnet-4-20250514',
-    keyHint: 'sk-ant-...',
-    keyUrl: 'https://console.anthropic.com/settings/keys',
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI',
-    modelPlaceholder: 'gpt-4o',
-    keyHint: 'sk-...',
-    keyUrl: 'https://platform.openai.com/api-keys',
-  },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    modelPlaceholder: 'deepseek/deepseek-v4.1-flash',
-    keyHint: 'sk-or-...',
-    keyUrl: 'https://openrouter.ai/keys',
-  },
-  {
-    id: 'gemini',
-    label: 'Google Gemini',
-    modelPlaceholder: 'gemini-2.5-flash',
-    keyHint: 'AIza...',
-    keyUrl: 'https://aistudio.google.com/apikey',
-  },
+  { id: 'anthropic', label: PROVIDER_LABELS.anthropic, modelPlaceholder: 'claude-sonnet-5-5', keyHint: 'sk-ant-...' },
+  { id: 'openai', label: PROVIDER_LABELS.openai, modelPlaceholder: 'gpt-6.1-sol', keyHint: 'sk-...' },
+  { id: 'openrouter', label: PROVIDER_LABELS.openrouter, modelPlaceholder: 'deepseek/deepseek-v4.1-flash', keyHint: 'sk-or-...' },
+  { id: 'gemini', label: PROVIDER_LABELS.gemini, modelPlaceholder: 'gemini-3.8-flash', keyHint: 'AIza...' },
 ];
 
 type ValidationState =
@@ -175,9 +150,10 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
   );
 
   /**
-   * Live validation issues the cheapest possible real completion. A provider
-   * only counts as reachable if it actually answers, so a typo or a revoked key
-   * is caught here rather than mid-analysis.
+   * Live validation issues one small real completion. A provider only counts
+   * as reachable if it actually answers, so a typo, a revoked key, an unknown
+   * model or an empty balance is caught here rather than mid-analysis. The
+   * budget leaves a reasoning model room to think before it says OK.
    */
   const handleValidate = useCallback(async () => {
     const candidateKey = apiKey.trim();
@@ -195,8 +171,7 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
       const client = createLLMClient({ provider, apiKey: candidateKey, model: model.trim() });
       const response = await client.complete({
         messages: [{ role: 'user', content: 'Réponds exactement: OK' }],
-        maxTokens: 8,
-        temperature: 0,
+        maxTokens: 256,
       });
       const reply = (response.content || '').trim();
       setValidation({
@@ -400,6 +375,23 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
 
               <label className="block">
                 <span className="block text-xs font-semibold uppercase tracking-wider text-muted">
+                  Clé API
+                </span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  autoComplete="off"
+                  placeholder={hasStoredKey ? '•••••••• (clé enregistrée)' : preset.keyHint}
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    setValidation({ kind: 'idle' });
+                  }}
+                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-hidden focus:border-accent"
+                />
+              </label>
+
+              <label className="block">
+                <span className="block text-xs font-semibold uppercase tracking-wider text-muted">
                   Modèle
                 </span>
                 <input
@@ -411,36 +403,6 @@ export const ByokSettingsModal: React.FC<ByokSettingsModalProps> = ({
                   autoComplete="off"
                   spellCheck={false}
                   placeholder={preset.modelPlaceholder}
-                  className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-hidden focus:border-accent"
-                />
-                <span className="mt-1 block text-xs leading-snug text-muted">
-                  Identifiant exact du modèle chez le fournisseur.
-                </span>
-              </label>
-
-              <label className="block">
-                <span className="flex items-baseline justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    Clé API
-                  </span>
-                  <a
-                    href={preset.keyUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-medium text-accent-hover hover:underline"
-                  >
-                    Obtenir une clé ↗
-                  </a>
-                </span>
-                <input
-                  type="password"
-                  value={apiKey}
-                  autoComplete="off"
-                  placeholder={hasStoredKey ? '•••••••• (clé enregistrée)' : preset.keyHint}
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setValidation({ kind: 'idle' });
-                  }}
                   className="mt-2 w-full rounded-xl border border-line bg-ground px-3 py-2 text-sm font-mono text-ink outline-hidden focus:border-accent"
                 />
               </label>

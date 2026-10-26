@@ -19,7 +19,7 @@ describe('the model a reader enters', () => {
   it('offers a free-text field with the provider’s example as a placeholder', () => {
     const markup = renderModal();
 
-    expect(markup).toContain('placeholder="claude-sonnet-4-20250514"');
+    expect(markup).toContain('placeholder="claude-sonnet-5-5"');
     // The list affordances must be gone, not merely supplemented.
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('datalist');
@@ -30,10 +30,25 @@ describe('the model a reader enters', () => {
     for (const preset of PROVIDER_PRESETS) {
       expect(preset.modelPlaceholder, `${preset.id} has no example`).toBeTruthy();
       expect(preset.keyHint, `${preset.id} has no key hint`).toBeTruthy();
-      expect(preset.keyUrl, `${preset.id} has no key url`).toBeTruthy();
     }
     const placeholders = PROVIDER_PRESETS.map((p) => p.modelPlaceholder);
     expect(new Set(placeholders).size).toBe(placeholders.length);
+  });
+});
+
+describe('the own-key form', () => {
+  it('asks for the provider, the key and the model, in that order, and nothing else', () => {
+    const markup = renderModal();
+    const byok = markup.slice(markup.indexOf('Utiliser ma propre clé'));
+
+    const provider = byok.indexOf('Fournisseur');
+    const key = byok.indexOf('Clé API');
+    const model = byok.indexOf('Modèle');
+    expect(provider).toBeGreaterThan(-1);
+    expect(key).toBeGreaterThan(provider);
+    expect(model).toBeGreaterThan(key);
+    expect(byok.match(/<input/g)).toHaveLength(2);
+    expect(byok).not.toContain('Obtenir une clé');
   });
 });
 
