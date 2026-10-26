@@ -47,7 +47,7 @@ export async function analyzePasted(
 /** What the reader is told, by the code the server named. */
 const ANALYSIS_ERRORS: Record<string, string> = {
   rate_limited: 'Une analyse est déjà en cours, ou le service est très demandé. Réessayez dans un instant.',
-  provider_unavailable: 'Le modèle n’a pas répondu. Votre texte est toujours là : relancez l’analyse.',
+  provider_unavailable: 'Service momentanément indisponible. Votre texte est toujours là : réessayez dans quelques minutes.',
   provider_unreadable: 'La réponse du modèle n’a pas pu être lue. Relancez l’analyse.',
   network: 'Impossible de joindre Squiggle. Vérifiez votre connexion, puis relancez l’analyse.',
   server_unavailable: 'Squiggle ne répond pas correctement pour le moment. Réessayez dans un instant.',

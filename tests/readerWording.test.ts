@@ -170,12 +170,12 @@ describe('a failure names what failed', () => {
 
   it('keeps the server’s own words when it reports that the model failed', async () => {
     const hosted = await client(async () =>
-      Response.json({ ok: false, error: 'provider_unavailable', message: 'Le modèle n’a pas répondu. Réessayez dans un instant.' }, { status: 502 })
+      Response.json({ ok: false, error: 'provider_unavailable', message: 'Service momentanément indisponible. Réessayez dans quelques minutes.' }, { status: 502 })
     );
 
     const error = (await hosted.analyze(input).catch((e: unknown) => e)) as HostedApiError;
 
     expect(error.code).toBe('provider_unavailable');
-    expect(error.message).toMatch(/modèle/);
+    expect(error.message).toBe('Service momentanément indisponible. Réessayez dans quelques minutes.');
   });
 });

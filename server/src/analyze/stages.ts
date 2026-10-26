@@ -302,10 +302,18 @@ export async function analyzeAudit(
     raw = completion.content;
   } catch {
     // Close the reservation: an audit that never produced anything must not
-    // hold the account's single slot for the next five minutes.
+    // hold the account's single slot for the next five minutes. The start is
+    // given back too. Hosted inference is pinned to a short list of hosts with
+    // no fallback beyond it, so "none of them can serve right now" is an
+    // expected outcome, and a reader retrying through it must not run out of
+    // starts for runs that never began. No credit was consumed either: that happens at finalize.
+    // Every audit call failure is released, a billed timeout included: the
+    // hourly global ceiling bounds that, and the release can be narrowed to
+    // provider refusals if timeouts ever show up in the failure counters.
     await s.db.finalizeAnalysisRun(run.id, now);
+    await s.db.releaseRunStart(user.id, now);
     await count(s, 'audit_failed');
-    return apiError('provider_unavailable', "Le modèle n'a pas répondu. Réessayez dans un instant.");
+    return apiError('provider_unavailable', 'Service momentanément indisponible. Réessayez dans quelques minutes.');
   }
 
   let audited: AnalysisReport;

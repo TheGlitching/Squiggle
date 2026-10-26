@@ -444,6 +444,11 @@ export class MemoryDb implements Db {
     return started;
   }
 
+  async releaseRunStart(userId: string, now: number): Promise<void> {
+    const daily = this.usageDaily.get(`${userId}\u0000${utcDayOf(now)}`);
+    if (daily && daily.started > 0) daily.started -= 1;
+  }
+
   async countAnalysesSince(userId: string, since: number): Promise<number> {
     let count = 0;
     for (const row of this.usageLog.values()) if (row.userId === userId && row.createdAt >= since) count += 1;
