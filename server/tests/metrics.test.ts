@@ -123,7 +123,7 @@ describe('GET /admin/metrics', () => {
     await finish('c@example.org', TRIAL_ANALYSES);
     const payer = await finish('d@example.org', TRIAL_ANALYSES);
     await env.db.setStripeIds(payer.id, { customerId: 'cus_d', subId: 'sub_d' }, env.clock.now());
-    await env.db.setPlan(payer.id, 'active', env.clock.now() + WEEK_MS, env.clock.now());
+    await env.db.setPlan(payer.id, 'active', { start: env.clock.now(), end: env.clock.now() + WEEK_MS }, env.clock.now());
 
     const event = (id: string, type: string) => ({
       id,

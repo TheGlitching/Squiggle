@@ -13,8 +13,9 @@
  *                                nothing to pay → active until the period ends
  *   customer.subscription.updated  renewal, plan change, or a cancellation
  *                                scheduled for the period end → the status
- *                                Stripe reports decides, and the expiry moves
- *                                to the new period end
+ *                                Stripe reports decides, and the period moves
+ *                                to the new one, which restarts the allowance
+ *                                (see `billing/quota.ts`)
  *   customer.subscription.deleted  the subscription is over → none
  *   invoice.payment_failed       the card failed → none, immediately
  *
@@ -55,18 +56,20 @@ function str(value: unknown): string | null {
 }
 
 /**
- * The end of the paid period. Since Stripe API 2025-03-31 (Basil) it lives on
- * each subscription item, not on the subscription; older endpoint versions
- * still send the subscription-level field. The smallest item value wins, so a
- * multi-item subscription never outlives its shortest-paid item.
+ * The paid period, as far as the event states it. Since Stripe API 2025-03-31
+ * (Basil) it lives on each subscription item, not on the subscription; older
+ * endpoint versions still send the subscription-level fields. The item ending
+ * first wins, so a multi-item subscription never outlives its shortest-paid
+ * item, and its start is taken with it so the two always describe one period.
  */
-function periodEndOf(object: Record<string, unknown>): number | null {
+function periodOf(object: Record<string, unknown>): { start: number | null; end: number | null } {
   const items = (object.items as { data?: unknown } | undefined)?.data;
-  const ends = Array.isArray(items)
-    ? items.map((item) => sec((item as Record<string, unknown> | null)?.current_period_end))
-    : [];
-  const itemEnds = ends.filter((end): end is number => end !== null);
-  return itemEnds.length > 0 ? Math.min(...itemEnds) : sec(object.current_period_end);
+  const periods = (Array.isArray(items) ? items : [])
+    .map((item) => item as Record<string, unknown> | null)
+    .map((item) => ({ start: sec(item?.current_period_start), end: sec(item?.current_period_end) }))
+    .filter((period): period is { start: number | null; end: number } => period.end !== null);
+  if (periods.length === 0) return { start: sec(object.current_period_start), end: sec(object.current_period_end) };
+  return periods.reduce((first, period) => (period.end < first.end ? period : first));
 }
 
 function sec(value: unknown): number | null {
@@ -147,10 +150,13 @@ export async function handleStripeWebhook(
       // arrive before this one. The provisional is therefore only written when
       // the account has no later expiry already on record: an out-of-order
       // checkout must never shorten a real subscription back to a week.
+      //
+      // The provisional period starts now: the allowance is counted from the
+      // payment until the subscription event states the real period.
       const provisionalEnd = now + PROVISIONAL_ACCESS_MS;
       const hasLaterExpiry = user.planExpiresAt !== null && user.planExpiresAt > provisionalEnd;
       if (!hasLaterExpiry) {
-        await deps.db.setPlan(user.id, 'active', provisionalEnd, now);
+        await deps.db.setPlan(user.id, 'active', { start: now, end: provisionalEnd }, now);
       }
       break;
     }
@@ -158,20 +164,24 @@ export async function handleStripeWebhook(
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const status = str(object.status);
-      const periodEnd = periodEndOf(object);
+      const period = periodOf(object);
       await deps.db.setStripeIds(user.id, { customerId: str(object.customer), subId: str(object.id) }, now);
       // `active` and `trialing` are the two statuses that entitle a reader.
       // past_due, unpaid, incomplete, paused and canceled all do not.
       const entitled = status === 'active' || status === 'trialing';
       if (!entitled) {
         await deps.db.setPlan(user.id, 'none', null, now);
-      } else if (periodEnd !== null) {
-        await deps.db.setPlan(user.id, 'active', periodEnd, now);
+      } else if (period.end !== null) {
+        // Stripe sends the start beside the end. Should an event ever carry
+        // only the end, the start on record is kept when the period is the one
+        // already stored, and a new period is counted from now.
+        const start = period.start ?? (period.end === user.planExpiresAt ? user.planPeriodStart : null) ?? now;
+        await deps.db.setPlan(user.id, 'active', { start, end: period.end }, now);
       } else if (user.planExpiresAt === null) {
         // An entitled event with no period anywhere in it must not clear the
         // expiry (null means "never expires"). Keep what is on record; if
         // nothing is, fall back to the same provisional week as a checkout.
-        await deps.db.setPlan(user.id, 'active', now + PROVISIONAL_ACCESS_MS, now);
+        await deps.db.setPlan(user.id, 'active', { start: now, end: now + PROVISIONAL_ACCESS_MS }, now);
       }
       break;
     }

@@ -255,6 +255,12 @@ export interface HostedAccountView {
   needsSubscription: boolean;
 }
 
+/** When an exhausted subscription gets its analyses back: the renewal, which ends the paid period. */
+function resetMoment(resetsAt: number | null): string {
+  if (resetsAt === null) return 'au renouvellement de l’abonnement';
+  return `le ${new Date(resetsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`;
+}
+
 /**
  * The four states the product defines, as text. Mirrors `web/src/usage.ts` so
  * the extension and the web app tell the reader the same thing; kept as its own
@@ -290,15 +296,15 @@ export function describeHostedAccount(account: HostedAccount): HostedAccountView
       return {
         state: 'active',
         title: 'Abonnement actif',
-        detail: `Il vous reste ${usage.remaining} analyse${usage.remaining > 1 ? 's' : ''} aujourd’hui.`,
+        detail: `Il vous reste ${usage.remaining} analyse${usage.remaining > 1 ? 's' : ''} ce mois-ci.`,
         canAnalyse: true,
         needsSubscription: false,
       };
     }
     return {
       state: 'quota_exhausted',
-      title: 'Quota du jour atteint',
-      detail: 'Vos analyses du jour sont utilisées. Le compteur repart à minuit UTC.',
+      title: 'Quota du mois atteint',
+      detail: `Vos ${usage.limit} analyses de ce mois sont utilisées. Le compteur repart ${resetMoment(usage.resetsAt)}.`,
       canAnalyse: false,
       needsSubscription: false,
     };

@@ -214,11 +214,11 @@ describe('sidepanel first screen', () => {
     });
 
     it('active: states the subscription and lets the reader run', async () => {
-      hostedMock.fetchHostedAccount.mockResolvedValue(account('active', 2, 10));
+      hostedMock.fetchHostedAccount.mockResolvedValue(account('active', 2, 60));
       await mount();
 
       expect(container.textContent).toContain('Abonnement actif');
-      expect(container.textContent).toContain('Il vous reste 8 analyses aujourd’hui.');
+      expect(container.textContent).toContain('Il vous reste 58 analyses ce mois-ci.');
       expect(primaries().map((b) => b.textContent)).toEqual(['Lancer l’analyse critique']);
       expect(button('Lancer l’analyse critique')!.disabled).toBe(false);
     });

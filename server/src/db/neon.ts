@@ -21,6 +21,7 @@ import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
   Plan,
+  PlanPeriod,
   BridgeCodeRow,
   CreateAnalysisRunArgs,
   CreateBridgeCodeArgs,
@@ -65,6 +66,7 @@ function mapUser(r: RawRow): UserRow {
     googleSub: (r.google_sub as string | null) ?? null,
     plan: r.plan as UserRow['plan'],
     planExpiresAt: r.plan_expires_at === null ? null : num(r.plan_expires_at),
+    planPeriodStart: r.plan_period_start == null ? null : num(r.plan_period_start),
     stripeCustomerId: (r.stripe_customer_id as string | null) ?? null,
     stripeSubId: (r.stripe_sub_id as string | null) ?? null,
     createdAt: num(r.created_at),
@@ -127,6 +129,7 @@ export class NeonDb implements Db {
       googleSub: args.googleSub ?? null,
       plan: 'trial',
       planExpiresAt: null,
+      planPeriodStart: null,
       stripeCustomerId: null,
       stripeSubId: null,
       createdAt: now,
@@ -182,9 +185,11 @@ export class NeonDb implements Db {
     return rows[0] ? mapUser(rows[0]) : null;
   }
 
-  async setPlan(userId: string, plan: Plan, planExpiresAt: number | null, now: number): Promise<void> {
+  async setPlan(userId: string, plan: Plan, period: PlanPeriod | null, now: number): Promise<void> {
     await this.q`
-      UPDATE users SET plan = ${plan}, plan_expires_at = ${planExpiresAt}, updated_at = ${now}
+      UPDATE users
+      SET plan = ${plan}, plan_expires_at = ${period?.end ?? null}, plan_period_start = ${period?.start ?? null},
+          updated_at = ${now}
       WHERE id = ${userId}
     `;
   }
@@ -506,22 +511,28 @@ export class NeonDb implements Db {
     return { id, userId: args.userId, createdAt: args.now };
   }
 
-  async recordRunStart(userId: string, now: number): Promise<{ today: number; total: number }> {
+  async recordRunStart(userId: string, now: number, sinceDay: number): Promise<number> {
     const day = utcDayOf(now);
-    // The increment is atomic, so two starts racing each see a distinct count.
+    // The increment is atomic, so two starts racing each see a distinct count
+    // for today. The earlier days are read beside it: the statement cannot see
+    // its own insert, so today's row comes from RETURNING and is left out of the sum.
     const rows = await this.q`
-      INSERT INTO usage_daily (user_id, day, analyses, started)
-      VALUES (${userId}, ${day}, 0, 1)
-      ON CONFLICT (user_id, day) DO UPDATE SET started = usage_daily.started + 1
-      RETURNING started
+      WITH bumped AS (
+        INSERT INTO usage_daily (user_id, day, analyses, started)
+        VALUES (${userId}, ${day}, 0, 1)
+        ON CONFLICT (user_id, day) DO UPDATE SET started = usage_daily.started + 1
+        RETURNING started
+      )
+      SELECT (SELECT started FROM bumped) + COALESCE((
+        SELECT SUM(started) FROM usage_daily WHERE user_id = ${userId} AND day >= ${sinceDay} AND day <> ${day}
+      ), 0) AS started
     `;
-    const totals = await this.q`SELECT COALESCE(SUM(started), 0) AS total FROM usage_daily WHERE user_id = ${userId}`;
-    return { today: num(rows[0].started), total: num(totals[0].total) };
+    return num(rows[0].started);
   }
 
-  async getDailyUsage(userId: string, day: number): Promise<number> {
-    const rows = await this.q`SELECT analyses FROM usage_daily WHERE user_id = ${userId} AND day = ${day}`;
-    return rows[0] ? num(rows[0].analyses) : 0;
+  async countAnalysesSince(userId: string, since: number): Promise<number> {
+    const rows = await this.q`SELECT COUNT(*) AS n FROM usage_log WHERE user_id = ${userId} AND created_at >= ${since}`;
+    return num(rows[0].n);
   }
 
   async sumUsage(userId: string): Promise<number> {

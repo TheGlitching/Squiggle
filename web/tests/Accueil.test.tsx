@@ -244,11 +244,11 @@ describe('Accueil', () => {
     expect(row('Où l’utiliser')).toHaveTextContent(/Sur le site, dans l’appli de votre téléphone et dans le bouton du navigateur/);
     expect(row('Où l’utiliser')).toHaveTextContent(/Dans l’extension du navigateur, sur ordinateur/);
     expect(row('Ce qu’il faut préparer')).toHaveTextContent(/Rien à installer, aucune clé à créer/);
-    expect(row('Analyses')).toHaveTextContent(/10 par jour/);
+    expect(row('Analyses')).toHaveTextContent(/60 par mois/);
     expect(row('Ce que vous payez')).toHaveTextContent(/4,99 € par mois, tout compris/);
     // A provider's model named as an example of what a reader can choose, never what the plan runs.
     expect(row('Ce que vous payez')).toHaveTextContent(
-      /qui dépend du modèle choisi\. Avec un modèle haut de gamme, par exemple Claude Opus : environ 120 à 150 € par mois pour 10 analyses par jour/,
+      /qui dépend du modèle choisi\. Avec un modèle haut de gamme, par exemple Claude Opus : environ 25 à 30 € par mois pour 60 analyses\./,
     );
     expect(pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })).toHaveLength(1);
     expect(pricing.getByRole('link', { name: 'Essayer gratuitement' })).toHaveAttribute('href', '/connexion');

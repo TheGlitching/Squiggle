@@ -291,6 +291,20 @@ describe('Hosted account presentation', () => {
         .state
     ).toBe('lapsed');
   });
+
+  it('counts a subscription by the month and says when an exhausted one comes back', () => {
+    const renewal = Date.UTC(2026, 10, 26, 12);
+    expect(
+      describeHostedAccount({ ...base, plan: 'active', usage: { used: 2, limit: 60, remaining: 58, resetsAt: renewal } })
+        .detail
+    ).toBe('Il vous reste 58 analyses ce mois-ci.');
+    expect(
+      describeHostedAccount({ ...base, plan: 'active', usage: { used: 60, limit: 60, remaining: 0, resetsAt: renewal } })
+    ).toMatchObject({
+      title: 'Quota du mois atteint',
+      detail: 'Vos 60 analyses de ce mois sont utilisées. Le compteur repart le 26 novembre.',
+    });
+  });
 });
 
 describe('beginHostedSignIn', () => {
