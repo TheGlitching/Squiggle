@@ -114,6 +114,12 @@ export async function createCheckoutSession(args: CheckoutArgs): Promise<Outcome
     // declared tax-inclusive in the dashboard, so nothing about it is decided
     // in this code.
     'automatic_tax[enabled]': 'true',
+    // Offered access (the service's own account, teachers on request) is a
+    // 100 %-forever promotion code made in the dashboard and typed here, so
+    // the plan still comes from the webhook like any other subscription.
+    // With nothing due, Checkout then asks for no card at all.
+    allow_promotion_codes: 'true',
+    payment_method_collection: 'if_required',
     customer_update: args.customerId ? 'auto' : '',
   };
   if (args.customerId) form.customer = args.customerId;

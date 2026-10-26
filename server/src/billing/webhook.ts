@@ -9,7 +9,8 @@
  *
  * Handled events, and what each one means for a reader:
  *
- *   checkout.session.completed   they paid → active until the period ends
+ *   checkout.session.completed   they paid, or a 100 % promotion code left
+ *                                nothing to pay → active until the period ends
  *   customer.subscription.updated  renewal, plan change, or a cancellation
  *                                scheduled for the period end → the status
  *                                Stripe reports decides, and the expiry moves
