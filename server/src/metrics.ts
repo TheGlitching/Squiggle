@@ -65,6 +65,8 @@ export interface Metrics {
     campaigns: Record<string, number>;
     clicks: Record<string, number>;
     pastes: Record<string, number>;
+    /** Findings reported as wrong, by category and, apart, by reason: the two are never linked. */
+    flags: { categories: Record<string, number>; reasons: Record<string, number> };
   };
   funnel: {
     signin: Record<string, number>;
@@ -138,7 +140,12 @@ export async function collectLaunchMetrics(
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },
     analyses,
-    audience: { campaigns, clicks: family(c, 'click_'), pastes: family(c, 'paste_') },
+    audience: {
+      campaigns,
+      clicks: family(c, 'click_'),
+      pastes: family(c, 'paste_'),
+      flags: { categories: family(c, 'flag_finding_'), reasons: family(c, 'flag_reason_') },
+    },
     funnel: {
       signin: family(c, 'signin_'),
       checkout: family(c, 'checkout_'),

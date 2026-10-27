@@ -31,6 +31,9 @@ export function hostedPontUrl(extensionId: string, publicKeyJwk: string): string
 /** The data-flow page the hosted disclosure links to. */
 export const TRANSPARENCY_URL = `${HOSTED_WEB_APP}/transparence`;
 
+/** The audience counter: a name from a closed list, sent without any credential. */
+export const COUNT_URL = `${HOSTED_ORIGIN}/web/count`;
+
 /** The account page, where a reader subscribes or manages a plan. */
 export const ACCOUNT_URL = `${HOSTED_WEB_APP}/compte`;
 

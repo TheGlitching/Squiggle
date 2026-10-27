@@ -143,9 +143,10 @@ daily event counters, a number per day and per fixed name:
   sign-ins started and completed, checkouts started and completed (paid, or free through
   a 100 % promotion code), analyses started and finalized by surface (extension or site),
   and refusals by reason;
-- sent by the site (`POST /web/count`, no cookie, closed list in
-  `shared/src/hosted/audience.ts`): known campaign links (`?ref=clemi`) and a few
-  buttons.
+- sent by the site, and by the extension in hosted mode (`POST /web/count`, no cookie,
+  closed list in `shared/src/hosted/audience.ts`): known campaign links (`?ref=clemi`),
+  a few buttons, and findings reported as wrong, counted by category and, apart, by the
+  reason picked from a closed list.
 
 Visits themselves (pages viewed, referrers, countries) are not counted here: they are
 read in Cloudflare Web Analytics, which Cloudflare injects at the edge on the site's zone

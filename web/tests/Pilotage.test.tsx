@@ -19,7 +19,11 @@ const METRICS: OwnerMetrics = {
   windowWeeks: 1,
   cache: { checks: 20, hits: 5, hitRate: 0.25 },
   stages: { audit: { ...stage, truncated: 0 }, research: stage, sourceCheck: stage },
-  audience: { campaigns: { clemi: 3 }, clicks: {} },
+  audience: {
+    campaigns: { clemi: 3 },
+    clicks: {},
+    flags: { categories: { sophisme: 2, cadrage: 0 }, reasons: { misread: 1, too_harsh: 1 } },
+  },
   funnel: { signin: { completed: 8 }, checkout: {}, runsStarted: { session: 12 }, finalized: { session: 11 }, refused: {} },
   headline: {
     newAccounts: { count: 7 },
@@ -57,6 +61,10 @@ describe('/tableau', () => {
       'https://dash.cloudflare.com/?to=/:account/web-analytics',
     );
     expect(screen.getByRole('heading', { name: 'Campagnes, boutons, textes collés' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Constats signalés comme erronés' })).toBeInTheDocument();
+    expect(screen.getByText('Sophisme').nextSibling).toHaveTextContent('2');
+    expect(screen.getByText('Le passage ne dit pas cela').nextSibling).toHaveTextContent('1');
+    expect(screen.queryByText('Cadrage')).not.toBeInTheDocument();
     expect(screen.getByText('Nouveaux comptes').nextSibling).toHaveTextContent('7');
     expect(screen.getByText('Première analyse dans la semaine').nextSibling).toHaveTextContent('75 %');
     expect(screen.getByText('Abonnés payants').nextSibling).toHaveTextContent('2');
@@ -81,6 +89,7 @@ describe('/tableau', () => {
     delete partial.stages.research.failed;
     partial.stages.sourceCheck = { failureRate: null };
     delete partial.headline.subscribers.cancelled;
+    delete (partial as unknown as { audience: Record<string, unknown> }).audience.flags;
     installFetch((call) =>
       call.url.startsWith('/web/tableau') ? jsonResponse({ ok: true, metrics: partial }) : undefined,
     );
@@ -90,5 +99,6 @@ describe('/tableau', () => {
     expect(screen.getByText('Audits tronqués').nextSibling).toHaveTextContent('-');
     expect(screen.getByText(/^- \/ 10 · 10/)).toBeInTheDocument();
     expect(screen.getByText('Sources citées').nextSibling).toHaveTextContent('- / - · -');
+    expect(screen.getByRole('heading', { name: 'Constats signalés comme erronés' })).toBeInTheDocument();
   });
 });
