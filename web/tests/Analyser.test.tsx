@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AnalysisReport } from '../../shared/src/engine/types';
 import type { Account } from '../src/api';
+import { loadSeance, saveSeance } from '../src/classe';
 import { Analyser } from '../src/pages/Analyser';
 import { account, jsonResponse, memoryStorage } from './helpers';
 
@@ -178,6 +179,27 @@ describe('Analyser, signed in', () => {
     expect(
       within(screen.getByRole('article', { name: 'Formule appuyée' })).getByText(/n’a pas été retrouvé tel quel/),
     ).toBeInTheDocument();
+  });
+
+  it('prepares the report for the class, in this browser only', async () => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    const seen = serve(account());
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.change(screen.getByLabelText(/Titre/), { target: { value: 'Cantines' } });
+    fireEvent.click(await analyseButton());
+    await screen.findByText('58');
+    const requests = seen.length;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Préparer pour la classe' }));
+    expect(window.location.pathname).toBe('/classe');
+    const seance = loadSeance();
+    expect(seance).toMatchObject({ title: 'Cantines', fromFile: false, hideScore: true });
+    expect(seance?.report.score).toBe(58);
+    expect(seance?.blocks[0]).toMatchObject({ type: 'heading', text: 'Cantines' });
+    // Preparing sends nothing: the report and the text are already in the page.
+    expect(seen).toHaveLength(requests);
+    saveSeance(null);
   });
 
   it('sends a text without an address as one, so it is filed by its words alone', async () => {

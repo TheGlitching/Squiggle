@@ -64,6 +64,11 @@ describe('legal pages', () => {
     expect(container.textContent).toContain('Data Privacy Framework');
   });
 
+  it('sets the age for an account in the terms an account accepts', () => {
+    const { container } = renderAt('/conditions');
+    expect(container.textContent).toMatch(/Un compte peut être créé à partir de 15 ans ; avant 15 ans, avec l’accord d’un\s+parent/);
+  });
+
   it('says a report is not a verdict and gives publishers a way to contest it', () => {
     const { container } = renderAt('/conditions');
     const text = container.textContent ?? '';

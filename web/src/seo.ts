@@ -38,7 +38,19 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     path: '/enseignants',
     title: 'Squiggle pour les enseignants',
     description:
-      'Un article de l’actualité, relu sous les yeux de la classe : les élèves cherchent d’abord, le rapport vient ensuite. Gratuit pour les enseignants, sur demande.',
+      'Un article de l’actualité, relu sous les yeux de la classe : vous préparez chez vous, vous révélez l’analyse au tableau. Gratuit pour les enseignants.',
+  },
+  {
+    path: '/classe',
+    title: 'Le mode classe - Squiggle',
+    description:
+      'Ouvrez votre fichier de séance sur l’ordinateur de la classe, sans compte, et révélez l’analyse au tableau constat par constat.',
+  },
+  {
+    path: '/classe/mode-emploi',
+    title: 'Mode d’emploi du mode classe - Squiggle',
+    description:
+      'Une séance avec Squiggle en six étapes, sur une page à imprimer : préparer chez soi, télécharger la séance, l’ouvrir en classe, projeter.',
   },
   {
     path: '/transparence',
@@ -69,9 +81,20 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
   },
 ];
 
-/** The title a path shows in the browser tab; an app page (account, sign-in) keeps the site's. */
+/**
+ * Pages no search should find, which still name their tab: the classroom's board
+ * and sheets only show a session open in this browser, and a teacher picks the
+ * board's window out by its name when moving it to the projector.
+ */
+const APP_TITLES: Record<string, string> = {
+  '/classe/tableau': 'Tableau - Squiggle',
+  '/classe/fiche': 'Fiche élève - Squiggle',
+  '/classe/corrige': 'Corrigé - Squiggle',
+};
+
+/** The title a path shows in the browser tab; any other app page (account, sign-in) keeps the site's. */
 export function titleFor(path: string): string {
-  return (PUBLIC_PAGES.find((page) => page.path === path) ?? PUBLIC_PAGES[0]).title;
+  return APP_TITLES[path] ?? (PUBLIC_PAGES.find((page) => page.path === path) ?? PUBLIC_PAGES[0]).title;
 }
 
 const escape = (text: string) =>

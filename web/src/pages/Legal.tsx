@@ -393,9 +393,9 @@ export function Confidentialite() {
       <Article title="6. Cookies et traceurs">
         <p>
           Le site dépose un seul cookie, la session de connexion, strictement nécessaire au service : il n’appelle pas
-          votre consentement. Il garde aussi dans votre navigateur le texte que vous collez pour l’analyser et, si vous
-          l’installez sur votre écran d’accueil, ses propres fichiers pour s’ouvrir sans attendre ; ni l’un ni l’autre
-          ne sert à vous suivre. Aucun traceur publicitaire ou analytique n’est utilisé, sur le site comme dans
+          votre consentement. Il garde aussi dans votre navigateur le texte que vous collez pour l’analyser, la séance du mode
+          classe le temps de l’onglet et, si vous l’installez sur votre écran d’accueil, ses propres fichiers pour
+          s’ouvrir sans attendre ; rien de cela ne sert à vous suivre. Aucun traceur publicitaire ou analytique n’est utilisé, sur le site comme dans
           l’extension.
         </p>
       </Article>
@@ -447,8 +447,9 @@ export function Conditions() {
 
       <Article title="5. Votre compte et l’usage acceptable">
         <p>
-          L’accès se fait par une adresse e-mail vérifiée ou par un compte Google ; vous êtes responsable de l’usage fait
-          depuis votre compte. Le service est destiné à la lecture : il est interdit de s’en servir pour extraire
+          Un compte peut être créé à partir de 15 ans ; avant 15 ans, avec l’accord d’un parent ou du représentant
+          légal. L’accès se fait par une adresse e-mail vérifiée ou par un compte Google ; vous êtes responsable de
+          l’usage fait depuis votre compte. Le service est destiné à la lecture : il est interdit de s’en servir pour extraire
           massivement des contenus, de contourner les quotas ou les limites de fréquence, ou d’en faire un usage illicite.
           Un compte qui enfreint ces règles peut être suspendu, dans les conditions des{' '}
           <A to="/cgv">conditions de vente</A>.

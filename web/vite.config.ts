@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { createServer } from 'vite';
 import { defineConfig, type Plugin } from 'vitest/config';
@@ -107,6 +107,8 @@ function prerender(): Plugin {
               '<div id="root"></div>',
               `<div id="root" data-path="${page.path}">${render(page.path)}</div>\n    ${STALE_PAGE_GUARD}`,
             );
+          // `/classe/mode-emploi` lives in `classe/`, beside `classe.html`.
+          mkdirSync(new URL('.', dist(pageFile(page.path))), { recursive: true });
           writeFileSync(dist(pageFile(page.path)), html);
         }
         writeFileSync(dist('sitemap.xml'), sitemap());

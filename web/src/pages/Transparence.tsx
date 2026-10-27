@@ -27,6 +27,11 @@ export const RETENTION = [
     'Jusqu’à ce que vous l’effaciez',
   ],
   [
+    'Séance du mode classe : l’article et sa préparation',
+    'L’onglet de votre navigateur, et le fichier de séance que vous téléchargez ; jamais nos serveurs',
+    'Jusqu’à la fermeture de l’onglet ; le fichier, tant que vous le gardez',
+  ],
+  [
     'Rapport d’analyse, avec extraits de l’article (cache partagé)',
     'Base de données',
     '30 jours, 500 rapports au plus',

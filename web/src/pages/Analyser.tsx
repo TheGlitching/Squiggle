@@ -30,7 +30,8 @@ import {
   saveDraft,
   type PastedArticle,
 } from '../paste';
-import { Link } from '../router';
+import { newSeance, saveSeance } from '../classe';
+import { Link, navigate } from '../router';
 import { describeAccount } from '../usage';
 
 const SIGN_IN = '/connexion?next=/analyser';
@@ -162,6 +163,17 @@ export function Analyser() {
           </button>
           <button type="button" onClick={startOver} className={QUIET_LINK}>
             Analyser un autre article
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const { report, blocks } = phase;
+              saveSeance(newSeance({ title: article.title, source: article.source, blocks, report }));
+              navigate('/classe');
+            }}
+            className={QUIET_LINK}
+          >
+            Préparer pour la classe
           </button>
           {view ? <p className="m-0 basis-full text-sm text-muted sm:basis-auto">{view.detail}</p> : null}
         </div>

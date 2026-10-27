@@ -24,8 +24,8 @@ const NAV_LINK = 'inline-block py-2 text-base text-muted transition-colors durat
  */
 export function Layout({ children, account = 'Se connecter' }: { children: ReactNode; account?: string }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-base text-foreground">
-      <header className="border-b border-lineSoft">
+    <div className="flex min-h-screen flex-col bg-background text-base text-foreground print:bg-white">
+      <header className="border-b border-lineSoft print:hidden">
         <div className={`${PAGE} flex items-center justify-between gap-x-6 py-4`}>
           <Link to="/" aria-label="Squiggle, accueil" className="inline-block shrink-0 py-1">
             <BrandLockup />
@@ -57,7 +57,7 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
 
       <main className="flex-1">{children}</main>
 
-      <footer className="border-t border-lineSoft">
+      <footer className="border-t border-lineSoft print:hidden">
         <div
           className={`${PAGE} grid gap-8 py-12 text-base text-muted md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-end md:gap-12`}
         >

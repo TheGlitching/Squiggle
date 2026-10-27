@@ -299,6 +299,325 @@
     outline-offset: 1px;
   }
 
+  /*
+    The projected board (/classe/tableau, and its preview on the teacher's desk).
+    Every size is a share of the frame, `--u` being about 1 % of its width, so the
+    same board reads from the back of a classroom and fits in a corner of a laptop.
+  */
+  .board-frame {
+    container-type: size;
+  }
+
+  .board {
+    --u: min(1cqi, 1.6cqb);
+    position: relative;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* A browser without container units sizes the board on the window, which is the board's own frame on the projector. */
+  @supports not (width: 1cqi) {
+    .board {
+      --u: min(1vw, 1.6vh);
+    }
+  }
+
+  /* A black screen hides the board without a sound: the class looks back at the teacher. */
+  .board[data-black='true'] > * {
+    visibility: hidden;
+  }
+
+  .board-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: calc(var(--u) * 2.2);
+    min-height: 0;
+    padding: calc(var(--u) * 2.4) calc(var(--u) * 2.6) calc(var(--u) * 1.2);
+  }
+
+  .board-paper {
+    position: relative;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    border-radius: calc(var(--u) * 1.2);
+    background: var(--color-paper);
+    color: var(--color-paperInk);
+    padding: calc(var(--u) * 2.6) calc(var(--u) * 3);
+    font-family: var(--font-serif);
+    font-size: calc(var(--u) * 1.85);
+    line-height: 1.58;
+  }
+
+  .board-paper p {
+    margin: calc(var(--u) * 1.3) 0 0;
+  }
+
+  .board-title {
+    margin: 0;
+    font-size: calc(var(--u) * 3);
+    line-height: 1.12;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  /* The sentence numbers the class calls out, the same as on the student sheet. */
+  /* Neither number is part of the text: selecting words for a remark leaves them out. */
+  .board-num,
+  .board-order {
+    user-select: none;
+  }
+
+  .board-num {
+    margin-right: 0.15em;
+    font-family: var(--font-sans);
+    font-size: 0.72em;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-paperMuted);
+    vertical-align: 0.45em;
+  }
+
+  /* A sentence the class proposed: the pencil squiggle of the exercise, and its wash. */
+  .board-phrase {
+    border-radius: 3px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    transition: background-color 160ms var(--ease-out);
+  }
+
+  .board-phrase.is-marked {
+    background-color: rgb(144 97 240 / 0.16);
+    text-decoration: underline wavy 0.08em var(--color-accent);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 0.32em;
+  }
+
+  .board-phrase.is-done {
+    text-decoration: none;
+  }
+
+  .board-hands {
+    display: inline-block;
+    margin-left: 0.3em;
+    padding: 0 0.45em;
+    border-radius: 999px;
+    background: var(--color-accent);
+    color: var(--color-accentForeground);
+    font-family: var(--font-sans);
+    font-size: 0.6em;
+    font-weight: 700;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: 0.3em;
+  }
+
+  .board-hl.is-current {
+    outline: 0.12em solid var(--color-paperInk);
+    outline-offset: 0.06em;
+  }
+
+  .board-panel {
+    display: grid;
+    align-content: start;
+    gap: calc(var(--u) * 1.4);
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .board-tag {
+    margin: 0;
+    font-size: calc(var(--u) * 1.3);
+    color: var(--color-muted);
+  }
+
+  .board-big {
+    margin: 0;
+    font-size: calc(var(--u) * 2.5);
+    line-height: 1.12;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .board-text,
+  .board-question {
+    margin: 0;
+    font-size: calc(var(--u) * 1.6);
+    line-height: 1.45;
+  }
+
+  .board-question {
+    color: var(--color-accentInk);
+  }
+
+  .board-card {
+    display: grid;
+    gap: calc(var(--u) * 1);
+    padding: calc(var(--u) * 1.8);
+    border: 1px solid var(--color-border);
+    border-radius: calc(var(--u) * 1.2);
+    background: var(--color-surface);
+  }
+
+  .board-row {
+    display: flex;
+    align-items: baseline;
+    gap: calc(var(--u) * 1);
+    margin: 0;
+    font-size: calc(var(--u) * 1.45);
+    line-height: 1.35;
+  }
+
+  .board-dot {
+    flex: none;
+    width: calc(var(--u) * 0.8);
+    height: calc(var(--u) * 0.8);
+    border-radius: 999px;
+    background: var(--sev-color);
+  }
+
+  .board-score {
+    display: inline-flex;
+    align-items: baseline;
+    gap: calc(var(--u) * 0.5);
+    width: fit-content;
+    margin: 0;
+    padding: calc(var(--u) * 0.4) calc(var(--u) * 1.1);
+    border: 1px solid var(--sev-color);
+    border-radius: 999px;
+    color: var(--sev-text);
+    font-size: calc(var(--u) * 1.5);
+  }
+
+  .board-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--u) * 2);
+    padding: calc(var(--u) * 0.9) calc(var(--u) * 2.6) calc(var(--u) * 1.3);
+    font-size: calc(var(--u) * 1.15);
+    color: var(--color-muted);
+  }
+
+  .board-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--u) * 0.6);
+    font-weight: 600;
+    color: var(--color-foreground);
+  }
+
+  .board-brand svg {
+    width: calc(var(--u) * 1.8);
+    height: calc(var(--u) * 1.8);
+  }
+
+  /* A board in a portrait window (a phone, a tablet held upright) stacks its two columns. */
+  @container (orientation: portrait) {
+    .board {
+      --u: 1.9cqi;
+    }
+
+    .board-grid {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr);
+    }
+  }
+
+  /* On the board nothing is pointed at: only the passage just revealed carries the ring. */
+  .board-hl:not(.is-current):hover {
+    outline: none;
+  }
+
+  /* A passage's place in the reveal order, in the preparation's corrigé. */
+  .board-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35em;
+    height: 1.35em;
+    margin-right: 0.25em;
+    padding: 0 0.3em;
+    border-radius: 999px;
+    background: var(--color-paperInk);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 0.72em;
+    font-weight: 700;
+    font-style: normal;
+    vertical-align: 0.3em;
+  }
+
+  /*
+    The walkthrough's drawings (`GuideFigure`): each step has one motion that says
+    what happens, played once when the step arrives. Every drawing is complete
+    without it: reduced motion, or print, shows its last frame.
+  */
+  .guide-type,
+  .guide-slide {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .guide-mark {
+      transform-box: fill-box;
+      transform-origin: left center;
+      animation: iso-mark 420ms var(--ease-out-expo) calc(650ms + var(--i, 0) * 700ms) backwards;
+    }
+
+    .guide-late {
+      animation: hero-fade 420ms var(--ease-out) 1300ms backwards;
+    }
+
+    .guide-drop {
+      animation: guide-move 900ms var(--ease-out-expo) 250ms backwards;
+    }
+
+    .guide-rise {
+      animation: guide-move 1000ms var(--ease-glide) 300ms backwards;
+    }
+
+    /* The address, typed a letter at a time: a cover over it shrinks in steps. */
+    .guide-type {
+      display: inline;
+      transform-box: fill-box;
+      transform-origin: right center;
+      animation: guide-type 1100ms steps(18, end) 250ms both;
+    }
+
+    /* The board's window crosses from the laptop to the projector, then is the projector. */
+    .guide-slide {
+      display: inline;
+      animation: guide-away 1300ms var(--ease-glide) 500ms both;
+    }
+
+    .guide-press {
+      animation: guide-press 360ms var(--ease-out) 250ms;
+    }
+
+    .guide-press-3 {
+      animation-duration: 700ms;
+      animation-delay: 300ms;
+      animation-iteration-count: 3;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* A revealed passage is painted in, never popped: the class sees where it lands. */
+    .board-hl {
+      animation: board-reveal 480ms var(--ease-out);
+    }
+  }
+
   .caret {
     display: inline-block;
     width: 2px;
@@ -364,6 +683,57 @@
   }
 }
 
+@keyframes guide-move {
+  from {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+  25% {
+    opacity: 1;
+  }
+}
+
+@keyframes guide-type {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes guide-away {
+  0% {
+    opacity: 0;
+    transform: none;
+  }
+  15% {
+    opacity: 1;
+    transform: none;
+  }
+  80% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+
+@keyframes guide-press {
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes board-reveal {
+  from {
+    background-color: transparent;
+    text-decoration-color: transparent;
+  }
+}
+
 @keyframes step-live {
   50% {
     opacity: 0.45;
@@ -414,5 +784,38 @@
     html {
       scroll-behavior: auto;
     }
+  }
+}
+
+/*
+  The classroom mode's paper: the student sheet, the answer sheet and the guide
+  print as white A4 pages, without the site around them.
+*/
+@page {
+  size: A4;
+  margin: 14mm;
+}
+
+@media print {
+  html {
+    color-scheme: light;
+    background: #fff;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000;
+  }
+
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .guide-type,
+  .guide-slide {
+    display: none !important;
   }
 }
