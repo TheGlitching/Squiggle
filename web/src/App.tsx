@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { OWNER_PATH } from './api';
 import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from './components/Landing';
 import { Layout } from './components/Layout';
 import { ModeEmploiPage } from './components/ModeEmploi';
@@ -15,6 +16,7 @@ import { Corrige, Fiche } from './pages/Feuilles';
 import { Glossaire, NotionPage } from './pages/Glossaire';
 import { FicheActivite, GrilleLecture } from './pages/Kit';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
+import { Pilotage } from './pages/Pilotage';
 import { Pont } from './pages/Pont';
 import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
@@ -64,6 +66,9 @@ export function App({ path: at }: { path?: string }) {
 
   // The projector's window is the board alone: no header, no footer, nothing to click.
   if (route === '/classe/tableau') return <Tableau />;
+
+  // The owner's metrics: the 404 to anyone else.
+  if (route === OWNER_PATH) return <Pilotage fallback={<Layout><NotFound /></Layout>} />;
 
   let page;
   switch (route) {

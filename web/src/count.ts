@@ -10,7 +10,7 @@
  */
 import { isAudienceMetricName, type AudienceMetricName } from '@squiggle/shared/src/hosted/audience';
 
-import { API_BASE } from './api';
+import { API_BASE, OWNER_PATH } from './api';
 import { notion } from './glossaire';
 import { FIREFOX_URL } from './install';
 
@@ -29,7 +29,10 @@ export function count(name: AudienceMetricName): void {
   }
 }
 
-/** `null` for an address that redirects to another page, which counts that one instead. */
+/**
+ * `null` for an address that redirects to another page, which counts that one instead,
+ * and for the owner's metrics page, which counts nothing at all.
+ */
 const VIEWS: Record<string, AudienceMetricName | null> = {
   '/': 'view_accueil',
   '/tarifs': 'view_tarifs',
@@ -54,6 +57,7 @@ const VIEWS: Record<string, AudienceMetricName | null> = {
   '/conditions': 'view_legal',
   '/legal': null,
   '/pont': 'view_pont',
+  [OWNER_PATH]: null,
 };
 
 export function viewOf(route: string): AudienceMetricName | null {
@@ -98,6 +102,7 @@ export function campaignOf(search: string): AudienceMetricName | null {
 
 /** Count where this page load came from. Called once, when the app starts. */
 export function countArrival(): void {
+  if (window.location.pathname === OWNER_PATH) return;
   const entry = entryOf(document.referrer, window.location.hostname, window.location.search);
   if (entry) count(entry);
   const campaign = campaignOf(window.location.search);
