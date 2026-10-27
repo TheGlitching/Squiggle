@@ -2,7 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { countArrival } from './count';
 import './index.css';
+
+countArrival();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');

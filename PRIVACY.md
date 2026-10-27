@@ -168,7 +168,7 @@ lecteur qui colle le même texte.
 | Lien de connexion par e-mail, avec l'adresse IP de la demande | base de données, le code **en empreinte SHA-256** | 10 minutes |
 | Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l'heure | base de données | 2 heures au plus |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
-| Compteurs de fonctionnement : combien de fois le cache a répondu, combien de fois une étape d'analyse a échoué, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
+| Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une page du site a été ouverte, une visite est venue d'un type de site, un bouton a été utilisé, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |
 
 Les journaux techniques méritent une précision, parce que c'est là que ce genre de
@@ -177,6 +177,22 @@ texte libre** : elle ne peut porter qu'un nom d'événement fixe, un nombre, un 
 identifiants opaques, ou l'empreinte SHA-256 de l'adresse de l'article. Il n'y a pas
 d'endroit où mettre un paragraphe, même par accident. Une requête refusée est
 journalisée par le **nom** du champ fautif, jamais par sa valeur.
+
+## Mesure d'audience du site
+
+Le site compte, jour par jour, combien de fois chaque page est ouverte, de quel type
+de site vient la visite (un moteur de recherche, une boutique d'extensions, un site
+académique…, parmi une liste fixe) et combien de fois quelques boutons sont utilisés,
+comme « Installer l'extension » ou « S'abonner ». Chaque compte est un simple nombre
+par jour et par nom d'événement : sans cookie, sans rien enregistrer dans votre
+navigateur, sans identifiant, sans adresse IP, et sans lien avec votre compte. Rien ne
+permet de vous reconnaître d'une visite à l'autre : ce n'est pas un traceur. Ces totaux
+ne servent qu'à nous, pour savoir ce qui est utile.
+
+Concrètement, la page envoie à notre serveur le seul nom de l'événement, sans cookie
+(`POST /web/count`), et le serveur refuse tout nom absent de la liste fermée
+(`shared/src/hosted/audience.ts`). La provenance d'une visite est réduite à son type de
+site dans le navigateur : l'adresse d'où vous venez ne nous parvient jamais.
 
 ## Les sous-traitants
 

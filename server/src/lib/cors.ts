@@ -84,6 +84,9 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   // the account's credit or model calls, so none of them runs without an
   // Origin proving the web app sent it. The GET is included because it is
   // the same conversation, and a check is what a forged run would start with.
+  // An audience counter carries no cookie and spends nothing, but only our
+  // own pages have a reason to send one.
+  { method: 'POST', path: '/web/count' },
   { method: 'GET', path: '/web/analyze/check' },
   { method: 'POST', path: '/web/analyze/audit' },
   { method: 'POST', path: '/web/analyze/research' },

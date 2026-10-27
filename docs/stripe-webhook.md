@@ -10,4 +10,6 @@ The handler reads the smallest item period end and falls back to the legacy subs
 
 ## Events
 
-`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
+`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.paid`.
+
+`invoice.paid` changes no plan: it only records whether the subscription still costs nothing (a 100 % promotion code), which the metrics use to tell paying subscribers from free ones. Without it, an account whose code covered only the first month stays counted as free.

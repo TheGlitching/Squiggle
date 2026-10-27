@@ -12,6 +12,7 @@ import {
   Section,
 } from '../components/Landing';
 import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
+import { count } from '../count';
 import { ModeEmploi } from '../components/ModeEmploi';
 import { MONTHLY_ANALYSES, SUBSCRIBE_LABEL } from '../offer';
 import { Link } from '../router';
@@ -151,7 +152,7 @@ export function Enseignants() {
             les enseignants : une adresse académique suffit.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <Link to={ACTIVATE_PATH} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+            <Link to={ACTIVATE_PATH} onClick={() => count('click_teacher_access')} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
               {ACTIVATE}
             </Link>
             <a href="#mode-classe" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
@@ -290,7 +291,7 @@ export function Enseignants() {
           </div>
         </div>
         <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <Link to={ACTIVATE_PATH} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+          <Link to={ACTIVATE_PATH} onClick={() => count('click_teacher_access')} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
             {ACTIVATE}
           </Link>
           <Link to="/" className={`${SECONDARY_BUTTON} max-sm:w-full`}>

@@ -17,6 +17,7 @@ import {
   SECONDARY_BUTTON,
   TITLE,
 } from "../components/Landing";
+import { count } from "../count";
 import { frenchDate } from "../format";
 import { MONTHLY_ANALYSES, SUBSCRIBE_LABEL, VAT_NOTE } from "../offer";
 import { Link, navigate, usePath } from "../router";
@@ -252,7 +253,10 @@ export function Compte() {
                   </span>
                 </label>
                 <button
-                  onClick={() => goToCheckout(startCheckout)}
+                  onClick={() => {
+                    count("click_subscribe");
+                    void goToCheckout(startCheckout);
+                  }}
                   disabled={busy || !startNow}
                   className={`${PRIMARY_BUTTON} max-sm:w-full disabled:opacity-50`}
                 >

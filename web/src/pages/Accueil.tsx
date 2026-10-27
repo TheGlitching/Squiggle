@@ -23,6 +23,7 @@ import {
   Section,
 } from '../components/Landing';
 import { CONTACT_URL } from '../components/Layout';
+import { count, installClick } from '../count';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
 import { installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
 import {
@@ -222,7 +223,7 @@ export function Accueil() {
               <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
                 Analyser un article
               </Link>
-              <a href="#exemple" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+              <a href="#exemple" onClick={() => count('click_example')} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
                 Voir un exemple
               </a>
             </div>
@@ -431,7 +432,7 @@ export function Accueil() {
           >
             {/* Only the store this browser installs from; none where no store exists (Safari, phones). */}
             {storeUrl ? (
-              <a href={storeUrl} className={WAY_ACTION}>
+              <a href={storeUrl} onClick={() => count(installClick(storeUrl))} className={WAY_ACTION}>
                 {installLabelFor(storeUrl, userAgent)}
               </a>
             ) : (
@@ -542,7 +543,11 @@ export function Accueil() {
               </td>
               <td className="border-lineSoft px-4 pt-6 pb-6 align-top md:border-t md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:border-border max-md:p-5">
                 {storeUrl ? (
-                  <a href={storeUrl} className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+                  <a
+                    href={storeUrl}
+                    onClick={() => count(installClick(storeUrl))}
+                    className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}
+                  >
                     {installLabelFor(storeUrl, userAgent)}
                   </a>
                 ) : (

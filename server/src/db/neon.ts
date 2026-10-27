@@ -69,6 +69,7 @@ function mapUser(r: RawRow): UserRow {
     planPeriodStart: r.plan_period_start == null ? null : num(r.plan_period_start),
     stripeCustomerId: (r.stripe_customer_id as string | null) ?? null,
     stripeSubId: (r.stripe_sub_id as string | null) ?? null,
+    subscriptionFree: Boolean(r.subscription_free),
     createdAt: num(r.created_at),
     updatedAt: num(r.updated_at),
   };
@@ -132,6 +133,7 @@ export class NeonDb implements Db {
       planPeriodStart: null,
       stripeCustomerId: null,
       stripeSubId: null,
+      subscriptionFree: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -192,6 +194,10 @@ export class NeonDb implements Db {
           updated_at = ${now}
       WHERE id = ${userId}
     `;
+  }
+
+  async setSubscriptionFree(userId: string, free: boolean, now: number): Promise<void> {
+    await this.q`UPDATE users SET subscription_free = ${free}, updated_at = ${now} WHERE id = ${userId}`;
   }
 
   async setStripeIds(
@@ -682,10 +688,11 @@ export class NeonDb implements Db {
   async collectMetrics({ now, weeks, trialAnalyses }: CollectMetricsArgs): Promise<MetricsRaw> {
     const since = now - weeks * WEEK_MS;
     const sinceDay = utcDayOf(since);
-    const [accounts, weekly, perAccount, events, finalized, counted] = await Promise.all([
+    const [accounts, weekly, perAccount, events, usage, cohort, counted] = await Promise.all([
       this.q`
         SELECT COUNT(*) AS total,
-               COUNT(*) FILTER (WHERE plan = 'active' AND plan_expires_at > ${now}) AS active
+               COUNT(*) FILTER (WHERE plan = 'active' AND plan_expires_at > ${now} AND NOT subscription_free) AS active,
+               COUNT(*) FILTER (WHERE plan = 'active' AND plan_expires_at > ${now} AND subscription_free) AS active_free
         FROM users
       `,
       this.q`
@@ -697,7 +704,8 @@ export class NeonDb implements Db {
                COUNT(*) FILTER (WHERE total >= ${trialAnalyses}) AS trial_done,
                COUNT(*) FILTER (WHERE total >= ${trialAnalyses} AND paid) AS trial_paid
         FROM (
-          SELECT COALESCE(SUM(d.analyses), 0) AS total, u.stripe_customer_id IS NOT NULL AS paid
+          SELECT COALESCE(SUM(d.analyses), 0) AS total,
+                 u.stripe_customer_id IS NOT NULL AND NOT u.subscription_free AS paid
           FROM users u LEFT JOIN usage_daily d ON d.user_id = u.id
           GROUP BY u.id
         ) per_account
@@ -708,7 +716,19 @@ export class NeonDb implements Db {
           AND type IN ('checkout.session.completed', 'customer.subscription.deleted')
         GROUP BY type
       `,
-      this.q`SELECT COALESCE(SUM(analyses), 0) AS n FROM usage_daily WHERE day >= ${sinceDay}`,
+      this.q`
+        SELECT COALESCE(SUM(analyses), 0) AS finalized, COALESCE(SUM(started), 0) AS started,
+               COUNT(DISTINCT user_id) FILTER (WHERE analyses > 0 OR started > 0) AS active
+        FROM usage_daily WHERE day >= ${sinceDay}
+      `,
+      this.q`
+        SELECT COUNT(*) AS cohort,
+               COUNT(*) FILTER (WHERE EXISTS (
+                 SELECT 1 FROM usage_daily d
+                 WHERE d.user_id = u.id AND d.analyses > 0 AND d.day <= u.created_at + ${WEEK_MS}::bigint
+               )) AS activated
+        FROM users u WHERE u.created_at >= ${since - WEEK_MS} AND u.created_at < ${now - WEEK_MS}
+      `,
       this.q`SELECT name, SUM(count) AS n FROM metric_counters WHERE day >= ${sinceDay} GROUP BY name`,
     ]);
     const accountsPerWeek = new Array<number>(weeks).fill(0);
@@ -724,9 +744,14 @@ export class NeonDb implements Db {
       trialCompleted: num(perAccount[0].trial_done),
       trialCompletedPaid: num(perAccount[0].trial_paid),
       activeSubscribers: num(accounts[0].active),
+      activeFreeSubscribers: num(accounts[0].active_free),
       subscriptionsStarted: eventCount('checkout.session.completed'),
       subscriptionsCancelled: eventCount('customer.subscription.deleted'),
-      finalizes: num(finalized[0].n),
+      finalizes: num(usage[0].finalized),
+      starts: num(usage[0].started),
+      activeAccounts: num(usage[0].active),
+      activationCohort: num(cohort[0].cohort),
+      activatedWithinWeek: num(cohort[0].activated),
       counters,
     };
   }

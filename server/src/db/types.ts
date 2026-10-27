@@ -10,6 +10,7 @@
  * interface, so the entire auth surface is testable in-process with no
  * database running.
  */
+import { AUDIENCE_METRIC_NAMES } from '@squiggle/shared';
 
 export type Plan = 'none' | 'trial' | 'active';
 
@@ -33,6 +34,11 @@ export interface UserRow {
   stripeCustomerId: string | null;
   /** Stripe subscription id. null unless/after a subscription is active. */
   stripeSubId: string | null;
+  /**
+   * The last checkout or invoice Stripe reported for the account came to zero
+   * (a 100 % promotion code): subscribed, but not paying. Metrics only.
+   */
+  subscriptionFree: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -304,6 +310,8 @@ export interface CreateAnalysisRunArgs {
 /**
  * The closed set of events counted for the launch metrics. A name is a fixed
  * identifier from the code: the counter has no way to carry a user or an article.
+ * The audience names are the ones a browser may send (`POST /web/count`); every
+ * other one is only ever counted by the server itself.
  */
 export const METRIC_NAMES = [
   'check',
@@ -314,6 +322,22 @@ export const METRIC_NAMES = [
   'research_failed',
   'source_check',
   'source_check_failed',
+  ...AUDIENCE_METRIC_NAMES,
+  'signin_link_sent',
+  'signin_google',
+  'signin_completed',
+  'checkout_started',
+  'checkout_paid',
+  'checkout_free',
+  'run_started_install',
+  'run_started_session',
+  'finalize_install',
+  'finalize_session',
+  'refused_trial_exhausted',
+  'refused_quota_exhausted',
+  'refused_starts_exhausted',
+  'refused_article_too_long',
+  'refused_subscription_required',
 ] as const;
 export type MetricName = (typeof METRIC_NAMES)[number];
 
@@ -334,16 +358,28 @@ export interface MetricsRaw {
   accountsFinalized: number;
   /** Accounts that ran at least `trialAnalyses` analyses. */
   trialCompleted: number;
-  /** Of those, the accounts that have ever paid (a Stripe customer exists). */
+  /** Of those, the accounts that pay: a Stripe customer exists and the subscription is not free. */
   trialCompletedPaid: number;
-  /** Accounts on an unexpired paid plan right now. */
+  /** Accounts on an unexpired plan right now that pay for it. */
   activeSubscribers: number;
+  /** Accounts on an unexpired plan right now that pay nothing (a 100 % promotion code). */
+  activeFreeSubscribers: number;
   /** `checkout.session.completed` events in the window. */
   subscriptionsStarted: number;
   /** `customer.subscription.deleted` events in the window. */
   subscriptionsCancelled: number;
   /** Analyses finalized in the window. */
   finalizes: number;
+  /** Runs started in the window (counted since migration 011). */
+  starts: number;
+  /** Accounts that started or finished an analysis in the window. */
+  activeAccounts: number;
+  /**
+   * Accounts created in the window shifted back a week, so each has had its
+   * whole first week, and of those, the ones that finished an analysis in it.
+   */
+  activationCohort: number;
+  activatedWithinWeek: number;
   /** Event counters over the window. */
   counters: Record<MetricName, number>;
 }
@@ -397,6 +433,9 @@ export interface Db {
    * reachable from a request a client controls.
    */
   setPlan(userId: string, plan: Plan, period: PlanPeriod | null, now: number): Promise<void>;
+
+  /** Record whether what the account's subscription last cost was zero. Webhook only. */
+  setSubscriptionFree(userId: string, free: boolean, now: number): Promise<void>;
 
   /** Attach (or update) the Stripe customer and subscription identifiers. */
   setStripeIds(

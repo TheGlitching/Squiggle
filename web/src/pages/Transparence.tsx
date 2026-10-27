@@ -56,7 +56,7 @@ export const RETENTION = [
   ],
   ['Identifiants Stripe (client, abonnement)', 'Base de données', 'Tant que le compte existe'],
   [
-    'Compteurs de fonctionnement : réponses du cache, échecs par étape d’analyse',
+    'Compteurs de fonctionnement et d’audience : réponses du cache, échecs par étape d’analyse, pages ouvertes, type de site d’où vient la visite, boutons utilisés',
     'Base de données',
     'Un nombre par jour et par nom d’événement, sans compte et sans article',
   ],
@@ -200,8 +200,11 @@ export function Transparence() {
           <p className="mt-6 mb-0 max-w-[55ch] text-base leading-relaxed text-muted">
             Une ligne de journal ne peut contenir qu’un nom d’événement, un nombre, un identifiant opaque ou l’empreinte
             d’une adresse : aucun champ de texte libre. Une requête refusée est journalisée par le nom du champ, jamais
-            par sa valeur. Nos mesures de lancement sont des totaux tirés du serveur, jamais d’un traceur, et ne
-            désignent ni un lecteur ni un article.
+            par sa valeur. Nos mesures sont des totaux par jour comptés sur le serveur, jamais par un traceur, et ne
+            désignent ni un lecteur ni un article. La mesure d’audience du site en fait partie : combien de fois chaque
+            page est ouverte, de quel type de site vient la visite, parmi une liste fixe, et combien de fois quelques
+            boutons sont utilisés, sans cookie, sans rien enregistrer dans votre navigateur, sans identifiant et sans
+            adresse IP.
           </p>
         </section>
 

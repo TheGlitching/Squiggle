@@ -41,6 +41,7 @@
  *   POST   /web/analyze/research
  *   POST   /web/analyze/source-check
  *   POST   /web/analyze/finalize
+ *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
@@ -98,15 +99,15 @@ import { corsHeaders, firefoxExtensionCall, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
 import { DAILY_CRON, REPORT_MAX_COUNT, USAGE_LOG_RETENTION_MS } from './usage/limits';
 import { NeonDb } from './db/neon';
-import type { Db, UserRow } from './db/types';
+import type { Db, MetricName, UserRow } from './db/types';
 import type { Clock } from './lib/clock';
 import { systemClock } from './lib/clock';
 import type { EmailSender, FetchLike } from './lib/brevo';
 import { BrevoEmailSender } from './lib/brevo';
 import { apiError, errorResponse, type Outcome } from './lib/errors';
-import { HOSTED_ANALYSIS, sha256Hex } from '@squiggle/shared';
+import { HOSTED_ANALYSIS, isAudienceMetricName, sha256Hex } from '@squiggle/shared';
 import { migrate, type SqlQuery } from './migrations';
-import { collectLaunchMetrics } from './metrics';
+import { collectLaunchMetrics, countMetric } from './metrics';
 import { secureEquals } from './lib/secureCompare';
 
 export interface Env {
@@ -328,6 +329,7 @@ function finish<T extends object>(outcome: Outcome<T>, setCookie?: string | null
 async function route(req: Request, url: URL, s: Services, requestId: string): Promise<Response> {
   const path = url.pathname;
   const method = req.method;
+  const count = (name: MetricName) => countMetric(s.db, name, s.clock.now(), requestId);
 
   if (path === '/health' && method === 'GET') {
     return Response.json({ ok: true });
@@ -341,6 +343,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin, requestId },
       { email, ip, next: body.next },
     );
+    if (outcome.ok) await count('signin_link_sent');
     return finish(outcome);
   }
 
@@ -352,6 +355,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       code,
       req.headers.get('cf-connecting-ip'),
     );
+    if (outcome.ok) await count('signin_completed');
     return finish(outcome, outcome.ok ? sessionSetCookie(outcome.sessionToken) : null);
   }
 
@@ -367,6 +371,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       },
       { next: url.searchParams.get('next') },
     );
+    await count('signin_google');
     return new Response(null, { status: 302, headers: { location: started.redirectUrl } });
   }
 
@@ -386,6 +391,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       },
     );
     if (outcome.ok) {
+      await count('signin_completed');
       const res = new Response(null, {
         status: 302,
         headers: { location: `${s.webAppOrigin}${outcome.next ?? DEFAULT_NEXT}` },
@@ -469,12 +475,23 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     return finish(outcome);
   }
 
+  // An audience counter. Sent with `credentials: 'omit'`, so it reaches us
+  // without the session cookie: nothing ties the count to an account, and the
+  // name is the whole of what is kept. The address the request came from is
+  // never read here.
+  if (path === '/web/count' && method === 'POST') {
+    const body = await readJson(req);
+    if (!isAudienceMetricName(body.name)) return finish(apiError('invalid_payload', 'Unknown counter.'));
+    await count(body.name);
+    return new Response(null, { status: 204 });
+  }
+
   if (path.startsWith('/web/account')) {
     return webAccountRoute(req, s, path, method, requestId);
   }
 
   if (path.startsWith('/v1/account')) {
-    return accountRoute(req, s, path, method);
+    return accountRoute(req, s, path, method, requestId);
   }
 
   if (path.startsWith('/v1/analyze/')) {
@@ -536,11 +553,12 @@ async function accountRoute(
   s: Services,
   path: string,
   method: string,
+  requestId: string,
 ): Promise<Response> {
   const rawBody = method === 'GET' ? '' : await req.text();
   const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
   if (!auth.ok) return finish(auth);
-  return accountForUser(s, auth.user, path, method);
+  return accountForUser(s, auth.user, path, method, requestId);
 }
 
 /**
@@ -558,7 +576,10 @@ async function webAccountRoute(
 ): Promise<Response> {
   const user = await sessionUser({ db: s.db, clock: s.clock }, req);
   if (!user) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
-  return (await accountDataRoute(req, s, user, path, method, requestId)) ?? accountForUser(s, user, path, method);
+  return (
+    (await accountDataRoute(req, s, user, path, method, requestId)) ??
+    accountForUser(s, user, path, method, requestId)
+  );
 }
 
 /**
@@ -620,6 +641,7 @@ async function accountForUser(
   user: UserRow,
   path: string,
   method: string,
+  requestId: string,
 ): Promise<Response> {
   const now = s.clock.now();
 
@@ -661,6 +683,7 @@ async function accountForUser(
       successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
       cancelUrl: `${s.webAppOrigin}/tarifs?paiement=annule`,
     });
+    if (outcome.ok) await countMetric(s.db, 'checkout_started', now, requestId);
     return finish(outcome);
   }
 
@@ -675,17 +698,18 @@ async function accountForUser(
         ),
       );
     }
-    return finish(
-      await createCheckoutSession({
-        config: s.stripe,
-        userId: user.id,
-        email: user.email,
-        customerId: null,
-        successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
-        cancelUrl: `${s.webAppOrigin}/compte?paiement=annule`,
-        teacherCoupon: coupon,
-      }),
-    );
+    const outcome = await createCheckoutSession({
+      config: s.stripe,
+      userId: user.id,
+      email: user.email,
+      customerId: null,
+      successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
+      cancelUrl: `${s.webAppOrigin}/compte?paiement=annule`,
+      teacherCoupon: coupon,
+    });
+    // Completed, it comes back free: counted as `checkout_free` by the webhook.
+    if (outcome.ok) await countMetric(s.db, 'checkout_started', now, requestId);
+    return finish(outcome);
   }
 
   if (isPortal && method === 'POST') {
@@ -730,6 +754,7 @@ async function analyzeRoute(
     promptVersion: s.promptVersion ?? PROMPT_VERSION,
     fetchImpl: s.fetchImpl as typeof fetch | undefined,
     requestId,
+    surface: caller,
   };
 
   // The signature covers the body byte-for-byte, so the raw text has to be

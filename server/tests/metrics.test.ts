@@ -10,11 +10,22 @@ import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
 
 import { TRIAL_ANALYSES } from '../src/billing/quota';
 import { WEEK_MS } from '../src/usage/limits';
-import { claim, exportJwk, magicLogin, makeTestEnv, postStripeEvent, signedRequest, T0, type TestEnv } from './helpers';
+import {
+  claim,
+  exportJwk,
+  magicLogin,
+  makeTestEnv,
+  postStripeEvent,
+  signedRequest,
+  T0,
+  WEB_APP_ORIGIN,
+  type TestEnv,
+} from './helpers';
 
 const URL_ = 'https://presse.example/politique/emploi-2026';
 const BLOCKS = [{ id: 'b1', type: 'paragraph' as const, text: 'Le chômage a baissé de 12 % en un an.', charStart: 0 }];
 const ADMIN = { authorization: 'Bearer admin-secret' };
+const DAY = 24 * 60 * 60 * 1000;
 
 async function signedIn(env: TestEnv, email: string) {
   const key = await generateSigningKeyPair();
@@ -40,6 +51,17 @@ const check = async (env: TestEnv, who: { key: CryptoKeyPair; token: string }) =
 
 const audit = (env: TestEnv, who: { key: CryptoKeyPair; token: string }) =>
   call(env, who, '/v1/analyze/audit', { url: URL_, title: 'T', blocks: BLOCKS, citedSources: [] });
+
+/** What the web app sends: no cookie, only the counter's name. */
+function countRequest(env: TestEnv, name: unknown, headers: Record<string, string> = { origin: WEB_APP_ORIGIN }) {
+  return env.handler(
+    new Request(`${env.webAppOrigin}/web/count`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ name }),
+    }),
+  );
+}
 
 async function metrics(env: TestEnv, query = '') {
   const res = await env.handler(new Request(`${env.webAppOrigin}/admin/metrics${query}`, { headers: ADMIN }));
@@ -158,5 +180,143 @@ describe('GET /admin/metrics', () => {
     const { body } = await metrics(env, '?weeks=3');
     expect(body.metrics.accounts).toEqual({ total: 3, perWeek: [0, 1, 1] });
     expect(body.metrics.cache.checks).toBe(1);
+  });
+});
+
+describe('POST /web/count', () => {
+  it('counts a name from the audience list and nothing else', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    expect((await countRequest(env, 'view_tarifs')).status).toBe(204);
+    expect((await countRequest(env, 'view_tarifs')).status).toBe(204);
+    expect((await countRequest(env, 'entry_edu')).status).toBe(204);
+    expect((await countRequest(env, 'ref_clemi')).status).toBe(204);
+    expect((await countRequest(env, 'click_install_firefox')).status).toBe(204);
+
+    // A name the server keeps for itself cannot be sent: a browser could
+    // otherwise declare checkouts, sign-ins or analyses that never happened.
+    for (const name of ['checkout_paid', 'signin_completed', 'finalize_session', 'check', 'view_nope', 42, null]) {
+      expect((await countRequest(env, name)).status).toBe(400);
+    }
+    // Only our own pages send one.
+    expect((await countRequest(env, 'view_accueil', { origin: 'https://ailleurs.example' })).status).toBe(403);
+    expect((await countRequest(env, 'view_accueil', {})).status).toBe(403);
+
+    const m = (await metrics(env, '?weeks=1')).body.metrics;
+    expect(m.audience.views).toMatchObject({ tarifs: 2, accueil: 0 });
+    expect(m.audience.entries).toMatchObject({ edu: 1, direct: 0 });
+    expect(m.audience.campaigns).toMatchObject({ clemi: 1 });
+    expect(m.audience.clicks).toMatchObject({ install_firefox: 1, install_chrome: 0 });
+    expect(m.funnel.checkout).toEqual({ started: 0, paid: 0, free: 0 });
+    expect(m.headline.newAccounts.entries).toEqual(m.audience.entries);
+  });
+
+  it('keeps the name and the day, never who sent it', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const { sessionCookie } = await magicLogin(env, 'marie@example.org');
+    const res = await countRequest(env, 'view_compte', {
+      origin: WEB_APP_ORIGIN,
+      cookie: sessionCookie,
+      'cf-connecting-ip': '203.0.113.7',
+      referer: 'https://www.qwant.com/?q=squiggle',
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    const raw = JSON.stringify([...(env.db as unknown as { metrics: Map<string, number> }).metrics]);
+    expect(raw).toContain('view_compte');
+    for (const secret of ['203.0.113', 'qwant', 'marie']) expect(raw).not.toContain(secret);
+  });
+});
+
+describe('the counters the server bumps itself', () => {
+  it('follows sign-in, analyses by surface and refusals by reason', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const marie = await signedIn(env, 'marie@example.org');
+    for (let i = 0; i < TRIAL_ANALYSES; i++) {
+      const { json } = await audit(env, marie);
+      expect((await call(env, marie, '/v1/analyze/finalize', { runId: json.runId })).status).toBe(200);
+    }
+    // The trial is spent: the next start is refused, and counted as such.
+    expect((await audit(env, marie)).json.error).toBe('trial_exhausted');
+    // A page of fifty articles is refused before anything else is weighed.
+    const text = 'Le chômage a baissé de 12 % en un an. '.repeat(100);
+    const page = Array.from({ length: 50 }, (_, i) => ({ id: `b${i}`, type: 'paragraph' as const, text, charStart: i * (text.length + 2) }));
+    expect((await call(env, marie, '/v1/analyze/audit', { url: URL_, title: 'T', blocks: page, citedSources: [] })).status).toBe(413);
+
+    const m = (await metrics(env, '?weeks=1')).body.metrics;
+    expect(m.funnel.signin).toEqual({ link_sent: 1, google: 0, completed: 1 });
+    expect(m.funnel.runsStarted).toEqual({ install: TRIAL_ANALYSES, session: 0 });
+    expect(m.funnel.finalized).toEqual({ install: TRIAL_ANALYSES, session: 0 });
+    expect(m.funnel.refused).toMatchObject({ trial_exhausted: 1, article_too_long: 1, quota_exhausted: 0 });
+    expect(m.headline.successRate).toEqual({ started: TRIAL_ANALYSES, finalized: TRIAL_ANALYSES, share: 1 });
+    expect(m.headline.activeAccounts).toBe(1);
+  });
+
+  it('measures activation over the accounts that have had their whole first week', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const quick = await env.db.createUser({ email: 'quick@example.org' }, T0 - 10 * DAY);
+    await env.db.recordAnalysis({ userId: quick.id, now: T0 - 8 * DAY });
+    const late = await env.db.createUser({ email: 'late@example.org' }, T0 - 12 * DAY);
+    await env.db.recordAnalysis({ userId: late.id, now: T0 - 2 * DAY });
+    await env.db.createUser({ email: 'never@example.org' }, T0 - 9 * DAY);
+    // Too recent to judge, and too old for the cohort of a one-week window.
+    await env.db.createUser({ email: 'new@example.org' }, T0 - DAY);
+    await env.db.createUser({ email: 'old@example.org' }, T0 - 20 * DAY);
+
+    const m = (await metrics(env, '?weeks=1')).body.metrics;
+    expect(m.headline.activationWithinWeek).toEqual({ cohort: 3, activated: 1, share: 0.333 });
+  });
+});
+
+describe('paid and free subscriptions', () => {
+  it('counts a 100 % promotion code apart from the subscribers who pay, until an invoice costs something', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const subscribe = async (email: string, amount: number, n: number) => {
+      const user = await env.db.createUser({ email }, env.clock.now());
+      for (let i = 0; i < TRIAL_ANALYSES; i++) await env.db.recordAnalysis({ userId: user.id, now: env.clock.now() });
+      await postStripeEvent(env, {
+        id: `evt_checkout_${n}`,
+        type: 'checkout.session.completed',
+        data: {
+          object: { customer: `cus_${n}`, subscription: `sub_${n}`, amount_total: amount, metadata: { user_id: user.id } },
+        },
+      });
+      return user;
+    };
+    await subscribe('payer@example.org', 499, 1);
+    const teacher = await subscribe('teacher@example.org', 0, 2);
+
+    let m = (await metrics(env)).body.metrics;
+    expect(m.trial).toMatchObject({ completed: 2, convertedToPaid: 1, conversion: 0.5 });
+    expect(m.subscriptions).toMatchObject({ active: 1, activeFree: 1, started: 2, startedFree: 1 });
+    expect(m.funnel.checkout).toEqual({ started: 0, paid: 1, free: 1 });
+    expect(m.headline.subscribers).toEqual({ paying: 1, free: 1, cancelled: 0 });
+
+    // The code covered the first month only: the renewal is paid.
+    await postStripeEvent(env, {
+      id: 'evt_invoice_2',
+      type: 'invoice.paid',
+      data: { object: { customer: 'cus_2', subscription: 'sub_2', amount_paid: 499 } },
+    });
+    expect((await env.db.getUserById(teacher.id))!.subscriptionFree).toBe(false);
+    m = (await metrics(env)).body.metrics;
+    expect(m.trial.convertedToPaid).toBe(2);
+    expect(m.headline.subscribers).toEqual({ paying: 2, free: 0, cancelled: 0 });
+    // An invoice writes no plan.
+    expect((await env.db.getUserById(teacher.id))!.plan).toBe('active');
+  });
+
+  it('activates a reader even when the free flag cannot be written (deploy before its migration)', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const user = await env.db.createUser({ email: 'early@example.org' }, env.clock.now());
+    env.db.setSubscriptionFree = async () => {
+      throw new Error('column "subscription_free" does not exist');
+    };
+    const res = await postStripeEvent(env, {
+      id: 'evt_early',
+      type: 'checkout.session.completed',
+      data: { object: { customer: 'cus_e', subscription: 'sub_e', amount_total: 499, metadata: { user_id: user.id } } },
+    });
+    expect(res.status).toBe(200);
+    expect((await env.db.getUserById(user.id))!.plan).toBe('active');
   });
 });
