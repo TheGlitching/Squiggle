@@ -8,7 +8,8 @@ import { HostedAnalysisClient, HostedApiError } from '../../shared/src/hosted/cl
 import type { PipelineProgressEvent } from '../../shared/src/engine/pipeline';
 import type { AnalysisReport, TextBlock } from '../../shared/src/engine/types';
 import { API_BASE } from './api';
-import { blocksFromPaste, webAddress, type PastedArticle } from './paste';
+import { readPaste, webAddress, type PastedArticle } from './paste';
+import type { Start } from './transcript';
 
 export interface Progress {
   message: string;
@@ -18,15 +19,18 @@ export interface Progress {
   stage?: PipelineProgressEvent['stage'];
 }
 
-/** The report, with the blocks it was made from: the page highlights in exactly those. */
+/**
+ * The report, with the blocks it was made from: the page highlights in exactly
+ * those. A transcript's times stay here: the server reads only the speech.
+ */
 export async function analyzePasted(
   article: PastedArticle,
   onProgress: (progress: Progress) => void,
   signal?: AbortSignal,
-): Promise<{ report: AnalysisReport; blocks: TextBlock[] }> {
+): Promise<{ report: AnalysisReport; blocks: TextBlock[]; times: Record<string, Start[]> | null }> {
   const client = new HostedAnalysisClient({ baseUrl: API_BASE, session: 'cookie' });
   const source = article.source.trim() ? webAddress(article.source) : null;
-  const blocks = blocksFromPaste(article);
+  const { blocks, times } = readPaste(article);
   const report = await client.analyze(
     {
       url: source ?? undefined,
@@ -41,7 +45,7 @@ export async function analyzePasted(
       },
     },
   );
-  return { report, blocks };
+  return { report, blocks, times };
 }
 
 /** What the reader is told, by the code the server named. */

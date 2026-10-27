@@ -64,6 +64,7 @@ export interface Metrics {
   audience: {
     campaigns: Record<string, number>;
     clicks: Record<string, number>;
+    pastes: Record<string, number>;
   };
   funnel: {
     signin: Record<string, number>;
@@ -137,7 +138,7 @@ export async function collectLaunchMetrics(
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },
     analyses,
-    audience: { campaigns, clicks: family(c, 'click_') },
+    audience: { campaigns, clicks: family(c, 'click_'), pastes: family(c, 'paste_') },
     funnel: {
       signin: family(c, 'signin_'),
       checkout: family(c, 'checkout_'),

@@ -56,7 +56,7 @@ describe('/tableau', () => {
       'href',
       'https://dash.cloudflare.com/?to=/:account/web-analytics',
     );
-    expect(screen.getByRole('heading', { name: 'Campagnes et boutons' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Campagnes, boutons, textes collés' })).toBeInTheDocument();
     expect(screen.getByText('Nouveaux comptes').nextSibling).toHaveTextContent('7');
     expect(screen.getByText('Première analyse dans la semaine').nextSibling).toHaveTextContent('75 %');
     expect(screen.getByText('Abonnés payants').nextSibling).toHaveTextContent('2');

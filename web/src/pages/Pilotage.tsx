@@ -26,6 +26,8 @@ const LABELS: Record<string, string> = {
   teacher_access: 'Accès enseignant',
   subscribe: 'S’abonner',
   example: 'Exemple',
+  // pastes
+  transcript: 'Transcription de vidéo',
   // sign-in
   link_sent: 'Lien envoyé',
   google: 'Google',
@@ -136,9 +138,10 @@ function Figures({ m }: { m: OwnerMetrics }) {
         </Tile>
       </div>
 
-      <Band title="Campagnes et boutons">
+      <Band title="Campagnes, boutons, textes collés">
         <Counts title="Campagnes" counts={m.audience.campaigns} />
         <Counts title="Boutons" counts={m.audience.clicks} />
+        <Counts title="Textes collés" counts={m.audience.pastes ?? {}} />
       </Band>
 
       <Band title="Entonnoir">

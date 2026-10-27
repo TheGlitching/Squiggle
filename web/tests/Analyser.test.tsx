@@ -219,6 +219,42 @@ describe('Analyser, signed in', () => {
     expect(seen.find((s) => s.url === '/web/analyze/audit')?.body).not.toHaveProperty('url');
   });
 
+  it('reads a pasted video transcript without its times, and puts them back in the report', async () => {
+    const transcript = [
+      '0:00',
+      '0 secondes',
+      'Depuis la rentrée, les cantines servent un repas végétarien par semaine, une mesure votée en juin par le conseil municipal',
+      '0:07',
+      '7 secondes',
+      'et que la mairie présente comme un succès. Alors on est allé voir sur place ce que les parents et les enfants en pensent vraiment.',
+      '0:15',
+      '15 secondes',
+      'Dans cette école du centre-ville, les avis sont partagés : certains parents applaudissent, d’autres beaucoup moins.',
+      '1:02',
+      '1 minute et 2 secondes',
+      'Selon un expert, la fréquentation aurait chuté de 30 % dès le premier mois.',
+    ].join('\n');
+    const seen = serve(account());
+    render(<Analyser />);
+    expect(screen.getByText(/Une vidéo YouTube \? Copiez sa transcription/)).toBeInTheDocument();
+    paste(transcript);
+    expect(screen.getByText(/Transcription reconnue : les horodatages sont retirés/)).toBeInTheDocument();
+    fireEvent.click(await analyseButton());
+    await screen.findByText('58');
+
+    // The server reads the speech alone.
+    const blocks = seen.find((s) => s.url === '/web/analyze/audit')?.body?.blocks as Array<{ text: string }>;
+    expect(blocks.map((b) => b.text).join(' ')).not.toMatch(/\d:\d\d|secondes/);
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'paste_transcript' }]);
+
+    // The report times each passage and each finding.
+    const text = screen.getByRole('article', { name: /Le texte collé/ });
+    expect(within(text).getByText('0:00')).toBeInTheDocument();
+    expect(within(text).getByText('1:02')).toBeInTheDocument();
+    const card = screen.getByRole('article', { name: 'Chiffre sans source' });
+    expect(card).toHaveTextContent('À 1:02 dans la vidéo');
+  });
+
   it('stops a paste too short to be an article, before any request', async () => {
     const seen = serve(account());
     render(<Analyser />);
