@@ -19,6 +19,7 @@ import type { AnalysisResult } from '@squiggle/shared';
 import { findingsToHighlightTargets, textBlockToEngineBlock } from '../adapters/findingAdapters';
 import type { ExtractedArticle } from '../content/types';
 import type { FcRpcMap } from '../messaging/protocol';
+import { recordFinalizedAnalysis } from '../review/reviewPrompt';
 
 /**
  * Below this word count a page is a teaser rather than an article. Real French
@@ -485,6 +486,8 @@ export class BackgroundServiceWorker {
         }
       }
 
+      // Counted before the panel hears of it, so the panel asks for a review on the run that reaches the count.
+      await recordFinalizedAnalysis();
       this.safeDispatch('ANALYSIS_COMPLETE', { tabId, result });
       return { success: true, result };
     } catch (err: unknown) {

@@ -1,14 +1,15 @@
 import { useSyncExternalStore } from 'react';
 
+import { CHROME_STORE_URL, FIREFOX_STORE_URL } from '@squiggle/shared/src/stores';
+
 /**
  * Where the install button sends the reader. One named constant per store,
  * routed by user agent so the button is never dead: Firefox goes to AMO, a
  * Chromium browser goes to the Chrome Web Store, and anything else (Safari, a
  * phone) gets no store at all, so the page leads with the analysis on the site.
  */
-export const CHROME_URL =
-  'https://chromewebstore.google.com/detail/squiggle-analyse-critique/gmlbdffooflgdpeiapkdfgkhnfclppec';
-export const FIREFOX_URL = 'https://addons.mozilla.org/en-US/firefox/addon/squiggle-analysis/';
+export const CHROME_URL = CHROME_STORE_URL;
+export const FIREFOX_URL = FIREFOX_STORE_URL;
 
 /** A phone or a tablet: no browser there installs the extension from a store. */
 export function isMobile(userAgent: string): boolean {

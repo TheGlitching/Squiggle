@@ -13,6 +13,8 @@ import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { HostedAccountCard } from '../ui/components/HostedAccountCard';
 import { OnboardingTour, getTourCompletionStatus } from '../ui/components/OnboardingTour';
 import { SquiggleBadge } from '../ui/components/SquiggleBadge';
+import { ReviewPromptCard } from '../ui/components/ReviewPromptCard';
+import { claimReviewPrompt } from '../review/reviewPrompt';
 import {
   beginHostedSignIn,
   describeHostedAccount,
@@ -86,6 +88,7 @@ function SidepanelApp() {
   const [hostedError, setHostedError] = useState<string | null>(null);
   const [hostedBusy, setHostedBusy] = useState(false);
   const [showHostedCode, setShowHostedCode] = useState(false);
+  const [askForReview, setAskForReview] = useState(false);
   // The visit earns its keep on the very first run, when the panel is empty and
   // nothing on screen says what the extension does. It opens only while it has
   // never been completed; the "?" button is the way back to it afterwards.
@@ -342,6 +345,9 @@ function SidepanelApp() {
       setReport(payload.result);
       setError(null);
       setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100, notes: [] });
+      void claimReviewPrompt().then((ask) => {
+        if (ask) setAskForReview(true);
+      });
     });
 
     const offError = bus.on<{ tabId: number; error: string }>('ANALYSIS_ERROR', (payload) => {
@@ -627,6 +633,8 @@ function SidepanelApp() {
                 )}
               </div>
             </section>
+
+            {askForReview && <ReviewPromptCard onClose={() => setAskForReview(false)} />}
           </>
         )}
 
