@@ -248,3 +248,67 @@ describe('Analyser, signed in', () => {
     expect(screen.queryByRole('button', { name: 'Analyser le texte' })).toBeNull();
   });
 });
+
+describe('Analyser, from the clipboard', () => {
+  function clipboard(readText: () => Promise<string>) {
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+  }
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+  });
+
+  it('reads the copied text and starts the analysis in the same tap', async () => {
+    const seen = serve(account());
+    clipboard(async () => TEXT);
+    render(<Analyser />);
+    await analyseButton();
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toHaveLength(3);
+  });
+
+  it('fills the form but leaves the next step to the account when it cannot analyse', async () => {
+    const seen = serve(null);
+    clipboard(async () => TEXT);
+    render(<Analyser />);
+    await screen.findByRole('link', { name: 'Se connecter pour analyser' });
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT));
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  it('stops a copied text the server would refuse, before any request', async () => {
+    const seen = serve(account());
+    clipboard(async () => 'Trop court.');
+    render(<Analyser />);
+    await analyseButton();
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/au moins 200 caractères/);
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  it('sends a copied address to the source field and asks for the text', async () => {
+    serve(account());
+    clipboard(async () => 'https://presse.example/cantines');
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    await waitFor(() => expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines'));
+    expect(screen.getByRole('status')).toHaveTextContent(/Collez maintenant le texte de l’article/);
+  });
+
+  it('falls back to a long press when the clipboard is refused or missing', async () => {
+    serve(account());
+    clipboard(() => Promise.reject(new DOMException('denied', 'NotAllowedError')));
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement dans le champ, puis Coller/);
+    expect(screen.getByLabelText('Texte de l’article')).toHaveFocus();
+    cleanup();
+
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement/);
+  });
+});
