@@ -97,7 +97,6 @@ export function Analyser() {
   const [returning] = useState(backFromVisit);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
-  const [accountFailed, setAccountFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: 'edit' });
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
   const [notice, setNotice] = useState<string | null>(() =>
@@ -115,13 +114,13 @@ export function Analyser() {
 
   useEffect(() => saveDraft(article), [article]);
 
-  function loadAccount() {
-    setAccountFailed(false);
+  // An account that cannot be checked leaves the visitor's analysis, which
+  // needs none: the page never ends on a retry with nothing else to do.
+  useEffect(() => {
     getAccount()
       .then(setAccount)
-      .catch(() => setAccountFailed(true));
-  }
-  useEffect(loadAccount, []);
+      .catch(() => setAccount(null));
+  }, []);
 
   // Back from the sign-in a visitor's report offered: the report is in the
   // shared cache, so it is shown again without a model call or a credit.
@@ -433,10 +432,8 @@ export function Analyser() {
             ) : (
               <Action
                 account={account}
-                accountFailed={accountFailed}
                 empty={!article.text}
                 refused={failure?.kind === 'signup'}
-                onRetry={loadAccount}
               />
             )}
             {view && !running && view.canAnalyse ? <p className="mt-3 mb-0 text-sm text-muted">{view.detail}</p> : null}
@@ -553,30 +550,15 @@ function KeepReport() {
 
 function Action({
   account,
-  accountFailed,
   empty,
   refused,
-  onRetry,
 }: {
   account: Account | null | undefined;
-  accountFailed: boolean;
   /** An empty text leaves the primary look to "Coller le texte copié". */
   empty: boolean;
   /** A visitor whose analysis without an account was refused: an account is the next step. */
   refused: boolean;
-  onRetry: () => void;
 }) {
-  if (accountFailed) {
-    return (
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <p className="m-0 text-sm text-muted">Votre compte n’a pas pu être vérifié.</p>
-        <button type="button" onClick={onRetry} className={SECONDARY_BUTTON}>
-          Réessayer
-        </button>
-      </div>
-    );
-  }
-
   if (account === null && refused) {
     return (
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">

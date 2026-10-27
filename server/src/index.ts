@@ -267,6 +267,16 @@ export function extensionOriginsOf(env: Pick<Env, 'EXTENSION_CHROME_ORIGIN' | 'E
   return [env.EXTENSION_CHROME_ORIGIN, env.EXTENSION_EDGE_ORIGIN].filter((origin): origin is string => !!origin);
 }
 
+function refererOrigin(req: Request): string | null {
+  const referer = req.headers.get('referer');
+  if (!referer) return null;
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return null;
+  }
+}
+
 /** Build the request handler from dependencies (the testable core). */
 export function ownerEmailsOf(raw: string | undefined): string[] {
   return (raw ?? '')
@@ -297,8 +307,13 @@ async function handle(
   // See lib/cors.ts for why the list is a list and not "every POST".
   // A browser sends no Origin on a same-origin GET (web app and API share one
   // origin), so `Sec-Fetch-Site: same-origin` stands in for it when Origin is
-  // absent. The browser sets that header and page script cannot.
-  const sameOrigin = origin === null && req.headers.get('sec-fetch-site') === 'same-origin';
+  // absent. The browser sets that header and page script cannot. A browser too
+  // old to send Sec-Fetch-Site (Safari before 16.4, Firefox before 90) still
+  // sends the page's address as Referer, which script can drop but not forge.
+  const fetchSite = req.headers.get('sec-fetch-site');
+  const sameOrigin =
+    origin === null &&
+    (fetchSite === 'same-origin' || (fetchSite === null && refererOrigin(req) === s.webAppOrigin));
   if (
     (origin !== null && !originAllowed) ||
     (!originAllowed && !sameOrigin && originRequired(req.method, url.pathname))

@@ -58,7 +58,11 @@
  * endpoints above, a request with no `Origin` is also accepted when it carries
  * `Sec-Fetch-Site: same-origin`. The browser sets that header and page script
  * cannot, which makes it the same class of evidence as `Origin`. `cross-site`,
- * `same-site`, `none` or an absent header are still refused.
+ * `same-site` and `none` are still refused. A browser too old to send
+ * `Sec-Fetch-Site` at all (Safari before 16.4, Firefox before 90) is accepted
+ * when its `Referer` is a page of the web app: script can suppress a Referer
+ * but cannot set one to another origin's address. With neither header, the
+ * request is refused.
  */
 
 /** Endpoints where a request must prove it came from one of our own surfaces. */
