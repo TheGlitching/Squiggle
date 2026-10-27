@@ -19,7 +19,7 @@ import { FREE_ANALYSES, MONTHLY_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../off
 import { Link } from '../router';
 import { INFERENCE_HOSTS_LABEL, RETENTION, WEB_SEARCH_LABEL } from './Transparence';
 
-const UPDATED = '23 octobre 2026';
+const UPDATED = '26 octobre 2026';
 
 const EDITEUR = {
   name: 'Denis Fonteneau',
@@ -275,6 +275,10 @@ const PROCESSING = [
   ['Encaisser l’abonnement et tenir le journal d’usage, preuve de ce qui a été fourni', 'Exécution du contrat (art. 6.1.b)'],
   ['Conserver les pièces de facturation', 'Obligation légale (art. 6.1.c)'],
   ['Protéger le service contre les abus : limites de fréquence, signature des requêtes, journaux techniques', 'Intérêt légitime (art. 6.1.f) : la sécurité du service'],
+  [
+    'Mesurer l’audience du site, en totaux par jour, sans rien conserver qui vous désigne (section 6)',
+    'Intérêt légitime (art. 6.1.f) : savoir ce qui est utile',
+  ],
   ['Répondre à vos demandes et réclamations', 'Exécution du contrat (art. 6.1.b), ou intérêt légitime si vous n’êtes pas client'],
 ] as const;
 
@@ -401,6 +405,15 @@ export function Confidentialite() {
           classe le temps de l’onglet et, si vous l’installez sur votre écran d’accueil, ses propres fichiers pour
           s’ouvrir sans attendre ; rien de cela ne sert à vous suivre. Aucun traceur publicitaire ou analytique n’est utilisé, sur le site comme dans
           l’extension.
+        </p>
+        <p>
+          Mesure d’audience. Le site compte, jour par jour, combien de fois chaque page est ouverte, de quel type de
+          site vient la visite (un moteur de recherche, une boutique d’extensions, un site académique…, parmi une liste
+          fixe) et combien de fois quelques boutons sont utilisés, comme « Installer l’extension » ou « S’abonner ».
+          Chaque compte est un simple nombre par jour et par nom d’événement : sans cookie, sans rien enregistrer dans
+          votre navigateur, sans identifiant, sans adresse IP, et sans lien avec votre compte. Rien ne permet de vous
+          reconnaître d’une visite à l’autre : ce n’est pas un traceur. Ces totaux ne servent qu’à nous, pour savoir ce
+          qui est utile.
         </p>
       </Article>
     </LegalPage>

@@ -18,6 +18,8 @@
  *                                (see `billing/quota.ts`)
  *   customer.subscription.deleted  the subscription is over → none
  *   invoice.payment_failed       the card failed → none, immediately
+ *   invoice.paid                 a renewal went through → no change to the plan;
+ *                                only whether it cost anything is noted
  *
  * A teacher subscription (`metadata.offer`, set by the teacher checkout) is
  * also given its end date here, the next 30 June, whenever an event shows it
@@ -31,11 +33,18 @@
  * us model calls if the account keeps analysing. The reader recovers the
  * moment a retry succeeds, because that emits a `subscription.updated` with an
  * `active` status which reinstates them here.
+ *
+ * Besides the plan, the webhook notes whether the subscription costs anything
+ * (`setSubscriptionFree`): a checkout or an invoice that came to zero is a
+ * 100 % promotion code, and the metrics count that account apart from the ones
+ * that pay. A later invoice that does cost something moves it back, which is
+ * what a code valid for the first month only leads to.
  */
 import type { Clock } from '../lib/clock';
 import type { Db, UserRow } from '../db/types';
 import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
+import { countMetric } from '../metrics';
 import { setSubscriptionEnd, verifyStripeSignature, type StripeConfig } from './stripe';
 import { schoolYearEnd } from './teacher';
 
@@ -100,6 +109,19 @@ async function accountFor(db: Db, object: Record<string, unknown>): Promise<User
   }
   const customerId = str(object.customer);
   return customerId ? db.getUserByStripeCustomerId(customerId) : null;
+}
+
+/**
+ * Note whether the subscription costs anything. Metrics only, so it comes after
+ * the plan and never fails the event: once recorded, an event is not applied
+ * again, and a reader who paid must not lose access over a statistic.
+ */
+async function noteFree(deps: WebhookDeps, userId: string, free: boolean, now: number): Promise<void> {
+  try {
+    await deps.db.setSubscriptionFree(userId, free, now);
+  } catch {
+    logEvent({ event: 'metric_failed', requestId: deps.requestId, scope: 'subscription_free' });
+  }
 }
 
 export async function handleStripeWebhook(
@@ -167,6 +189,10 @@ export async function handleStripeWebhook(
       if (!hasLaterExpiry) {
         await deps.db.setPlan(user.id, 'active', { start: now, end: provisionalEnd }, now);
       }
+      // Cents; an amount the event does not carry counts as paid, as before.
+      const free = object.amount_total === 0;
+      await noteFree(deps, user.id, free, now);
+      await countMetric(deps.db, free ? 'checkout_free' : 'checkout_paid', now, deps.requestId);
       break;
     }
 
@@ -208,6 +234,11 @@ export async function handleStripeWebhook(
     case 'customer.subscription.deleted': {
       await deps.db.setStripeIds(user.id, { subId: null }, now);
       await deps.db.setPlan(user.id, 'none', null, now);
+      break;
+    }
+
+    case 'invoice.paid': {
+      await noteFree(deps, user.id, object.amount_paid === 0, now);
       break;
     }
 

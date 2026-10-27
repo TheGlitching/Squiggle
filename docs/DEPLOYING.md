@@ -135,8 +135,21 @@ build, the staging one.
 
 `GET /admin/metrics` answers with aggregate counts and ratios, read with the same admin
 token. It is the only source of launch metrics: the extension and the site carry no
-telemetry. The figures come from rows the server already keeps, plus one small table of
-daily event counters (cache checks and hits, calls and failures per model stage).
+tracker. The figures come from rows the server already keeps, plus one small table of
+daily event counters, a number per day and per fixed name:
+
+- counted by the server: cache checks and hits, calls and failures per model stage,
+  sign-ins started and completed, checkouts started and completed (paid, or free through
+  a 100 % promotion code), analyses started and finalized by surface (extension or site),
+  and refusals by reason;
+- sent by the site (`POST /web/count`, no cookie, closed list in
+  `shared/src/hosted/audience.ts`): pages opened, the kind of site a visit came from,
+  known campaign links (`?ref=clemi`), and a few buttons.
+
+`headline` gathers the five figures to read every week; ask with `?weeks=1` to read them
+over the last week. Revenue is read in Stripe, net of discounts: `subscriptions.active`
+and `trial.convertedToPaid` count only the accounts that pay, and `activeFree` the ones
+subscribed through a free code.
 
 ```bash
 curl -H "authorization: Bearer $ADMIN_TOKEN" "https://<origin>/admin/metrics?weeks=4&costUsd=12.40"

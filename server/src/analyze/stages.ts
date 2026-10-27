@@ -61,9 +61,9 @@ import {
 } from '@squiggle/shared';
 
 import type { Clock } from '../lib/clock';
-import type { Db, UserRow } from '../db/types';
+import { METRIC_NAMES, type Db, type MetricName, type UserRow } from '../db/types';
 import { entitlementOf, refusalFor, startsCountedFromDay, startsRefusal } from '../billing/quota';
-import { apiError, type Outcome } from '../lib/errors';
+import { apiError, type ApiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
 import { countMetric } from '../metrics';
 import { sanitizeReport } from '../lib/sanitize';
@@ -136,6 +136,8 @@ export interface AnalyzeServices {
   fetchImpl?: typeof fetch;
   /** Correlation id of the request being served; logged, never derived from content. */
   requestId: string;
+  /** Who is asking: the extension (`install`) or the web app (`session`). Counted, never stored with the run. */
+  surface: 'install' | 'session';
 }
 
 /**
@@ -144,8 +146,13 @@ export interface AnalyzeServices {
  * whoever wrote the article, executed from inside our own network.
  */
 /** Count a metric at the clock of the request being served. */
-const count = (s: AnalyzeServices, name: Parameters<typeof countMetric>[1]) =>
-  countMetric(s.db, name, s.clock.now(), s.requestId);
+const count = (s: AnalyzeServices, name: MetricName) => countMetric(s.db, name, s.clock.now(), s.requestId);
+
+/** Count a refusal the reader is shown, by its code, when it is one the metrics follow. */
+async function countRefusal(s: AnalyzeServices, refusal: ApiError): Promise<void> {
+  const name = `refused_${refusal.code}`;
+  if ((METRIC_NAMES as readonly string[]).includes(name)) await count(s, name as MetricName);
+}
 
 function serverPageFetcher(s: AnalyzeServices): PageFetcher {
   return (url, timeoutMs) => safeFetchPageText(url, timeoutMs, { fetchImpl: s.fetchImpl });
@@ -230,6 +237,7 @@ export async function analyzeAudit(
   const chars = articleLength(payload.blocks);
   if (chars > MAX_ARTICLE_CHARS) {
     logEvent({ event: 'payload_rejected', requestId: s.requestId, userId: user.id, fields: ['blocks'], count: chars });
+    await count(s, 'refused_article_too_long');
     return apiError('article_too_long', articleTooLongMessage(chars));
   }
 
@@ -238,7 +246,11 @@ export async function analyzeAudit(
   // Every ceiling is checked BEFORE the provider is called: an abusive client
   // must not be able to spend a single token proving it is abusive.
   const gate = await enforceStartCeilings(s, user, now);
-  if (!gate.ok) return gate;
+  if (!gate.ok) {
+    await countRefusal(s, gate);
+    return gate;
+  }
+  await count(s, `run_started_${s.surface}`);
 
   // The run row is opened BEFORE the audit call, not after it. The audit takes
   // 5-25 seconds, and a row written afterwards leaves that whole window with
@@ -646,6 +658,7 @@ export async function analyzeFinalize(
 
   // The ledger records that an analysis happened, not which article it was.
   await s.db.recordAnalysis({ userId: user.id, now });
+  await count(s, `finalize_${s.surface}`);
   logEvent({ event: 'analysis_finalized', requestId: s.requestId, userId: user.id, urlHash });
 
   return { ok: true, report, cached };
