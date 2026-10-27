@@ -81,7 +81,8 @@ export function Glossaire() {
   return (
     <>
       <div className={`${PAGE} pt-10 pb-16 md:pt-20 md:pb-24`}>
-        <h1 className={`${H1} max-w-[14ch]`}>Les noms de ce qui cloche</h1>
+        <h1 className={`${H1} max-w-[14ch]`}>Glossaire de l’esprit critique</h1>
+        <p className={`mt-4 ${LEAD} ${MEASURE} font-semibold`}>Sophismes, biais et procédés, expliqués simplement</p>
         <p className={`mt-6 ${LEAD} ${MEASURE}`}>
           {typo(
             `Les ${NOTIONS.length} notions que nomment les rapports Squiggle, une par page : une définition simple, un exemple sur un article inventé, les signes qui la trahissent et une question pour en parler en classe.`,

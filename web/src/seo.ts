@@ -24,13 +24,13 @@ export interface PublicPage {
 }
 
 const GLOSSARY = `${ORIGIN}/glossaire`;
-const TERM_SET = { '@type': 'DefinedTermSet', '@id': `${GLOSSARY}#glossaire`, name: 'Les noms de ce qui cloche', url: GLOSSARY };
+const TERM_SET = { '@type': 'DefinedTermSet', '@id': `${GLOSSARY}#glossaire`, name: 'Glossaire de l’esprit critique', url: GLOSSARY };
 
 /** The glossary: its index as a `DefinedTermSet`, and each notion as a `DefinedTerm` of it. */
 const GLOSSARY_PAGES: PublicPage[] = [
   {
     path: '/glossaire',
-    title: 'Glossaire : les noms de ce qui cloche - Squiggle',
+    title: 'Glossaire de l’esprit critique : sophismes, biais et procédés, expliqués simplement - Squiggle',
     description:
       'Faux dilemme, homme de paille, chiffre sans origine… Les 25 notions que nomment les rapports Squiggle, avec un exemple et une question pour la classe.',
     jsonLd: {

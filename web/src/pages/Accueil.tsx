@@ -347,7 +347,7 @@ export function Accueil() {
         </table>
         <p className="mt-8 mb-0">
           <Link to="/glossaire" className={QUIET_LINK}>
-            Faux dilemme, homme de paille, chiffre sans origine : les noms de ce qui cloche, expliqués
+            Glossaire de l’esprit critique : sophismes, biais et procédés, expliqués simplement
           </Link>
         </p>
 

@@ -96,7 +96,7 @@ describe('a finding finds its notion', () => {
 describe('the glossary pages', () => {
   it('lists every notion by family on /glossaire', () => {
     render(<App path="/glossaire" />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Les noms de ce qui cloche' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Glossaire de l’esprit critique' })).toBeInTheDocument();
     for (const { id, titre } of FAMILLES) {
       const region = within(screen.getByRole('region', { name: titre }));
       for (const notion of NOTIONS.filter((item) => item.famille === id)) {
