@@ -67,7 +67,7 @@ export function Connexion() {
     // for the sign-in, so the destination comes back from the server.
     verifyMagicLink(linkCode)
       .then((result) => {
-        if (!cancelled) navigate(result.next ?? next);
+        if (!cancelled) navigate(result.next ?? next, { replace: true });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -87,7 +87,7 @@ export function Connexion() {
     if (linkCode) return;
     getAccount()
       .then((account) => {
-        if (account) navigate(next);
+        if (account) navigate(next, { replace: true });
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,7 +113,7 @@ export function Connexion() {
     setError(null);
     try {
       const result = await verifyMagicLink(code);
-      navigate(result.next ?? next);
+      navigate(result.next ?? next, { replace: true });
     } catch (err) {
       setError(messageForError(err));
       setBusy(false);

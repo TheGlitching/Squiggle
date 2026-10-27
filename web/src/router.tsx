@@ -22,8 +22,13 @@ export function usePath(at?: Path): Path {
   return path;
 }
 
-export function navigate(to: string): void {
-  window.history.pushState({}, '', to);
+/**
+ * `replace` is for a redirect: the page that only sends the reader on must not stay
+ * in the history, or Back lands on it and it sends the reader forward again.
+ */
+export function navigate(to: string, { replace = false }: { replace?: boolean } = {}): void {
+  if (replace) window.history.replaceState({}, '', to);
+  else window.history.pushState({}, '', to);
   window.dispatchEvent(new PopStateEvent('popstate'));
   // A new page opens at its top, as it would on a full load, not at the scroll of the last one.
   window.scrollTo(0, 0);
