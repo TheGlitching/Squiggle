@@ -14,6 +14,8 @@ import { WEEK_MS } from '../src/usage/limits';
 import {
   claim,
   exportJwk,
+  CHROME_ORIGIN,
+  FIREFOX_ORIGIN,
   magicLogin,
   makeTestEnv,
   postStripeEvent,
@@ -251,12 +253,30 @@ describe('POST /web/count', () => {
     expect((await countRequest(env, 'click_example', {})).status).toBe(403);
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
-    expect(Object.keys(m.audience)).toEqual(['campaigns', 'clicks', 'pastes']);
+    expect(Object.keys(m.audience)).toEqual(['campaigns', 'clicks', 'pastes', 'flags']);
     expect(m.audience.campaigns).toMatchObject({ clemi: 2, linuxfr: 0 });
     expect(m.audience.clicks).toMatchObject({ install_firefox: 1, install_chrome: 0 });
     expect(m.audience.pastes).toEqual({ transcript: 1 });
     expect(m.funnel.checkout).toEqual({ started: 0, paid: 0, free: 0 });
     expect(m.headline.newAccounts).toEqual({ count: 0, campaigns: m.audience.campaigns });
+  });
+
+  it('counts a reported finding by category and by reason, from the site and from either extension', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    for (const origin of [WEB_APP_ORIGIN, CHROME_ORIGIN, FIREFOX_ORIGIN]) {
+      expect((await countRequest(env, 'flag_finding_sophisme', { origin })).status).toBe(204);
+    }
+    expect((await countRequest(env, 'flag_reason_misread')).status).toBe(204);
+    // A category or a reason off the list is refused like any other name.
+    for (const name of ['flag_finding_autre', 'flag_reason_texte libre', 'flag_finding_']) {
+      expect((await countRequest(env, name)).status).toBe(400);
+    }
+    // The Firefox shape reaches the counter, never a cookie-carrying endpoint.
+    expect((await countRequest(env, 'flag_reason_other', { origin: 'moz-extension://evil.example' })).status).toBe(403);
+
+    const { flags } = (await metrics(env, '?weeks=1')).body.metrics.audience;
+    expect(flags.categories).toMatchObject({ sophisme: 3, affirmation_non_etayee: 0, point_fort: 0 });
+    expect(flags.reasons).toMatchObject({ misread: 1, sourced: 0, other: 0 });
   });
 
   it('keeps the name and the day, never who sent it', async () => {

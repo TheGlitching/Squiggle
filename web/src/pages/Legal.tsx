@@ -19,7 +19,7 @@ import { FREE_ANALYSES, MONTHLY_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../off
 import { Link } from '../router';
 import { INFERENCE_HOSTS_LABEL, RETENTION, WEB_SEARCH_LABEL } from './Transparence';
 
-const UPDATED = '26 octobre 2026';
+const UPDATED = '27 octobre 2026';
 
 const EDITEUR = {
   name: 'Denis Fonteneau',
@@ -415,6 +415,13 @@ export function Confidentialite() {
           l’extension » ou « S’abonner », et combien de visites arrivent par un lien de campagne connu : un simple
           nombre par jour et par nom d’événement, sans cookie, sans identifiant, sans adresse IP et sans lien avec votre
           compte. Ces totaux ne servent qu’à nous, pour savoir ce qui est utile.
+        </p>
+        <p>
+          Signaler un constat erroné. Sous chaque constat d’un rapport, sur le site et dans l’extension en mode hébergé,
+          « Signaler une erreur » propose une courte liste de motifs. Le choix ajoute un à chacun de deux de ces totaux : l’un pour
+          la catégorie du constat (sophisme, cadrage…), l’autre pour le motif. Rien d’autre ne part : ni le texte du
+          constat, ni l’article, ni son adresse, ni votre compte, et les deux totaux ne sont pas reliés entre eux. Avec
+          votre propre clé, l’extension ne propose pas ce signalement, puisqu’elle n’envoie rien à notre serveur.
         </p>
       </Article>
     </LegalPage>

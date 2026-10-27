@@ -1,6 +1,6 @@
 # Politique de confidentialité
 
-*Dernière mise à jour : 26 octobre 2026*
+*Dernière mise à jour : 27 octobre 2026*
 
 Squiggle est une extension de navigateur qui analyse la rigueur d'un article de presse,
 et un site, squiggle.fr, qui fait la même analyse sur le texte d'un article qu'on y
@@ -168,7 +168,7 @@ lecteur qui colle le même texte.
 | Lien de connexion par e-mail, avec l'adresse IP de la demande | base de données, le code **en empreinte SHA-256** | 10 minutes |
 | Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l'heure | base de données | 2 heures au plus |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
-| Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une visite est arrivée par un lien de campagne, un bouton a été utilisé, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
+| Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une visite est arrivée par un lien de campagne, un bouton a été utilisé, un constat a été signalé comme erroné (sa catégorie, et le motif choisi), par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |
 
 Les journaux techniques méritent une précision, parce que c'est là que ce genre de
@@ -195,6 +195,14 @@ et sans lien avec votre compte. La page envoie à notre serveur le seul nom de
 l'événement, sans cookie (`POST /web/count`), et le serveur refuse tout nom absent de la
 liste fermée (`shared/src/hosted/audience.ts`). Ces totaux ne servent qu'à nous, pour
 savoir ce qui est utile.
+
+**Signaler un constat erroné.** Sous chaque constat d'un rapport, sur le site et dans
+l'extension en mode hébergé, « Signaler une erreur » propose une courte liste fermée de
+motifs. Le choix ajoute un à chacun de deux de ces totaux : l'un pour la catégorie du constat
+(`flag_finding_<catégorie>`), l'autre pour le motif (`flag_reason_<motif>`). Rien d'autre
+ne part : ni le texte du constat, ni l'article, ni son adresse, ni votre compte, et les
+deux totaux ne sont pas reliés entre eux. En mode clé personnelle, l'extension ne propose
+pas ce signalement : elle n'envoie toujours rien à notre serveur.
 
 ## Les sous-traitants
 

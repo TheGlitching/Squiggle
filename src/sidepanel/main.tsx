@@ -25,6 +25,7 @@ import {
   type HostedAccount,
 } from '../hosted/session';
 import { TRANSPARENCY_URL } from '../hosted/config';
+import { reportFinding } from '../hosted/flag';
 import type { AnalysisMode } from '../crypto/storage';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
@@ -628,6 +629,7 @@ function SidepanelApp() {
                       isHovered={hoveredFindingId === finding.id}
                       onSelect={(id) => selectFinding(selectedFindingId === id ? null : id)}
                       onHover={setHoveredFindingId}
+                      onReport={hosted ? (reason) => reportFinding(finding.category, reason) : undefined}
                     />
                   ))
                 )}

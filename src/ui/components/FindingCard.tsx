@@ -1,5 +1,5 @@
-import React from 'react';
-import { Finding } from '@squiggle/shared';
+import React, { useState } from 'react';
+import { Finding, FLAG_REASONS, type FlagReason } from '@squiggle/shared';
 import { SeverityBadge } from './SeverityBadge';
 import { VerificationBadge } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
@@ -11,6 +11,8 @@ export interface FindingCardProps {
   isHovered?: boolean;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
+  /** Report the finding as wrong. Absent in BYOK mode, which sends nothing to our server. */
+  onReport?: (reason: FlagReason) => void;
 }
 
 type FindingTone = 'critical' | 'warning' | 'info' | 'positive';
@@ -66,6 +68,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
   isHovered,
   onSelect,
   onHover,
+  onReport,
 }) => {
   const tone = findingTone(finding);
 
@@ -109,6 +112,67 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         {finding.explanation}
       </p>
       <SourceCitations sources={finding.sources ?? []} />
+      {onReport && <ReportFinding onReport={onReport} />}
+    </div>
+  );
+};
+
+const REPORT_LINK =
+  'text-xs text-muted underline decoration-line-heavy underline-offset-4 hover:text-ink focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-accent rounded-xs';
+
+/**
+ * "Signaler une erreur": one click opens the closed list of reasons, one more
+ * sends it. Only the category and the reason are counted, never the text.
+ */
+const ReportFinding: React.FC<{ onReport: (reason: FlagReason) => void }> = ({ onReport }) => {
+  const [state, setState] = useState<'closed' | 'open' | 'sent'>('closed');
+  // The card selects its finding on click; a report must not.
+  const stop = (event: React.MouseEvent) => event.stopPropagation();
+
+  if (state === 'sent') {
+    return (
+      <p role="status" className="mt-2 text-xs text-muted">
+        Merci, c’est noté. Seuls la catégorie et le motif sont comptés.
+      </p>
+    );
+  }
+  if (state === 'closed') {
+    return (
+      <button
+        type="button"
+        aria-expanded={false}
+        onClick={(event) => {
+          stop(event);
+          setState('open');
+        }}
+        className={`mt-2 block whitespace-nowrap text-left ${REPORT_LINK}`}
+      >
+        Signaler une erreur
+      </button>
+    );
+  }
+  return (
+    <div role="group" aria-label="Ce qui ne va pas dans ce constat" className="mt-2" onClick={stop}>
+      <p className="text-xs text-muted mb-1.5">Qu’est-ce qui ne va pas ?</p>
+      <div className="flex flex-wrap gap-1.5">
+        {FLAG_REASONS.map(({ id, label }, index) => (
+          <button
+            key={id}
+            type="button"
+            autoFocus={index === 0}
+            onClick={() => {
+              onReport(id);
+              setState('sent');
+            }}
+            className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-xs text-ink hover:border-line-heavy focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-accent"
+          >
+            {label}
+          </button>
+        ))}
+        <button type="button" onClick={() => setState('closed')} className={`whitespace-nowrap px-1 ${REPORT_LINK}`}>
+          Annuler
+        </button>
+      </div>
     </div>
   );
 };

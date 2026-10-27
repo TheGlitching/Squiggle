@@ -8,6 +8,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 
 import { getScoreBandLabel } from '../../../shared/src/engine/bands';
+import { FLAG_REASONS, flagCounters } from '../../../shared/src/hosted/audience';
 import type { AnalysisReport, EvidenceSource, Finding, TextBlock } from '../../../shared/src/engine/types';
 import {
   CATEGORY_LABELS,
@@ -19,6 +20,7 @@ import {
   VERIFICATION_STATES,
   type HighlightSeverity,
 } from '../demo';
+import { count } from '../count';
 import { frenchDate } from '../format';
 import { glossaryLink } from '../glossaire';
 import { locateFindings, passageTone, type Segment } from '../report';
@@ -122,6 +124,8 @@ function FindingCard({
 }) {
   const verification = finding.verification ? VERIFICATION[finding.verification] : undefined;
   const glossary = glossaryLink(finding);
+  // "Signaler une erreur": the category and the reason are counted, never the text.
+  const [report, setReport] = useState<'closed' | 'open' | 'sent'>('closed');
   return (
     <article
       id={findingId(finding)}
@@ -188,6 +192,48 @@ function FindingCard({
               <span className="sr-only"> (nouvel onglet)</span>
             </a>
           ) : null}
+        </p>
+      ) : null}
+      {/* Apart from the links above: it is a word about the report, not a way through it. */}
+      {report === 'closed' ? (
+        <button
+          type="button"
+          aria-expanded={false}
+          className="block whitespace-nowrap py-3 text-left text-sm text-muted underline decoration-borderControl underline-offset-4 hover:text-foreground hover:decoration-foreground"
+          onClick={() => setReport('open')}
+        >
+          Signaler une erreur
+        </button>
+      ) : null}
+      {report === 'open' ? (
+        <div role="group" aria-labelledby={`${findingId(finding)}-motif`} className="mt-1">
+          <p id={`${findingId(finding)}-motif`} className="m-0 text-sm text-muted">
+            Qu’est-ce qui ne va pas ?
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {FLAG_REASONS.map(({ id, label }, index) => (
+              <button
+                key={id}
+                type="button"
+                autoFocus={index === 0}
+                className="min-h-11 whitespace-nowrap rounded-control border border-borderControl px-3 text-sm hover:border-accentInk"
+                onClick={() => {
+                  for (const name of flagCounters(finding.category, id)) count(name);
+                  setReport('sent');
+                }}
+              >
+                {label}
+              </button>
+            ))}
+            <button type="button" className={`${CARD_LINK} px-1`} onClick={() => setReport('closed')}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {report === 'sent' ? (
+        <p role="status" className="mt-2 mb-0 text-sm text-muted">
+          Merci, c’est noté. Seuls la catégorie du constat et le motif sont comptés, jamais le texte.
         </p>
       ) : null}
     </article>

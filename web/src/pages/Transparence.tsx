@@ -56,7 +56,7 @@ export const RETENTION = [
   ],
   ['Identifiants Stripe (client, abonnement)', 'Base de données', 'Tant que le compte existe'],
   [
-    'Compteurs de fonctionnement et d’audience : réponses du cache, échecs par étape d’analyse, visites par un lien de campagne, boutons utilisés',
+    'Compteurs de fonctionnement et d’audience : réponses du cache, échecs par étape d’analyse, visites par un lien de campagne, boutons utilisés, constats signalés comme erronés (catégorie et motif)',
     'Base de données',
     'Un nombre par jour et par nom d’événement, sans compte et sans article',
   ],

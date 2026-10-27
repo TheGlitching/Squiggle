@@ -6,6 +6,7 @@
  * the report highlights the passages it discusses; a refusal says what to do.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AnalysisReport } from '../../shared/src/engine/types';
@@ -186,6 +187,40 @@ describe('Analyser, signed in', () => {
     expect(
       within(screen.getByRole('article', { name: 'Formule appuyée' })).getByText(/n’a pas été retrouvé tel quel/),
     ).toBeInTheDocument();
+  });
+
+  it('counts a finding reported as wrong by its category and a reason from the list, never its text', async () => {
+    const seen = serve(account());
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    await screen.findByText('58');
+
+    const card = screen.getByRole('article', { name: 'Chiffre sans source' });
+    await userEvent.click(within(card).getByRole('button', { name: 'Signaler une erreur' }));
+    const reasons = within(card).getByRole('group', { name: 'Qu’est-ce qui ne va pas ?' });
+    expect(within(reasons).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Le passage ne dit pas cela',
+      'L’article donne sa source',
+      'Ce n’est pas ce procédé',
+      'Trop sévère',
+      'Autre raison',
+      'Annuler',
+    ]);
+    await userEvent.click(within(reasons).getByRole('button', { name: 'L’article donne sa source' }));
+    expect(within(card).getByRole('status')).toHaveTextContent('Merci, c’est noté.');
+    expect(within(card).queryByRole('button', { name: 'Signaler une erreur' })).toBeNull();
+
+    const counts = seen.filter((s) => s.url.endsWith('/web/count'));
+    expect(counts.map((s) => s.body)).toEqual([{ name: 'flag_finding_affirmation_non_etayee' }, { name: 'flag_reason_sourced' }]);
+    for (const c of counts) expect(c.credentials).toBe('omit');
+
+    // Cancelling sends nothing.
+    const other = screen.getByRole('article', { name: 'Formule appuyée' });
+    await userEvent.click(within(other).getByRole('button', { name: 'Signaler une erreur' }));
+    await userEvent.click(within(other).getByRole('button', { name: 'Annuler' }));
+    expect(within(other).getByRole('button', { name: 'Signaler une erreur' })).toBeInTheDocument();
+    expect(seen.filter((s) => s.url.endsWith('/web/count'))).toHaveLength(2);
   });
 
   it('prepares the report for the class, in this browser only', async () => {
