@@ -1,4 +1,5 @@
 import { AnalysisInput } from './types';
+import { isVideoTranscriptUrl } from './video';
 
 /**
  * Version of the prompt set below. It is stamped into every report's `meta`
@@ -268,6 +269,26 @@ function formatCitedSourcesSection(citedSources: { href: string; domain: string;
 }
 
 /**
+ * A video reaches the audit as the captions of its speech, read in the reader's
+ * tab, and those are not an article: nobody wrote the spelling or the
+ * punctuation, a spoken claim never carries a link, and an automatic caption
+ * can turn a name or a figure into another one. Judged as prose, a transcript
+ * loses its spelling marks to the captioning and has its mishearings reported
+ * as the speaker's errors. Only a text filed under a video address gets this
+ * section, so every article prompt, and every report cached under it, is
+ * unchanged.
+ */
+const VIDEO_TRANSCRIPT_SECTION = `
+
+NATURE DU TEXTE : TRANSCRIPTION D'UNE VIDÉO
+Ce texte n'est pas un article écrit : ce sont les sous-titres de la parole d'une vidéo, souvent générés automatiquement. Chaque bloc est un passage parlé, dans l'ordre de la vidéo.
+- Une parole ne porte pas de lien : n'en reproche jamais l'absence. Une affirmation factuelle dont l'orateur ne nomme pas la source reste non sourcée.
+- Une transcription automatique peut déformer un nom propre, un chiffre ou un mot. Ne qualifie jamais d'erreur factuelle ce qui peut être une erreur de transcription : signale au plus un point à vérifier.
+- L'orthographe, la ponctuation et la syntaxe sont celles des sous-titres, pas de l'orateur : ne les juge pas, et donne la note maximale au domaine "orthographe_grammaire".
+- Seule la parole est transcrite : le texte et les images à l'écran te sont inconnus. Ne conclus jamais qu'un chiffre ou une source n'est pas montré à l'écran.
+- "quote" reste une citation littérale exacte du texte transcrit.`;
+
+/**
  * Generates the user prompt embedding the article data and the Squiggle 8-block criteria.
  *
  * No factual-verification evidence is embedded here: research now runs on the
@@ -281,6 +302,7 @@ export function buildFourchesCaudinesUserPrompt(
   const blocksFormatted = formatBlocksForPrompt(input);
   const citedSourcesSection = formatCitedSourcesSection(opts.citedSources ?? []);
   const temporalSection = formatTemporalContextSection(opts.now ?? new Date());
+  const transcriptSection = isVideoTranscriptUrl(input.url) ? VIDEO_TRANSCRIPT_SECTION : '';
 
   return `Effectue l'analyse critique complète selon la grille de lecture Squiggle sur l'article suivant, pour informer le lecteur de sa solidité :
 
@@ -293,7 +315,7 @@ URL : ${input.url}
 TEXTE SEGMENTÉ PAR BLOCS :
 ---
 ${blocksFormatted}
----${citedSourcesSection}${temporalSection}
+---${citedSourcesSection}${temporalSection}${transcriptSection}
 
 GRILLE D'ÉVALUATION ET CRITÈRES DE NOTATION SUR 100 POINTS :
 Tu dois noter obligatoirement chacun des 5 domaines suivants :

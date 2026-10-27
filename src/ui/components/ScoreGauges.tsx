@@ -8,6 +8,8 @@ export interface ScoreGaugeProps {
   strokeWidth?: number;
   showBandLabel?: boolean;
   scoreBand?: ScoreBand;
+  /** What the score is about, for the band's title. */
+  subject?: 'article' | 'video';
   className?: string;
 }
 
@@ -39,6 +41,7 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
   strokeWidth = 9,
   showBandLabel = true,
   scoreBand,
+  subject = 'article',
   className = '',
 }) => {
   const effectiveBand = scoreBand || determineScoreBand(score);
@@ -89,7 +92,7 @@ export const ScoreRadialGauge: React.FC<ScoreGaugeProps> = ({
           reader as an unaccented "PROBLEMATIQUE". */}
       {showBandLabel && (
         <span className={`mt-2 font-mono text-xs font-bold uppercase tracking-wider text-center ${colors.text}`}>
-          {getScoreBandLabel(effectiveBand).title}
+          {getScoreBandLabel(effectiveBand, subject).title}
         </span>
       )}
     </div>

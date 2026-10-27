@@ -53,6 +53,7 @@ const LABELS: Record<string, string> = {
   install: 'Extension',
   session: 'Site',
   anon: 'Site, sans compte',
+  video: 'dont vidéos YouTube',
   // refusals
   trial_exhausted: 'Essai épuisé',
   quota_exhausted: 'Quota épuisé',

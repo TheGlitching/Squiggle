@@ -47,6 +47,7 @@ import {
   computeFourchesCaudinesScore,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
   isResearchableFinding,
+  isVideoTranscriptUrl,
   MAX_ARTICLE_CHARS,
   parseAndValidateLlmOutput,
   reconcileResearchedFindings,
@@ -292,6 +293,7 @@ export async function analyzeAudit(
     return gate;
   }
   await count(s, `run_started_${s.surface}`);
+  if (isVideoTranscriptUrl(canonical)) await count(s, 'run_started_video');
 
   // The run row is opened BEFORE the audit call, not after it. The audit takes
   // 5-25 seconds, and a row written afterwards leaves that whole window with

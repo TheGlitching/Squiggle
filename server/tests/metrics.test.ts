@@ -313,11 +313,29 @@ describe('the counters the server bumps itself', () => {
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
     expect(m.funnel.signin).toEqual({ link_sent: 1, google: 0, completed: 1, after_anon: 0 });
-    expect(m.funnel.runsStarted).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0 });
+    expect(m.funnel.runsStarted).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0, video: 0 });
     expect(m.funnel.finalized).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0 });
     expect(m.funnel.refused).toMatchObject({ trial_exhausted: 1, article_too_long: 1, quota_exhausted: 0 });
     expect(m.headline.successRate).toEqual({ started: TRIAL_ANALYSES, finalized: TRIAL_ANALYSES, share: 1 });
     expect(m.headline.activeAccounts).toBe(1);
+  });
+
+  it('counts a run on a video transcript, read as one from its address alone', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const marie = await signedIn(env, 'marie@example.org');
+    const video = 'https://www.youtube.com/watch?v=k1KPNO-1vJc';
+    for (const url of [video, URL_]) {
+      const run = await call(env, marie, '/v1/analyze/audit', { url, title: 'T', blocks: BLOCKS, citedSources: [] });
+      expect(run.status).toBe(200);
+      expect((await call(env, marie, '/v1/analyze/finalize', { runId: run.json.runId })).status).toBe(200);
+    }
+
+    const prompts = env.llm.completeOptions.map((o) => o.messages.map((m) => m.content).join('\n'));
+    expect(prompts[0]).toContain('TRANSCRIPTION D\'UNE VIDÉO');
+    expect(prompts[1]).not.toContain('TRANSCRIPTION');
+
+    const m = (await metrics(env, '?weeks=1')).body.metrics;
+    expect(m.funnel.runsStarted).toEqual({ install: 2, session: 0, anon: 0, video: 1 });
   });
 
   it('measures activation over the accounts that have had their whole first week', async () => {

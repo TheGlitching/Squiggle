@@ -10,6 +10,7 @@
 
 import type { AnalysisResult, Finding, PipelineStatus } from '@squiggle/shared';
 import type { ExtractedArticle } from '../content/types';
+import type { VideoReport } from '../video/youtube';
 
 export interface TabAnalysisSnapshot {
   tabId: number;
@@ -21,6 +22,7 @@ export interface TabAnalysisSnapshot {
   article?: ExtractedArticle;
   findings?: Finding[];
   result?: AnalysisResult;
+  video?: VideoReport;
   error?: string;
   selectedFindingId?: string | null;
   hoveredFindingId?: string | null;
@@ -69,7 +71,7 @@ export interface FcEventMap {
     /** Cumulative human-readable steps of the run; drives the live activity feed. */
     notes?: string[];
   };
-  ANALYSIS_COMPLETE: { tabId: number; result: AnalysisResult };
+  ANALYSIS_COMPLETE: { tabId: number; result: AnalysisResult; video?: VideoReport };
   ANALYSIS_ERROR: { tabId: number; error: string };
   FC_SIDEBAR_FINDING_SELECTED: { tabId?: number; findingId?: string };
   FC_SIDEBAR_FINDING_HOVERED: { tabId?: number; findingId?: string };

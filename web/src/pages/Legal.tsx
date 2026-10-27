@@ -370,6 +370,11 @@ export function Confidentialite() {
           pas conservé. L’adresse que vous indiquez à côté reste une simple mention : elle n’est jamais visitée. Avant
           l’analyse, le texte attend dans votre navigateur, jamais sur nos serveurs, jusqu’à ce que vous l’effaciez.
         </p>
+        <p>
+          Une vidéo YouTube est analysée à partir de ses sous-titres, que l’extension lit dans votre onglet, là où le
+          lecteur de YouTube les charge pour vous : ce texte est ensuite traité exactement comme un article. Notre serveur
+          ne va jamais chercher la vidéo ni ses sous-titres, et aucune API de YouTube n’est appelée.
+        </p>
         <Table head={['Finalité', 'Base légale (RGPD)']} rows={PROCESSING} />
         <p>Aucune donnée n’est vendue, utilisée pour de la publicité, pour un profilage, ni pour entraîner un modèle.</p>
       </Article>
