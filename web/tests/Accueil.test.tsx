@@ -428,6 +428,7 @@ describe('Accueil', () => {
     expect(meta('property', 'og:description')).toBe(meta('name', 'description'));
     expect(meta('property', 'og:title')).toBe(html.match(/<title>([^<]+)<\/title>/)?.[1]);
     expect(meta('property', 'og:image')).toBe('https://squiggle.fr/og.png');
+    expect(meta('name', 'twitter:image')).toBe('https://squiggle.fr/og.png');
   });
 
   it('hides its drawings from assistive technology, which reads the words beside them', () => {

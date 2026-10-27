@@ -31,9 +31,9 @@ describe('the Worker entry module', () => {
 });
 
 describe('static assets', () => {
-  it('serve the built web app with a single-page fallback', () => {
+  it('serve the built web app, and a 404 page for any address it does not answer', () => {
     expect(wrangler.assets.directory).toBe('../web/dist');
-    expect(wrangler.assets.not_found_handling).toBe('single-page-application');
+    expect(wrangler.assets.not_found_handling).toBe('404-page');
   });
 
   it('let the Worker answer every API path before a file or the fallback can', () => {

@@ -99,18 +99,29 @@ function prerender(): Plugin {
         appType: 'custom',
       });
       try {
-        const { PUBLIC_PAGES, headFor, render, sitemap } = (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
-        for (const page of PUBLIC_PAGES) {
-          const html = template
-            .replace('<!--page-head-->', headFor(page))
-            .replace(
-              '<div id="root"></div>',
-              `<div id="root" data-path="${page.path}">${render(page.path)}</div>\n    ${STALE_PAGE_GUARD}`,
-            );
+        const { APP_PATHS, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, headFor, render, shareImage, shareImagePath, sitemap, titleFor } =
+          (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
+        const write = (file: string, content: string | Buffer) => {
           // `/classe/mode-emploi` lives in `classe/`, beside `classe.html`.
-          mkdirSync(new URL('.', dist(pageFile(page.path))), { recursive: true });
-          writeFileSync(dist(pageFile(page.path)), html);
+          mkdirSync(new URL('.', dist(file)), { recursive: true });
+          writeFileSync(dist(file), content);
+        };
+        const page = (head: string, root: string) =>
+          template.replace('<!--page-head-->', head).replace('<div id="root"></div>', root);
+        const rendered = (path: string) =>
+          `<div id="root" data-path="${path}">${render(path)}</div>\n    ${STALE_PAGE_GUARD}`;
+
+        for (const item of PUBLIC_PAGES) {
+          write(pageFile(item.path), page(headFor(item), rendered(item.path)));
+          if (item.share) write(shareImagePath(item).slice(1), await shareImage(item));
         }
+        // The pricing anchor is the home page, under its own address.
+        write(pageFile('/tarifs'), page(headFor(PUBLIC_PAGES[0]), rendered('/tarifs')));
+        // The app's own pages render in the browser, from an empty root, as they always have.
+        for (const path of APP_PATHS) write(pageFile(path), page(appHeadFor(titleFor(path)), '<div id="root"></div>'));
+        // Every other address: Cloudflare answers it with this page and a 404 status
+        // (`not_found_handling` in server/wrangler.jsonc), so a mistyped link is not the home page.
+        write('404.html', page(appHeadFor(NOT_FOUND_TITLE), `<div id="root">${render('/404')}</div>`));
         writeFileSync(dist('sitemap.xml'), sitemap());
       } finally {
         await server.close();
