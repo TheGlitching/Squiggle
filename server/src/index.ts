@@ -52,6 +52,7 @@ import {
   PROMPT_VERSION,
   type BaseLLMClient,
   type OpenRouterProviderPreferences,
+  type OpenRouterReasoning,
 } from '@squiggle/shared';
 
 import {
@@ -202,6 +203,16 @@ const HOSTED_PROVIDER_PREFERENCES: OpenRouterProviderPreferences = {
 };
 
 /**
+ * How hard the hosted model thinks before it answers. DeepSeek V4.1 Flash
+ * reasons by default at `high` effort, and its reasoning is paid for out of
+ * the same output ceiling as the answer: left at that default, it could spend
+ * most of the audit's budget thinking and stop mid-report, which the reader
+ * saw as an unreadable answer. `low` keeps it thinking and leaves the answer
+ * its room. `require_parameters` above skips a host that would ignore it.
+ */
+const HOSTED_REASONING: OpenRouterReasoning = { effort: 'low' };
+
+/**
  * Builds the hosted LLM client from deployment config, so the provider and the
  * model are settings rather than something baked into a build. OpenRouter is
  * the default; `gemini` is kept selectable.
@@ -231,7 +242,7 @@ export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
       // The default is the exact OpenRouter catalogue id, tilde-free: the API
       // rejects anything that is not exactly right.
       model: env.OPENROUTER_MODEL || HOSTED_ANALYSIS.model,
-    }, HOSTED_PROVIDER_PREFERENCES);
+    }, HOSTED_PROVIDER_PREFERENCES, HOSTED_REASONING);
   }
 
   return undefined;

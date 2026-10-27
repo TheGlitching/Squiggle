@@ -38,6 +38,11 @@ export interface CompletionResponse {
     totalTokens?: number;
   };
   provider: LLMProvider;
+  /**
+   * Why the model stopped, as the API reports it. `length` means it ran out of
+   * output budget: the answer is cut short, not wrong.
+   */
+  finishReason?: string;
   raw?: unknown;
 }
 

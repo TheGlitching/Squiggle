@@ -92,16 +92,28 @@ export interface OpenRouterProviderPreferences {
   zdr?: boolean;
 }
 
+/**
+ * OpenRouter's `reasoning` request object. A model that reasons by default
+ * does so at its own default effort unless the request says otherwise, and its
+ * reasoning is paid for out of the same `max_tokens` as the answer.
+ */
+export interface OpenRouterReasoning {
+  effort: 'none' | 'low' | 'medium' | 'high';
+}
+
 export class OpenRouterClient extends OpenAIClient {
   private readonly providerPreferences?: OpenRouterProviderPreferences;
+  private readonly reasoning?: OpenRouterReasoning;
 
   /**
-   * Without preferences OpenRouter picks among every host of the model, which
-   * is what a BYOK reader gets on their own key. Hosted mode passes them.
+   * Without preferences OpenRouter picks among every host of the model, and
+   * the model reasons as much as it likes, which is what a BYOK reader gets on
+   * their own key. Hosted mode passes both.
    */
-  constructor(config: ProviderConfig, providerPreferences?: OpenRouterProviderPreferences) {
+  constructor(config: ProviderConfig, providerPreferences?: OpenRouterProviderPreferences, reasoning?: OpenRouterReasoning) {
     super(config);
     this.providerPreferences = providerPreferences;
+    this.reasoning = reasoning;
   }
 
   protected override get defaultBaseUrl(): string {
@@ -128,12 +140,15 @@ export class OpenRouterClient extends OpenAIClient {
 
   /**
    * Every request of this client goes through here (completion, stream, web
-   * search), so the provider preferences cannot be left off one of them.
+   * search), so neither the provider preferences nor the reasoning effort can
+   * be left off one of them.
    */
   protected override postJson(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<Response> {
-    const routed = this.providerPreferences
-      ? { ...(body as Record<string, unknown>), provider: this.providerPreferences }
-      : body;
+    const routed = {
+      ...(body as Record<string, unknown>),
+      ...(this.providerPreferences ? { provider: this.providerPreferences } : {}),
+      ...(this.reasoning ? { reasoning: this.reasoning } : {}),
+    };
     return super.postJson(url, headers, routed, signal);
   }
 
