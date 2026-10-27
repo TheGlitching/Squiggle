@@ -65,4 +65,25 @@ describe('/tableau', () => {
     await waitFor(() => expect(calls.at(-1)?.url).toBe('/web/tableau?weeks=4&costUsd=1.5'));
     expect(calls.filter((call) => call.url.endsWith('/web/count'))).toEqual([]);
   });
+
+  it('reads a figure the server left out as "-" instead of going blank', async () => {
+    window.history.pushState({}, '', '/tableau');
+    const partial = structuredClone(METRICS) as unknown as {
+      stages: Record<string, Record<string, unknown>>;
+      headline: { subscribers: Record<string, unknown> };
+    };
+    delete partial.stages.audit.truncated;
+    delete partial.stages.research.failed;
+    partial.stages.sourceCheck = { failureRate: null };
+    delete partial.headline.subscribers.cancelled;
+    installFetch((call) =>
+      call.url.startsWith('/web/tableau') ? jsonResponse({ ok: true, metrics: partial }) : undefined,
+    );
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Tableau de bord' })).toBeInTheDocument();
+    expect(screen.getByText('5 accès offerts · - résiliations')).toBeInTheDocument();
+    expect(screen.getByText('Audits tronqués').nextSibling).toHaveTextContent('-');
+    expect(screen.getByText(/^- \/ 10 · 10/)).toBeInTheDocument();
+    expect(screen.getByText('Sources citées').nextSibling).toHaveTextContent('- / - · -');
+  });
 });

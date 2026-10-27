@@ -62,9 +62,10 @@ const LABELS: Record<string, string> = {
   subscription_required: 'Abonnement requis',
 };
 
-const number = (n: number) => n.toLocaleString('fr-FR');
-const percent = (share: number | null) =>
-  share === null ? '-' : share.toLocaleString('fr-FR', { style: 'percent', maximumFractionDigits: 1 });
+// A figure the server left out reads as '-' rather than taking the whole page down.
+const number = (n: number | undefined) => (n == null ? '-' : n.toLocaleString('fr-FR'));
+const percent = (share: number | null | undefined) =>
+  share == null ? '-' : share.toLocaleString('fr-FR', { style: 'percent', maximumFractionDigits: 1 });
 const usd = (n: number) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 });
 const sum = (counts: Record<string, number>) => Object.values(counts).reduce((a, b) => a + b, 0);
 
