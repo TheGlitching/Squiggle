@@ -174,6 +174,8 @@ export class StubLlm extends BaseLLMClient {
   failNextComplete = false;
   /** Fail the next grounded call (a research judgement). */
   failNextGrounded = false;
+  /** Audit replies served in order, before falling back to `auditJson`. */
+  auditReplies: Array<{ content: string; finishReason?: string }> = [];
   /** Audit reply, overridable per test. */
   auditJson: string = JSON.stringify({
     summary: "L'article avance un chiffre sans le sourcer.",
@@ -229,15 +231,17 @@ export class StubLlm extends BaseLLMClient {
     // The source-judgement prompt is the only `complete` the engine makes
     // besides the audit; telling them apart by their system prompt keeps the
     // stub honest about which call it is answering.
-    const content = system.includes('inspection des sources')
-      ? JSON.stringify({
-          relation: 'supporte',
-          fiabilite: 'fiable',
-          passage: 'La page citée donne bien ce chiffre.',
-          raison: 'concordance',
-        })
-      : this.auditJson;
-    return { content, model: this.getModel(), provider: 'gemini' };
+    if (system.includes('inspection des sources')) {
+      const content = JSON.stringify({
+        relation: 'supporte',
+        fiabilite: 'fiable',
+        passage: 'La page citée donne bien ce chiffre.',
+        raison: 'concordance',
+      });
+      return { content, model: this.getModel(), provider: 'gemini' };
+    }
+    const reply = this.auditReplies.shift() ?? { content: this.auditJson, finishReason: 'stop' };
+    return { ...reply, model: this.getModel(), provider: 'gemini' };
   }
 
   async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {

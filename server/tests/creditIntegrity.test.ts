@@ -12,7 +12,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { generateSigningKeyPair } from '@squiggle/shared';
+import { AUDIT_MAX_OUTPUT_TOKENS, generateSigningKeyPair } from '@squiggle/shared';
 
 import {
   claim as claimToken,
@@ -159,6 +159,52 @@ describe('the run is reserved before the provider is called', () => {
   });
 });
 
+describe('an audit answer the model cut short', () => {
+  /**
+   * What production returned: a reasoning model that spent most of its output
+   * ceiling thinking, then stopped mid-report. The JSON ends inside a string.
+   */
+  function truncated(env: TestEnv) {
+    return { content: env.llm.auditJson.slice(0, Math.floor(env.llm.auditJson.length * 0.6)), finishReason: 'length' };
+  }
+
+  it('is asked for once more, and the reader gets the report', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+    env.llm.auditReplies = [truncated(env)];
+
+    const audit = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    expect(audit.status).toBe(200);
+    expect(env.llm.calls.complete).toBe(2);
+    const counters = await env.db.collectMetrics({ now: env.clock.now(), weeks: 1, trialAnalyses: TRIAL_ANALYSES });
+    expect(counters.counters.audit_truncated).toBe(1);
+  });
+
+  it('surfaces as unreadable after the second try, and costs the reader neither a credit nor a start', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+
+    // More failed runs than a trial has starts: none of them may count.
+    const allowed = STARTS_PER_CREDIT * TRIAL_ANALYSES;
+    for (let i = 0; i <= allowed; i += 1) {
+      env.llm.auditReplies = [truncated(env), truncated(env)];
+      const failed = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+      expect(failed.status).toBe(502);
+      expect(failed.json.error).toBe('provider_unreadable');
+    }
+    expect(env.llm.calls.complete).toBe(2 * (allowed + 1));
+
+    // The run is closed at once, so the next one is not refused as concurrent,
+    // and the reader still has every start and every credit.
+    for (let i = 0; i < TRIAL_ANALYSES; i += 1) {
+      const audit = await call(env, who, '/v1/analyze/audit', { url: `${ARTICLE_URL}-${i}`, title: 'T', blocks: BLOCKS });
+      expect(audit.status).toBe(200);
+      const done = await call(env, who, '/v1/analyze/finalize', { runId: audit.json.runId as string });
+      expect(done.status).toBe(200);
+    }
+  });
+});
+
 describe('the client does not choose what a credit costs', () => {
   it('caps the research calls a single run can buy', async () => {
     const env = makeTestEnv({ fetchImpl: pageFetch(), llm: llmWithFindings(60) });
@@ -242,9 +288,10 @@ describe('what one model call can cost', () => {
       sourceUrl: CITED[0].href,
     });
 
-    // The audit and the cited-page judgement.
+    // The audit, which writes the whole report, and the cited-page judgement.
     expect(env.llm.completeOptions).toHaveLength(2);
-    for (const options of env.llm.completeOptions) expect(options.maxTokens).toBe(MAX_OUTPUT_TOKENS);
+    expect(env.llm.completeOptions[0].maxTokens).toBe(AUDIT_MAX_OUTPUT_TOKENS);
+    expect(env.llm.completeOptions[1].maxTokens).toBe(MAX_OUTPUT_TOKENS);
     // The research: a provider search tool left to itself may search thirty times in one request.
     expect(env.llm.groundedOptions).toHaveLength(1);
     expect(env.llm.groundedOptions[0].maxSearches).toBe(MAX_SEARCHES_PER_RESEARCH);
