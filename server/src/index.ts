@@ -23,6 +23,7 @@
  *   POST   /auth/logout                end the current web session
  *   GET    /v1/account                 (signed) who am I, plan and usage
  *   POST   /v1/account/checkout        (signed) open a Stripe Checkout session
+ *   POST   /web/account/teacher-checkout (session) the same, with the teacher coupon applied
  *   POST   /v1/account/portal          (signed) open the Stripe customer portal
  *   GET    /web/account/installs       (session) the installs whose token still works
  *   POST   /web/account/installs/revoke (session) revoke one install
@@ -91,6 +92,7 @@ import {
 } from './auth/session';
 import { entitlementOf } from './billing/quota';
 import { createCheckoutSession, createPortalSession, type StripeConfig } from './billing/stripe';
+import { teacherCoupon, teacherOfferOpen } from './billing/teacher';
 import { handleStripeWebhook } from './billing/webhook';
 import { corsHeaders, firefoxExtensionCall, originRequired } from './lib/cors';
 import { logEvent, newRequestId, REQUEST_ID_HEADER } from './lib/log';
@@ -127,6 +129,8 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET: string;
   /** Non-secret: the `price_…` the subscription is sold at (wrangler.jsonc var). */
   STRIPE_PRICE_ID: string;
+  /** Non-secret: the teacher coupon id (wrangler.jsonc var); `PENDING_…` keeps the offer closed. */
+  STRIPE_TEACHER_COUPON_ID?: string;
   /** Non-secret: which provider hosted analyses run on. Defaults to `openrouter`. */
   LLM_PROVIDER?: string;
   /** Our own OpenRouter key. Hosted mode runs on it; BYOK never touches it. */
@@ -447,7 +451,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     // authentication. The raw bytes are what was signed, so they are what is
     // verified — never a re-serialization of the parsed JSON.
     const outcome = await handleStripeWebhook(
-      { db: s.db, clock: s.clock, webhookSecret: s.stripe.webhookSecret, requestId },
+      { db: s.db, clock: s.clock, stripe: s.stripe, requestId },
       await req.text(),
       req.headers.get('stripe-signature'),
     );
@@ -620,6 +624,9 @@ async function accountForUser(
       email: user.email,
       plan: entitlement.plan,
       planExpiresAt: user.planExpiresAt,
+      // Whether the self-service teacher offer is open to this account. The
+      // rule lives on the server; the web app only shows or hides a button.
+      teacherOffer: teacherOfferOpen(s.stripe, user),
       usage: {
         used: entitlement.used,
         limit: entitlement.limit,
@@ -630,6 +637,7 @@ async function accountForUser(
   }
 
   const isCheckout = path === '/v1/account/checkout' || path === '/web/account/checkout';
+  const isTeacherCheckout = path === '/web/account/teacher-checkout';
   const isPortal = path === '/v1/account/portal' || path === '/web/account/portal';
 
   if (isCheckout && method === 'POST') {
@@ -643,6 +651,30 @@ async function accountForUser(
       cancelUrl: `${s.webAppOrigin}/tarifs?paiement=annule`,
     });
     return finish(outcome);
+  }
+
+  if (isTeacherCheckout && method === 'POST') {
+    const coupon = teacherCoupon(s.stripe);
+    if (!s.stripe || !coupon) return finish(apiError('billing_unavailable', 'Billing is not configured.'));
+    if (!teacherOfferOpen(s.stripe, user)) {
+      return finish(
+        apiError(
+          'teacher_offer_closed',
+          'L’accès enseignant en libre-service demande une adresse académique vérifiée, sur un compte qui n’a jamais été abonné.',
+        ),
+      );
+    }
+    return finish(
+      await createCheckoutSession({
+        config: s.stripe,
+        userId: user.id,
+        email: user.email,
+        customerId: null,
+        successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
+        cancelUrl: `${s.webAppOrigin}/compte?paiement=annule`,
+        teacherCoupon: coupon,
+      }),
+    );
   }
 
   if (isPortal && method === 'POST') {
@@ -808,6 +840,7 @@ function servicesFromEnv(env: Env): Services {
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY,
       priceId: env.STRIPE_PRICE_ID,
+      teacherCouponId: env.STRIPE_TEACHER_COUPON_ID,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     },
     runMigrations: (now) => {

@@ -553,7 +553,7 @@ export function Accueil() {
         </p>
         <ul className="mt-4 grid list-none gap-2 p-0 text-base text-muted sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-8">
           <li>
-            Enseignants : gratuit, sur demande.{' '}
+            Enseignants : gratuit avec une adresse académique.{' '}
             <Link to="/enseignants" className={QUIET_LINK}>
               L’offre enseignants
             </Link>

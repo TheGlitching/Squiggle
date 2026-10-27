@@ -77,6 +77,7 @@ describe('environments', () => {
       'LLM_PROVIDER',
       'OPENROUTER_MODEL',
       'STRIPE_PRICE_ID',
+      'STRIPE_TEACHER_COUPON_ID',
     ]) {
       expect(envs.production.vars, name).toHaveProperty(name);
     }
@@ -116,8 +117,8 @@ describe('the PENDING guard', () => {
     expect(pendingVars(text, 'staging')).toEqual([]);
   });
 
-  it('leaves production with nothing pending', () => {
-    expect(pendingVars(wranglerText, 'production')).toEqual([]);
+  it('leaves production with nothing pending but the teacher coupon, which only the dashboard can create', () => {
+    for (const name of pendingVars(wranglerText, 'production')) expect(name).toBe('STRIPE_TEACHER_COUPON_ID');
   });
 });
 

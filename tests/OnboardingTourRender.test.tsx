@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { OnboardingTour } from '../src/ui/components/OnboardingTour';
+import { DEFAULT_EDITORIAL_TOUR_STEPS, OnboardingTour } from '../src/ui/components/OnboardingTour';
 
 // Lets React treat these `act` calls as a real test environment instead of
 // warning on every commit.
@@ -76,13 +76,18 @@ describe('the visit renders usable steps on a first run', () => {
 
     expect(stepCount()).toBeGreaterThanOrEqual(3);
 
+    // The steps that stand on their prose alone: the opening one, and the
+    // pin hint, whose target is the browser's toolbar rather than the panel.
+    const unanchored = DEFAULT_EDITORIAL_TOUR_STEPS.filter((s) => !s.targetSelector).map((s) => s.title);
     const titles: string[] = [];
     for (let i = 0; i < stepCount(); i += 1) {
-      titles.push(card()!.querySelector('h3')!.textContent ?? '');
-      // Past the opening step, every step darkens the panel around something.
-      expect(highlights()).toHaveLength(i === 0 ? 0 : 1);
+      const title = card()!.querySelector('h3')!.textContent ?? '';
+      titles.push(title);
+      // Every other step darkens the panel around something.
+      expect(highlights()).toHaveLength(unanchored.includes(title) ? 0 : 1);
       await advance();
     }
+    expect(titles).toContain('Gardez Squiggle à portée de clic');
 
     expect(new Set(titles).size).toBe(titles.length);
     expect(titles.every((t) => t.length > 0)).toBe(true);

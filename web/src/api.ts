@@ -16,6 +16,8 @@ export interface Account {
   email: string | null;
   plan: Plan;
   planExpiresAt: number | null;
+  /** The self-service teacher offer is open to this account (verified academic address, never subscribed). */
+  teacherOffer: boolean;
   usage: { used: number; limit: number; remaining: number; resetsAt: number | null };
 }
 
@@ -79,6 +81,12 @@ export function logout(): Promise<{ ok: true }> {
 
 export async function startCheckout(): Promise<string> {
   const { url } = await call<{ url: string }>('/web/account/checkout', { method: 'POST', body: '{}' });
+  return url;
+}
+
+/** Checkout with the teacher coupon applied: nothing to pay, no card asked. */
+export async function startTeacherCheckout(): Promise<string> {
+  const { url } = await call<{ url: string }>('/web/account/teacher-checkout', { method: 'POST', body: '{}' });
   return url;
 }
 
@@ -148,6 +156,8 @@ const FRENCH_ERRORS: Record<string, string> = {
   invalid_session: 'Votre session a expiré. Reconnectez-vous.',
   invalid_key: 'La clé de l’extension est invalide.',
   billing_unavailable: 'Le paiement est momentanément indisponible.',
+  teacher_offer_closed:
+    'L’accès enseignant demande une adresse académique vérifiée, sur un compte qui n’a jamais été abonné.',
   not_found: 'Aucun abonnement à gérer pour ce compte.',
   origin_not_allowed: 'Origine non autorisée.',
   internal: 'Une erreur est survenue. Réessayez.',
