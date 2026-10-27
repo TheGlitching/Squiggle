@@ -124,8 +124,8 @@ function FindingCard({
       tabIndex={-1}
       style={cardStyle(finding)}
       aria-labelledby={`${findingId(finding)}-titre`}
-      className={`scroll-mt-6 rounded-card border bg-surface p-5 outline-hidden focus-visible:ring-1 focus-visible:ring-offset-0 transition-colors duration-160 ease-out ${
-        selected ? 'border-accentHover ring-1 ring-accentHover' : 'border-border'
+      className={`scroll-mt-6 rounded-card border bg-surface p-5 outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-offset-0 transition-colors duration-160 ease-out ${
+        selected ? 'border-accentHover ring-1 ring-inset ring-accentHover' : 'border-border'
       }`}
       onFocus={() => onSelect(finding)}
     >
@@ -332,9 +332,12 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
           </article>
         </section>
 
+        {/* The column scrolls on its own; its right padding, borrowed from the page gutter, keeps
+            the cards clear of a macOS overlay scrollbar, whose expanded track paints the page
+            background over whatever sits under it. The cards keep the full 24rem. */}
         <section
           aria-labelledby="constats-titre"
-          className="lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain"
+          className="lg:sticky lg:top-6 lg:-mr-4 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-4"
         >
           <h2 id="constats-titre" className="m-0 text-base font-semibold">
             {findings.length === 0 ? 'Constats' : `${findings.length} constat${findings.length > 1 ? 's' : ''}`}
