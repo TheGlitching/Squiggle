@@ -79,14 +79,20 @@ export function logout(): Promise<{ ok: true }> {
   return call('/auth/logout', { method: 'POST' });
 }
 
-export async function startCheckout(): Promise<string> {
-  const { url } = await call<{ url: string }>('/web/account/checkout', { method: 'POST', body: '{}' });
+/** The page Stripe sends the reader back to: the account page, or `/analyser` when they paid from under a report. */
+export type CheckoutReturn = '/compte' | '/analyser';
+
+export async function startCheckout(retour: CheckoutReturn = '/compte'): Promise<string> {
+  const { url } = await call<{ url: string }>('/web/account/checkout', { method: 'POST', body: JSON.stringify({ retour }) });
   return url;
 }
 
 /** Checkout with the teacher coupon applied: nothing to pay, no card asked. */
-export async function startTeacherCheckout(): Promise<string> {
-  const { url } = await call<{ url: string }>('/web/account/teacher-checkout', { method: 'POST', body: '{}' });
+export async function startTeacherCheckout(retour: CheckoutReturn = '/compte'): Promise<string> {
+  const { url } = await call<{ url: string }>('/web/account/teacher-checkout', {
+    method: 'POST',
+    body: JSON.stringify({ retour }),
+  });
   return url;
 }
 
