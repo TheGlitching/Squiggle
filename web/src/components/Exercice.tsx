@@ -1,6 +1,8 @@
 import { useState, type KeyboardEvent } from 'react';
 
 import { EXAMPLES, HERO_ARTICLE } from '../demo';
+import { glossaryLink } from '../glossaire';
+import { Link } from '../router';
 import { tone } from './Exemple';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './Landing';
 
@@ -158,14 +160,25 @@ export function Exercice() {
               </p>
               <ul aria-label="Les constats de l’analyse" className="m-0 grid list-none gap-3 p-0 text-base">
                 {SENTENCES.filter(({ finding }) => finding !== undefined).map(({ id, finding }) => {
-                  const { label, sev, category } = EXAMPLES[finding as number];
+                  const example = EXAMPLES[finding as number];
+                  const { label, sev, category } = example;
+                  const glossary = glossaryLink(example);
                   const strength = category === 'point-fort';
                   const seen = marked.has(id);
                   const status = strength ? (seen ? 'marqué, à débattre' : 'point fort') : seen ? 'repéré' : 'manqué';
                   return (
                     <li key={id} className="flex items-baseline gap-3" style={tone(sev)}>
                       <span aria-hidden="true" className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full bg-(--sev-color)" />
-                      <span className="grow">{label}</span>
+                      {glossary ? (
+                        <Link
+                          to={glossary.to}
+                          className="grow underline decoration-borderControl underline-offset-4 hover:text-accentInk hover:decoration-accentInk"
+                        >
+                          {label}
+                        </Link>
+                      ) : (
+                        <span className="grow">{label}</span>
+                      )}
                       <span className={seen && !strength ? 'font-semibold text-foreground' : 'text-muted'}>{status}</span>
                     </li>
                   );

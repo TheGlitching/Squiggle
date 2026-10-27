@@ -8,6 +8,7 @@
  */
 import { CONTACT_EMAIL } from './components/Layout';
 import { GITHUB_URL, PRICE_MONTHLY, TAGLINE } from './offer';
+import { NOTIONS, glossaryPath } from './glossaire';
 import { CHROME_URL, FIREFOX_URL } from './install';
 
 export const ORIGIN = 'https://squiggle.fr';
@@ -18,7 +19,49 @@ export interface PublicPage {
   path: string;
   title: string;
   description: string;
+  /** Structured data (schema.org) for a page that defines something, the glossary's. */
+  jsonLd?: object;
 }
+
+const GLOSSARY = `${ORIGIN}/glossaire`;
+const TERM_SET = { '@type': 'DefinedTermSet', '@id': `${GLOSSARY}#glossaire`, name: 'Les noms de ce qui cloche', url: GLOSSARY };
+
+/** The glossary: its index as a `DefinedTermSet`, and each notion as a `DefinedTerm` of it. */
+const GLOSSARY_PAGES: PublicPage[] = [
+  {
+    path: '/glossaire',
+    title: 'Glossaire : les noms de ce qui cloche - Squiggle',
+    description:
+      'Faux dilemme, homme de paille, chiffre sans origine… Les 25 notions que nomment les rapports Squiggle, avec un exemple et une question pour la classe.',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      ...TERM_SET,
+      description: 'Les sophismes, procédés de cadrage et défauts de sourcing que nomment les rapports Squiggle.',
+      inLanguage: 'fr',
+      hasDefinedTerm: NOTIONS.map((notion) => ({
+        '@type': 'DefinedTerm',
+        name: notion.nom,
+        url: `${ORIGIN}${glossaryPath(notion.slug)}`,
+      })),
+    },
+  },
+  ...NOTIONS.map((notion) => ({
+    path: glossaryPath(notion.slug),
+    title: `${notion.nom} : définition et exemple - Squiggle`,
+    description: `${notion.resume} Définition, exemple, comment le repérer.`,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'DefinedTerm',
+      '@id': `${ORIGIN}${glossaryPath(notion.slug)}#notion`,
+      name: notion.nom,
+      ...(notion.aussi ? { alternateName: notion.aussi } : {}),
+      description: notion.definition[0],
+      url: `${ORIGIN}${glossaryPath(notion.slug)}`,
+      inLanguage: 'fr',
+      inDefinedTermSet: TERM_SET,
+    },
+  })),
+];
 
 /** Every page worth finding from a search. `/tarifs` is the home page's pricing anchor, not a page. */
 export const PUBLIC_PAGES: readonly PublicPage[] = [
@@ -79,6 +122,7 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     title: 'Mentions légales - Squiggle',
     description: 'Qui édite Squiggle et qui l’héberge.',
   },
+  ...GLOSSARY_PAGES,
 ];
 
 /**
@@ -149,9 +193,12 @@ function structuredData(): string {
       },
     ],
   };
-  // `<` cannot close the script element from inside a JSON string once escaped.
-  return `<script type="application/ld+json">${JSON.stringify(graph).replaceAll('<', '\\u003c')}</script>`;
+  return jsonLdScript(graph);
 }
+
+// `<` cannot close the script element from inside a JSON string once escaped.
+const jsonLdScript = (data: object) =>
+  `<script type="application/ld+json">${JSON.stringify(data).replaceAll('<', '\\u003c')}</script>`;
 
 /** The page-specific part of `<head>`: what replaces `<!--page-head-->` in `index.html`. */
 export function headFor(page: PublicPage): string {
@@ -167,7 +214,7 @@ export function headFor(page: PublicPage): string {
     `<meta property="og:description" content="${description}" />`,
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
-    ...(page.path === '/' ? [structuredData()] : []),
+    ...(page.path === '/' ? [structuredData()] : page.jsonLd ? [jsonLdScript(page.jsonLd)] : []),
   ].join('\n    ');
 }
 
