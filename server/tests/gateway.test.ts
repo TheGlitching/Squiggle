@@ -107,6 +107,7 @@ describe('the research stage on OpenRouter', () => {
       blockId: 'b1',
       quote: 'Le chômage a baissé de 12 % en un an.',
       category: 'affirmation-non-etayee',
+      checkableClaim: 'Le chômage a baissé de 12 % en un an.',
       severity: 2,
       label: 'Chiffre non étayé',
       explanation: 'Aucune source.',

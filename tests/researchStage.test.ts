@@ -5,9 +5,10 @@ import {
   buildClaimGroundedJudgementUserPrompt,
   buildFourchesCaudinesUserPrompt,
   buildResearchAgentStepPrompt,
+  FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT,
   RESEARCH_AGENT_SYSTEM_PROMPT
 } from '@squiggle/shared';
-import { CitedSource, researchFindings } from '@squiggle/shared';
+import { CitedSource, parseAndValidateLlmOutput, reconcileResearchedFindings, researchFindings } from '@squiggle/shared';
 import type { CompletionOptions, CompletionResponse, StreamCallbacks } from '@squiggle/shared';
 
 /**
@@ -100,6 +101,8 @@ function makeFinding(overrides: Partial<Finding> & Pick<Finding, 'category'>): F
     label: 'Chiffre non sourcé',
     explanation: 'Aucune source ne vient étayer ce chiffre.',
     confidence: 0.9,
+    // The audit restates the fact it doubts; tests that care pass their own.
+    checkableClaim: overrides.quote ?? "L'usine a licencié 200 salariés en 2023.",
     ...overrides
   };
 }
@@ -266,9 +269,15 @@ describe('researchFindings', () => {
     ).rejects.toThrow(/aborted/i);
   });
 
-  it('runs exactly one grounded call and keeps a verifiee verdict backed by the provider citations, even with empty snippets', async () => {
+  it('runs exactly one grounded call and keeps a verifiee verdict backed by a provider citation the model names, even with empty snippets', async () => {
     const finding = makeFinding({ category: 'affirmation-non-etayee', quote: "L'usine a licencié 200 salariés en 2023." });
-    const judgement = JSON.stringify({ verification: 'verifiee', sources: [], rationale: 'Confirmé par la page consultée.' });
+    // The model names the page with a trailing slash the provider did not
+    // report: still the same page, still credited.
+    const judgement = JSON.stringify({
+      verification: 'verifiee',
+      sources: [{ title: 'Communiqué', url: 'https://www.news.example/plan-social/', origin: 'search' }],
+      rationale: 'Confirmé par la page consultée.'
+    });
 
     const client = new StubClient({
       completions: [],
@@ -611,6 +620,205 @@ describe('researchFindings', () => {
 
     expect(client.groundedCalls[0].maxSearches).toBe(3);
     expect(client.groundedCalls[0].maxTokens).toBe(4096);
+  });
+});
+
+/**
+ * The case seen in production on the first real hosted analysis: a franceinfo
+ * piece on smartphone prices. The audit rightly flagged that the three quoted
+ * customers are anonymous, quoting "confie un client". Research then searched
+ * that fragment, the search returned a company called Confie, and its About,
+ * Client Services and Contact pages were listed under the finding as
+ * "Sources consultées".
+ */
+describe('the anonymous-witness case (franceinfo, smartphone prices)', () => {
+  const article: AnalysisInput = {
+    url: 'https://www.franceinfo.fr/sciences/high-tech/smartphones-la-penurie-de-puces-electroniques-fait-grimper-les-prix_8249692.html',
+    title: 'Smartphones : la pénurie de puces électroniques fait grimper les prix',
+    outlet: 'franceinfo.fr',
+    language: 'fr',
+    blocks: [
+      {
+        id: 'b2',
+        type: 'paragraph',
+        charStart: 0,
+        text:
+          "Désormais, pour s'offrir un smartphone neuf, il faut parfois dépenser l'équivalent d'un salaire. " +
+          "\"C'est quasiment, entre guillemets, le prix d'un loyer, donc oui, enfin, ça nous frustre un peu\", confie un client. " +
+          "Une autre ajoute : \"S'endetter pour un téléphone, de mon point de vue, ça vaut pas le coup.\""
+      },
+      {
+        id: 'b5',
+        type: 'paragraph',
+        charStart: 400,
+        text: "Au total, cette année, le prix de certaines puces mémoire a augmenté de 350 %."
+      }
+    ]
+  };
+
+  /** The audit's answer, as the model now writes it: no checkable claim behind anonymous witnesses. */
+  const auditAnswer = JSON.stringify({
+    summary: 'Article informatif, appuyé sur des témoignages anonymes.',
+    scores: [{ domain: 'robustesse_factuelle', score: 25 }],
+    findings: [
+      {
+        blockId: 'b2',
+        quote: 'confie un client',
+        category: 'affirmation-non-etayee',
+        severity: 1,
+        label: 'Témoins non identifiables',
+        explanation: 'Les trois personnes citées restent anonymes, ce qui empêche toute vérification.',
+        checkableClaim: ''
+      },
+      {
+        blockId: 'b5',
+        quote: 'le prix de certaines puces mémoire a augmenté de 350 %',
+        category: 'affirmation-non-etayee',
+        severity: 2,
+        label: 'Chiffre sans source',
+        explanation: "Le chiffre de 350 % n'est rattaché à aucune étude.",
+        checkableClaim: 'Le prix de certaines puces mémoire a augmenté de 350 % en 2026.'
+      }
+    ]
+  });
+
+  /** What the search engine returns for the bare fragment "confie un client". */
+  const confieHits: SearchResult[] = [
+    { title: 'About Us | Confie', url: 'https://www.confie.com/about-us', snippet: '' },
+    { title: 'Confie Client Services | Confie', url: 'https://www.confie.com/client-services', snippet: '' },
+    { title: 'Contact Us | Confie', url: 'https://www.confie.com/contact-us', snippet: '' }
+  ];
+  const memoryHit: SearchResult = {
+    title: 'Les prix de la mémoire DRAM ont triplé',
+    url: 'https://news.example/dram-prix',
+    snippet: 'Les prix contractuels de certaines mémoires ont progressé de 350 % sur un an.'
+  };
+
+  it('never searches the anonymous witnesses, and never lists a page under them', async () => {
+    const audited = parseAndValidateLlmOutput(auditAnswer, article);
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => ({
+        // The model, given the restated claim, names only the page about memory prices.
+        content: JSON.stringify({
+          verification: 'verifiee',
+          sources: [{ title: memoryHit.title, url: memoryHit.url, quote: memoryHit.snippet, origin: 'search' }],
+          rationale: 'Une source de presse spécialisée rapporte la même hausse.'
+        }),
+        citations: [...confieHits, memoryHit]
+      })
+    });
+
+    const { claims } = await researchFindings({ client, input: article, findings: audited.findings, citedSources: [] });
+    const { findings } = reconcileResearchedFindings(audited.findings, claims);
+
+    // One grounded call, for the checkable figure only, carrying the restated fact.
+    expect(client.groundedCalls).toHaveLength(1);
+    expect(client.groundedCalls[0].messages[0].content).toContain('AFFIRMATION À VÉRIFIER : Le prix de certaines puces mémoire a augmenté de 350 % en 2026.');
+    expect(claims.map((c) => c.claim)).toEqual(['Le prix de certaines puces mémoire a augmenté de 350 % en 2026.']);
+
+    const witnesses = findings.find((f) => f.quote === 'confie un client');
+    expect(witnesses?.verification).toBe('non-verifiable');
+    expect(witnesses?.sources ?? []).toEqual([]);
+
+    // The search hits that were never used are not shown as consulted sources.
+    expect(claims[0].sources.map((s) => s.url)).toEqual([memoryHit.url]);
+  });
+
+  it('lists nothing, and says so, when a search returns only pages that share the words', async () => {
+    const finding = makeFinding({
+      category: 'affirmation-non-etayee',
+      blockId: 'b2',
+      quote: 'confie un client',
+      checkableClaim: 'Un client a déclaré que le prix d’un smartphone neuf équivaut à un loyer.'
+    });
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => ({
+        content: JSON.stringify({
+          verification: 'non-verifiable',
+          sources: [{ title: 'About Us | Confie', url: 'https://www.confie.com/about-us', origin: 'search' }],
+          rationale: ''
+        }),
+        citations: confieHits
+      })
+    });
+
+    const { claims } = await researchFindings({ client, input: article, findings: [finding], citedSources: [] });
+
+    expect(claims[0].verification).toBe('non-verifiable');
+    expect(claims[0].sources).toEqual([]);
+    expectReaderText(claims[0].rationale);
+  });
+
+  it('drops the provider results the model did not use, even on a confirmed verdict', async () => {
+    const finding = makeFinding({ category: 'affirmation-non-etayee', blockId: 'b5', quote: 'a augmenté de 350 %' });
+    const client = new StubClient({
+      completions: [],
+      canGround: true,
+      groundedImpl: async () => ({
+        content: JSON.stringify({ verification: 'verifiee', sources: [{ title: '', url: memoryHit.url, origin: 'search' }], rationale: 'Confirmé.' }),
+        citations: [...confieHits, memoryHit]
+      })
+    });
+
+    const { claims } = await researchFindings({ client, input: article, findings: [finding], citedSources: [] });
+
+    expect(claims[0].verification).toBe('verifiee');
+    expect(claims[0].sources.map((s) => s.url)).toEqual([memoryHit.url]);
+  });
+
+  it('keeps an agent verdict of non-verifiable free of the search hits it saw', async () => {
+    const finding = makeFinding({
+      category: 'affirmation-non-etayee',
+      blockId: 'b2',
+      quote: 'confie un client',
+      checkableClaim: 'Un client a déclaré que le prix d’un smartphone neuf équivaut à un loyer.'
+    });
+    const client = new StubClient({
+      completions: [
+        JSON.stringify({ action: 'search', query: 'prix smartphone neuf équivalent loyer client', note: 'cherche le témoignage' }),
+        JSON.stringify({
+          action: 'verdict',
+          verification: 'non-verifiable',
+          sources: [{ title: 'About Us | Confie', url: 'https://www.confie.com/about-us', origin: 'search' }],
+          rationale: 'Aucune source pertinente trouvée.'
+        })
+      ],
+      canSearch: true,
+      searchImpl: async () => confieHits.map((h) => ({ ...h, snippet: 'Confie is an insurance distribution company.' }))
+    });
+
+    const { claims } = await researchFindings({ client, input: article, findings: [finding], citedSources: [] });
+
+    expect(claims[0].verification).toBe('non-verifiable');
+    expect(claims[0].sources).toEqual([]);
+    expect(claims[0].rationale).toBe('Aucune source pertinente trouvée.');
+  });
+
+  it('records why nothing was searched when no finding carries a checkable claim', async () => {
+    const audited = parseAndValidateLlmOutput(auditAnswer, article);
+    const client = new StubClient({ completions: [], canGround: true });
+
+    const result = await researchFindings({
+      client,
+      input: article,
+      findings: audited.findings.filter((f) => f.quote === 'confie un client'),
+      citedSources: []
+    });
+
+    expect(client.groundedCalls).toHaveLength(0);
+    expect(result.claims).toEqual([]);
+    expect(result.research.performed).toBe(false);
+    expect(result.research.skippedReason).toMatch(/recherche web pourrait/);
+  });
+
+  it('asks the audit for the checkable claim, and the research prompts to search the claim, not the quote', () => {
+    expect(buildFourchesCaudinesUserPrompt(article, { now: pinnedNow })).toMatch(/"checkableClaim"[\s\S]*témoignage anonyme/);
+    expect(RESEARCH_AGENT_SYSTEM_PROMPT).toMatch(/jamais la seule citation exacte/);
+    expect(FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT).toMatch(/jamais la seule citation exacte/);
   });
 });
 

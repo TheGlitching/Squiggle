@@ -253,6 +253,15 @@ export interface Finding {
   explanation: string;
   confidence: number;
   /**
+   * The checkable fact behind an `affirmation-non-etayee` finding, restated by
+   * the audit as one self-contained sentence (who, what, when, where), because
+   * the `quote` alone is a fragment that searches for the wrong thing: "confie
+   * un client" finds a company called Confie. Absent when a web search cannot
+   * settle the point (an anonymous witness, an opinion, a framing choice), and
+   * then the finding is never researched.
+   */
+  checkableClaim?: string;
+  /**
    * Set on findings that assert something about the world rather than about the
    * prose. Absent on purely editorial findings, where it would be meaningless.
    */
@@ -356,6 +365,11 @@ export const FindingSchema = z.object({
   label: z.string().min(1),
   explanation: z.string().min(1),
   confidence: z.number().min(0).max(1).default(0.9),
+  // A model writes "" or null for "nothing a search could settle"; both mean absent.
+  checkableClaim: z
+    .string()
+    .nullish()
+    .transform((value) => value?.trim() || undefined),
   verification: VerificationStateSchema.optional(),
   sources: z.array(EvidenceSourceSchema).default([])
 });

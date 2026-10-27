@@ -72,6 +72,7 @@ const FINDINGS: Finding[] = [
     severity: 3,
     label: 'Chiffre non étayé',
     explanation: 'Le chiffre de 200 licenciements n\'est pas sourcé.',
+    checkableClaim: CLAIM_QUOTE,
     confidence: 0.9
   }
 ];

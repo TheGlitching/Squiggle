@@ -45,10 +45,10 @@ import {
   buildFourchesCaudinesUserPrompt,
   computeFourchesCaudinesScore,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
+  isResearchableFinding,
   MAX_ARTICLE_CHARS,
   parseAndValidateLlmOutput,
   reconcileResearchedFindings,
-  RESEARCHABLE_FINDING_CATEGORIES,
   researchFindings,
   safeFetchPageText,
   sha256Hex,
@@ -430,7 +430,7 @@ async function enforceStartCeilings(
  */
 function researchableFindingIds(state: AnalysisRunState): string[] {
   return state.findings
-    .filter((finding) => RESEARCHABLE_FINDING_CATEGORIES[finding.category])
+    .filter(isResearchableFinding)
     .map((finding) => finding.id)
     .slice(0, MAX_RESEARCH_CALLS_PER_RUN);
 }

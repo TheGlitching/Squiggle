@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BaseLLMClient, SearchResult } from '../client/base';
-import { extractJsonFromResponse, repairJsonString, RESEARCHABLE_FINDING_CATEGORIES } from './validator';
+import { extractJsonFromResponse, isResearchableFinding, repairJsonString, RESEARCHABLE_FINDING_CATEGORIES } from './validator';
 import {
   AnalysisInput,
   EvidenceSource,
@@ -30,11 +30,12 @@ export interface ResearchFindingsArgs {
   client: BaseLLMClient;
   input: AnalysisInput;
   /**
-   * The audit's own findings. Only the factual categories among them are
-   * researched; the claim under test is always the finding's `quote` (what
-   * the article said), never the finding's own explanation of what is wrong
-   * with it - the point of researching after the audit is to check the
-   * audit's objection, not to re-confirm it from the audit's own wording.
+   * The audit's own findings. Only those `isResearchableFinding` accepts are
+   * researched; the claim under test is always the article's own statement -
+   * the finding's `checkableClaim`, anchored by its `quote` - never the
+   * finding's explanation of what is wrong with it: the point of researching
+   * after the audit is to check the audit's objection, not to re-confirm it
+   * from the audit's own wording.
    */
   findings: Finding[];
   citedSources: CitedSource[];
@@ -169,7 +170,11 @@ function enforceSourcedVerdict(
   onDiagnostic?: (note: string) => void
 ): z.infer<typeof JudgementSchema> {
   if (judgement.verification === 'non-verifiable') {
-    return judgement;
+    // Nothing settled the point, so no page is shown as a consulted source:
+    // listed under the finding, a page that decided nothing reads as evidence,
+    // and a search hit that merely shared the claim's words reads as nonsense.
+    // The rationale tells the reader plainly that nothing relevant was found.
+    return { ...judgement, sources: [], rationale: judgement.rationale?.trim() || READER_NO_SOURCE };
   }
 
   const sources = route === 'search' ? judgement.sources.filter((s) => evidencedUrls.has(s.url)) : judgement.sources;
@@ -444,14 +449,55 @@ async function researchClaimViaAgent(
   return { verdict: enforceSourcedVerdict(parsed, 'search', evidencedUrls, onDiagnostic), queries };
 }
 
+/** Host without `www.`, lowercased; null for a string that is not a URL. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/** A URL compared without its fragment, trailing slash, `www.` or host case. */
+function comparableUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return `${hostOf(url)}${parsed.pathname.replace(/\/+$/, '')}${parsed.search}`;
+  } catch {
+    return url.trim();
+  }
+}
+
+/**
+ * Finds the retrieved citation a source the model named stands for. The exact
+ * page first; failing that, a page from the same site, because the provider
+ * may report the page under another form of its address (Gemini reports a
+ * redirect URL whose title is the site's domain). A citation already claimed
+ * by an earlier named source is not handed out twice.
+ */
+function findRetrievedCitation(named: { url: string }, citations: SearchResult[], taken: Set<string>): SearchResult | undefined {
+  const free = citations.filter((c) => !taken.has(c.url));
+  const wanted = comparableUrl(named.url);
+  const host = hostOf(named.url);
+  return (
+    free.find((c) => comparableUrl(c.url) === wanted) ??
+    (host ? free.find((c) => hostOf(c.url) === host || c.title.toLowerCase().replace(/^www\./, '') === host) : undefined)
+  );
+}
+
 /**
  * Grounded judgement: a single call in which the provider itself runs the
  * searches and reads the pages into the model's own context, so the model's
  * verdict is judged against what it actually saw rather than a text excerpt
- * this module chose for it. Evidence is the union of the sources the model
- * names and the citations the provider reports it fetched, de-duplicated by
- * url; an empty `snippet` on either side is not a defect here, it is just
- * this module's inability to see what the model read.
+ * this module chose for it.
+ *
+ * A source is credited only when the model named it as one it used AND the
+ * provider reports having retrieved it. The provider's citation list alone is
+ * every page the search returned, relevant or not: listing it wholesale is how
+ * a company called Confie came to be shown as a consulted source for three
+ * anonymous customers "confie un client". An empty `snippet` is not a defect
+ * here, it is just this module's inability to see what the model read.
  */
 async function judgeClaimGrounded(
   client: BaseLLMClient,
@@ -487,15 +533,15 @@ async function judgeClaimGrounded(
     return { verification: 'non-verifiable', sources: [], rationale: READER_NO_SOURCE };
   }
 
-  const quoteByUrl = new Map(parsed.sources.filter((s) => s.url).map((s) => [s.url, s]));
   const evidenceByUrl = new Map<string, EvidenceSource>();
-  for (const citation of answer.citations) {
-    if (!citation.url || evidenceByUrl.has(citation.url)) continue;
-    const named = quoteByUrl.get(citation.url);
+  for (const named of parsed.sources) {
+    if (!named.url) continue;
+    const citation = findRetrievedCitation(named, answer.citations, new Set(evidenceByUrl.keys()));
+    if (!citation) continue;
     evidenceByUrl.set(citation.url, {
-      title: citation.title || named?.title || citation.url,
+      title: citation.title || named.title || citation.url,
       url: citation.url,
-      quote: named?.quote || citation.snippet || undefined,
+      quote: named.quote || citation.snippet || undefined,
       origin: 'search'
     });
   }
@@ -513,11 +559,15 @@ async function judgeClaimGrounded(
  * findings are already fully resolved by `enforceEvidenceHonesty` before this
  * runs, and are deliberately never re-opened here, or a claim of
  * `non-verifiable` from a fruitless search would silently overwrite the
- * `non-sourcee` sourcing observation with an unrelated truth verdict.
+ * `non-sourcee` sourcing observation with an unrelated truth verdict. Among
+ * them, only a finding with a `checkableClaim` is searched
+ * (`isResearchableFinding`): an unsupported statement no search can settle
+ * stays the audit's own non-verifiable reserve, with no search behind it.
  *
  * This runs AFTER the audit, not before it: the audit's factual findings are
  * exactly the claims under test, and the claim under test is always the
- * article's own statement (the finding's `quote`), never the finding's
+ * article's own statement (the finding's `checkableClaim`, which restates the
+ * `quote` with the context a search needs), never the finding's
  * explanation of what the audit thinks is wrong with it. Reconciling a
  * finding against its researched claim - keeping it, downgrading it, or
  * withdrawing it as an unfounded objection - is `reconcileResearchedFindings`
@@ -533,7 +583,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
   const now = args.now ?? new Date();
   void input; // kept in the signature for parity with the prompt builders and future per-article context
 
-  const factual = findings.filter((f) => RESEARCHABLE_FINDING_CATEGORIES[f.category]);
+  const factual = findings.filter(isResearchableFinding);
 
   if (factual.length === 0) {
     return {
@@ -542,7 +592,9 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         performed: false,
         provider: client.getProvider(),
         queries: [],
-        skippedReason: "Aucun constat factuel dans l'audit à vérifier.",
+        skippedReason: findings.some((f) => RESEARCHABLE_FINDING_CATEGORIES[f.category])
+          ? "Aucun constat de l'audit ne porte sur un fait qu'une recherche web pourrait établir ou contredire."
+          : "Aucun constat factuel dans l'audit à vérifier.",
         withdrawn: []
       }
     };
@@ -556,7 +608,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
         findingId: f.id,
         blockId: f.blockId,
         quote: f.quote,
-        claim: f.quote,
+        claim: f.checkableClaim,
         verification: 'non-verifiable',
         sources: [],
         rationale: READER_NO_WEB_SEARCH
@@ -584,7 +636,9 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     }
 
     const finding = factual[i];
-    const claimUnderTest = { quote: finding.quote, claim: finding.quote };
+    // `isResearchableFinding` guarantees the claim is there: the search is
+    // built from the restated fact, never from the quoted fragment alone.
+    const claimUnderTest = { quote: finding.quote, claim: finding.checkableClaim ?? finding.quote };
     onProgress?.(`Vérification : ${finding.quote}`, 10 + Math.round((i / factual.length) * 80));
     onActivity?.(`Vérification du constat : ${finding.quote.slice(0, 80)}`);
 
@@ -593,13 +647,13 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
     if (groundedCapable) {
       try {
         const judgement = await judgeClaimGrounded(client, claimUnderTest, articleSourcesForBlock, maxSearches, maxTokens, now, abortSignal, onDiagnostic);
-        queries.push(finding.quote);
+        queries.push(claimUnderTest.claim);
         claims.push(
           FactualClaimSchema.parse({
             findingId: finding.id,
             blockId: finding.blockId,
             quote: finding.quote,
-            claim: finding.quote,
+            claim: claimUnderTest.claim,
             verification: judgement.verification,
             sources: judgement.sources,
             rationale: judgement.rationale
@@ -613,7 +667,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
             findingId: finding.id,
             blockId: finding.blockId,
             quote: finding.quote,
-            claim: finding.quote,
+            claim: claimUnderTest.claim,
             verification: 'non-verifiable',
             sources: [],
             rationale: READER_CHECK_FAILED
@@ -647,7 +701,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
           findingId: finding.id,
           blockId: finding.blockId,
           quote: finding.quote,
-          claim: finding.quote,
+          claim: claimUnderTest.claim,
           verification: verdict.verification,
           sources: verdict.sources,
           rationale: verdict.rationale
@@ -661,7 +715,7 @@ export async function researchFindings(args: ResearchFindingsArgs): Promise<Rese
           findingId: finding.id,
           blockId: finding.blockId,
           quote: finding.quote,
-          claim: finding.quote,
+          claim: claimUnderTest.claim,
           verification: 'non-verifiable',
           sources: [],
           rationale: READER_CHECK_FAILED

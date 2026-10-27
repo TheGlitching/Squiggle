@@ -138,6 +138,19 @@ export const RESEARCHABLE_FINDING_CATEGORIES: Record<string, true> = {
 };
 
 /**
+ * Whether the research stage should search the web for this finding: it must
+ * be in a researchable category AND carry a `checkableClaim`. An unsupported
+ * statement that no search can settle - three anonymous customers, an opinion -
+ * has nothing to look for, and searching its quote anyway only returns pages
+ * that happen to share its words, which were then shown as consulted sources.
+ * Read by both the engine and the hosted server, so the two never disagree on
+ * which findings are researched.
+ */
+export function isResearchableFinding(finding: Pick<Finding, 'category' | 'checkableClaim'>): boolean {
+  return RESEARCHABLE_FINDING_CATEGORIES[finding.category] === true && Boolean(finding.checkableClaim?.trim());
+}
+
+/**
  * Enforces in code what the prompt cannot guarantee: a factual finding that
  * claims the article is wrong ('douteuse') but carries no evidence is
  * downgraded to 'non-verifiable' rather than published as a doubt, and a
