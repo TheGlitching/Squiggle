@@ -42,6 +42,7 @@ import {
   articleLength,
   articleTextHash,
   articleTooLongMessage,
+  AUDIT_MAX_OUTPUT_TOKENS,
   buildFourchesCaudinesUserPrompt,
   computeFourchesCaudinesScore,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
@@ -93,9 +94,11 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * findings, reported as unverified.
  *
  * Together with the per-call caps below, they bound one analysis on the
- * production model to under 45 cents in the worst case, at the price of the
+ * production model to under 50 cents in the worst case, at the price of the
  * dearest hosts it is pinned to (Nebius, tried first, and Together AI, both
- * $0.30 / $1.20 per million tokens);
+ * $0.30 / $1.20 per million tokens): under 45 cents when the hosts were
+ * pinned, plus at most two audits of 100 000 characters answering in
+ * `AUDIT_MAX_OUTPUT_TOKENS`, about 3 cents each;
  * the arithmetic is in the pull requests that set the caps and pinned the
  * hosts. About 12 cents of it is web searches, at half a cent each, which is
  * why the search count is capped per finding; they are close to half the
@@ -112,10 +115,11 @@ export const MAX_SOURCE_CHECKS_PER_RUN = 8;
 export const MAX_SEARCHES_PER_RESEARCH = 3;
 
 /**
- * Output ceiling on every model call of a run, reasoning included. Without one
- * a single answer is bounded only by the model's own maximum, hundreds of
- * thousands of tokens. A verdict is a short JSON object; the audit is the
- * longest answer and has always fitted in this.
+ * Output ceiling on the research and cited-page calls of a run, reasoning
+ * included. Without one a single answer is bounded only by the model's own
+ * maximum, hundreds of thousands of tokens. A verdict is a short JSON object.
+ * The audit writes the whole report and has its own, larger ceiling,
+ * `AUDIT_MAX_OUTPUT_TOKENS`.
  */
 export const MAX_OUTPUT_TOKENS = 4096;
 
@@ -296,48 +300,62 @@ export async function analyzeAudit(
     });
   }
 
-  const startedAt = Date.now();
-  let raw: string;
-  await count(s, 'audit');
-  try {
-    const completion = await client.complete({
-      systemPrompt: FOURCHES_CAUDINES_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: buildFourchesCaudinesUserPrompt(input, { citedSources, now: new Date(now) }),
-        },
-      ],
-      temperature: 0.1,
-      maxTokens: MAX_OUTPUT_TOKENS,
-    });
-    raw = completion.content;
-  } catch {
-    // Close the reservation: an audit that never produced anything must not
-    // hold the account's single slot for the next five minutes. The start is
-    // given back too. Hosted inference is pinned to a short list of hosts with
-    // no fallback beyond it, so "none of them can serve right now" is an
-    // expected outcome, and a reader retrying through it must not run out of
-    // starts for runs that never began. No credit was consumed either: that happens at finalize.
-    // Every audit call failure is released, a billed timeout included: the
-    // hourly global ceiling bounds that, and the release can be narrowed to
-    // provider refusals if timeouts ever show up in the failure counters.
-    await s.db.finalizeAnalysisRun(run.id, now);
-    await s.db.releaseRunStart(user.id, now);
-    await count(s, 'audit_failed');
-    return apiError('provider_unavailable', 'Service momentanément indisponible. Réessayez dans quelques minutes.');
+  // An answer that comes back unreadable is asked for once more before the
+  // reader sees an error: a malformed answer is rarely repeated, and a second
+  // audit costs a few cents where the error costs the reader the whole run.
+  let audited: AnalysisReport | undefined;
+  for (let attempt = 0; attempt < 2 && !audited; attempt += 1) {
+    const startedAt = Date.now();
+    let completion;
+    await count(s, 'audit');
+    try {
+      completion = await client.complete({
+        systemPrompt: FOURCHES_CAUDINES_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content: buildFourchesCaudinesUserPrompt(input, { citedSources, now: new Date(now) }),
+          },
+        ],
+        temperature: 0.1,
+        maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
+      });
+    } catch {
+      // Close the reservation: an audit that never produced anything must not
+      // hold the account's single slot for the next five minutes. The start is
+      // given back too. Hosted inference is pinned to a short list of hosts with
+      // no fallback beyond it, so "none of them can serve right now" is an
+      // expected outcome, and a reader retrying through it must not run out of
+      // starts for runs that never began. No credit was consumed either: that happens at finalize.
+      // Every audit call failure is released, a billed timeout included: the
+      // hourly global ceiling bounds that, and the release can be narrowed to
+      // provider refusals if timeouts ever show up in the failure counters.
+      await s.db.finalizeAnalysisRun(run.id, now);
+      await s.db.releaseRunStart(user.id, now);
+      await count(s, 'audit_failed');
+      return apiError('provider_unavailable', 'Service momentanément indisponible. Réessayez dans quelques minutes.');
+    }
+
+    // The model ran out of output budget: the report is cut short. Counted on
+    // its own because it is the one unreadable answer a bigger budget fixes.
+    if (completion.finishReason === 'length') await count(s, 'audit_truncated');
+
+    try {
+      audited = parseAndValidateLlmOutput(completion.content, input, {
+        modelName: modelIdOf(client),
+        durationMs: Date.now() - startedAt,
+        articleSources: sourcesByBlock,
+      });
+    } catch {
+      await count(s, 'audit_failed');
+    }
   }
 
-  let audited: AnalysisReport;
-  try {
-    audited = parseAndValidateLlmOutput(raw, input, {
-      modelName: modelIdOf(client),
-      durationMs: Date.now() - startedAt,
-      articleSources: sourcesByBlock,
-    });
-  } catch {
+  if (!audited) {
+    // Our failure, not the reader's: the start is given back as for a provider
+    // failure, and no credit was consumed.
     await s.db.finalizeAnalysisRun(run.id, now);
-    await count(s, 'audit_failed');
+    await s.db.releaseRunStart(user.id, now);
     return apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
   }
 

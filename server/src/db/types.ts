@@ -318,6 +318,7 @@ export const METRIC_NAMES = [
   'cache_hit',
   'audit',
   'audit_failed',
+  'audit_truncated',
   'research',
   'research_failed',
   'source_check',

@@ -1,4 +1,5 @@
 import {
+  AUDIT_MAX_OUTPUT_TOKENS,
   FOURCHES_CAUDINES_SYSTEM_PROMPT,
   buildFourchesCaudinesUserPrompt,
 } from './prompts';
@@ -220,10 +221,7 @@ export class AnalysisPipeline {
           messages: [{ role: 'user', content: userPrompt }],
           systemPrompt,
           temperature: 0.1,
-          // The cap counts the reasoning of the current Anthropic, OpenAI and
-          // Gemini models as well as the report itself: 4096 left a
-          // reasoning model a truncated report, or none at all.
-          maxTokens: 16000,
+          maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
           abortSignal: this.abortController?.signal,
         },
         {

@@ -41,6 +41,30 @@ describe('hosted disclosure', () => {
     expect(slugs[0]).toBe('nebius');
   });
 
+  it('caps how hard the model thinks on every hosted request, so the answer keeps its room', async () => {
+    // DeepSeek V4.1 Flash reasons at `high` effort unless told otherwise, out
+    // of the same output ceiling as the answer: left at that default, the
+    // audit could stop mid-report, and the reader was told it was unreadable.
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ choices: [{ message: { content: '{' }, finish_reason: 'length' }] }), { status: 200 });
+    }));
+    let answer;
+    try {
+      const client = createHostedLlm({ OPENROUTER_API_KEY: 'k' })!;
+      answer = await client.complete({ messages: [{ role: 'user', content: 'q' }] });
+      await client.groundedAnswer({ messages: [{ role: 'user', content: 'q' }] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) expect(body.reasoning).toEqual({ effort: 'low' });
+    // A cut-short answer is reported as such, not only as bad JSON.
+    expect(answer.finishReason).toBe('length');
+  });
+
   it('tries every European host before any other, and names none in China', () => {
     const european = ['Pays-Bas', 'France', 'Allemagne', 'Finlande', 'Suède', 'Irlande', 'Espagne', 'Italie', 'Belgique'];
     const countries = HOSTED_ANALYSIS.inferenceHosts.map((host) => host.country);

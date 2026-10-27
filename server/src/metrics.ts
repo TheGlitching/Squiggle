@@ -54,7 +54,8 @@ export interface Metrics {
   };
   cache: { checks: number; hits: number; hitRate: number | null };
   stages: {
-    audit: ReturnType<typeof stage>;
+    /** `truncated`: audit answers cut short by their output ceiling. */
+    audit: ReturnType<typeof stage> & { truncated: number };
     research: ReturnType<typeof stage>;
     sourceCheck: ReturnType<typeof stage>;
   };
@@ -133,7 +134,7 @@ export async function collectLaunchMetrics(
     },
     cache: { checks: c.check, hits: c.cache_hit, hitRate: ratio(c.cache_hit, c.check) },
     stages: {
-      audit: stage(c.audit, c.audit_failed),
+      audit: { ...stage(c.audit, c.audit_failed), truncated: c.audit_truncated },
       research: stage(c.research, c.research_failed),
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },

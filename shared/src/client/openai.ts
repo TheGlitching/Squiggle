@@ -86,7 +86,7 @@ export class OpenAIClient extends BaseLLMClient {
 
     const data = await response.json() as {
       model?: string;
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
 
@@ -101,6 +101,7 @@ export class OpenAIClient extends BaseLLMClient {
         totalTokens: data.usage?.total_tokens,
       },
       provider: this.providerName,
+      finishReason: data.choices?.[0]?.finish_reason,
       raw: data,
     };
   }

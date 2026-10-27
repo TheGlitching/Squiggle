@@ -118,7 +118,7 @@ describe('GET /admin/metrics', () => {
     expect(m.accounts).toEqual({ total: 3, perWeek: [3] });
     expect(m.activation).toEqual({ withFinalize: 1, share: 0.333 });
     expect(m.cache).toEqual({ checks: 2, hits: 1, hitRate: 0.5 });
-    expect(m.stages.audit).toEqual({ calls: 2, failed: 1, failureRate: 0.5 });
+    expect(m.stages.audit).toEqual({ calls: 2, failed: 1, failureRate: 0.5, truncated: 0 });
     expect(m.stages.research).toEqual({ calls: 0, failed: 0, failureRate: null });
     expect(m.analyses).toEqual({ finalized: 1, costPerAnalysisUsd: 0.5 });
   });
