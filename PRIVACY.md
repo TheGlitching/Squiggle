@@ -188,7 +188,7 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini, ce qui n'est pas le cas aujourd'hui ; ses serveurs ne sont pas tous en Europe | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |
 | **Cloudflare** (Workers) | hébergement du serveur | le trafic, sans contenu d'article dans les journaux |
-| **Neon** | base de données | tout ce que décrit le tableau ci-dessus |
+| **Neon** (base hébergée à Francfort, Allemagne, région AWS `eu-central-1` ; société établie aux États-Unis) | base de données | tout ce que décrit le tableau ci-dessus |
 | **Stripe** | paiement | votre e-mail et vos données de paiement — **nous ne voyons aucun numéro de carte** |
 | **Brevo** | envoi des e-mails de connexion | votre adresse e-mail |
 

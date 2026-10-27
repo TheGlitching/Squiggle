@@ -84,6 +84,18 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
       'Un article de l’actualité, relu sous les yeux de la classe : vous préparez chez vous, vous révélez l’analyse au tableau. Gratuit avec une adresse académique.',
   },
   {
+    path: '/enseignants/fiche-activite',
+    title: 'Fiche d’activité : ce qui fragilise un article - Squiggle',
+    description:
+      'Une séance d’éducation aux médias de 55 minutes, de la 4e à la terminale : objectifs, déroulé, variantes. Deux pages A4 à imprimer.',
+  },
+  {
+    path: '/enseignants/grille-lecture',
+    title: 'Grille de lecture : cinq raisons de douter d’un article - Squiggle',
+    description:
+      'Une grille à photocopier pour chaque élève : cinq raisons de douter d’un article, avec un exemple chacune. Sert avec n’importe quel article.',
+  },
+  {
     path: '/classe',
     title: 'Le mode classe - Squiggle',
     description:

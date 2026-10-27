@@ -78,6 +78,22 @@ const PRESS_WEEK_FACTS = [
   'De la 4e au lycée. En 4e et en 3e, seul l’enseignant se sert de l’outil.',
 ] as const;
 
+/** The teacher kit: two printable pages at a stable address, to keep or to pass on to a colleague. */
+const KIT: Array<[string, string, string, string]> = [
+  [
+    'La fiche d’activité',
+    'Une séance de 55 minutes, de la 4e à la terminale : ce que les élèves travaillent, la préparation, le déroulé minute par minute, les variantes. Deux pages A4.',
+    '/enseignants/fiche-activite',
+    'Voir la fiche d’activité',
+  ],
+  [
+    'La grille de lecture',
+    'Une page pour chaque élève : cinq raisons de douter d’un article, avec un exemple inventé chacune, et la place de noter ses phrases fragiles. Elle sert avec n’importe quel article.',
+    '/enseignants/grille-lecture',
+    'Voir la grille de lecture',
+  ],
+];
+
 const FRAME = [
   'Aucune publicité, aucun traceur.',
   'Le texte est jugé, jamais son auteur ni le média.',
@@ -185,6 +201,22 @@ export function Enseignants() {
 
       <Section id="pas-a-pas" title="Une séance, pas à pas">
         <ModeEmploi />
+      </Section>
+
+      <Section id="kit" title="Le kit à imprimer">
+        <div className="grid gap-10 md:grid-cols-2 md:gap-16">
+          {KIT.map(([title, text, to, label]) => (
+            <div key={to} className="grid content-start gap-3">
+              <h3 className={H3}>{title}</h3>
+              <p className="m-0 text-lg leading-relaxed text-muted">{text}</p>
+              <p className="m-0">
+                <Link to={to} className={`${QUIET_LINK} text-lg`}>
+                  {label}
+                </Link>
+              </p>
+            </div>
+          ))}
+        </div>
       </Section>
 
       <Section
