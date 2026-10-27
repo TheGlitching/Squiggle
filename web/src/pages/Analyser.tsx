@@ -7,7 +7,9 @@
  * is kept in this browser until the reader clears it, so signing in halfway
  * loses nothing. "Partager vers Squiggle" (the installed app's share target)
  * lands here with the shared text or address in the query string, which is
- * read once and wiped from the address bar.
+ * read once and wiped from the address bar. Where the share menu does not
+ * list the app, "Coller le texte copié" reads the clipboard and starts the
+ * analysis in the same tap.
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
@@ -29,6 +31,7 @@ import {
   pasteProblem,
   saveDraft,
   type PastedArticle,
+  webAddress,
 } from '../paste';
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
@@ -40,6 +43,9 @@ type Phase =
   | { kind: 'edit' }
   | { kind: 'running'; progress: Progress }
   | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[] };
+
+const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
+const MANUAL_PASTE = 'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement dans le champ, puis Coller.';
 
 /** The draft, with whatever a share just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null } {
@@ -61,9 +67,7 @@ export function Analyser() {
   const [phase, setPhase] = useState<Phase>({ kind: 'edit' });
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
   const [notice, setNotice] = useState<string | null>(
-    shared && !shared.text
-      ? 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.'
-      : null,
+    shared && !shared.text ? ADDRESS_ONLY : null,
   );
   const [showProblem, setShowProblem] = useState(false);
   const controller = useRef<AbortController | null>(null);
@@ -100,13 +104,57 @@ export function Analyser() {
     if (key === 'text') setNotice(null);
   }
 
-  async function analyse(event: FormEvent) {
+  function analyse(event: FormEvent) {
     event.preventDefault();
     if (problem) {
       setShowProblem(true);
       textArea.current?.focus();
       return;
     }
+    void run(article);
+  }
+
+  /**
+   * Copy in the article's page, open Squiggle, one tap: the copied text is read,
+   * put in the form, and analysed when the account allows it. A copied address
+   * alone goes to the source field, as a shared one does. Anything that stops the
+   * analysis leaves the text in the form with the same next step as a paste.
+   */
+  async function pasteCopied() {
+    let copied: string;
+    try {
+      copied = await navigator.clipboard.readText();
+    } catch {
+      // No clipboard API (Firefox, an old browser) or the reader refused it.
+      setNotice(MANUAL_PASTE);
+      textArea.current?.focus();
+      return;
+    }
+    const text = copied.trim();
+    if (!text) {
+      setNotice('Rien à coller : copiez d’abord le texte de l’article.');
+      return;
+    }
+    setFailure(null);
+    const address = /^https?:\/\/\S+$/i.test(text) ? webAddress(text) : null;
+    if (address) {
+      setArticle({ ...article, source: address });
+      setNotice(ADDRESS_ONLY);
+      textArea.current?.focus();
+      return;
+    }
+    // The button only shows on an empty text, so a title or a shared address already there stays.
+    const next = { ...article, text };
+    setArticle(next);
+    setNotice(null);
+    if (pasteProblem(next)) {
+      setShowProblem(true);
+      return;
+    }
+    if (view?.canAnalyse) await run(next);
+  }
+
+  async function run(article: PastedArticle) {
     setFailure(null);
     setNotice(null);
     const abort = new AbortController();
@@ -209,6 +257,17 @@ export function Analyser() {
                   </button>
                 ) : null}
               </div>
+              {!running && !article.text ? (
+                <div className="mt-3">
+                  <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto`}>
+                    Coller le texte copié
+                  </button>
+                  <p className="mt-2 mb-0 text-sm text-muted">
+                    Le partage depuis d’autres applis demande Chrome avec les services Google ; sinon, copiez puis
+                    Coller.
+                  </p>
+                </div>
+              ) : null}
               {notice ? (
                 <p
                   role="status"
@@ -290,7 +349,7 @@ export function Analyser() {
             {running ? (
               <RunningPanel progress={phase.progress} onCancel={() => controller.current?.abort()} />
             ) : (
-              <Action account={account} accountFailed={accountFailed} onRetry={loadAccount} />
+              <Action account={account} accountFailed={accountFailed} empty={!article.text} onRetry={loadAccount} />
             )}
             {view && !running && view.canAnalyse ? <p className="mt-3 mb-0 text-sm text-muted">{view.detail}</p> : null}
           </div>
@@ -381,10 +440,13 @@ function Stages({ stage }: { stage: Progress['stage'] }) {
 function Action({
   account,
   accountFailed,
+  empty,
   onRetry,
 }: {
   account: Account | null | undefined;
   accountFailed: boolean;
+  /** An empty text leaves the primary look to "Coller le texte copié". */
+  empty: boolean;
   onRetry: () => void;
 }) {
   if (accountFailed) {
@@ -430,7 +492,7 @@ function Action({
     <button
       type="submit"
       disabled={account === undefined}
-      className={`${PRIMARY_BUTTON} max-sm:w-full disabled:opacity-70`}
+      className={`${empty ? SECONDARY_BUTTON : PRIMARY_BUTTON} max-sm:w-full disabled:opacity-70`}
     >
       Analyser le texte
     </button>
