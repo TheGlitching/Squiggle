@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
 import { NOTIONS } from '../src/glossaire';
-import { ORIGIN, PUBLIC_PAGES, headFor, sitemap, titleFor } from '../src/seo';
+import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, shareImagePath, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
 // The analysis page asks who is signed in: no one, here.
@@ -71,6 +71,54 @@ describe('search engines and link previews', () => {
     const robots = readFileSync(resolve(__dirname, '../public/robots.txt'), 'utf8');
     expect(robots).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
     expect(robots).not.toMatch(/^Disallow: \/$/m);
+  });
+
+  it('gives every page a share image with its size and alt text, and each notion its own', () => {
+    const tag = (head: string, attr: string, key: string) =>
+      head.match(new RegExp(`<meta ${attr}="${key}" content="([^"]*)" />`))?.[1];
+    for (const page of PUBLIC_PAGES) {
+      const head = headFor(page);
+      const image = tag(head, 'property', 'og:image');
+      expect(image, page.path).toBe(`${ORIGIN}${shareImagePath(page)}`);
+      expect(tag(head, 'name', 'twitter:image')).toBe(image);
+      expect(tag(head, 'property', 'og:image:width')).toBe('1200');
+      expect(tag(head, 'property', 'og:image:height')).toBe('630');
+      expect(tag(head, 'property', 'og:image:type')).toBe('image/png');
+      expect(tag(head, 'property', 'og:image:alt')?.length).toBeGreaterThan(20);
+      expect(tag(head, 'name', 'twitter:image:alt')).toBe(tag(head, 'property', 'og:image:alt'));
+      expect(tag(head, 'name', 'twitter:card')).toBe('summary_large_image');
+      expect(tag(head, 'name', 'robots')).toBe('index, follow');
+    }
+    for (const notion of NOTIONS) {
+      const page = PUBLIC_PAGES.find((item) => item.path === `/glossaire/${notion.slug}`)!;
+      expect(shareImagePath(page)).toBe(`/og/glossaire/${notion.slug}.png`);
+      expect(page.share).toMatchObject({ title: notion.nom, text: notion.resume });
+    }
+    for (const path of ['/', '/enseignants', '/classe', '/transparence', '/glossaire']) {
+      const page = PUBLIC_PAGES.find((item) => item.path === path)!;
+      expect(shareImagePath(page), path).toBe(path === '/' ? '/og.png' : `/og${path}.png`);
+    }
+    expect(shareImagePath(PUBLIC_PAGES.find((item) => item.path === '/mentions-legales')!)).toBe('/og.png');
+  });
+
+  it('writes a page for every address the app answers, so any other is a 404', () => {
+    // Cloudflare answers an address with no file with 404.html (server/wrangler.jsonc):
+    // a route of App.tsx the build writes no page for would be a 404 in production.
+    const routes = [...readFileSync(resolve(__dirname, '../src/App.tsx'), 'utf8').matchAll(/(?:case |route === )'(\/[^']*)'/g)].map(
+      (match) => match[1],
+    );
+    const written = new Set([...PUBLIC_PAGES.map((page) => page.path), ...APP_PATHS, '/tarifs']);
+    for (const route of routes) expect(written.has(route), route).toBe(true);
+    for (const path of APP_PATHS) expect(routes, path).toContain(path);
+    for (const path of APP_PATHS) expect(PUBLIC_PAGES.map((page) => page.path)).not.toContain(path);
+
+    expect(titleFor('/glossaire/inconnu')).toBe(NOT_FOUND_TITLE);
+    const head = appHeadFor(NOT_FOUND_TITLE);
+    expect(head).toContain('<meta name="robots" content="noindex" />');
+    expect(head).not.toContain('rel="canonical"');
+    expect(head).toContain(`<meta property="og:image" content="${ORIGIN}/og.png" />`);
+    render(<App path="/glossaire/inconnu" />);
+    expect(screen.getByText('Page introuvable')).toBeInTheDocument();
   });
 
   it('keeps the tab title in step with the page as the reader moves around', () => {

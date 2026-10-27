@@ -3,7 +3,8 @@ import { renderToString } from 'react-dom/server';
 
 import { App } from './App';
 
-export { PUBLIC_PAGES, headFor, sitemap } from './seo';
+export { APP_PATHS, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, headFor, shareImagePath, sitemap, titleFor } from './seo';
+export { shareImage } from './share';
 
 // Node 25 has a `localStorage` of its own, which warns when read without a file to keep it
 // in. The build is not a reader's browser: a page reading it here must find none.
