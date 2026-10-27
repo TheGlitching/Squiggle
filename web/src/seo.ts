@@ -38,7 +38,7 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     path: '/enseignants',
     title: 'Squiggle pour les enseignants',
     description:
-      'Un article de l’actualité, relu sous les yeux de la classe : vous préparez chez vous, vous révélez l’analyse au tableau. Gratuit pour les enseignants.',
+      'Un article de l’actualité, relu sous les yeux de la classe : vous préparez chez vous, vous révélez l’analyse au tableau. Gratuit avec une adresse académique.',
   },
   {
     path: '/classe',

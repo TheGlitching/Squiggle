@@ -16,15 +16,18 @@ afterEach(() => {
 const region = (name: string) => within(screen.getByRole('region', { name }));
 
 describe('Enseignants', () => {
-  it('states the offer at a glance: who, what is free, how to ask', () => {
+  it('states the offer at a glance: who, what is free, how to get it', () => {
     render(<Enseignants />);
     expect(
       screen.getByRole('heading', { level: 1, name: 'Squiggle pour les enseignants' }),
     ).toBeInTheDocument();
     const offer = screen.getByText('Pour qui', { selector: 'dt' }).closest('dl') as HTMLElement;
     expect(offer.textContent).toContain('L’abonnement complet, gratuit');
-    expect(offer.textContent).toContain('Un code de réduction, sur demande');
-    expect(screen.getByRole('list', { name: 'Comment le demander' })).toHaveTextContent('Le total passe à 0 €, sans carte bancaire.');
+    expect(offer.textContent).toContain('En un clic, avec une adresse académique');
+    const steps = screen.getByRole('list', { name: 'Comment activer l’accès enseignant' });
+    expect(steps).toHaveTextContent('@ac-….fr');
+    expect(steps).toHaveTextContent('« Accès enseignant »');
+    expect(steps).toHaveTextContent('jusqu’au 30 juin, sans carte bancaire');
   });
 
   it('says what the classroom mode does, and that the students use no AI', () => {
@@ -54,13 +57,19 @@ describe('Enseignants', () => {
     expect(screen.getByText(/jamais un texte d’élève/)).toBeInTheDocument();
   });
 
-  it('gives a prefilled request from the top and again at the end', () => {
+  it('sends an academic address to the account page, from the top and again at the end', () => {
+    render(<Enseignants />);
+    const activations = screen.getAllByRole('link', { name: 'Activer l’accès enseignant' });
+    expect(activations).toHaveLength(2);
+    for (const link of activations) expect(link).toHaveAttribute('href', '/connexion?next=/compte');
+  });
+
+  it('keeps a prefilled request by e-mail for a teacher without an academic address', () => {
     render(<Enseignants />);
     expect(TEACHER_REQUEST_URL.startsWith(`${CONTACT_URL}?subject=`)).toBe(true);
     expect(decodeURIComponent(TEACHER_REQUEST_URL)).toContain('Établissement :');
-    const requests = screen.getAllByRole('link', { name: 'Demander l’accès enseignant' });
-    expect(requests).toHaveLength(2);
-    for (const request of requests) expect(request).toHaveAttribute('href', TEACHER_REQUEST_URL);
+    expect(screen.getByText(/Pas d’adresse académique/)).toHaveTextContent('le total passe à 0 €');
+    expect(screen.getByRole('link', { name: 'Demander un code par e-mail' })).toHaveAttribute('href', TEACHER_REQUEST_URL);
   });
 
   // The classroom mode and its exercise are shown on this page, never by sending the teacher back to the home page.

@@ -16,7 +16,10 @@ import { ModeEmploi } from '../components/ModeEmploi';
 import { MONTHLY_ANALYSES, SUBSCRIBE_LABEL } from '../offer';
 import { Link } from '../router';
 
-/** The request, written for the teacher: the three facts we need to grant the offer. */
+/**
+ * The request by e-mail, for a teacher without an academic address: the three
+ * facts we need to send a code by hand.
+ */
 export const TEACHER_REQUEST_URL = `${CONTACT_URL}?subject=${encodeURIComponent(
   'Accès enseignant Squiggle',
 )}&body=${encodeURIComponent('Établissement :\nDiscipline :\nAdresse e-mail du compte Squiggle :\n')}`;
@@ -25,7 +28,7 @@ export const TEACHER_REQUEST_URL = `${CONTACT_URL}?subject=${encodeURIComponent(
 const OFFER: Array<[string, string]> = [
   ['Pour qui', 'Enseignants et documentalistes'],
   ['Ce qui est offert', 'L’abonnement complet, gratuit'],
-  ['Comment', 'Un code de réduction, sur demande'],
+  ['Comment', 'En un clic, avec une adresse académique'],
 ];
 
 /** What the classroom mode does, in the order a lesson uses it. */
@@ -51,10 +54,10 @@ const INCLUDED = [
   'Aucune publicité, aucun traceur',
 ] as const;
 
-const REQUEST_STEPS = [
-  'Créez votre compte sur le site.',
-  `Écrivez-nous à ${CONTACT_EMAIL}, avec votre établissement et votre discipline.`,
-  'Vous recevez un code de réduction : saisissez-le en vous abonnant, depuis « Mon compte ». Le total passe à 0 €, sans carte bancaire.',
+const ACCESS_STEPS = [
+  'Créez votre compte avec votre adresse académique (@ac-….fr).',
+  'Sur la page « Mon compte », cliquez sur « Accès enseignant ».',
+  'L’abonnement est actif jusqu’au 30 juin, sans carte bancaire.',
 ] as const;
 
 /**
@@ -82,7 +85,10 @@ const FRAME = [
   'Une analyse peut se tromper : chaque constat cite sa phrase.',
 ] as const;
 
-const REQUEST = 'Demander l’accès enseignant';
+const ACTIVATE = 'Activer l’accès enseignant';
+
+/** Sign-in creates the account, and the account page carries the button. */
+const ACTIVATE_PATH = '/connexion?next=/compte';
 
 function Marks({ items, label }: { items: readonly string[]; label: string }) {
   return (
@@ -126,12 +132,12 @@ export function Enseignants() {
           <p className={`mt-6 ${LEAD} ${MEASURE}`}>
             Un article de l’actualité, relu sous les yeux de la classe. Vous préparez chez vous et voyez tout le corrigé,
             seul ; en classe, le tableau ne montre que ce que vous révélez. Les élèves n’utilisent pas d’IA. Gratuit pour
-            les enseignants.
+            les enseignants : une adresse académique suffit.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <a href={TEACHER_REQUEST_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-              {REQUEST}
-            </a>
+            <Link to={ACTIVATE_PATH} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+              {ACTIVATE}
+            </Link>
             <a href="#mode-classe" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
               Découvrir le mode classe
             </a>
@@ -245,20 +251,27 @@ export function Enseignants() {
             </div>
           </div>
           <div>
-            <h3 className={H3}>Comment le demander</h3>
+            <h3 className={H3}>Comment l’activer</h3>
             <div className="mt-4">
-              <Steps items={REQUEST_STEPS} label="Comment le demander" />
+              <Steps items={ACCESS_STEPS} label="Comment activer l’accès enseignant" />
             </div>
           </div>
         </div>
         <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <a href={TEACHER_REQUEST_URL} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-            {REQUEST}
-          </a>
+          <Link to={ACTIVATE_PATH} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+            {ACTIVATE}
+          </Link>
           <Link to="/" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
             Retour à l’accueil
           </Link>
         </div>
+        <p className={`mt-8 mb-0 text-base leading-relaxed text-muted ${MEASURE}`}>
+          Pas d’adresse académique ? Écrivez-nous à {CONTACT_EMAIL} avec votre établissement et votre discipline. Vous
+          recevez un code de réduction à saisir en vous abonnant : le total passe à 0 €, sans carte bancaire.{' '}
+          <a href={TEACHER_REQUEST_URL} className={QUIET_LINK}>
+            Demander un code par e-mail
+          </a>
+        </p>
       </Section>
     </>
   );

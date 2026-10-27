@@ -51,7 +51,10 @@
         "LLM_PROVIDER": "openrouter",
         "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
         // The Stripe test-mode price: staging never talks to live billing.
-        "STRIPE_PRICE_ID": "PENDING_TEST_PRICE_ID"
+        "STRIPE_PRICE_ID": "PENDING_TEST_PRICE_ID",
+        // The test-mode teacher coupon (see production). None exists yet, so
+        // the offer stays closed on staging.
+        "STRIPE_TEACHER_COUPON_ID": "PENDING_TEST_TEACHER_COUPON_ID"
       }
     },
     "production": {
@@ -83,7 +86,14 @@
         // a secret (it is visible in any Checkout URL), but it is environment
         // specific, so it lives here rather than in code. Filled in from the
         // Stripe dashboard (issue #5).
-        "STRIPE_PRICE_ID": "price_1UUZJ21VvAeMihPA3JsE9s6m"
+        "STRIPE_PRICE_ID": "price_1UUZJ21VvAeMihPA3JsE9s6m",
+        // The coupon the self-service teacher offer applies at Checkout
+        // (src/billing/teacher.ts): 100 % off, repeating for 12 months, at most
+        // 100 redemptions, redeemable until 30 June 2027. The subscription
+        // itself is set to end on 30 June by the webhook; the coupon's 12 months
+        // only bound it should that ever fail. A coupon id is not a secret: it
+        // grants nothing without a verified academic address on our side.
+        "STRIPE_TEACHER_COUPON_ID": "B2AcWPHo"
       }
     }
   }

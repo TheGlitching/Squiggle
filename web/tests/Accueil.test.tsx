@@ -256,7 +256,7 @@ describe('Accueil', () => {
     expect(pricing.getByText(/Une clé d’API, c’est le code d’accès personnel/)).toHaveTextContent(
       /La clé reste dans votre navigateur, rien ne passe par nos serveurs/,
     );
-    expect(pricing.getByText(/Enseignants : gratuit, sur demande/)).toBeInTheDocument();
+    expect(pricing.getByText(/Enseignants : gratuit avec une adresse académique/)).toBeInTheDocument();
     expect(pricing.getByRole('link', { name: 'L’offre enseignants' })).toHaveAttribute('href', '/enseignants');
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });

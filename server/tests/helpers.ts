@@ -269,6 +269,7 @@ export class StubLlm extends BaseLLMClient {
 export const STRIPE_SECRET_KEY = 'sk_test_not_a_real_key';
 export const STRIPE_PRICE_ID = 'price_test_placeholder';
 export const STRIPE_WEBHOOK_SECRET = 'whsec_test_placeholder';
+export const STRIPE_TEACHER_COUPON_ID = 'coupon_test_teacher';
 
 export interface FakeStripe {
   fetchImpl: FetchLike;
@@ -299,6 +300,9 @@ export function makeFakeStripe(): FakeStripe {
       }
       if (init?.method === 'DELETE' && path.startsWith('/subscriptions/')) {
         return Response.json({ id: path.slice('/subscriptions/'.length), status: 'canceled' });
+      }
+      if (init?.method === 'POST' && path.startsWith('/subscriptions/')) {
+        return Response.json({ id: path.slice('/subscriptions/'.length), cancel_at: Number(form.cancel_at) });
       }
       if (init?.method === 'POST' && path.startsWith('/customers/')) {
         return Response.json({ id: path.slice('/customers/'.length) });
@@ -394,6 +398,7 @@ export function makeTestEnv(
     stripe: {
       secretKey: STRIPE_SECRET_KEY,
       priceId: STRIPE_PRICE_ID,
+      teacherCouponId: STRIPE_TEACHER_COUPON_ID,
       webhookSecret: STRIPE_WEBHOOK_SECRET,
       fetchImpl: stripe.fetchImpl as unknown as typeof fetch,
     },

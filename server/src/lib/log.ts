@@ -35,6 +35,7 @@ export interface LogFields {
     | 'email_changed'
     | 'install_revoked'
     | 'stripe_email_sync_failed'
+    | 'stripe_teacher_end_failed'
     | 'metric_failed';
   requestId: string;
   method?: string;

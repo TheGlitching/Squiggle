@@ -77,6 +77,7 @@ describe('environments', () => {
       'LLM_PROVIDER',
       'OPENROUTER_MODEL',
       'STRIPE_PRICE_ID',
+      'STRIPE_TEACHER_COUPON_ID',
     ]) {
       expect(envs.production.vars, name).toHaveProperty(name);
     }

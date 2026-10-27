@@ -75,6 +75,16 @@ describe('the visit stands on its own before any analysis', () => {
     expect(steps.map((s) => s.id)).toContain('run-analysis');
   });
 
+  // An extension left in the browser's Extensions menu is one a reader forgets
+  // they installed; the pin hint is shown before any report exists.
+  it('tells the reader to pin the icon to the toolbar', () => {
+    const pin = availableOnFirstRun().find((s) => s.id === 'pin-icon');
+
+    expect(pin?.targetSelector).toBeUndefined();
+    expect(pin?.content).toMatch(/épinglez Squiggle/);
+    expect(pin?.methodologyTip).toMatch(/Firefox/);
+  });
+
   it('drops the steps whose anchor is not on screen rather than highlighting nothing', () => {
     const first = availableOnFirstRun();
 

@@ -103,6 +103,16 @@ export const DEFAULT_EDITORIAL_TOUR_STEPS: TourStep[] = [
     methodologyTip: 'La recherche vient après la lecture, jamais avant : l’audit dit d’abord ce qu’il lit dans le texte, et les sources viennent ensuite le confirmer ou le démentir.',
   },
   {
+    // The toolbar is the browser's, outside the panel, so there is nothing
+    // here to anchor to: the step stands on its prose, like the opening one.
+    id: 'pin-icon',
+    title: 'Gardez Squiggle à portée de clic',
+    badge: 'Barre d’outils',
+    placement: 'center',
+    content: 'Le navigateur range une extension installée dans son menu Extensions, l’icône en forme de pièce de puzzle. Ouvrez ce menu et épinglez Squiggle : son icône reste dans la barre d’outils, prête pour le prochain article qui vous fait réagir.',
+    methodologyTip: 'Dans Chrome et Edge, c’est la punaise à côté de Squiggle. Dans Firefox, la roue dentée à côté de Squiggle, puis « Épingler à la barre d’outils ».',
+  },
+  {
     id: 'global-score',
     targetSelector: '[data-tour="score-gauges"]',
     title: 'Le verdict d’ensemble',

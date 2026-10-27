@@ -6,6 +6,7 @@ import {
   messageForError,
   openPortal,
   startCheckout,
+  startTeacherCheckout,
   type Account,
 } from "../api";
 import { DonneesCompte } from "../components/DonneesCompte";
@@ -86,11 +87,11 @@ export function Compte() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function subscribe() {
+  async function goToCheckout(start: () => Promise<string>) {
     setBusy(true);
     setError(null);
     try {
-      window.location.href = await startCheckout();
+      window.location.href = await start();
     } catch (err) {
       setError(messageForError(err));
       setBusy(false);
@@ -218,7 +219,23 @@ export function Compte() {
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            {view.canSubscribe ? (
+            {view.canSubscribe && account.teacherOffer ? (
+              <div>
+                <button
+                  onClick={() => goToCheckout(startTeacherCheckout)}
+                  disabled={busy}
+                  className={`${PRIMARY_BUTTON} max-sm:w-full disabled:opacity-50`}
+                >
+                  Accès enseignant
+                </button>
+                <p className="mt-3 mb-0 max-w-xl text-sm text-muted">
+                  Votre adresse académique vous ouvre l’abonnement complet,
+                  gratuit jusqu’au 30 juin : {MONTHLY_ANALYSES} analyses par
+                  mois, sans carte bancaire. Il s’arrête de lui-même à cette
+                  date.
+                </p>
+              </div>
+            ) : view.canSubscribe ? (
               <div>
                 {/* The express request of art. L221-25 that the conditions of sale rely on. */}
                 <label className="mb-4 flex max-w-xl items-start gap-3 text-base text-muted">
@@ -235,7 +252,7 @@ export function Compte() {
                   </span>
                 </label>
                 <button
-                  onClick={subscribe}
+                  onClick={() => goToCheckout(startCheckout)}
                   disabled={busy || !startNow}
                   className={`${PRIMARY_BUTTON} max-sm:w-full disabled:opacity-50`}
                 >

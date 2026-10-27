@@ -22,6 +22,11 @@ export interface StripeConfig {
   secretKey: string;
   /** The recurring price the subscription is sold at (a `price_…` id). */
   priceId: string;
+  /**
+   * The teacher coupon (100 %, see `billing/teacher.ts`). Unset, or still the
+   * `PENDING_…` placeholder, means the self-service teacher offer is closed.
+   */
+  teacherCouponId?: string;
   webhookSecret: string;
   fetchImpl?: typeof fetch;
 }
@@ -77,6 +82,22 @@ export async function cancelSubscription(
   return res.ok ? { ok: true } : res;
 }
 
+/**
+ * End a subscription at a fixed date (the teacher offer's 30 June). Stripe
+ * then cancels it on its own and the webhook hears `subscription.deleted`.
+ */
+export async function setSubscriptionEnd(
+  config: StripeConfig,
+  subscriptionId: string,
+  endMs: number,
+): Promise<Outcome<object>> {
+  const res = await stripePost(config, `/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    cancel_at: String(Math.floor(endMs / 1000)),
+    proration_behavior: 'none',
+  });
+  return res.ok ? { ok: true } : res;
+}
+
 /** Keep the address on Stripe's receipts in step with the account's. */
 export async function updateCustomerEmail(
   config: StripeConfig,
@@ -97,6 +118,8 @@ export interface CheckoutArgs {
   customerId: string | null;
   successUrl: string;
   cancelUrl: string;
+  /** The teacher offer: this coupon is applied to the session instead of a code being typed. */
+  teacherCoupon?: string;
 }
 
 export async function createCheckoutSession(args: CheckoutArgs): Promise<Outcome<{ url: string }>> {
@@ -114,14 +137,24 @@ export async function createCheckoutSession(args: CheckoutArgs): Promise<Outcome
     // declared tax-inclusive in the dashboard, so nothing about it is decided
     // in this code.
     'automatic_tax[enabled]': 'true',
-    // Offered access (the service's own account, teachers on request) is a
-    // 100 %-forever promotion code made in the dashboard and typed here, so
-    // the plan still comes from the webhook like any other subscription.
+    // Offered access (the service's own account, a teacher without an
+    // academic address) is a 100 %-forever promotion code made in the
+    // dashboard and typed here, so the plan still comes from the webhook like
+    // any other subscription. An academic address skips the code: see below.
     // With nothing due, Checkout then asks for no card at all.
     allow_promotion_codes: 'true',
     payment_method_collection: 'if_required',
     customer_update: args.customerId ? 'auto' : '',
   };
+  if (args.teacherCoupon) {
+    // Stripe takes either a discount or a promotion-code field, never both.
+    // The offer marker travels to the subscription, where the webhook reads
+    // it to end the subscription with the school year.
+    delete form.allow_promotion_codes;
+    form['discounts[0][coupon]'] = args.teacherCoupon;
+    form['metadata[offer]'] = 'teacher';
+    form['subscription_data[metadata][offer]'] = 'teacher';
+  }
   if (args.customerId) form.customer = args.customerId;
   else if (args.email) form.customer_email = args.email;
   if (!args.customerId) delete form.customer_update;

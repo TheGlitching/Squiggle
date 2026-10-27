@@ -27,6 +27,12 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
 3. **Fill the `PENDING_…` values** of the environment in `server/wrangler.jsonc`:
    - `WEB_APP_ORIGIN` of staging, once its `workers.dev` address is known;
    - `STRIPE_PRICE_ID`: the recurring price, from the test-mode catalogue for staging.
+   - `STRIPE_TEACHER_COUPON_ID`: the coupon the self-service teacher offer applies
+     (`server/src/billing/teacher.ts`), created in the Stripe dashboard (Products,
+     Coupons): 100 % off, duration *repeating* for 12 months, at most 100
+     redemptions, redeemable until 30 June. The subscription it opens is ended on
+     30 June by the webhook, so the 12 months are only a bound. A new coupon is
+     made for each school year.
 
    `npm run deploy:production` refuses to run while any of them is left.
 4. **Secrets**, set by name with `npx wrangler secret put <NAME> --env <environment>`.
