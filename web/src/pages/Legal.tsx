@@ -293,7 +293,11 @@ const TRANSFERS = [
   ['Cloudflare, Inc. (hébergement)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Stripe (paiement)', 'Irlande, et États-Unis pour Stripe, Inc.', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Google (connexion, si vous la choisissez)', 'États-Unis', 'Data Privacy Framework UE-États-Unis'],
-  ['Neon, Inc. (base de données)', 'États-Unis', 'Clauses contractuelles types, dans l’accord de traitement de Neon'],
+  [
+    'Neon, Inc. (base de données)',
+    'Allemagne (Francfort) pour les données, États-Unis pour la société',
+    'Clauses contractuelles types, dans l’accord de traitement de Neon',
+  ],
   ['Brevo (e-mails de connexion)', 'France', 'Aucun transfert hors UE'],
 ] as const;
 

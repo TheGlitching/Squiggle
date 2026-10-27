@@ -26,6 +26,11 @@ describe('legal pages', () => {
     expect(text).not.toMatch(/à compléter|provisoire|brouillon/);
   });
 
+  it('says where the database is', () => {
+    const { container } = renderAt('/confidentialite');
+    expect(container.textContent).toContain('Allemagne (Francfort) pour les données, États-Unis pour la société');
+  });
+
   it('names the publisher and the host', () => {
     const { container } = renderAt('/mentions-legales');
     const text = container.textContent ?? '';
