@@ -16,7 +16,7 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import { ANON_RATE_SCOPE_PREFIX, DAY_MS, RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
 import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
@@ -501,6 +501,14 @@ export class NeonDb implements Db {
     return { allowed: count <= args.limit, count, windowStart };
   }
 
+  async releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void> {
+    const windowStart = Math.floor(args.now / args.windowMs) * args.windowMs;
+    await this.q`
+      UPDATE rate_limits SET count = count - 1
+      WHERE scope = ${args.scope} AND key = ${args.key} AND window_start = ${windowStart} AND count > 0
+    `;
+  }
+
   // ---- usage (ledger + daily counter) -------------------------------------
 
   async recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow> {
@@ -647,7 +655,7 @@ export class NeonDb implements Db {
     const r = rows[0];
     return {
       id: r.id as string,
-      userId: r.user_id as string,
+      userId: (r.user_id as string | null) ?? null,
       urlHash: r.url_hash as string,
       // JSONB comes back parsed; the rest of the server treats state as text.
       state: typeof r.state === 'string' ? r.state : JSON.stringify(r.state),
@@ -770,7 +778,11 @@ export class NeonDb implements Db {
       this.q`DELETE FROM oauth_pending WHERE expires_at <= ${now} RETURNING 1`,
       this.q`DELETE FROM analysis_runs WHERE expires_at <= ${now} RETURNING 1`,
       this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs} RETURNING 1`,
-      this.q`DELETE FROM rate_limits WHERE window_start <= ${now - RATE_WINDOW_MS} RETURNING 1`,
+      this.q`
+        DELETE FROM rate_limits
+        WHERE window_start <= CASE WHEN scope LIKE ${`${ANON_RATE_SCOPE_PREFIX}%`} THEN ${now - DAY_MS}::bigint ELSE ${now - RATE_WINDOW_MS}::bigint END
+        RETURNING 1
+      `,
     ]);
     return swept.reduce((n, rows) => n + rows.length, 0);
   }

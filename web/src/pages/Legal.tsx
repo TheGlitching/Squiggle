@@ -150,8 +150,8 @@ export function Cgv() {
       <Article title="2. Le service">
         <p>
           Squiggle analyse la rigueur d’un article de presse que vous lisez et produit un rapport (voir les{' '}
-          <A to="/conditions">conditions d’utilisation</A>). Un compte donne droit à {FREE_ANALYSES} analyses offertes,
-          sans carte bancaire. L’abonnement donne droit à {MONTHLY_ANALYSES} analyses par mois d’abonnement. Le compteur repart à chaque
+          <A to="/conditions">conditions d’utilisation</A>). Sans compte, le site offre une analyse par jour. Un
+          compte donne droit à {FREE_ANALYSES} analyses offertes, sans carte bancaire. L’abonnement donne droit à {MONTHLY_ANALYSES} analyses par mois d’abonnement. Le compteur repart à chaque
           renouvellement mensuel ; les analyses non utilisées ne sont pas reportées.
           Un rapport déjà présent dans le cache partagé est servi sans consommer d’analyse.
         </p>
@@ -276,6 +276,10 @@ const PROCESSING = [
   ['Conserver les pièces de facturation', 'Obligation légale (art. 6.1.c)'],
   ['Protéger le service contre les abus : limites de fréquence, signature des requêtes, journaux techniques', 'Intérêt légitime (art. 6.1.f) : la sécurité du service'],
   [
+    'Offrir une analyse par jour sans compte, et s’en tenir là : l’empreinte de votre adresse IP, 24 heures au plus',
+    'Intérêt légitime (art. 6.1.f) : faire essayer le service sans inscription, à un coût borné',
+  ],
+  [
     'Mesurer l’audience du site, en données agrégées, sans cookie ni rien qui vous désigne (section 6)',
     'Intérêt légitime (art. 6.1.f) : savoir ce qui est utile',
   ],
@@ -347,7 +351,7 @@ export function Confidentialite() {
         <p>
           Avec votre propre clé d’API, l’extension n’envoie rien à nos serveurs : l’article part directement de votre
           navigateur vers le fournisseur que vous avez choisi, qui en est seul destinataire. Cette politique concerne le
-          site squiggle.fr et le mode hébergé, avec un compte.
+          site squiggle.fr et le mode hébergé, avec un compte ou, sur le site, sans compte.
         </p>
       </Article>
 
@@ -355,7 +359,9 @@ export function Confidentialite() {
         <p>
           Vos données personnelles sont votre adresse e-mail, votre identifiant Google si vous vous connectez avec Google,
           vos identifiants Stripe, l’adresse IP d’une demande (pour les limites de fréquence) et le journal de vos
-          analyses, qui note qu’une analyse a eu lieu et quand, jamais laquelle. Le texte des articles n’est jamais
+          analyses, qui note qu’une analyse a eu lieu et quand, jamais laquelle. Sans compte, le site permet une
+          analyse par jour : pour la compter, il garde l’empreinte SHA-256 de votre adresse IP 24 heures au plus,
+          sans rien d’autre, puis l’efface à minuit (UTC). Le texte des articles n’est jamais
           conservé, et aucune identité de lecteur n’accompagne une requête vers le modèle.
         </p>
         <p>

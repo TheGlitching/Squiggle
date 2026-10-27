@@ -10,7 +10,7 @@
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import { ANON_RATE_SCOPE_PREFIX, DAY_MS, RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
 import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
@@ -56,7 +56,7 @@ export class MemoryDb implements Db {
   private readonly bridgeCodes = new Map<string, BridgeCodeRow>();
   private readonly nonces = new Map<string, NonceRow>();
   private readonly oauth = new Map<string, OAuthPendingRow>();
-  private readonly rates = new Map<string, { count: number; windowStart: number }>();
+  private readonly rates = new Map<string, { scope: string; count: number; windowStart: number }>();
   private readonly usageDaily = new Map<string, UsageDailyRow>();
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
@@ -411,11 +411,17 @@ export class MemoryDb implements Db {
     const k = `${args.scope}\u0000${args.key}\u0000${windowStart}`;
     let entry = this.rates.get(k);
     if (!entry) {
-      entry = { count: 0, windowStart };
+      entry = { scope: args.scope, count: 0, windowStart };
       this.rates.set(k, entry);
     }
     entry.count += 1;
     return { allowed: entry.count <= args.limit, count: entry.count, windowStart };
+  }
+
+  async releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void> {
+    const windowStart = Math.floor(args.now / args.windowMs) * args.windowMs;
+    const entry = this.rates.get(`${args.scope}\u0000${args.key}\u0000${windowStart}`);
+    if (entry && entry.count > 0) entry.count -= 1;
   }
 
   // ---- usage (ledger + daily counter) -------------------------------------
@@ -676,7 +682,7 @@ export class MemoryDb implements Db {
     sweep(this.runs, (r) => r.expiresAt <= now);
     const cutoff = now - usageLogRetentionMs;
     sweep(this.usageLog, (r) => r.createdAt <= cutoff);
-    sweep(this.rates, (r) => r.windowStart <= now - RATE_WINDOW_MS);
+    sweep(this.rates, (r) => r.windowStart <= now - (r.scope.startsWith(ANON_RATE_SCOPE_PREFIX) ? DAY_MS : RATE_WINDOW_MS));
     return removed;
   }
 }

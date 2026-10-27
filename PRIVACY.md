@@ -25,6 +25,13 @@ L'analyse sur le site (la page « Analyser un texte ») est le mode hébergé, s
 extension : elle tourne sur le même compte, avec les mêmes analyses offertes et le même
 abonnement, et tout ce que la section 2 dit du mode hébergé s'y applique.
 
+Le site permet aussi **une analyse par jour sans compte**, et 40 par jour au plus pour
+tous les visiteurs ensemble. Elle suit le même trajet, le même cache partagé et les
+mêmes limites de taille. Pour la compter, et pour rien d'autre, le serveur garde
+l'empreinte SHA-256 de votre adresse IP, jamais l'adresse elle-même, et l'efface à
+minuit (UTC), soit 24 heures au plus. Aucun cookie n'est envoyé ni déposé : rien ne
+relie cette analyse au compte que vous créeriez ensuite.
+
 ---
 
 # 1. Mode « clé personnelle » (BYOK)
@@ -167,6 +174,7 @@ lecteur qui colle le même texte.
 | Session web | base de données, **en empreinte SHA-256** | 30 jours |
 | Lien de connexion par e-mail, avec l'adresse IP de la demande | base de données, le code **en empreinte SHA-256** | 10 minutes |
 | Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l'heure | base de données | 2 heures au plus |
+| Analyse sans compte sur le site : l'**empreinte SHA-256** de votre adresse IP et le nombre d'analyses lancées dans la journée, pour s'en tenir à une par jour | base de données | **24 heures au plus**, effacée à minuit (UTC) |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
 | Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une visite est arrivée par un lien de campagne, un bouton a été utilisé, un constat a été signalé comme erroné (sa catégorie, et le motif choisi), par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |

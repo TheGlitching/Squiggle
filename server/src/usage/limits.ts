@@ -25,11 +25,21 @@ export const REPORT_MAX_BYTES = 256 * 1024;
 export const USAGE_LOG_RETENTION_MS = 365 * DAY_MS;
 
 /**
- * The longest rate-limit window in use (every caller counts per hour). A
- * window row names an IP or an address in clear, so the hourly sweep drops it
- * once it closes. A longer window must raise this, or its count resets early.
+ * The rate-limit window every caller counts in, except the analysis without
+ * an account. A window row names an IP or an address in clear, so the hourly
+ * sweep drops it once it closes. A longer window must be swept on its own, or
+ * its count resets early.
  */
 export const RATE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * The scopes of the analysis without an account count per UTC day, under
+ * this prefix. Their key is the SHA-256 of the visitor's IP, never the IP,
+ * and the sweep drops a row once its day has closed. The hourly sweep runs on
+ * the hour (`wrangler.jsonc`), so the one at midnight UTC takes it: a row is
+ * kept 24 hours at most, as `PRIVACY.md` says.
+ */
+export const ANON_RATE_SCOPE_PREFIX = 'anon:';
 
 /**
  * The cron trigger (`wrangler.jsonc`) that runs the daily report sweep; any

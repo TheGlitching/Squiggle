@@ -3,9 +3,11 @@
  *
  * It runs in hosted mode on the reader's account, so it spends the same trial
  * and subscription as the extension, and nothing here judges the text: the
- * stages, the prompts and the score are the server's (`shared/`). The paste
- * is kept in this browser until the reader clears it, so signing in halfway
- * loses nothing. "Partager vers Squiggle" (the installed app's share target)
+ * stages, the prompts and the score are the server's (`shared/`). A visitor
+ * without an account runs one analysis a day the same way, then is offered an
+ * account to keep the report: back from that sign-in, the report is served
+ * again from the shared cache, at no cost. The paste is kept in this browser
+ * until the reader clears it, so signing in halfway loses nothing. "Partager vers Squiggle" (the installed app's share target)
  * lands here with the shared text or address in the query string, which is
  * read once and wiped from the address bar. Where the share menu does not
  * list the app, "Coller le texte copié" reads the clipboard and starts the
@@ -16,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
-import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } from '../analysis';
+import { analysisFailure, analyzePasted, cachedReport, type AnalysisFailure, type Progress } from '../analysis';
 import { getAccount, type Account } from '../api';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
@@ -44,11 +46,25 @@ import { readTranscript, type Start } from '../transcript';
 import { describeAccount, type AccountView } from '../usage';
 
 const SIGN_IN = '/connexion?next=/analyser';
+/** The sign-in a visitor's report offers; the server counts an account opened through it. */
+const SIGN_UP_AFTER_VISIT = `/connexion?next=${encodeURIComponent('/analyser?apres=essai')}`;
 
 type Phase =
   | { kind: 'edit' }
   | { kind: 'running'; progress: Progress }
-  | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[]; times: Record<string, Start[]> | null };
+  /** `visitor`: run without an account, so the page offers one to keep the report. */
+  | {
+      kind: 'done';
+      report: AnalysisReport;
+      blocks: TextBlock[];
+      times: Record<string, Start[]> | null;
+      visitor: boolean;
+    };
+
+/** Back from the sign-in a visitor's report offered. Read before the address bar is wiped. */
+function backFromVisit(): boolean {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('apres') === 'essai';
+}
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
 /** Checkout started from this page comes back here; the query is read once, as a share is. */
@@ -78,6 +94,7 @@ function initialArticle(): { article: PastedArticle; shared: Partial<PastedArtic
 
 export function Analyser() {
   const [{ article: start, shared }] = useState(initialArticle);
+  const [returning] = useState(backFromVisit);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   const [accountFailed, setAccountFailed] = useState(false);
@@ -105,6 +122,25 @@ export function Analyser() {
       .catch(() => setAccountFailed(true));
   }
   useEffect(loadAccount, []);
+
+  // Back from the sign-in a visitor's report offered: the report is in the
+  // shared cache, so it is shown again without a model call or a credit.
+  const signedIn = Boolean(account);
+  useEffect(() => {
+    if (!returning || !signedIn || pasteProblem(article)) return;
+    let live = true;
+    cachedReport(article).then(
+      (hit) => {
+        if (live && hit) setPhase((current) => (current.kind === 'edit' ? { kind: 'done', ...hit, visitor: false } : current));
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+    // Once, with the paste the reader came back with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returning, signedIn]);
 
   useEffect(() => {
     if (phase.kind === 'done') reportTop.current?.focus();
@@ -169,7 +205,7 @@ export function Analyser() {
       setShowProblem(true);
       return;
     }
-    if (view?.canAnalyse) await run(next);
+    if (account === null || view?.canAnalyse) await run(next);
   }
 
   async function run(article: PastedArticle) {
@@ -179,6 +215,7 @@ export function Analyser() {
     controller.current = abort;
     if (readTranscript(article.text)) count('paste_transcript');
     setPhase({ kind: 'running', progress: { message: 'Préparation de l’analyse…', percent: 2 } });
+    const visitor = account === null;
     try {
       const { report, blocks, times } = await analyzePasted(
         article,
@@ -192,8 +229,9 @@ export function Analyser() {
               : current,
           ),
         abort.signal,
+        visitor,
       );
-      setPhase({ kind: 'done', report, blocks, times });
+      setPhase({ kind: 'done', report, blocks, times, visitor });
       window.scrollTo?.({ top: 0 });
     } catch (err) {
       setPhase({ kind: 'edit' });
@@ -244,6 +282,7 @@ export function Analyser() {
           </button>
         </div>
         <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} />
+        {phase.visitor ? <KeepReport /> : null}
         {account && view ? (
           view.needsSubscription ? (
             <div className="mt-12">
@@ -392,7 +431,13 @@ export function Analyser() {
             {running ? (
               <RunningPanel progress={phase.progress} onCancel={() => controller.current?.abort()} />
             ) : (
-              <Action account={account} accountFailed={accountFailed} empty={!article.text} onRetry={loadAccount} />
+              <Action
+                account={account}
+                accountFailed={accountFailed}
+                empty={!article.text}
+                refused={failure?.kind === 'signup'}
+                onRetry={loadAccount}
+              />
             )}
             {view && !running && view.canAnalyse ? <p className="mt-3 mb-0 text-sm text-muted">{view.detail}</p> : null}
           </div>
@@ -480,16 +525,45 @@ function Stages({ stage }: { stage: Progress['stage'] }) {
   );
 }
 
+/**
+ * After a visitor's report: the account is what keeps it, and what comes with
+ * it. The same card as the offer a signed-in reader meets when the trial runs out.
+ */
+function KeepReport() {
+  return (
+    <div className="mt-12">
+      <section
+        aria-labelledby="garder-titre"
+        className="max-w-2xl rounded-card border border-border bg-surface p-5 sm:p-7"
+      >
+        <h2 id="garder-titre" className="m-0 font-display text-xl font-semibold tracking-[-0.01em]">
+          Gardez ce rapport, et faites-en {FREE_ANALYSES} de plus
+        </h2>
+        <p className="mt-1 mb-5 text-base text-muted">
+          Créez un compte gratuit, sans carte bancaire : ce rapport vous attend au retour, et {FREE_ANALYSES} analyses
+          vous sont offertes, ici, dans l’appli et dans l’extension.
+        </p>
+        <Link to={SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+          Créer un compte gratuit
+        </Link>
+      </section>
+    </div>
+  );
+}
+
 function Action({
   account,
   accountFailed,
   empty,
+  refused,
   onRetry,
 }: {
   account: Account | null | undefined;
   accountFailed: boolean;
   /** An empty text leaves the primary look to "Coller le texte copié". */
   empty: boolean;
+  /** A visitor whose analysis without an account was refused: an account is the next step. */
+  refused: boolean;
   onRetry: () => void;
 }) {
   if (accountFailed) {
@@ -503,16 +577,32 @@ function Action({
     );
   }
 
-  if (account === null) {
+  if (account === null && refused) {
     return (
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <Link to={SIGN_IN} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-          Se connecter pour analyser
+          Créer un compte gratuit
         </Link>
         <p className="m-0 text-sm text-muted">
-          {FREE_ANALYSES} analyses offertes à l’inscription. Votre texte reste ici, dans ce navigateur.
+          {FREE_ANALYSES} analyses offertes, sans carte bancaire. Votre texte reste ici, dans ce navigateur.
         </p>
       </div>
+    );
+  }
+
+  if (account === null) {
+    return (
+      <>
+        <button type="submit" className={`${empty ? SECONDARY_BUTTON : PRIMARY_BUTTON} max-sm:w-full`}>
+          Analyser le texte
+        </button>
+        <p className="mt-3 mb-0 text-sm text-muted">
+          Une analyse offerte sans compte, chaque jour.{' '}
+          <Link to={SIGN_IN} className="underline underline-offset-4 hover:text-foreground">
+            Se connecter
+          </Link>
+        </p>
+      </>
     );
   }
 
@@ -602,6 +692,13 @@ function RunningPanel({ progress, onCancel }: { progress: Progress; onCancel: ()
 function FailureNotice({ failure }: { failure: AnalysisFailure }) {
   // A refusal on billing is the account's state, which the action below now shows with its next step.
   if (failure.kind === 'billing') return null;
+  if (failure.kind === 'signup') {
+    return (
+      <p role="alert" className="mt-0 mb-3 text-sm text-warningInk">
+        {failure.message}
+      </p>
+    );
+  }
   if (failure.kind === 'signin') {
     return (
       <p role="alert" className="mt-0 mb-3 text-sm text-warningInk">

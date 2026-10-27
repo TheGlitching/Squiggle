@@ -66,13 +66,15 @@ export interface InstallClientConfig {
 /**
  * The web app: it holds no key, so every call rides the reader's session
  * cookie on `/web/analyze/*`, where the server requires an allowed Origin
- * instead of a signature. The stages, their order and their payloads are the
- * extension's, so the two entry points cannot drift into two protocols.
+ * instead of a signature. A visitor without an account (`session: 'none'`)
+ * walks `/web/anon/*` with no cookie at all, on the site's one analysis a day.
+ * The stages, their order and their payloads are the extension's, so the
+ * entry points cannot drift into separate protocols.
  */
 export interface SessionClientConfig {
   /** Origin of the hosted API, without a trailing slash; empty when same-origin. */
   baseUrl: string;
-  session: 'cookie';
+  session: 'cookie' | 'none';
   fetchImpl?: typeof fetch;
 }
 
@@ -117,7 +119,7 @@ interface CheckResponse {
 
 export class HostedAnalysisClient {
   private readonly config: HostedClientConfig;
-  /** `/v1/analyze` for a signed install, `/web/analyze` for a browser session. */
+  /** `/v1/analyze` for a signed install, `/web/analyze` for a browser session, `/web/anon` for a visitor. */
   private readonly stages: string;
   private controller: AbortController | null = null;
   private notes: string[] = [];
@@ -126,7 +128,7 @@ export class HostedAnalysisClient {
 
   constructor(config: HostedClientConfig) {
     this.config = config;
-    this.stages = 'privateKey' in config ? '/v1/analyze' : '/web/analyze';
+    this.stages = 'privateKey' in config ? '/v1/analyze' : config.session === 'none' ? '/web/anon' : '/web/analyze';
   }
 
   /**
@@ -157,16 +159,11 @@ export class HostedAnalysisClient {
       // 1. The preflight is the whole point of the shared cache: on a hit the
       //    article is never sent anywhere and no credit is spent.
       this.report('preparing_prompt', 'Recherche d’une analyse déjà publiée...', 5);
-      //    A report is only served to a reader whose page yields the same text
-      //    it was built from, so the check carries the fingerprint of the text
-      //    (not the text) beside the address.
-      const textHash = await articleTextHash(input.blocks);
-      const address = input.url === undefined ? '' : `url=${encodeURIComponent(input.url)}&`;
-      const check = await this.call<CheckResponse>('GET', `${this.stages}/check?${address}text=${textHash}`);
-      if (check.hit && check.report) {
+      const hit = await this.check(input);
+      if (hit) {
         this.note('Analyse déjà disponible : aucun nouvel appel au modèle.');
         this.report('success', 'Analyse récupérée sans nouvel appel au modèle', 100);
-        return check.report;
+        return hit;
       }
 
       // 2. The audit. One call, and the only one that carries the article.
@@ -247,6 +244,31 @@ export class HostedAnalysisClient {
     }
   }
 
+  /**
+   * The report already filed for this text, or null: the preflight alone, so it
+   * spends nothing and never sends the article.
+   */
+  async cached(input: Pick<HostedAnalyzeInput, 'url' | 'blocks'>): Promise<AnalysisReport | null> {
+    this.controller = new AbortController();
+    try {
+      return await this.check(input);
+    } finally {
+      this.controller = null;
+    }
+  }
+
+  /**
+   * A report is only served to a reader whose page yields the same text it was
+   * built from, so the check carries the fingerprint of the text (not the text)
+   * beside the address.
+   */
+  private async check(input: Pick<HostedAnalyzeInput, 'url' | 'blocks'>): Promise<AnalysisReport | null> {
+    const textHash = await articleTextHash(input.blocks);
+    const address = input.url === undefined ? '' : `url=${encodeURIComponent(input.url)}&`;
+    const check = await this.call<CheckResponse>('GET', `${this.stages}/check?${address}text=${textHash}`);
+    return check.hit && check.report ? check.report : null;
+  }
+
   // -------------------------------------------------------------------------
   // Wire
   // -------------------------------------------------------------------------
@@ -272,8 +294,11 @@ export class HostedAnalysisClient {
         body: rawBody,
         signal: this.controller?.signal,
         // The session cookie is the web app's only credential. Same-origin in
-        // production; a dev build calls a local API on another port.
-        ...('session' in this.config ? { credentials: 'include' as const } : {}),
+        // production; a dev build calls a local API on another port. A visitor
+        // sends none, so their run is never tied to an account.
+        ...('session' in this.config
+          ? { credentials: this.config.session === 'none' ? ('omit' as const) : ('include' as const) }
+          : {}),
       });
     } catch (err) {
       this.rethrowIfAborted(err);

@@ -44,6 +44,7 @@ const LABELS: Record<string, string> = {
   link_sent: 'Lien envoyé',
   google: 'Google',
   completed: 'Connexions réussies',
+  after_anon: 'Comptes créés après une analyse sans compte',
   // checkout
   started: 'Commencés',
   paid: 'Payés',
@@ -51,12 +52,15 @@ const LABELS: Record<string, string> = {
   // surfaces
   install: 'Extension',
   session: 'Site',
+  anon: 'Site, sans compte',
   // refusals
   trial_exhausted: 'Essai épuisé',
   quota_exhausted: 'Quota épuisé',
   starts_exhausted: 'Trop de lancements',
   article_too_long: 'Article trop long',
   subscription_required: 'Abonnement requis',
+  anon_used: 'Sans compte : déjà faite ce jour',
+  anon_closed: 'Sans compte : plafond du jour atteint',
 };
 
 // A figure the server left out reads as '-' rather than taking the whole page down.
@@ -168,6 +172,16 @@ function Figures({ m }: { m: OwnerMetrics }) {
         <Counts title="Analyses lancées" counts={m.funnel.runsStarted} />
         <Counts title="Analyses réussies" counts={m.funnel.finalized} />
         <Counts title="Analyses refusées" counts={m.funnel.refused} />
+        <Rows
+          title="Analyse sans compte"
+          rows={[
+            ['Lancées', number(m.funnel.runsStarted.anon)],
+            ['Réussies', number(m.funnel.finalized.anon)],
+            ['Refusées : déjà faite ce jour', number(m.funnel.refused.anon_used)],
+            ['Refusées : plafond du jour atteint', number(m.funnel.refused.anon_closed)],
+            ['Comptes créés ensuite', number(m.funnel.signin.after_anon)],
+          ]}
+        />
       </Band>
 
       <Band title="Santé">
