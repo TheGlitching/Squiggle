@@ -9,7 +9,7 @@ import { useMemo, type ReactNode } from 'react';
 import { categoryOf, mention, Sentences } from '../components/Board';
 import { tone } from '../components/Exemple';
 import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from '../components/Landing';
-import { deckOf, layoutOf, loadSeance, placeOf, questionFor, type Seance } from '../classe';
+import { deckOf, findingsOf, isTeacherNote, layoutOf, loadSeance, placeOf, questionFor, type Seance } from '../classe';
 import { SCORE_BANDS, SEVERITY_LABELS, VERIFICATION_STATES, type SeverityLevel } from '../demo';
 import { passageTone } from '../report';
 import { Link } from '../router';
@@ -96,7 +96,7 @@ function Head({ left, right }: { left: string; right: ReactNode }) {
 }
 
 function Article({ seance }: { seance: Seance }) {
-  const layout = useMemo(() => layoutOf(seance.blocks, seance.report.findings), [seance]);
+  const layout = useMemo(() => layoutOf(seance.blocks, findingsOf(seance)), [seance]);
   return (
     <div className="font-serif text-[17px] leading-[1.75]">
       {layout.blocks.map(({ block, runs }) => {
@@ -171,7 +171,7 @@ export function Fiche() {
 
 export function Corrige() {
   const seance = loadSeance();
-  const layout = useMemo(() => (seance ? layoutOf(seance.blocks, seance.report.findings) : null), [seance]);
+  const layout = useMemo(() => (seance ? layoutOf(seance.blocks, findingsOf(seance)) : null), [seance]);
   if (!seance || !layout) return <Missing />;
   const band = SCORE_BANDS[seance.report.scoreBand];
   return (
@@ -208,7 +208,11 @@ export function Corrige() {
               </p>
               <p className="m-0 text-[13.5px] text-paperMuted">
                 {categoryOf(finding)}
-                {finding.category === 'point-fort' ? '' : ` · ${SEVERITY_LABELS[finding.severity as SeverityLevel]}`}
+                {isTeacherNote(finding)
+                  ? ' · votre remarque'
+                  : finding.category === 'point-fort'
+                    ? ''
+                    : ` · ${SEVERITY_LABELS[finding.severity as SeverityLevel]}`}
                 {verification ? ` · ${verification}` : ''} · « {finding.quote} »
               </p>
               <p className="m-0">{finding.explanation}</p>

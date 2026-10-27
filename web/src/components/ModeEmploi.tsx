@@ -17,6 +17,7 @@ export const GUIDE: Array<{ step: GuideStep; title: string; text: string; tip?: 
     step: 'preparer',
     title: 'Chez vous, préparez la séance',
     text: 'Analysez l’article sur squiggle.fr, puis cliquez sur « Préparer pour la classe », sous le rapport. Vous voyez tout le corrigé, seul, et vous choisissez l’ordre des constats.',
+    tip: 'L’analyse a manqué un passage ? Sélectionnez ses mots dans l’article, puis « Ajouter une remarque » : elle sera révélée comme les autres.',
   },
   {
     step: 'telecharger',

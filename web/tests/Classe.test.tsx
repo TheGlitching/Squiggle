@@ -11,7 +11,18 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
-import { CHANNEL, loadSeance, newSeance, saveSeance, seanceFile, startState, type Message, type Seance } from '../src/classe';
+import {
+  addNote,
+  CHANNEL,
+  loadSeance,
+  newSeance,
+  noteFrom,
+  saveSeance,
+  seanceFile,
+  startState,
+  type Message,
+  type Seance,
+} from '../src/classe';
 import { Tableau } from '../src/pages/Tableau';
 import { lesson, memoryStorage } from './helpers';
 
@@ -120,6 +131,49 @@ describe('/classe, the preparation', () => {
     click.mockRestore();
   });
 
+  it('adds a remark of the teacher’s own, then edits and deletes it', async () => {
+    renderAt('/classe');
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter une remarque' }));
+    const dialog = screen.getByRole('dialog', { name: 'Ajouter une remarque' });
+    await userEvent.type(within(dialog).getByLabelText('Les mots du passage'), 'des mots absents');
+    await userEvent.type(within(dialog).getByLabelText('Votre remarque'), 'Le mot dramatise.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la remarque' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Ces mots ne sont pas dans l’article.');
+
+    await userEvent.clear(within(dialog).getByLabelText('Les mots du passage'));
+    await userEvent.type(within(dialog).getByLabelText('Les mots du passage'), 'le constat inquiète');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /Cadrage/ }));
+    await userEvent.type(within(dialog).getByLabelText(/Question pour la classe/), 'Qui s’inquiète ?');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la remarque' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(loadSeance()?.notes).toMatchObject([{ quote: 'le constat inquiète', category: 'cadrage', question: 'Qui s’inquiète ?' }]);
+    const article = screen.getByRole('article', { name: 'L’article, avec tout le corrigé' });
+    expect(within(article).getByLabelText('constat 7').closest('mark')).toHaveTextContent('le constat inquiète');
+    const item = screen.getByRole('button', { name: 'Votre remarque' }).closest('li') as HTMLElement;
+    expect(item).toHaveTextContent('remarque de l’enseignant');
+    expect(item).toHaveTextContent('Qui s’inquiète ?');
+
+    await userEvent.click(within(item).getByRole('button', { name: 'Modifier votre remarque sur « le constat inquiète »' }));
+    const edit = screen.getByRole('dialog', { name: 'Modifier votre remarque' });
+    await userEvent.clear(within(edit).getByLabelText('Votre remarque'));
+    await userEvent.type(within(edit).getByLabelText('Votre remarque'), 'Un constat sans chiffre.');
+    await userEvent.click(within(edit).getByRole('button', { name: 'Enregistrer' }));
+    expect(loadSeance()?.notes[0].explanation).toBe('Un constat sans chiffre.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Supprimer votre remarque sur « le constat inquiète »' }));
+    expect(loadSeance()?.notes).toEqual([]);
+    expect(article.querySelectorAll('mark')).toHaveLength(6);
+  });
+
+  it('closes the remark form with Escape, adding nothing', async () => {
+    renderAt('/classe');
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter une remarque' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(loadSeance()?.notes).toEqual([]);
+  });
+
   it('forgets the session when the teacher closes it', async () => {
     renderAt('/classe');
     await userEvent.click(screen.getByRole('button', { name: 'Fermer cette séance' }));
@@ -211,6 +265,20 @@ describe('/classe/tableau', () => {
     expect(await screen.findByRole('heading', { name: 'Séance terminée' })).toBeInTheDocument();
   });
 
+  it('shows a teacher’s remark as the teacher’s, never as the analysis', async () => {
+    const desk = listen();
+    render(<Tableau />);
+    await waitFor(() => expect(desk.messages).toContainEqual({ type: 'hello' }));
+    const base = newSeance(lesson());
+    const note = noteFrom(base, { words: 'le constat inquiète', category: 'cadrage', explanation: 'Le mot dramatise.', question: '' }, 'remarque-1')!;
+    const seance = { ...addNote(base, note), order: ['remarque-1', ...base.order] };
+    act(() => desk.post({ type: 'state', seance, state: { ...startState(seance), phase: 'revelation', revealed: 1 } }));
+    const board = await screen.findByRole('region', { name: 'Le tableau' });
+    expect([...board.querySelectorAll('mark')].map((m) => m.textContent)).toEqual(['le constat inquiète']);
+    expect(within(board).getByText('Remarque de l’enseignant')).toBeInTheDocument();
+    expect(within(board).getByText('Le mot dramatise.')).toBeInTheDocument();
+  });
+
   it('is the board alone: no header, no footer', () => {
     renderAt('/classe/tableau');
     expect(screen.queryByRole('navigation', { name: 'Navigation principale' })).toBeNull();
@@ -247,6 +315,23 @@ describe('the paper', () => {
     ]);
     expect(sheet).toHaveTextContent('À poser : Jugé douteux, pas faux : pourquoi cette nuance ?');
     expect(sheet).toHaveTextContent('elle peut se tromper');
+  });
+
+  it('puts the teacher’s remark on the answer sheet, and nothing of it on the student sheet', () => {
+    const base = newSeance(lesson());
+    const note = noteFrom(base, { words: 'le constat inquiète', category: 'cadrage', explanation: 'Le mot dramatise.', question: 'Qui s’inquiète ?' }, 'remarque-1')!;
+    saveSeance(addNote(base, note));
+    renderAt('/classe/fiche');
+    const fiche = screen.getByRole('article', { name: 'Fiche élève' });
+    expect(fiche).not.toHaveTextContent('Le mot dramatise.');
+    expect(fiche).not.toHaveTextContent('Remarque');
+    cleanup();
+    renderAt('/classe/corrige');
+    const corrige = screen.getByRole('article', { name: 'Corrigé' });
+    const last = within(corrige).getAllByRole('listitem').at(-1) as HTMLElement;
+    expect(last).toHaveTextContent('7. Phrase 1 · Remarque de l’enseignant');
+    expect(last).toHaveTextContent('Cadrage · votre remarque · « le constat inquiète »');
+    expect(last).toHaveTextContent('À poser : Qui s’inquiète ?');
   });
 
   it('sends a reader with no session back to the classroom mode', () => {

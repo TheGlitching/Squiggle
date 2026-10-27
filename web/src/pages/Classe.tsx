@@ -10,16 +10,26 @@
  *   a second window, for the projector. The desk holds the lesson's state and
  *   the board shows what it is told.
  */
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 
 import type { Finding } from '../../../shared/src/engine/types';
 import { Board, categoryOf, Sentences } from '../components/Board';
 import { ModeEmploi } from '../components/ModeEmploi';
-import { PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
+import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import {
+  addNote,
   CHANNEL,
   deckOf,
   fileName,
+  findingsOf,
+  isTeacherNote,
+  nextNoteId,
+  NOTE_CATEGORIES,
+  noteFrom,
+  removeNote,
+  replaceNote,
+  type NoteDraft,
+  type TeacherNote,
   keyOf,
   layoutOf,
   loadSeance,
@@ -40,7 +50,7 @@ import {
   type Message,
   type Seance,
 } from '../classe';
-import { SCORE_BANDS, SEVERITY_LABELS, VERIFICATION_STATES, type SeverityLevel } from '../demo';
+import { CATEGORY_LABELS, SCORE_BANDS, SEVERITY_LABELS, VERIFICATION_STATES, type DemoCategory, type SeverityLevel } from '../demo';
 import { frenchDate } from '../format';
 import { passageTone } from '../report';
 import { Link } from '../router';
@@ -226,10 +236,30 @@ function Preparation({
   onChange: (seance: Seance | null) => void;
   onLaunch: () => void;
 }) {
-  const layout = useMemo(() => layoutOf(seance.blocks, seance.report.findings), [seance.blocks, seance.report]);
+  const layout = useMemo(() => layoutOf(seance.blocks, findingsOf(seance)), [seance]);
   const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ draft: NoteDraft; id?: string } | null>(null);
+  const picked = useSelectedWords();
+  const article = picked.article;
   const deck = deckOf(seance);
-  const all = new Set(seance.report.findings.map((f) => f.id));
+  const findings = findingsOf(seance);
+  const all = new Set(findings.map((f) => f.id));
+
+  const startNote = (words = '', blockId?: string) => {
+    document.getSelection()?.removeAllRanges();
+    picked.clear();
+    setEditing({ draft: { words, blockId, category: 'affirmation-non-etayee', explanation: '', question: '' } });
+  };
+  const editNote = (note: TeacherNote) =>
+    setEditing({
+      id: note.id,
+      draft: { words: note.quote, blockId: note.blockId, category: note.category, explanation: note.explanation, question: note.question ?? '' },
+    });
+  const saveNote = (note: TeacherNote) => {
+    onChange(seance.notes.some((n) => n.id === note.id) ? replaceNote(seance, note) : addNote(seance, note));
+    setEditing(null);
+    setOpen(note.id);
+  };
   const band = SCORE_BANDS[seance.report.scoreBand];
   const date = analysedOn(seance);
 
@@ -274,6 +304,14 @@ function Preparation({
             <p className="mt-1 mb-0 text-base text-muted">
               Le tableau les montrera un par un, dans cet ordre. Retirez ceux que vous ne voulez pas traiter.
             </p>
+            <div className="mt-4 grid gap-2 rounded-control border border-dashed border-borderControl p-4">
+              <p className="m-0 text-base leading-relaxed">
+                L’analyse a manqué quelque chose ? Sélectionnez les mots dans l’article, ou cliquez ici.
+              </p>
+              <button type="button" onClick={() => startNote()} className={`${SECONDARY_BUTTON} w-full`}>
+                Ajouter une remarque
+              </button>
+            </div>
             {seance.order.length === 0 ? (
               <p className="mt-4 mb-0 text-base text-muted">
                 L’analyse n’a relevé aucun passage : la séance portera sur la lecture et le débat.
@@ -283,7 +321,7 @@ function Preparation({
                 {seance.order
                   .filter((id) => all.has(id))
                   .map((id, index) => {
-                    const finding = seance.report.findings.find((f) => f.id === id) as Finding;
+                    const finding = findings.find((f) => f.id === id) as Finding;
                     return (
                       <OrderItem
                         key={id}
@@ -297,6 +335,8 @@ function Preparation({
                         onUp={() => move(index, -1)}
                         onDown={() => move(index, 1)}
                         onToggle={() => toggle(id)}
+                        onEdit={isTeacherNote(finding) ? () => editNote(finding) : undefined}
+                        onDelete={isTeacherNote(finding) ? () => onChange(removeNote(seance, id)) : undefined}
                       />
                     );
                   })}
@@ -318,6 +358,7 @@ function Preparation({
         </div>
 
         <article
+          ref={article}
           aria-label="L’article, avec tout le corrigé"
           className="rounded-card bg-paper px-5 py-7 font-serif text-lg leading-[1.7] text-paperInk sm:px-8 md:px-12 md:py-10 lg:sticky lg:top-6 lg:order-1 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain"
         >
@@ -336,17 +377,276 @@ function Preparation({
               />
             );
             return block.type === 'heading' ? (
-              <h2 key={block.id} className="mt-2 mb-0 text-3xl leading-tight font-semibold tracking-tight">
+              <h2 key={block.id} data-block={block.id} className="mt-2 mb-0 text-3xl leading-tight font-semibold tracking-tight">
                 {text}
               </h2>
             ) : (
-              <p key={block.id} className="mt-5 mb-0">
+              <p key={block.id} data-block={block.id} className="mt-5 mb-0">
                 {text}
               </p>
             );
           })}
         </article>
       </div>
+
+      {picked.words && !editing ? (
+        <div
+          role="region"
+          aria-label="Le passage sélectionné"
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur"
+        >
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:px-2">
+            {picked.blockId ? (
+              <p className="m-0 min-w-0 grow truncate font-serif text-lg italic">« {picked.words} »</p>
+            ) : (
+              <p className="m-0 text-base">Sélectionnez des mots d’un seul paragraphe.</p>
+            )}
+            <div className="flex gap-3 max-sm:w-full">
+              {picked.blockId ? (
+                <button
+                  type="button"
+                  onClick={() => startNote(picked.words, picked.blockId)}
+                  className={`${PRIMARY_BUTTON} max-sm:grow`}
+                >
+                  Ajouter une remarque sur ce passage
+                </button>
+              ) : null}
+              <button type="button" onClick={picked.clear} className={SECONDARY_BUTTON}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editing ? (
+        <NoteForm
+          seance={seance}
+          initial={editing.draft}
+          id={editing.id ?? nextNoteId(seance)}
+          isNew={!editing.id}
+          onSave={saveNote}
+          onDelete={
+            editing.id
+              ? () => {
+                  onChange(removeNote(seance, editing.id as string));
+                  setEditing(null);
+                }
+              : undefined
+          }
+          onCancel={() => setEditing(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The words the teacher selects in the article, kept after the selection itself
+ * is gone (a click on the button that uses them clears it). A selection across
+ * two paragraphs is reported with no block, and the bar says to pick one.
+ */
+function useSelectedWords() {
+  const article = useRef<HTMLElement>(null);
+  const [picked, setPicked] = useState<{ words: string; blockId: string }>({ words: '', blockId: '' });
+
+  useEffect(() => {
+    const onSelect = () => {
+      const selection = document.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      const blockOf = (node: Node) =>
+        (node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement)?.closest('[data-block]') ?? null;
+      const start = blockOf(range.startContainer);
+      if (!start || !article.current?.contains(start)) return;
+      const words = selection.toString().replace(/\s+/g, ' ').trim();
+      if (!words) return;
+      setPicked({ words, blockId: start === blockOf(range.endContainer) ? (start.getAttribute('data-block') ?? '') : '' });
+    };
+    document.addEventListener('selectionchange', onSelect);
+    return () => document.removeEventListener('selectionchange', onSelect);
+  }, []);
+
+  return { ...picked, article, clear: () => setPicked({ words: '', blockId: '' }) };
+}
+
+/** Adding or changing a remark of the teacher's own: the words, what is wrong with them, and what to ask. */
+function NoteForm({
+  seance,
+  initial,
+  id,
+  isNew,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  seance: Seance;
+  initial: NoteDraft;
+  id: string;
+  isNew: boolean;
+  onSave: (note: TeacherNote) => void;
+  onDelete?: () => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState<NoteDraft>(initial);
+  const [error, setError] = useState<string | null>(null);
+  const first = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
+
+  // The dialog takes the focus, and gives it back to whatever opened it.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    first.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      opener?.focus?.();
+    };
+  }, []);
+
+  const set = <K extends keyof NoteDraft>(key: K, value: NoteDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value, ...(key === 'words' ? { blockId: undefined } : {}) }));
+    setError(null);
+  };
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!draft.words.trim()) return setError('Indiquez les mots du passage.');
+    if (!draft.explanation.trim()) return setError('Écrivez votre remarque : c’est elle que la classe lira.');
+    const note = noteFrom(seance, draft, id);
+    if (!note) return setError('Ces mots ne sont pas dans l’article. Copiez-les tels quels, ou sélectionnez-les dans l’article.');
+    onSave(note);
+  }
+
+  const placeholder = questionFor({ category: draft.category } as Finding);
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-center bg-black/85 p-4" onClick={onCancel}>
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="remarque-titre"
+        onSubmit={submit}
+        onClick={(event) => event.stopPropagation()}
+        noValidate
+        className="grid max-h-[calc(100dvh-2rem)] w-full max-w-xl gap-5 overflow-y-auto rounded-card border border-border bg-surface p-5 sm:p-7"
+      >
+        <h2 id="remarque-titre" className="m-0 font-display text-2xl leading-tight font-semibold">
+          {isNew ? 'Ajouter une remarque' : 'Modifier votre remarque'}
+        </h2>
+        <p className="m-0 text-base leading-relaxed text-muted">
+          Elle sera révélée comme les constats de l’analyse, avec la mention « remarque de l’enseignant ».
+        </p>
+
+        <div className="grid gap-1">
+          <label htmlFor="remarque-mots" className="text-base font-medium">
+            Les mots du passage
+          </label>
+          <input
+            id="remarque-mots"
+            aria-describedby="remarque-mots-aide"
+            ref={(el) => {
+              if (!initial.words) first.current = el;
+            }}
+            value={draft.words}
+            onChange={(event) => set('words', event.target.value)}
+            maxLength={400}
+            className={`${FIELD} mt-1 font-serif text-lg`}
+          />
+          <p id="remarque-mots-aide" className="m-0 text-sm text-muted">
+            Copiés tels quels depuis l’article, ou sélectionnés dedans.
+          </p>
+        </div>
+
+        <fieldset className="m-0 grid gap-2 border-0 p-0">
+          <legend className="mb-2 p-0 text-base font-medium">Ce que vous relevez</legend>
+          {NOTE_CATEGORIES.map(([category, hint]) => (
+            <label
+              key={category}
+              className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-control border px-4 py-2.5 transition-colors duration-160 ease-out has-focus-visible:ring-2 has-focus-visible:ring-accentHover ${
+                draft.category === category ? 'border-accent bg-accentSoft' : 'border-border hover:border-borderControl'
+              }`}
+            >
+              <input
+                type="radio"
+                name="categorie"
+                value={category}
+                checked={draft.category === category}
+                onChange={() => set('category', category)}
+                className="h-5 w-5 shrink-0 accent-[var(--color-accent)]"
+              />
+              <span className="grid">
+                <span className="text-base font-semibold">{CATEGORY_LABELS[category as DemoCategory]}</span>
+                <span className="text-sm text-muted">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+
+        <div className="grid gap-1">
+          <label htmlFor="remarque-texte" className="text-base font-medium">
+            Votre remarque
+          </label>
+          <textarea
+            id="remarque-texte"
+            aria-describedby="remarque-texte-aide"
+            ref={(el) => {
+              if (initial.words) first.current = el;
+            }}
+            value={draft.explanation}
+            onChange={(event) => set('explanation', event.target.value)}
+            rows={3}
+            maxLength={600}
+            className={`${FIELD} mt-1 resize-y leading-relaxed`}
+          />
+          <p id="remarque-texte-aide" className="m-0 text-sm text-muted">
+            Une ou deux phrases, montrées au tableau.
+          </p>
+        </div>
+
+        <div className="grid gap-1">
+          <label htmlFor="remarque-question" className="text-base font-medium">
+            Question pour la classe <span className="font-normal text-muted">(facultatif)</span>
+          </label>
+          <input
+            id="remarque-question"
+            aria-describedby="remarque-question-aide"
+            value={draft.question}
+            onChange={(event) => set('question', event.target.value)}
+            maxLength={200}
+            placeholder={placeholder}
+            className={`${FIELD} mt-1`}
+          />
+          <p id="remarque-question-aide" className="m-0 text-sm text-muted">
+            Sans question de votre part, c’est celle qui est écrite en gris qui sera posée.
+          </p>
+        </div>
+
+        {error ? (
+          <p role="alert" className="m-0 rounded-control border border-critical bg-criticalSoft px-4 py-3 text-base text-criticalInk">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+            {isNew ? 'Ajouter la remarque' : 'Enregistrer'}
+          </button>
+          <button type="button" onClick={onCancel} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+            Annuler
+          </button>
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex min-h-12 items-center justify-center rounded-control px-4 text-base font-medium text-criticalInk underline underline-offset-4 hover:text-foreground sm:ml-auto max-sm:w-full"
+            >
+              Supprimer la remarque
+            </button>
+          ) : null}
+        </div>
+      </form>
     </div>
   );
 }
@@ -402,6 +702,8 @@ function OrderItem({
   onUp,
   onDown,
   onToggle,
+  onEdit,
+  onDelete,
 }: {
   finding: Finding;
   place: string | null;
@@ -413,6 +715,8 @@ function OrderItem({
   onUp: () => void;
   onDown: () => void;
   onToggle: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const verification = finding.verification ? VERIFICATION[finding.verification] : null;
   return (
@@ -437,7 +741,7 @@ function OrderItem({
           onClick={onOpen}
           className="min-h-11 grow text-left text-base leading-snug font-semibold"
         >
-          {finding.label}
+          {onEdit ? 'Votre remarque' : finding.label}
           {position === null ? <span className="font-normal text-muted"> · retiré</span> : null}
         </button>
         <button type="button" onClick={onUp} disabled={first} aria-label={`Monter « ${finding.label} »`} className={ICON_BUTTON}>
@@ -452,7 +756,8 @@ function OrderItem({
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-(--sev-color)" />
           {categoryOf(finding)}
         </span>
-        {finding.category === 'point-fort' ? null : <span>{SEVERITY_LABELS[finding.severity as SeverityLevel]}</span>}
+        {onEdit ? <span>remarque de l’enseignant</span> : null}
+        {onEdit || finding.category === 'point-fort' ? null : <span>{SEVERITY_LABELS[finding.severity as SeverityLevel]}</span>}
         {verification ? <span>{verification}</span> : null}
         <span>{place ?? 'passage introuvable dans le texte'}</span>
       </p>
@@ -465,9 +770,30 @@ function OrderItem({
           </p>
         </div>
       ) : null}
-      <button type="button" onClick={onToggle} className={`${QUIET_LINK} justify-self-start text-sm`}>
-        {position === null ? 'Remettre dans la séance' : 'Retirer de la séance'}
-      </button>
+      {onEdit && onDelete ? (
+        <div className="flex flex-wrap gap-x-6 gap-y-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={`Modifier votre remarque sur « ${finding.quote} »`}
+            className={`${QUIET_LINK} text-sm`}
+          >
+            Modifier
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Supprimer votre remarque sur « ${finding.quote} »`}
+            className={`${QUIET_LINK} text-sm`}
+          >
+            Supprimer
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={onToggle} className={`${QUIET_LINK} justify-self-start text-sm`}>
+          {position === null ? 'Remettre dans la séance' : 'Retirer de la séance'}
+        </button>
+      )}
     </li>
   );
 }
@@ -544,7 +870,7 @@ function Actions({
 /* ---------- The lesson: the teacher's desk ---------- */
 
 function Pupitre({ seance, onEnd }: { seance: Seance; onEnd: () => void }) {
-  const layout = useMemo(() => layoutOf(seance.blocks, seance.report.findings), [seance]);
+  const layout = useMemo(() => layoutOf(seance.blocks, findingsOf(seance)), [seance]);
   const deck = useMemo(() => deckOf(seance), [seance]);
   const [state, setState] = useState<ClassState>(() => startState(seance));
   const [board, setBoard] = useState<'opening' | 'open' | 'closed' | 'blocked'>('opening');

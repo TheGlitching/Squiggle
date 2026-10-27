@@ -368,6 +368,12 @@
   }
 
   /* The sentence numbers the class calls out, the same as on the student sheet. */
+  /* Neither number is part of the text: selecting words for a remark leaves them out. */
+  .board-num,
+  .board-order {
+    user-select: none;
+  }
+
   .board-num {
     margin-right: 0.15em;
     font-family: var(--font-sans);

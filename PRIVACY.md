@@ -154,7 +154,7 @@ lecteur qui colle le même texte.
 |---|---|---|
 | Texte de l'article, lu par l'extension ou collé sur le site | mémoire, le temps de l'appel d'audit | **jamais écrit** |
 | Texte collé sur le site, avant l'analyse | **votre navigateur** (stockage local du site), jamais notre serveur | jusqu'à ce que vous l'effaciez |
-| Séance du mode classe : l'article, le rapport et l'ordre de révélation | **l'onglet de votre navigateur** (stockage de session), et le fichier de séance que vous téléchargez ; jamais notre serveur | jusqu'à la fermeture de l'onglet ; le fichier, tant que vous le gardez |
+| Séance du mode classe : l'article, le rapport, l'ordre de révélation et vos remarques | **l'onglet de votre navigateur** (stockage de session), et le fichier de séance que vous téléchargez ; jamais notre serveur | jusqu'à la fermeture de l'onglet ; le fichier, tant que vous le gardez |
 | Fichiers du site installé sur l'écran d'accueil | votre navigateur | jusqu'à la version suivante du site ; **jamais une réponse de compte ou d'analyse** |
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
 | Analyse en cours (constats, sans l'article) | base de données | 1 heure |

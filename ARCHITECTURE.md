@@ -153,8 +153,10 @@ table and the subprocessors.
 
 `/classe` turns a report the teacher just got, or a session file they downloaded, into a
 lesson, and adds nothing to the server. The session (the pasted blocks, the report, the
-reveal order) lives in the tab's session storage and in the `.squiggle` file; `web/src/classe.ts`
-holds its model and the file format. During the lesson two windows of the same browser
+reveal order, and the teacher's own remarks, kept beside the report and never in it) lives in
+the tab's session storage and in the `.squiggle` file; `web/src/classe.ts` holds its model and
+the file format. Every view that shows a teacher's remark, the board included, says it is the
+teacher's. During the lesson two windows of the same browser
 share it: the desk on the teacher's screen holds the state, the board (`/classe/tableau`)
 on the projector shows what it is told and sends its keys back, over a `BroadcastChannel`
 that never leaves the browser. A session opened from a file is a report the server can no

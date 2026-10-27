@@ -32,7 +32,7 @@ const OFFER: Array<[string, string]> = [
 const MODE: Array<[string, string]> = [
   [
     'Préparer en privé',
-    'Tout le corrigé, pour vous seul : chaque passage relevé, son explication et une question à poser. Vous choisissez l’ordre et retirez ce que vous ne traiterez pas. La note reste masquée, sauf si vous l’affichez.',
+    'Tout le corrigé, pour vous seul : chaque passage relevé, son explication et une question à poser. Vous choisissez l’ordre, retirez ce que vous ne traiterez pas et ajoutez vos propres remarques. La note reste masquée, sauf si vous l’affichez.',
   ],
   [
     'Révéler un à un',

@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Board } from '../components/Board';
 import { BrandLockup } from '../components/Brand';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from '../components/Landing';
-import { CHANNEL, keyOf, layoutOf, type ClassState, type Message, type Seance } from '../classe';
+import { CHANNEL, findingsOf, keyOf, layoutOf, type ClassState, type Message, type Seance } from '../classe';
 
 type View = { kind: 'waiting' } | { kind: 'live'; seance: Seance; state: ClassState } | { kind: 'ended' };
 
@@ -56,7 +56,7 @@ export function Tableau() {
   }, [linked]);
 
   const layout = useMemo(
-    () => (view.kind === 'live' ? layoutOf(view.seance.blocks, view.seance.report.findings) : null),
+    () => (view.kind === 'live' ? layoutOf(view.seance.blocks, findingsOf(view.seance)) : null),
     [view],
   );
 

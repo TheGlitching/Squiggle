@@ -9,8 +9,21 @@
  * teacher's screen and the board on the projector. They talk over a
  * `BroadcastChannel`, which never leaves the browser.
  */
-import type { AnalysisReport, Finding, TextBlock } from '../../shared/src/engine/types';
+import type { AnalysisReport, Finding, FindingCategory, TextBlock } from '../../shared/src/engine/types';
 import { locateFindings } from './report';
+
+/**
+ * A remark the teacher adds where the analysis said nothing. It is kept apart
+ * from the report, which stays exactly what the server returned, and every
+ * view that shows it says it is the teacher's.
+ */
+export interface TeacherNote extends Finding {
+  byTeacher: true;
+  /** The question the teacher wants to ask; the category's own when absent. */
+  question?: string;
+}
+
+export const TEACHER_LABEL = 'Remarque de l’enseignant';
 
 export interface Seance {
   title: string;
@@ -22,6 +35,8 @@ export interface Seance {
   /** The findings the teacher took out of the lesson. */
   left: string[];
   hideScore: boolean;
+  /** The teacher's own remarks, revealed like any finding. */
+  notes: TeacherNote[];
   /**
    * Opened from a file: a report our server can no longer vouch for, since
    * anyone can edit a file. The board then says where it came from instead of
@@ -54,9 +69,18 @@ export function startState(seance: Seance): ClassState {
   return { phase: 'lecture', marks: {}, revealed: 0, black: false, showScore: !seance.hideScore };
 }
 
+export function isTeacherNote(finding: Finding): finding is TeacherNote {
+  return (finding as Partial<TeacherNote>).byTeacher === true;
+}
+
+/** Every finding of the session: the analysis's, then the teacher's. */
+export function findingsOf(seance: Seance): Finding[] {
+  return [...seance.report.findings, ...seance.notes];
+}
+
 /** The findings the board will reveal, in their order. */
 export function deckOf(seance: Seance): Finding[] {
-  const byId = new Map(seance.report.findings.map((f) => [f.id, f]));
+  const byId = new Map(findingsOf(seance).map((f) => [f.id, f]));
   return seance.order.filter((id) => !seance.left.includes(id)).flatMap((id) => byId.get(id) ?? []);
 }
 
@@ -165,8 +189,102 @@ export function newSeance(input: { title: string; source?: string; blocks: TextB
     order: defaultOrder(layout, input.report.findings),
     left: [],
     hideScore: true,
+    notes: [],
     fromFile: false,
   };
+}
+
+/* ---------- The teacher's own remarks ---------- */
+
+/** The grid's categories, in a teacher's words, for a remark of their own. */
+export const NOTE_CATEGORIES: Array<[FindingCategory, string]> = [
+  ['affirmation-non-etayee', 'Rien n’appuie ce qui est affirmé'],
+  ['source-absente', 'On ne sait pas d’où vient l’information'],
+  ['sophisme', 'Le raisonnement cloche'],
+  ['surinterpretation', 'La conclusion va plus loin que les faits'],
+  ['cadrage', 'Un mot oriente le jugement'],
+  ['point-fort', 'Ce passage est solide'],
+];
+
+/**
+ * Where `words` are in the text, spaces and line breaks aside: in the block they
+ * were selected in when it is known, otherwise the first block that holds them.
+ */
+export function findPassage(
+  blocks: TextBlock[],
+  words: string,
+  prefer?: string,
+): { blockId: string; start: number; end: number } | null {
+  const wanted = words.replace(/\s+/g, ' ').trim();
+  if (!wanted) return null;
+  const pattern = new RegExp(wanted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+'));
+  const first = blocks.find((b) => b.id === prefer);
+  for (const block of first ? [first, ...blocks.filter((b) => b !== first)] : blocks) {
+    const match = pattern.exec(block.text);
+    if (match) return { blockId: block.id, start: match.index, end: match.index + match[0].length };
+  }
+  return null;
+}
+
+export interface NoteDraft {
+  words: string;
+  /** The block the words were selected in, if they were selected rather than typed. */
+  blockId?: string;
+  category: FindingCategory;
+  explanation: string;
+  question: string;
+}
+
+/**
+ * The remark a draft makes, or null when its words are not in the article.
+ * It carries its passage's exact offsets, so it is highlighted where the
+ * teacher put it even when the same words appear twice.
+ */
+export function noteFrom(seance: Seance, draft: NoteDraft, id: string): TeacherNote | null {
+  const at = findPassage(seance.blocks, draft.words, draft.blockId);
+  const block = at && seance.blocks.find((b) => b.id === at.blockId);
+  if (!at || !block) return null;
+  const question = draft.question.trim();
+  return {
+    id,
+    blockId: block.id,
+    quote: block.text.slice(at.start, at.end),
+    charStart: block.charStart + at.start,
+    charEnd: block.charStart + at.end,
+    category: draft.category,
+    severity: draft.category === 'point-fort' ? 1 : 2,
+    label: TEACHER_LABEL,
+    explanation: draft.explanation.trim(),
+    confidence: 1,
+    byTeacher: true,
+    ...(question ? { question } : {}),
+  };
+}
+
+/** A new remark goes last in the reveal order. */
+export function addNote(seance: Seance, note: TeacherNote): Seance {
+  return { ...seance, notes: [...seance.notes, note], order: [...seance.order, note.id] };
+}
+
+export function replaceNote(seance: Seance, note: TeacherNote): Seance {
+  return { ...seance, notes: seance.notes.map((n) => (n.id === note.id ? note : n)) };
+}
+
+export function removeNote(seance: Seance, id: string): Seance {
+  return {
+    ...seance,
+    notes: seance.notes.filter((n) => n.id !== id),
+    order: seance.order.filter((x) => x !== id),
+    left: seance.left.filter((x) => x !== id),
+  };
+}
+
+/** An id no finding of the session has. */
+export function nextNoteId(seance: Seance): string {
+  const taken = new Set(findingsOf(seance).map((f) => f.id));
+  let n = seance.notes.length + 1;
+  while (taken.has(`remarque-${n}`)) n += 1;
+  return `remarque-${n}`;
 }
 
 /**
@@ -175,6 +293,7 @@ export function newSeance(input: { title: string; source?: string; blocks: TextB
  * nothing Squiggle invents about the article.
  */
 export function questionFor(finding: Finding): string {
+  if (isTeacherNote(finding) && finding.question) return finding.question;
   if (finding.verification === 'douteuse') return 'Jugé douteux, pas faux : pourquoi cette nuance ?';
   switch (finding.category) {
     case 'sophisme':
@@ -203,7 +322,7 @@ export function tally(seance: Seance, layout: Layout, state: ClassState) {
   // Only a passage in a numbered sentence can be proposed by the class.
   const weak = deckOf(seance).filter((f) => f.category !== 'point-fort' && (layout.sentenceOf.get(f.id) ?? 0) > 0);
   const found = weak.filter(marked).length;
-  const withFinding = new Set(seance.report.findings.map((f) => layout.sentenceOf.get(f.id)));
+  const withFinding = new Set(findingsOf(seance).map((f) => layout.sentenceOf.get(f.id)));
   const extra = Object.keys(state.marks).filter((n) => !withFinding.has(Number(n))).length;
   return { weak: weak.length, found, extra, marked };
 }
@@ -292,8 +411,8 @@ export class SeanceError extends Error {}
 
 /** The file a teacher carries to the classroom: the text, the report, the order. */
 export function seanceFile(seance: Seance): Blob {
-  const { title, source, blocks, report, order, left, hideScore } = seance;
-  const body = { format: FORMAT, version: VERSION, title, source, blocks, report, order, left, hideScore };
+  const { title, source, blocks, report, order, left, hideScore, notes } = seance;
+  const body = { format: FORMAT, version: VERSION, title, source, blocks, report, order, left, hideScore, notes };
   // A neutral type, so no browser renames the file after a type it thinks it knows.
   return new Blob([JSON.stringify(body)], { type: 'application/octet-stream' });
 }
@@ -348,7 +467,7 @@ export function parseSeance(text: string, fromFile = true): Seance {
   if (isNumber(data.version) && data.version > VERSION) {
     throw new SeanceError('Ce fichier vient d’une version plus récente de Squiggle. Rechargez la page, puis rouvrez-le.');
   }
-  const { title, source, blocks, report, order, left, hideScore } = data;
+  const { title, source, blocks, report, order, left, hideScore, notes } = data;
   const validBlocks =
     Array.isArray(blocks) &&
     blocks.length > 0 &&
@@ -365,11 +484,23 @@ export function parseSeance(text: string, fromFile = true): Seance {
     isObject(report.meta) &&
     isString(report.meta.analyzedAt) &&
     isString(report.meta.promptVersion);
-  if (!isString(title) || !validBlocks || !validReport) {
+  // A file written before the teacher could add remarks has none.
+  const validNotes =
+    notes === undefined ||
+    (Array.isArray(notes) &&
+      notes.every(
+        (n) =>
+          isFinding(n) &&
+          (n as Partial<TeacherNote>).byTeacher === true &&
+          ((n as Partial<TeacherNote>).question === undefined || isString((n as Partial<TeacherNote>).question)) &&
+          (blocks as unknown[]).some((b) => isObject(b) && b.id === n.blockId),
+      ));
+  if (!isString(title) || !validBlocks || !validReport || !validNotes) {
     throw new SeanceError('Ce fichier de séance est incomplet ou abîmé. Téléchargez-le à nouveau depuis la préparation.');
   }
 
-  const findings = (report as unknown as AnalysisReport).findings;
+  const teacherNotes = (notes ?? []) as TeacherNote[];
+  const findings = [...(report as unknown as AnalysisReport).findings, ...teacherNotes];
   const ids = findings.map((f) => f.id);
   const known = (list: unknown) => (Array.isArray(list) ? list.filter((id): id is string => ids.includes(id as string)) : []);
   // An order that lost or gained a finding is completed rather than refused: the report is what counts.
@@ -382,6 +513,7 @@ export function parseSeance(text: string, fromFile = true): Seance {
     order: [...kept, ...ids.filter((id) => !kept.includes(id))],
     left: known(left),
     hideScore: hideScore !== false,
+    notes: teacherNotes,
     fromFile,
   };
 }

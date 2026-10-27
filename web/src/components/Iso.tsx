@@ -880,6 +880,12 @@ export function GuideFigure({ step }: { step: GuideStep }) {
     return frame(
       <Laptop v={v} at={[0, 0]} w={136} d={84} h={86}>
         <MiniBoard w={128} h={78} marks={3} live />
+        {/* A passage the analysis missed, which the teacher marks as a remark of their own. */}
+        <g className="guide-late">
+          <rect x={7} y={54.5} width={42} height={7} rx={1.5} fill="none" stroke="var(--color-accent)" strokeWidth={0.9} strokeDasharray="2.5 1.5" />
+          <circle cx={53} cy={58} r={4.5} fill="var(--color-accent)" />
+          <path d="M 53 55.6 V 60.4 M 50.6 58 H 55.4" className="iso-line" stroke="var(--color-accentForeground)" strokeWidth={1.2} strokeLinecap="round" />
+        </g>
         {/* The reveal order, numbered beside each passage: the teacher's own. */}
         {[
           [52, 23],

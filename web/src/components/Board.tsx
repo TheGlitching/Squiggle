@@ -214,10 +214,11 @@ function Panel({ seance, layout, state }: { seance: Seance; layout: Layout; stat
 function centre(container: HTMLElement | null, selector: string) {
   const target = container?.querySelector<HTMLElement>(selector);
   if (!container || !target) return;
-  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // A hidden window (behind another, minimised) never plays a smooth scroll to its end: it jumps.
+  const still = document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   container.scrollTo?.({
     top: target.offsetTop - container.clientHeight / 2 + target.offsetHeight / 2,
-    behavior: reduced ? 'auto' : 'smooth',
+    behavior: still ? 'auto' : 'smooth',
   });
 }
 

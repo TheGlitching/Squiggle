@@ -8,19 +8,23 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  addNote,
   defaultOrder,
   deckOf,
   fileName,
   layoutOf,
   newSeance,
+  noteFrom,
   parseSeance,
   placeOf,
   questionFor,
+  removeNote,
   seanceFile,
   SeanceError,
   startState,
   step,
   tally,
+  TEACHER_LABEL,
   type ClassState,
 } from '../src/classe';
 import { lesson } from './helpers';
@@ -172,5 +176,64 @@ describe('the session file', () => {
     const read = parseSeance(JSON.stringify(data));
     expect(read.order).toEqual(['f2', 'f1', 'f6', 'f3', 'f4', 'f5']);
     expect(read.left).toEqual(['f1']);
+  });
+});
+
+describe('the teacher’s own remarks', () => {
+  const draft = { words: 'le constat inquiète', category: 'cadrage' as const, explanation: 'Le mot dramatise.', question: '' };
+
+  it('finds the words in the text, spaces and line breaks aside, and marks the remark as the teacher’s', () => {
+    const seance = newSeance(lesson());
+    const note = noteFrom(seance, { ...draft, words: 'le constat\n  inquiète' }, 'remarque-1');
+    expect(note).toMatchObject({ blockId: 'b2', quote: 'le constat inquiète', label: TEACHER_LABEL, byTeacher: true, severity: 2 });
+    const block = seance.blocks.find((b) => b.id === 'b2')!;
+    expect(block.text.slice(note!.charStart! - block.charStart, note!.charEnd! - block.charStart)).toBe('le constat inquiète');
+    expect(noteFrom(seance, { ...draft, words: 'des mots absents' }, 'x')).toBeNull();
+  });
+
+  it('looks first in the paragraph the words were selected in', () => {
+    const seance = newSeance(lesson());
+    // "adolescents" is in the first paragraph and the second one.
+    expect(noteFrom(seance, { ...draft, words: 'adolescents' }, 'a')?.blockId).toBe('b2');
+    expect(noteFrom(seance, { ...draft, words: 'adolescents', blockId: 'b3' }, 'b')?.blockId).toBe('b3');
+  });
+
+  it('is revealed last by default, sits in its sentence, and asks its own question when it has one', () => {
+    const base = newSeance(lesson());
+    const note = noteFrom(base, { ...draft, question: 'Qui s’inquiète, au juste ?' }, 'remarque-1')!;
+    const seance = addNote(base, note);
+    expect(deckOf(seance).at(-1)?.id).toBe('remarque-1');
+    expect(placeOf(layoutOf(seance.blocks, [...seance.report.findings, ...seance.notes]), note)).toBe('phrase 1');
+    expect(questionFor(note)).toBe('Qui s’inquiète, au juste ?');
+    expect(questionFor(noteFrom(base, draft, 'r2')!)).toBe(questionFor(base.report.findings.find((f) => f.category === 'cadrage')!));
+    // A marked sentence holding a remark is found, not "marked of its own".
+    const layout = layoutOf(seance.blocks, [...seance.report.findings, ...seance.notes]);
+    expect(tally(seance, layout, { ...startState(seance), marks: { 1: 0 } })).toMatchObject({ found: 1, extra: 0 });
+  });
+
+  it('leaves the order and the removed list when deleted', () => {
+    const base = newSeance(lesson());
+    const seance = { ...addNote(base, noteFrom(base, draft, 'remarque-1')!), left: ['remarque-1'] };
+    const after = removeNote(seance, 'remarque-1');
+    expect(after.notes).toEqual([]);
+    expect(after.order).toEqual(base.order);
+    expect(after.left).toEqual([]);
+  });
+
+  it('travels in the session file, and an older file without remarks still opens', async () => {
+    const base = newSeance(lesson());
+    const seance = addNote(base, noteFrom(base, { ...draft, question: 'Pourquoi ?' }, 'remarque-1')!);
+    expect(parseSeance(await seanceFile(seance).text())).toEqual({ ...seance, fromFile: true });
+
+    const old = JSON.parse(await seanceFile(base).text());
+    delete old.notes;
+    expect(parseSeance(JSON.stringify(old)).notes).toEqual([]);
+  });
+
+  it('refuses a remark in a file that does not say it is the teacher’s', async () => {
+    const base = newSeance(lesson());
+    const data = JSON.parse(await seanceFile(addNote(base, noteFrom(base, draft, 'remarque-1')!)).text());
+    delete data.notes[0].byTeacher;
+    expect(() => parseSeance(JSON.stringify(data))).toThrow(/incomplet ou abîmé/);
   });
 });
