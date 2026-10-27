@@ -8,7 +8,7 @@ import { TypedMessageBus } from '../messaging/messageBus';
 import { TabStateManager } from './tabStateManager';
 import { SecureKeyStorage, UnreadableKeyError } from '../crypto/storage';
 import { LLMClientFactory } from '../client/factory';
-import { AnalysisPipeline, HostedApiError } from '@squiggle/shared';
+import { AnalysisPipeline, HostedApiError, youtubeVideoId, youtubeWatchUrl } from '@squiggle/shared';
 import { HostedRunner, type AnalysisRunner } from '../hosted/runner';
 // `PipelineProgressEvent` is exported by BOTH engine/types.ts ({step,progress})
 // and engine/pipeline.ts ({status,stage,message,progress}). The star barrel makes
@@ -20,6 +20,15 @@ import { findingsToHighlightTargets, textBlockToEngineBlock } from '../adapters/
 import type { ExtractedArticle } from '../content/types';
 import type { FcRpcMap } from '../messaging/protocol';
 import { recordFinalizedAnalysis } from '../review/reviewPrompt';
+import {
+  captureYoutubeCaptions,
+  cuesToBlocks,
+  findingTimes,
+  seekYoutubePlayer,
+  type CaptionCapture,
+  type TranscriptBlock,
+  type VideoReport,
+} from '../video/youtube';
 
 /**
  * Below this word count a page is a teaser rather than an article. Real French
@@ -27,6 +36,20 @@ import { recordFinalizedAnalysis } from '../review/reviewPrompt';
  * words, which is not enough to judge sourcing or argument structure.
  */
 const MIN_ANALYSABLE_WORDS = 200;
+
+/**
+ * How long a video's reading waits for a YouTube ad to finish before giving
+ * up: the player loads the video's own captions only once it is the video
+ * that plays, and an ad break the reader does not skip runs to two or three
+ * minutes.
+ */
+const VIDEO_AD_WAIT_MS = 180_000;
+const VIDEO_RETRY_MS = 2_000;
+
+/** A transcript, or the sentence telling the reader why there is none. */
+type VideoRead =
+  | { ok: true; blocks: TranscriptBlock[]; title: string; author: string; automatic: boolean }
+  | { ok: false; error?: string };
 
 /** Firefox-only action API: MV3 replaced `browser.browserAction` with `browser.action`. */
 interface FirefoxActionApi {
@@ -167,6 +190,7 @@ export class BackgroundServiceWorker {
           url: changeInfo.url,
           findings: [],
           result: undefined,
+          video: undefined,
           error: undefined,
           selectedFindingId: null,
           hoveredFindingId: null,
@@ -245,7 +269,19 @@ export class BackgroundServiceWorker {
         targetTabId = activeTab?.id;
       }
       if (targetTabId) {
-        this.stateManager.updateTabState(targetTabId, { selectedFindingId: req.findingId });
+        const state = this.stateManager.updateTabState(targetTabId, { selectedFindingId: req.findingId });
+        // A video's finding has no text in the page to scroll to: its passage
+        // is a moment of the video, so the player goes there instead.
+        const video = state.video;
+        const at = req.findingId ? video?.times[req.findingId] : undefined;
+        if (video && at !== undefined) {
+          try {
+            await UnifiedRuntime.runInPage(targetTabId, seekYoutubePlayer, [video.videoId, at]);
+          } catch {
+            // The tab has left the video; nothing to move.
+          }
+          return { success: true };
+        }
         // Relay to content script
         try {
           await UnifiedRuntime.sendTabMessage(targetTabId, {
@@ -336,6 +372,103 @@ export class BackgroundServiceWorker {
   }
 
   /**
+   * Read a YouTube video's captions in its tab (see `src/video/youtube.ts`).
+   *
+   * Each call answers at once; the waiting happens here, so the panel can say
+   * what it is waiting for. Two waits are legitimate: an ad, which holds the
+   * video's own captions back until it ends, and a video that never started,
+   * which the reader is told will be run muted for a moment before it is.
+   */
+  private async readVideo(tabId: number, videoId: string): Promise<VideoRead> {
+    const say = (message: string) => {
+      this.stateManager.updateTabState(tabId, { status: 'extracting', progress: 5, currentStep: message });
+      this.safeDispatch('ANALYSIS_PROGRESS', { tabId, status: 'extracting', stage: 'extract', message, progress: 5 });
+    };
+    say('Lecture des sous-titres de la vidéo…');
+
+    const deadline = Date.now() + VIDEO_AD_WAIT_MS;
+    let allowMutedStart = false;
+    let notReady = 0;
+    for (;;) {
+      let read: CaptionCapture | undefined;
+      try {
+        read = await UnifiedRuntime.runInPage(tabId, captureYoutubeCaptions, [videoId, allowMutedStart]);
+      } catch (err) {
+        console.warn('Could not read the video page:', err);
+        return {
+          ok: false,
+          error:
+            'Impossible de lire cette page YouTube. Cliquez sur l’icône Squiggle depuis la page ' +
+            'de la vidéo, ou autorisez l’accès à tous les sites dans les réglages, puis relancez.',
+        };
+      }
+      switch (read?.kind) {
+        case 'ok':
+          return {
+            ok: true,
+            blocks: cuesToBlocks(read.cues),
+            title: read.title,
+            author: read.author,
+            automatic: read.automatic,
+          };
+        case 'no_captions':
+          return {
+            ok: false,
+            error:
+              'Cette vidéo n’a pas de sous-titres, ni ceux de la chaîne ni ceux que YouTube génère : ' +
+              'Squiggle analyse la parole à partir de ses sous-titres, et n’a donc rien à lire ici.',
+          };
+        case 'live':
+          return {
+            ok: false,
+            error:
+              'Une vidéo en direct ne peut pas être analysée pendant sa diffusion. ' +
+              'Relancez l’analyse sur son enregistrement, une fois le direct terminé.',
+          };
+        case 'needs_start':
+          say(
+            'La vidéo n’a pas encore été lancée : Squiggle la démarre sans le son, le temps que ' +
+              'YouTube charge ses sous-titres, puis la remet en pause.'
+          );
+          allowMutedStart = true;
+          continue;
+        case 'ad':
+          say(
+            'Une publicité YouTube passe avant la vidéo : les sous-titres seront lus dès qu’elle ' +
+              'se termine. Si le lecteur propose de la passer, vous pouvez le faire.'
+          );
+          break;
+        case 'not_ready':
+          if (++notReady > 3) {
+            return {
+              ok: false,
+              error: 'Le lecteur de cette vidéo n’a pas fini de charger. Attendez un instant, puis relancez.',
+            };
+          }
+          break;
+        default:
+          return {
+            ok: false,
+            error:
+              'YouTube n’a pas fourni les sous-titres de cette vidéo. Rechargez la page, ' +
+              'puis relancez l’analyse.',
+          };
+      }
+      if (Date.now() > deadline) {
+        return {
+          ok: false,
+          error:
+            'La publicité YouTube ne s’est pas terminée à temps. Passez-la ou laissez-la finir, ' +
+            'puis relancez l’analyse.',
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, VIDEO_RETRY_MS));
+      // The reader left the video while it waited: its state was already reset.
+      if (youtubeVideoId((await UnifiedRuntime.getTabUrl(tabId)) ?? '') !== videoId) return { ok: false };
+    }
+  }
+
+  /**
    * Execute analysis pipeline for a given tab
    */
   public async runAnalysisForTab(
@@ -345,9 +478,36 @@ export class BackgroundServiceWorker {
     let articleText = options?.articleText;
     let articleTitle = options?.articleTitle;
 
-    // 1. If article not provided, request extraction from the content script.
+    // 1. If article not provided, read it from the page: a YouTube video's
+    // captions, or the article through the content script.
     let extracted: ExtractedArticle | undefined;
+    let video: (VideoRead & { ok: true }) | undefined;
+    let videoId: string | null = null;
     if (!articleText) {
+      videoId = youtubeVideoId((await UnifiedRuntime.getTabUrl(tabId)) ?? '');
+    }
+    if (videoId) {
+      const read = await this.readVideo(tabId, videoId);
+      if (!read.ok) {
+        // No error means the reader moved on while it waited: nothing to say.
+        if (!read.error) return { success: false };
+        this.stateManager.updateTabState(tabId, { status: 'error', error: read.error });
+        this.safeDispatch('ANALYSIS_ERROR', { tabId, error: read.error });
+        return { success: false, error: read.error };
+      }
+      video = read;
+      articleText = read.blocks.map((b) => b.text).join('\n\n');
+      articleTitle = read.title;
+      const words = articleText.split(/\s+/).filter(Boolean).length;
+      if (words < MIN_ANALYSABLE_WORDS) {
+        const err =
+          `Les sous-titres de cette vidéo ne comptent que ${words} mots : ` +
+          'trop peu pour juger ce qui y est affirmé.';
+        this.stateManager.updateTabState(tabId, { status: 'error', error: err });
+        this.safeDispatch('ANALYSIS_ERROR', { tabId, error: err });
+        return { success: false, error: err };
+      }
+    } else if (!articleText) {
       extracted = await this.extractArticle(tabId);
       if (extracted) {
         articleText = extracted.fullText || extracted.cleanText;
@@ -454,28 +614,49 @@ export class BackgroundServiceWorker {
     });
 
     try {
-      const result = await runner.analyze({
-        text: articleText,
-        title: articleTitle,
-        url: extracted?.metadata?.canonicalUrl || undefined,
-        // Sending the real structure and the article's own links is what lets the
-        // audit check a claim against the source the piece already cites, rather
-        // than calling it unsourced.
-        blocks: extracted?.blocks?.map(textBlockToEngineBlock),
-        citedSources: extracted?.citedSources,
-      });
+      const result = await runner.analyze(
+        video && videoId
+          ? {
+              text: articleText,
+              title: articleTitle,
+              // One address per video, whatever page it was opened from: it is
+              // the cache key, and the server reads "a transcript" from it.
+              url: youtubeWatchUrl(videoId),
+              author: video.author || undefined,
+              outlet: 'YouTube',
+              // The cue times stay here: the analysis needs the text only.
+              blocks: video.blocks.map(({ id, type, text, charStart }) => ({ id, type, text, charStart })),
+            }
+          : {
+              text: articleText,
+              title: articleTitle,
+              url: extracted?.metadata?.canonicalUrl || undefined,
+              // Sending the real structure and the article's own links is what lets the
+              // audit check a claim against the source the piece already cites, rather
+              // than calling it unsourced.
+              blocks: extracted?.blocks?.map(textBlockToEngineBlock),
+              citedSources: extracted?.citedSources,
+            }
+      );
+
+      const videoReport: VideoReport | undefined =
+        video && videoId
+          ? { videoId, automatic: video.automatic, times: findingTimes(result.findings ?? [], video.blocks) }
+          : undefined;
 
       this.stateManager.updateTabState(tabId, {
         status: 'complete',
         progress: 100,
         result,
         findings: result.findings,
+        video: videoReport,
       });
 
       // The content script expects FindingHighlightTarget[] (findingId, string
       // severities, snake_case categories). Posting raw engine Finding[] left
-      // findingId undefined and every anchor silently failed.
-      if (result.findings && result.findings.length > 0) {
+      // findingId undefined and every anchor silently failed. A video has no
+      // text in the page to highlight.
+      if (!videoReport && result.findings && result.findings.length > 0) {
         try {
           await UnifiedRuntime.sendTabMessage(tabId, {
             type: 'FC_APPLY_HIGHLIGHTS',
@@ -488,7 +669,7 @@ export class BackgroundServiceWorker {
 
       // Counted before the panel hears of it, so the panel asks for a review on the run that reaches the count.
       await recordFinalizedAnalysis();
-      this.safeDispatch('ANALYSIS_COMPLETE', { tabId, result });
+      this.safeDispatch('ANALYSIS_COMPLETE', { tabId, result, video: videoReport });
       return { success: true, result };
     } catch (err: unknown) {
       // A pipeline killed by `abortPipelineForTab` because its tab

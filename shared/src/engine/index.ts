@@ -16,3 +16,4 @@ export * from './research';
 export * from './sourceFetch';
 export * from './sourceVerification';
 export * from './demoFixture';
+export * from './video';

@@ -117,4 +117,32 @@ describe('Fourches Caudines Engine', () => {
     expect(report.findings[0].charStart).toBeGreaterThan(0);
     expect(report.meta.model).toBe('gpt-4o');
   });
+
+  it('keeps the valid findings, each with its id, when one finding in the answer is malformed', () => {
+    const scores = Object.keys(SCORE_DOMAINS).map((domain) => ({ domain, score: 4, strengths: [], weaknesses: [] }));
+    const finding = (blockId: string, quote: string) => ({
+      blockId,
+      quote,
+      category: 'cadrage',
+      severity: 1,
+      label: 'Formule',
+      explanation: 'Une formule oriente le lecteur.',
+    });
+    const raw = JSON.stringify({
+      summary: 'Synthèse.',
+      scores,
+      findings: [
+        finding('b1', 'multiplier par mille'),
+        finding('b2', ''),
+        finding('b2', 'va remplacer tous les serveurs'),
+      ],
+    });
+
+    const report = parseAndValidateLlmOutput(raw, sampleInput);
+
+    expect(report.findings.map((f) => f.quote)).toEqual(['multiplier par mille', 'va remplacer tous les serveurs']);
+    const ids = report.findings.map((f) => f.id);
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(2);
+  });
 });

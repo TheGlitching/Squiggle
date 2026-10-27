@@ -31,7 +31,8 @@ import { reportFinding } from '../hosted/flag';
 import type { AnalysisMode } from '../crypto/storage';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
-import { SCORE_DOMAINS } from '@squiggle/shared';
+import { SCORE_DOMAINS, youtubeVideoId } from '@squiggle/shared';
+import type { VideoReport } from '../video/youtube';
 import type { AnalysisResult, Finding, ScoreDomainKey } from '@squiggle/shared';
 
 /**
@@ -76,6 +77,10 @@ function SidepanelApp() {
   const analysisEpochRef = useRef(0);
   const [tabId, setTabId] = useState<number | null>(null);
   const [report, setReport] = useState<AnalysisResult | null>(null);
+  const [videoReport, setVideoReport] = useState<VideoReport | null>(null);
+  // The address shown in the tracked tab, when the browser lets the panel read
+  // it: it decides whether the button offers an article or a video.
+  const [pageUrl, setPageUrl] = useState<string | undefined>(undefined);
   const [progress, setProgress] = useState<ProgressState>(IDLE_PROGRESS);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<FilterCategory>('all');
@@ -198,6 +203,7 @@ function SidepanelApp() {
           state?: {
             status?: Status;
             result?: AnalysisResult;
+            video?: VideoReport;
             error?: string;
             currentStep?: string;
             progress?: number;
@@ -206,6 +212,7 @@ function SidepanelApp() {
         const state = response?.state;
         if (isStale() || !state) return;
         if (state.result) setReport(state.result);
+        if (state.video) setVideoReport(state.video);
         if (state.error) setError(state.error);
         if (state.status && state.status !== 'idle') {
           setProgress({
@@ -232,6 +239,7 @@ function SidepanelApp() {
   const resetForNewPage = useCallback(() => {
     analysisEpochRef.current += 1;
     setReport(null);
+    setVideoReport(null);
     setError(null);
     setProgress(IDLE_PROGRESS);
     setSelectedFindingId(null);
@@ -249,6 +257,7 @@ function SidepanelApp() {
       const resolvedId = activeTab?.id ?? null;
       currentTabIdRef.current = resolvedId;
       lastUrlRef.current = activeTab?.url;
+      setPageUrl(activeTab?.url);
       setTabId(resolvedId);
 
       await refreshKeyPresence();
@@ -300,6 +309,7 @@ function SidepanelApp() {
         if (nextId === currentTabIdRef.current) return;
         currentTabIdRef.current = nextId;
         lastUrlRef.current = activeTab?.url;
+        setPageUrl(activeTab?.url);
         resetForNewPage();
         setTabId(nextId);
         const epochAtSwitch = analysisEpochRef.current;
@@ -311,6 +321,7 @@ function SidepanelApp() {
       if (updatedTabId !== currentTabIdRef.current) return;
       if (!changeInfo.url || changeInfo.url === lastUrlRef.current) return;
       lastUrlRef.current = changeInfo.url;
+      setPageUrl(changeInfo.url);
       resetForNewPage();
     });
 
@@ -343,9 +354,10 @@ function SidepanelApp() {
       }
     );
 
-    const offComplete = bus.on<{ tabId: number; result: AnalysisResult }>('ANALYSIS_COMPLETE', (payload) => {
+    const offComplete = bus.on<{ tabId: number; result: AnalysisResult; video?: VideoReport }>('ANALYSIS_COMPLETE', (payload) => {
       if (!isTrackedTab(payload.tabId)) return;
       setReport(payload.result);
+      setVideoReport(payload.video ?? null);
       setError(null);
       setProgress({ status: 'complete', message: 'Analyse terminée', progress: 100, notes: [] });
       void claimReviewPrompt().then((ask) => {
@@ -382,6 +394,8 @@ function SidepanelApp() {
 
   useEffect(() => () => bus.destroy(), [bus]);
 
+  const isVideoPage = pageUrl ? youtubeVideoId(pageUrl) !== null : false;
+
   const runAnalysis = useCallback(async () => {
     // The panel is driven by live events (`ANALYSIS_PROGRESS` / `ANALYSIS_COMPLETE`
     // / `ANALYSIS_ERROR`) - the background streams progress and dispatches the
@@ -395,7 +409,13 @@ function SidepanelApp() {
     const epoch = analysisEpochRef.current;
     setError(null);
     setReport(null);
-    setProgress({ status: 'extracting', message: 'Extraction de l’article…', progress: 5, notes: [] });
+    setVideoReport(null);
+    setProgress({
+      status: 'extracting',
+      message: isVideoPage ? 'Lecture des sous-titres de la vidéo…' : 'Extraction de l’article…',
+      progress: 5,
+      notes: [],
+    });
 
     try {
       const response = (await bus.callRPC('TRIGGER_ANALYSIS', { tabId: tabId ?? undefined })) as {
@@ -418,7 +438,7 @@ function SidepanelApp() {
       setError(message);
       setProgress({ status: 'error', message, progress: 0, notes: [] });
     }
-  }, [bus, tabId]);
+  }, [bus, tabId, isVideoPage]);
 
   const selectFinding = useCallback(
     (id: string | null) => {
@@ -475,7 +495,9 @@ function SidepanelApp() {
               Squiggle
             </h1>
             <p className="text-xs text-muted">
-              Analyse critique de la fiabilité de l’article
+              {isVideoPage
+                ? 'Analyse critique de la fiabilité de la vidéo'
+                : 'Analyse critique de la fiabilité de l’article'}
             </p>
           </div>
         </div>
@@ -530,8 +552,24 @@ function SidepanelApp() {
               : 'border border-line text-ink/80'
           }`}
         >
-          {busy ? 'Analyse en cours…' : report ? 'Relancer l’analyse' : 'Lancer l’analyse critique'}
+          {busy
+            ? 'Analyse en cours…'
+            : report
+            ? 'Relancer l’analyse'
+            : isVideoPage
+            ? 'Analyser cette vidéo'
+            : 'Lancer l’analyse critique'}
         </button>
+
+        {/* Most readers have already watched the video and do not want to again:
+            say up front that they will not have to. */}
+        {isVideoPage && !report && !busy && !error && canRun && (
+          <p className="-mt-3 text-xs leading-relaxed text-muted">
+            Inutile de revoir la vidéo : Squiggle active ses sous-titres un instant pour les lire
+            en entier, sans toucher à votre lecture. Chaque constat portera l’heure de son passage,
+            où un clic ramène la vidéo.
+          </p>
+        )}
 
         {busy && (
           <div className="space-y-2" role="status" aria-live="polite">
@@ -578,12 +616,25 @@ function SidepanelApp() {
 
         {report && (
           <>
+            {videoReport && (
+              <p className="rounded-xl border border-line bg-panel px-3 py-2.5 text-xs leading-relaxed text-ink/80">
+                Seule la parole est analysée : le texte et les images à l’écran ne le sont pas.
+                {videoReport.automatic &&
+                  ' Les sous-titres sont ceux que YouTube génère : un nom ou un chiffre peut y être mal transcrit.'}
+              </p>
+            )}
             <section className="p-4 rounded-xl bg-panel border border-line shadow-xs">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
                 Évaluation globale
               </h2>
               <div className="mt-4 flex justify-center" data-tour="score-gauges">
-                <ScoreGauge score={report.score} size={110} strokeWidth={8} showBandLabel />
+                <ScoreGauge
+                  score={report.score}
+                  size={110}
+                  strokeWidth={8}
+                  showBandLabel
+                  subject={videoReport ? 'video' : 'article'}
+                />
               </div>
               {report.summary && (
                 <p className="mt-3 text-xs leading-relaxed text-ink/80">
@@ -647,6 +698,8 @@ function SidepanelApp() {
                       finding={finding}
                       isSelected={selectedFindingId === finding.id}
                       isHovered={hoveredFindingId === finding.id}
+                      videoTime={videoReport?.times[finding.id]}
+                      onSeek={selectFinding}
                       onSelect={(id) => selectFinding(selectedFindingId === id ? null : id)}
                       onHover={setHoveredFindingId}
                       onReport={hosted ? (reason) => reportFinding(finding.category, reason) : undefined}
@@ -664,7 +717,7 @@ function SidepanelApp() {
           </>
         )}
 
-        {!report && !busy && !error && (hosted ? hostedCanAnalyse : hasKey !== false) && (
+        {!report && !busy && !error && !isVideoPage && (hosted ? hostedCanAnalyse : hasKey !== false) && (
           <p className="text-xs leading-relaxed text-muted">
             Ouvrez un article de presse, puis lancez l’analyse. Les constats seront surlignés
             directement dans la page.

@@ -16,28 +16,34 @@ export function determineScoreBand(score: number): ScoreBand {
 }
 
 /**
- * Explains a score band in reader-friendly French
+ * Explains a score band in reader-friendly French. The title names what was
+ * judged: a video's transcript is not an article. Every band's adjective is
+ * the same in either gender, so only the noun changes.
  */
-export function getScoreBandLabel(band: ScoreBand): { title: string; description: string } {
+export function getScoreBandLabel(
+  band: ScoreBand,
+  subject: 'article' | 'video' = 'article'
+): { title: string; description: string } {
+  const noun = subject === 'video' ? 'Vidéo' : 'Article';
   switch (band) {
     case 'solide':
       return {
-        title: 'Article solide',
+        title: `${noun} solide`,
         description: 'Argumentation robuste, faits vérifiables et cadrage équilibré.'
       };
     case 'perfectible':
       return {
-        title: 'Article perfectible',
+        title: `${noun} perfectible`,
         description: 'Propos globalement cohérent mais comportant des nuances ou sources à consolider.'
       };
     case 'fragile':
       return {
-        title: 'Article fragile',
+        title: `${noun} fragile`,
         description: 'Faiblesses logiques, affirmations peu étayées ou angle réducteur.'
       };
     case 'problematique':
       return {
-        title: 'Article problématique',
+        title: `${noun} problématique`,
         description: 'Multiples failles de raisonnement, données non vérifiables ou cadrage trompeur.'
       };
   }

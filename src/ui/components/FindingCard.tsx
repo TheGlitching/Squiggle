@@ -4,6 +4,7 @@ import { SeverityBadge } from './SeverityBadge';
 import { VerificationBadge } from './VerificationBadge';
 import { SourceCitations } from './SourceCitations';
 import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
+import { formatVideoTime } from '../../video/youtube';
 
 export interface FindingCardProps {
   finding: Finding;
@@ -13,6 +14,10 @@ export interface FindingCardProps {
   onHover?: (id: string | null) => void;
   /** Report the finding as wrong. Absent in BYOK mode, which sends nothing to our server. */
   onReport?: (reason: FlagReason) => void;
+  /** In a video's report: the second the quote is said at. */
+  videoTime?: number;
+  /** Sends the video to the finding's passage. */
+  onSeek?: (id: string) => void;
 }
 
 type FindingTone = 'critical' | 'warning' | 'info' | 'positive';
@@ -69,6 +74,8 @@ export const FindingCard: React.FC<FindingCardProps> = ({
   onSelect,
   onHover,
   onReport,
+  videoTime,
+  onSeek,
 }) => {
   const tone = findingTone(finding);
 
@@ -95,10 +102,25 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         {/* Meaning-carrying badges are 14 px, so they get their own row instead of
             squeezing the category label. A strength is not graded: "Mineur" beside
             "Point fort" reads as a fault. */}
-        {(finding.verification || finding.category !== 'point-fort') && (
+        {(finding.verification || finding.category !== 'point-fort' || videoTime !== undefined) && (
           <span className="flex flex-wrap items-center gap-1.5">
             {finding.verification && <VerificationBadge verification={finding.verification} />}
             {finding.category !== 'point-fort' && <SeverityBadge severity={finding.severity} />}
+            {videoTime !== undefined && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  // The card's own click toggles the selection; this one always plays.
+                  e.stopPropagation();
+                  onSeek?.(finding.id);
+                }}
+                aria-label={`Revoir ce passage, à ${formatVideoTime(videoTime)} dans la vidéo`}
+                className="inline-flex items-center gap-1 rounded-sm border border-line px-2 py-0.5 font-mono text-sm text-ink/80 hover:border-line-heavy hover:text-ink"
+              >
+                <span aria-hidden>▶</span>
+                {formatVideoTime(videoTime)}
+              </button>
+            )}
           </span>
         )}
       </div>
