@@ -12,6 +12,7 @@ import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
 import { Corrige, Fiche } from './pages/Feuilles';
 import { Glossaire, NotionPage } from './pages/Glossaire';
+import { FicheActivite, GrilleLecture } from './pages/Kit';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pont } from './pages/Pont';
 import { Tableau } from './pages/Tableau';
@@ -72,6 +73,12 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/enseignants':
       page = <Enseignants />;
+      break;
+    case '/enseignants/fiche-activite':
+      page = <FicheActivite />;
+      break;
+    case '/enseignants/grille-lecture':
+      page = <GrilleLecture />;
       break;
     case '/classe':
       page = <Classe />;

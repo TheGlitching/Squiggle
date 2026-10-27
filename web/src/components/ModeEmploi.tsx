@@ -146,9 +146,15 @@ export function ModeEmploi() {
       <div className="grid gap-6 border-t border-lineSoft pt-10">
         <h3 className="m-0 font-display text-2xl font-semibold">Trois mots à connaître</h3>
         <Terms />
-        <p className="m-0">
+        <p className="m-0 flex flex-wrap gap-x-6 gap-y-2">
           <Link to="/classe/mode-emploi" className={`${QUIET_LINK} text-lg`}>
             Imprimer ce mode d’emploi (une page)
+          </Link>
+          <Link to="/enseignants/fiche-activite" className={`${QUIET_LINK} text-lg`}>
+            La fiche d’activité (deux pages)
+          </Link>
+          <Link to="/enseignants/grille-lecture" className={`${QUIET_LINK} text-lg`}>
+            La grille de lecture des élèves
           </Link>
         </p>
       </div>

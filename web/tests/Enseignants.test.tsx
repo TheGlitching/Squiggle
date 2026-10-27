@@ -130,4 +130,38 @@ describe('Enseignants', () => {
     expect(screen.getByRole('navigation', { name: 'Navigation principale' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Retour à l’accueil' })).toHaveAttribute('href', '/');
   });
+
+  it('links the printable kit, at its own addresses', () => {
+    render(<Enseignants />);
+    const kit = region('Le kit à imprimer');
+    expect(kit.getByRole('link', { name: 'Voir la fiche d’activité' })).toHaveAttribute('href', '/enseignants/fiche-activite');
+    expect(kit.getByRole('link', { name: 'Voir la grille de lecture' })).toHaveAttribute('href', '/enseignants/grille-lecture');
+    const guide = region('Une séance, pas à pas');
+    expect(guide.getByRole('link', { name: 'La fiche d’activité (deux pages)' })).toHaveAttribute('href', '/enseignants/fiche-activite');
+    expect(guide.getByRole('link', { name: 'La grille de lecture des élèves' })).toHaveAttribute('href', '/enseignants/grille-lecture');
+  });
+});
+
+describe('the teacher kit', () => {
+  it('prints the activity sheet on two pages, with the five reasons and their questions', () => {
+    render(<App path="/enseignants/fiche-activite" />);
+    expect(screen.getByRole('heading', { level: 1, name: 'La fiche d’activité' })).toBeInTheDocument();
+    const first = within(screen.getByRole('region', { name: 'Fiche d’activité, page 1' }));
+    expect(first.getAllByRole('row')).toHaveLength(5);
+    expect(first.getByText('Ce n’est pas une ressource du CLEMI.', { exact: false })).toBeInTheDocument();
+    const second = within(screen.getByRole('region', { name: 'Fiche d’activité, page 2' }));
+    expect(second.getByText('Chiffre ou fait sans source')).toBeInTheDocument();
+    expect(second.getByText('Qui l’affirme ? Où pourrait-on le vérifier ?')).toBeInTheDocument();
+    expect(second.getByText(/squiggle.fr\/enseignants, rubrique « Obtenir l’accès gratuit »/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Imprimer' })).toBeInTheDocument();
+  });
+
+  it('prints the reading grid on one page, with room for five sentences', () => {
+    render(<App path="/enseignants/grille-lecture" />);
+    const sheet = within(screen.getByRole('region', { name: 'Grille de lecture' }));
+    expect(sheet.getByRole('heading', { level: 2, name: 'Ce qui fragilise un article' })).toBeInTheDocument();
+    expect(sheet.getAllByRole('table')).toHaveLength(2);
+    expect(sheet.getAllByRole('row')).toHaveLength(12);
+    expect(screen.getByRole('link', { name: 'Squiggle pour les enseignants' })).toHaveAttribute('href', '/enseignants');
+  });
 });
