@@ -47,6 +47,7 @@ const AUDIT = {
       blockId: 'b1',
       quote: 'Éric Ciotti est maire de Nice depuis juin 2024',
       category: 'affirmation-non-etayee',
+      checkableClaim: 'Éric Ciotti est maire de Nice depuis juin 2024.',
       severity: 3,
       label: 'Erreur factuelle sur le maire de Nice',
       explanation: "Éric Ciotti n'est pas maire de Nice, c'est Christian Estrosi qui occupe cette fonction.",

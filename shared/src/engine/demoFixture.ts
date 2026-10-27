@@ -137,6 +137,7 @@ export const DEMO_FOURCHES_CAUDINES_REPORT = {
       severity: 3,
       label: 'Affirmation d’infaillibilité sans référence',
       explanation: 'Cette étude est présentée comme un fait établi sans qu’aucun laboratoire, auteur ou revue à comité de lecture ne soit nommé : rien ne permet au lecteur de la retrouver ni de la vérifier.',
+      checkableClaim: 'Une étude récente menée sur 50 000 élèves montre que l\'usage quotidien des agents conversationnels divise par deux le temps de lecture autonome.',
       confidence: 0.98
     },
     {
