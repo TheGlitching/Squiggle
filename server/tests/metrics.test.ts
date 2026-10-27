@@ -235,34 +235,32 @@ describe('GET /web/tableau', () => {
 describe('POST /web/count', () => {
   it('counts a name from the audience list and nothing else', async () => {
     const env = makeTestEnv({ adminToken: 'admin-secret' });
-    expect((await countRequest(env, 'view_tarifs')).status).toBe(204);
-    expect((await countRequest(env, 'view_tarifs')).status).toBe(204);
-    expect((await countRequest(env, 'entry_edu')).status).toBe(204);
+    expect((await countRequest(env, 'ref_clemi')).status).toBe(204);
     expect((await countRequest(env, 'ref_clemi')).status).toBe(204);
     expect((await countRequest(env, 'click_install_firefox')).status).toBe(204);
 
     // A name the server keeps for itself cannot be sent: a browser could
     // otherwise declare checkouts, sign-ins or analyses that never happened.
-    for (const name of ['checkout_paid', 'signin_completed', 'finalize_session', 'check', 'view_nope', 42, null]) {
+    // Nor a page view or a referrer kind: visits are read in Cloudflare Web Analytics.
+    for (const name of ['checkout_paid', 'signin_completed', 'finalize_session', 'check', 'view_accueil', 'entry_search', 42, null]) {
       expect((await countRequest(env, name)).status).toBe(400);
     }
     // Only our own pages send one.
-    expect((await countRequest(env, 'view_accueil', { origin: 'https://ailleurs.example' })).status).toBe(403);
-    expect((await countRequest(env, 'view_accueil', {})).status).toBe(403);
+    expect((await countRequest(env, 'click_example', { origin: 'https://ailleurs.example' })).status).toBe(403);
+    expect((await countRequest(env, 'click_example', {})).status).toBe(403);
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
-    expect(m.audience.views).toMatchObject({ tarifs: 2, accueil: 0 });
-    expect(m.audience.entries).toMatchObject({ edu: 1, direct: 0 });
-    expect(m.audience.campaigns).toMatchObject({ clemi: 1 });
+    expect(Object.keys(m.audience)).toEqual(['campaigns', 'clicks']);
+    expect(m.audience.campaigns).toMatchObject({ clemi: 2, linuxfr: 0 });
     expect(m.audience.clicks).toMatchObject({ install_firefox: 1, install_chrome: 0 });
     expect(m.funnel.checkout).toEqual({ started: 0, paid: 0, free: 0 });
-    expect(m.headline.newAccounts.entries).toEqual(m.audience.entries);
+    expect(m.headline.newAccounts).toEqual({ count: 0, campaigns: m.audience.campaigns });
   });
 
   it('keeps the name and the day, never who sent it', async () => {
     const env = makeTestEnv({ adminToken: 'admin-secret' });
     const { sessionCookie } = await magicLogin(env, 'marie@example.org');
-    const res = await countRequest(env, 'view_compte', {
+    const res = await countRequest(env, 'click_subscribe', {
       origin: WEB_APP_ORIGIN,
       cookie: sessionCookie,
       'cf-connecting-ip': '203.0.113.7',
@@ -271,7 +269,7 @@ describe('POST /web/count', () => {
     expect(res.status).toBe(204);
     expect(res.headers.get('set-cookie')).toBeNull();
     const raw = JSON.stringify([...(env.db as unknown as { metrics: Map<string, number> }).metrics]);
-    expect(raw).toContain('view_compte');
+    expect(raw).toContain('click_subscribe');
     for (const secret of ['203.0.113', 'qwant', 'marie']) expect(raw).not.toContain(secret);
   });
 });

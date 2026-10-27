@@ -168,7 +168,7 @@ lecteur qui colle le même texte.
 | Lien de connexion par e-mail, avec l'adresse IP de la demande | base de données, le code **en empreinte SHA-256** | 10 minutes |
 | Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l'heure | base de données | 2 heures au plus |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
-| Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une page du site a été ouverte, une visite est venue d'un type de site, un bouton a été utilisé, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
+| Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une visite est arrivée par un lien de campagne, un bouton a été utilisé, par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |
 
 Les journaux techniques méritent une précision, parce que c'est là que ce genre de
@@ -180,19 +180,21 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 
 ## Mesure d'audience du site
 
-Le site compte, jour par jour, combien de fois chaque page est ouverte, de quel type
-de site vient la visite (un moteur de recherche, une boutique d'extensions, un site
-académique…, parmi une liste fixe) et combien de fois quelques boutons sont utilisés,
-comme « Installer l'extension » ou « S'abonner ». Chaque compte est un simple nombre
-par jour et par nom d'événement : sans cookie, sans rien enregistrer dans votre
-navigateur, sans identifiant, sans adresse IP, et sans lien avec votre compte. Rien ne
-permet de vous reconnaître d'une visite à l'autre : ce n'est pas un traceur. Ces totaux
-ne servent qu'à nous, pour savoir ce qui est utile.
+La fréquentation du site est mesurée par **Cloudflare Web Analytics**, l'outil de
+Cloudflare, qui héberge déjà le site : Cloudflare ajoute lui-même son script de mesure
+aux pages qu'il sert. Il ne dépose aucun cookie, ne calcule aucune empreinte de votre
+navigateur, n'y enregistre rien, et ne nous montre que des données agrégées : combien
+de pages sont vues, d'où viennent les visites, depuis quel pays et quel type
+d'appareil. Rien ne permet de vous reconnaître d'une visite à l'autre.
 
-Concrètement, la page envoie à notre serveur le seul nom de l'événement, sans cookie
-(`POST /web/count`), et le serveur refuse tout nom absent de la liste fermée
-(`shared/src/hosted/audience.ts`). La provenance d'une visite est réduite à son type de
-site dans le navigateur : l'adresse d'où vous venez ne nous parvient jamais.
+Le site compte aussi lui-même, jour par jour, combien de fois quelques boutons sont
+utilisés, comme « Installer l'extension » ou « S'abonner », et combien de visites
+arrivent par un lien de campagne connu (`?ref=clemi`). Chaque compte est un simple
+nombre par jour et par nom d'événement : sans cookie, sans identifiant, sans adresse IP,
+et sans lien avec votre compte. La page envoie à notre serveur le seul nom de
+l'événement, sans cookie (`POST /web/count`), et le serveur refuse tout nom absent de la
+liste fermée (`shared/src/hosted/audience.ts`). Ces totaux ne servent qu'à nous, pour
+savoir ce qui est utile.
 
 ## Les sous-traitants
 
@@ -203,7 +205,7 @@ site dans le navigateur : l'adresse d'où vous venez ne nous parvient jamais.
 | **Parallel Web Systems** (États-Unis), via OpenRouter | moteur de la recherche web de l'étape de vérification | les requêtes de recherche rédigées par le modèle, jamais l'article ni une identité de lecteur |
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini, ce qui n'est pas le cas aujourd'hui ; ses serveurs ne sont pas tous en Europe | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |
-| **Cloudflare** (Workers) | hébergement du serveur | le trafic, sans contenu d'article dans les journaux |
+| **Cloudflare** (Workers, Web Analytics) | hébergement du serveur et du site, mesure d'audience du site | le trafic, sans contenu d'article dans les journaux ; pour l'audience, des totaux sans cookie ni empreinte |
 | **Neon** (base hébergée à Francfort, Allemagne, région AWS `eu-central-1` ; société établie aux États-Unis) | base de données | tout ce que décrit le tableau ci-dessus |
 | **Stripe** | paiement | votre e-mail et vos données de paiement — **nous ne voyons aucun numéro de carte** |
 | **Brevo** | envoi des e-mails de connexion | votre adresse e-mail |
@@ -245,7 +247,7 @@ site dans le navigateur : l'adresse d'où vous venez ne nous parvient jamais.
   **rien n'entraîne un modèle** : nous n'avons aucun accord de ce type et l'API payante
   du fournisseur configuré n'utilise pas les requêtes pour l'entraînement.
 - Aucune donnée n'est utilisée pour évaluer une solvabilité ni pour un prêt.
-- Aucune publicité, aucun traceur, aucun mouchard analytique.
+- Aucune publicité, aucun traceur : la mesure d'audience ne dépose aucun cookie.
 - Aucun code n'est téléchargé ni exécuté depuis l'extérieur : tout ce qui s'exécute
   est dans le paquet que vous avez installé, et lisible dans le dépôt.
 - **Votre clé personnelle n'atteint jamais notre serveur.** Dans le mode BYOK elle ne

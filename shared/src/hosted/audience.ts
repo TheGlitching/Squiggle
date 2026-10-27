@@ -4,31 +4,10 @@
  * A closed list, shared by the page that sends a name and the server that
  * refuses every other one. Each name is a fixed identifier: the counter it
  * bumps is a number per UTC day, and nothing in a name can carry a reader, an
- * address or an article. A visit's origin is reduced to one of the `entry_`
- * kinds inside the browser, so the server never receives a referring URL.
+ * address or an article. Visits themselves (pages, referrers) are read in
+ * Cloudflare Web Analytics, not counted here.
  */
 export const AUDIENCE_METRIC_NAMES = [
-  // A page opened, by route.
-  'view_accueil',
-  'view_tarifs',
-  'view_analyser',
-  'view_enseignants',
-  'view_kit',
-  'view_classe',
-  'view_glossaire',
-  'view_connexion',
-  'view_compte',
-  'view_transparence',
-  'view_legal',
-  'view_pont',
-  'view_introuvable',
-  // A visit arriving from another site, or from none, by kind of site.
-  'entry_search',
-  'entry_store',
-  'entry_edu',
-  'entry_social',
-  'entry_direct',
-  'entry_other',
   // A visit arriving through a known campaign link (`?ref=`).
   'ref_clemi',
   'ref_linuxfr',
