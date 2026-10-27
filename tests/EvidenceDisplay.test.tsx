@@ -208,6 +208,38 @@ describe('Finding evidence display', () => {
   });
 });
 
+describe('A finding in a video’s report', () => {
+  it('shows when its passage is said, and plays it without toggling the card', () => {
+    const onSelect = vi.fn();
+    const onSeek = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    act(() => {
+      root.render(
+        <FindingCard finding={{ ...baseFinding, category: 'point-fort' }} videoTime={428} onSelect={onSelect} onSeek={onSeek} />
+      );
+    });
+
+    const play = host.querySelector('button[aria-label="Revoir ce passage, à 7:08 dans la vidéo"]');
+    expect(play?.textContent).toContain('7:08');
+
+    act(() => {
+      play!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(onSeek).toHaveBeenCalledWith('f1');
+    expect(onSelect).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it('shows no time on an article’s finding', () => {
+    expect(renderToStaticMarkup(<FindingCard finding={baseFinding} />)).not.toContain('Revoir ce passage');
+  });
+});
+
 describe('Research disclosure', () => {
   it('states plainly that no research ran and names the reason', () => {
     const research: ResearchRecord = {

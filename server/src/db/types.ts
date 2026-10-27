@@ -336,6 +336,8 @@ export const METRIC_NAMES = [
   'run_started_install',
   'run_started_session',
   'run_started_anon',
+  // Of those, the runs on a video's transcript (a YouTube address), whichever surface.
+  'run_started_video',
   'finalize_install',
   'finalize_session',
   'finalize_anon',

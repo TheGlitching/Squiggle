@@ -17,6 +17,7 @@
 
 import { AnalysisResult, Finding, PipelineStatus } from '@squiggle/shared';
 import type { ExtractedArticle } from '../content/types';
+import type { VideoReport } from '../video/youtube';
 
 export interface TabAnalysisState {
   tabId: number;
@@ -28,6 +29,8 @@ export interface TabAnalysisState {
   article?: ExtractedArticle;
   findings?: Finding[];
   result?: AnalysisResult;
+  /** Set when the report is a video's: where each finding is said in it. */
+  video?: VideoReport;
   error?: string;
   selectedFindingId?: string | null;
   hoveredFindingId?: string | null;

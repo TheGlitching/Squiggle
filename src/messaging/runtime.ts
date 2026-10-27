@@ -107,6 +107,36 @@ export class UnifiedRuntime {
     }
   }
 
+  /**
+   * Run a self-contained function in the page's own JavaScript world, not the
+   * extension's isolated one, and return what it resolves to. Only a page's own
+   * objects can be reached from there (a site's video player), so this is for
+   * reading what the page already holds; the function is serialised, so it may
+   * use nothing but its arguments.
+   */
+  public static async runInPage<Args extends unknown[], Result>(
+    tabId: number,
+    func: (...args: Args) => Result | Promise<Result>,
+    args: Args
+  ): Promise<Result | undefined> {
+    const browserGlobal = (globalThis as unknown as { browser?: BrowserNamespace }).browser;
+    const scripting =
+      browserGlobal?.scripting ?? (typeof chrome !== 'undefined' ? chrome.scripting : undefined);
+    if (!scripting?.executeScript) throw new Error('No script injection API available');
+    const results = await scripting.executeScript({ target: { tabId }, world: 'MAIN', func, args });
+    return results?.[0]?.result as Result | undefined;
+  }
+
+  /** The address a tab shows, when the extension may read it. */
+  public static async getTabUrl(tabId: number): Promise<string | undefined> {
+    try {
+      const tab = await this.getTabs().get(tabId);
+      return tab?.url;
+    } catch {
+      return undefined;
+    }
+  }
+
   public static async sendMessage<TResponse = unknown>(
     message: unknown,
     options?: { extensionId?: string }

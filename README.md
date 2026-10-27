@@ -141,7 +141,8 @@ What changes, stated plainly, because it is the whole trade:
   gets it for free and never sends the article anywhere.
 - our server never fetches the article itself — your browser supplies it, from the
   page you are already reading. A paywalled article is analysed as far as you can read
-  it, and flagged as partial.
+  it, and flagged as partial. A YouTube video is analysed from its captions, which the
+  extension reads in your tab; the server never fetches a video or its captions.
 - on the website, the text is what you paste, and it travels exactly like the article
   the extension reads. An address given beside it is kept as a label and a cache key,
   never requested.

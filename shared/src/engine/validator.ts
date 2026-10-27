@@ -7,6 +7,7 @@ import {
   FactualClaim,
   Finding,
   RawLlmAnalysisResponse,
+  FindingSchema,
   RawLlmAnalysisResponseSchema,
   ResearchRecord,
   TextBlock,
@@ -297,12 +298,21 @@ export function parseAndValidateLlmOutput(
     if (typeof parsedJson === 'object' && parsedJson !== null) {
       const candidate = parsedJson as Record<string, unknown>;
       const scoresParsed = Array.isArray(candidate.scores) ? candidate.scores : [];
-      const findingsParsed = Array.isArray(candidate.findings) ? candidate.findings : [];
+      // One malformed finding (an empty quote, say) must not cost the others
+      // their validation: taken raw, they lost their defaults, the `id` among
+      // them, and the panel could no longer tell one finding from another.
+      // Each is validated alone, and the ones that fail are dropped.
+      const findingsParsed = Array.isArray(candidate.findings)
+        ? candidate.findings.flatMap((finding) => {
+            const parsed = FindingSchema.safeParse(finding);
+            return parsed.success ? [parsed.data] : [];
+          })
+        : [];
 
       rawData = {
         summary: typeof candidate.summary === 'string' ? candidate.summary : 'Analyse effectuée avec réserves.',
         scores: scoresParsed as RawLlmAnalysisResponse['scores'],
-        findings: findingsParsed as RawLlmAnalysisResponse['findings'],
+        findings: findingsParsed,
         claims: []
       };
     } else {

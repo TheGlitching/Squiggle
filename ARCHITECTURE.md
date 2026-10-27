@@ -234,6 +234,20 @@ content script, and a second injection into the same tab is a no-op.
   and the overlay cannot leak out. Repositions via `ResizeObserver` and
   rAF-throttled scroll.
 
+### YouTube videos
+On a YouTube watch or Shorts page the background reads the video's captions instead of
+injecting the article reader (`src/video/youtube.ts`). A function run in the page's own
+world, on the reader's click, switches captions on through the player's API so the
+player fetches the caption file with the token it alone generates, reads that file
+again (`fmt=json3`, every cue with its time), and switches captions back. A pre-roll
+ad that autoplay left stalled is played muted, and the video paused back at its start
+once read. The cues become paragraph blocks that remember where each cue starts, so a
+finding's quote maps back to the second it is said at; the panel shows that time on the
+finding and a click seeks the player there. The text then runs the ordinary pipeline
+under the address `https://www.youtube.com/watch?v=<id>`, and that address alone is
+what tells the audit prompt (and the hosted counter `run_started_video`) that it is
+reading a spoken transcript (`shared/src/engine/video.ts`).
+
 ### Background and messaging
 - **`UnifiedRuntime`** (`src/messaging/runtime.ts`) - the one place Chrome's
   `chrome.*` and Firefox's `browser.*` differences are absorbed.

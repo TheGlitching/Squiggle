@@ -32,6 +32,19 @@ l'empreinte SHA-256 de votre adresse IP, jamais l'adresse elle-même, et l'effac
 minuit (UTC), soit 24 heures au plus. Aucun cookie n'est envoyé ni déposé : rien ne
 relie cette analyse au compte que vous créeriez ensuite.
 
+**Une vidéo YouTube** est analysée à partir de ses sous-titres, et ce texte suit
+exactement le trajet du texte d'un article, dans l'un et l'autre mode. Quand vous lancez
+l'analyse sur une page de vidéo, l'extension active les sous-titres un instant dans votre
+onglet, pour que le lecteur de YouTube charge leur fichier, puis relit ce même fichier :
+c'est votre navigateur qui le reçoit de YouTube, dans votre session, comme quand vous
+affichez les sous-titres vous-même. Si la vidéo n'a jamais été lancée et qu'une
+publicité bloquée la précède, l'extension la lance sans le son le temps de ce chargement,
+puis la remet en pause à son début. Aucune API de YouTube n'est appelée, rien n'est
+téléchargé d'autre que ce texte, et **notre serveur ne va jamais chercher la vidéo ni ses
+sous-titres**. Le titre de la vidéo, le nom de la chaîne et son adresse accompagnent le
+texte, comme le titre et l'adresse d'un article ; le rapport en garde des extraits, jamais
+la transcription entière.
+
 ---
 
 # 1. Mode « clé personnelle » (BYOK)
@@ -275,7 +288,8 @@ pas ce signalement : elle n'envoie toujours rien à notre serveur.
 - **`activeTab`** — lire l'article de l'onglet où vous cliquez, au moment où vous le
   demandez.
 - **`scripting`** — insérer le lecteur d'article dans cet onglet pour en extraire le
-  texte, les liens et les emplacements à surligner.
+  texte, les liens et les emplacements à surligner ; sur une page de vidéo YouTube, lire
+  les sous-titres que son lecteur charge, et ramener la vidéo au passage d'un constat.
 - **`storage`** — conserver votre clé chiffrée, pour ne pas la redemander. En mode
   hébergé, conserver de la même façon le jeton de session et la clé de signature de
   l'installation.

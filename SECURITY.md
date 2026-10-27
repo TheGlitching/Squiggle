@@ -26,7 +26,12 @@ the whole data flow: your page, your provider, your key.
 
 It declares no content script. The reader that extracts the article is injected into
 the tab you invoke the extension on (`activeTab` and `scripting`), when you ask for an
-analysis, so nothing runs on a page you have not pointed it at. Its only host access
+analysis, so nothing runs on a page you have not pointed it at. On a YouTube video the
+text is the video's captions: a function run in that page, on the same click, switches
+captions on through YouTube's own player so the player fetches their file in your
+session, reads that file again, and switches them back. It calls no YouTube API,
+downloads nothing but the text, and never mints the token the player sends with the
+request. Its only host access
 is the four model providers it can call with your key (`api.anthropic.com`,
 `api.openai.com`, `openrouter.ai`, `generativelanguage.googleapis.com`).
 
@@ -60,7 +65,9 @@ with a request. What that means concretely:
   prompt version. A text pasted on the website without an address is filed under a
   fixed key no URL can canonicalise to, so it is keyed by its fingerprint alone.
 - **our server never fetches the article itself.** It only ever fetches pages
-  the article cites, and only through an SSRF-hardened fetcher. An address given
+  the article cites, and only through an SSRF-hardened fetcher. Nor does it fetch a
+  video or its captions: a YouTube video reaches it as the caption text the extension
+  read in the reader's tab, and cites no link. An address given
   beside a pasted text is never requested, and the website's analysis route refuses
   cited links outright, so a run started there makes the server read no page.
 
