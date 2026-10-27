@@ -7,7 +7,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { installFetch, jsonResponse } from './helpers';
+import { account, installFetch, jsonResponse } from './helpers';
 import { Connexion } from '../src/pages/Connexion';
 
 afterEach(() => {
@@ -68,6 +68,19 @@ describe('Connexion', () => {
       expect(window.location.pathname).toBe('/compte');
     });
   });
+  // Back from the destination must leave the sign-in page behind, not land on it and be sent forward again.
+  it('replaces itself in the history when the reader is already signed in', async () => {
+    installFetch((call) =>
+      call.url.endsWith('/web/account') ? jsonResponse({ ok: true, ...account() }) : undefined,
+    );
+    window.history.pushState({}, '', '/enseignants');
+    renderAt('/connexion?next=/compte');
+
+    await waitFor(() => expect(window.location.pathname).toBe('/compte'));
+    window.history.back();
+    await waitFor(() => expect(window.location.pathname).toBe('/enseignants'));
+  });
+
   const BRIDGE = `/pont?${new URLSearchParams({ ext: 'abcdefghijklmnop', pub: '{"kty":"EC"}' })}`;
 
   it('asks the server to keep the bridge destination when it requests the e-mail', async () => {

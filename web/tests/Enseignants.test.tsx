@@ -1,15 +1,28 @@
 /** The teachers' page: the offer at a glance, the classroom exercise played on the page, and how to ask. */
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Account } from '../src/api';
 import { App } from '../src/App';
 import { CONTACT_URL } from '../src/components/Layout';
 import { EXAMPLES } from '../src/demo';
 import { Enseignants, TEACHER_REQUEST_URL } from '../src/pages/Enseignants';
+import { account, installFetch, jsonResponse } from './helpers';
+
+/** The page asks who is signed in; `null` is a visitor without a session. */
+function signedIn(who: Account | null) {
+  installFetch((call) => {
+    if (!call.url.endsWith('/web/account')) return jsonResponse({ ok: true });
+    return who ? jsonResponse({ ok: true, ...who }) : jsonResponse({ ok: false, error: 'invalid_session' }, 401);
+  });
+}
+
+beforeEach(() => signedIn(null));
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   window.history.pushState({}, '', '/');
 });
 
@@ -62,6 +75,42 @@ describe('Enseignants', () => {
     const activations = screen.getAllByRole('link', { name: 'Activer l’accès enseignant' });
     expect(activations).toHaveLength(2);
     for (const link of activations) expect(link).toHaveAttribute('href', '/connexion?next=/compte');
+  });
+
+  describe('follows the signed-in account', () => {
+    const gmail = 'prof@gmail.com';
+    const academic = 'prof@ac-versailles.fr';
+    const STATES: Array<[string, Account]> = [
+      ['a free account on another address', account({ email: gmail, plan: 'trial' })],
+      ['a subscribed account on another address', account({ email: gmail, plan: 'active' })],
+      ['an academic address already subscribed', account({ email: academic, plan: 'active' })],
+      ['an academic address whose free access is used', account({ email: academic, plan: 'none' })],
+    ];
+
+    it('sends an academic address that can activate straight to the account page and its button', async () => {
+      signedIn(account({ email: academic, plan: 'trial', teacherOffer: true }));
+      render(<Enseignants />);
+      await waitFor(() => {
+        for (const link of screen.getAllByRole('link', { name: 'Activer l’accès enseignant' }))
+          expect(link).toHaveAttribute('href', '/compte');
+      });
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it.each(STATES)('gives %s the classroom mode and the reason, never the activation', async (_, who) => {
+      signedIn(who);
+      render(<Enseignants />);
+      await waitFor(() => expect(screen.getAllByRole('status')).toHaveLength(2));
+      expect(screen.queryByRole('link', { name: 'Activer l’accès enseignant' })).toBeNull();
+      const opens = screen.getAllByRole('link', { name: 'Ouvrir le mode classe' });
+      for (const link of opens) expect(link).toHaveAttribute('href', '/classe');
+      // The hero, the classroom-mode section and the access section.
+      expect(opens).toHaveLength(3);
+      expect(screen.queryByRole('link', { name: 'Découvrir le mode classe' })).toBeNull();
+      const [reason] = screen.getAllByRole('status');
+      if (who.plan === 'active') expect(reason).toHaveTextContent('Votre abonnement est déjà actif');
+      else expect(reason).toHaveTextContent(`réservé aux adresses académiques (@ac-….fr) jamais abonnées, et l’adresse ${who.email}`);
+    });
   });
 
   it('keeps a prefilled request by e-mail for a teacher without an academic address', () => {

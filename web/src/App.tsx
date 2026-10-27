@@ -24,7 +24,7 @@ import { titleFor } from './seo';
 /** An old address that must keep working: emailed /magic-link links, the first /legal. */
 function Redirect({ to }: { to: string }) {
   useEffect(() => {
-    navigate(to);
+    navigate(to, { replace: true });
   }, [to]);
   return null;
 }

@@ -1,3 +1,6 @@
+import { useEffect, useState, type ReactNode } from 'react';
+
+import { getAccount, type Account } from '../api';
 import { Exercice } from '../components/Exercice';
 import { ClassFigure, SquiggleMark } from '../components/Iso';
 import {
@@ -107,6 +110,64 @@ const ACTIVATE = 'Activer l’accès enseignant';
 /** Sign-in creates the account, and the account page carries the button. */
 const ACTIVATE_PATH = '/connexion?next=/compte';
 
+/**
+ * Why there is nothing to activate for this account, or null when there is: the
+ * free access is for an academic address that has never subscribed, and the server
+ * alone says so (`teacherOffer`). The classroom mode is open to any account either way.
+ */
+function noTeacherAccess(account: Account): string | null {
+  if (account.teacherOffer) return null;
+  if (account.plan === 'active') {
+    return 'Votre abonnement est déjà actif : le mode classe y est inclus, il n’y a rien à activer.';
+  }
+  const who = account.email ? `l’adresse ${account.email}` : 'votre compte';
+  return `L’accès enseignant gratuit est réservé aux adresses académiques (@ac-….fr) jamais abonnées, et ${who} n’y ouvre pas droit. Le mode classe vous est ouvert quand même.`;
+}
+
+/**
+ * The page's call to action, by account: signed out, the way in through sign-in;
+ * an academic address, straight to the account page and its button; any other
+ * account, the classroom mode and the reason it has no free access to activate.
+ */
+function TeacherAccess({
+  account,
+  reason,
+  secondary,
+}: {
+  account: Account | null;
+  reason: string | null;
+  secondary: ReactNode;
+}) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        {reason ? (
+          <Link to="/classe" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+            Ouvrir le mode classe
+          </Link>
+        ) : (
+          <Link
+            to={account ? '/compte' : ACTIVATE_PATH}
+            onClick={() => count('click_teacher_access')}
+            className={`${PRIMARY_BUTTON} max-sm:w-full`}
+          >
+            {ACTIVATE}
+          </Link>
+        )}
+        {secondary}
+      </div>
+      {reason ? (
+        <p
+          role="status"
+          className={`mt-5 mb-0 rounded-control border border-border bg-surface px-4 py-3 text-base leading-relaxed ${MEASURE}`}
+        >
+          {reason}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 function Marks({ items, label }: { items: readonly string[]; label: string }) {
   return (
     <ul aria-label={label} className="m-0 grid list-none gap-3 p-0 text-lg leading-normal">
@@ -139,6 +200,15 @@ function Steps({ items, label }: { items: readonly string[]; label: string }) {
 }
 
 export function Enseignants() {
+  // The page is public and built ahead: it renders signed out, then follows the account.
+  const [account, setAccount] = useState<Account | null>(null);
+  useEffect(() => {
+    getAccount()
+      .then(setAccount)
+      .catch(() => {});
+  }, []);
+  const reason = account ? noTeacherAccess(account) : null;
+
   return (
     <>
       <div
@@ -151,13 +221,19 @@ export function Enseignants() {
             seul ; en classe, le tableau ne montre que ce que vous révélez. Les élèves n’utilisent pas d’IA. Gratuit pour
             les enseignants : une adresse académique suffit.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <Link to={ACTIVATE_PATH} onClick={() => count('click_teacher_access')} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-              {ACTIVATE}
-            </Link>
-            <a href="#mode-classe" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-              Découvrir le mode classe
-            </a>
+          <div className="mt-8">
+            <TeacherAccess
+              account={account}
+              reason={reason}
+              secondary={
+                // Beside « Ouvrir le mode classe », a second way to the same mode would only repeat it.
+                reason ? null : (
+                  <a href="#mode-classe" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+                    Découvrir le mode classe
+                  </a>
+                )
+              }
+            />
           </div>
           <dl className="mt-10 mb-0 grid gap-x-8 gap-y-4 sm:grid-cols-3">
             {OFFER.map(([term, detail]) => (
@@ -290,13 +366,16 @@ export function Enseignants() {
             </div>
           </div>
         </div>
-        <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <Link to={ACTIVATE_PATH} onClick={() => count('click_teacher_access')} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-            {ACTIVATE}
-          </Link>
-          <Link to="/" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-            Retour à l’accueil
-          </Link>
+        <div className="mt-12">
+          <TeacherAccess
+            account={account}
+            reason={reason}
+            secondary={
+              <Link to="/" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+                Retour à l’accueil
+              </Link>
+            }
+          />
         </div>
         <p className={`mt-8 mb-0 text-base leading-relaxed text-muted ${MEASURE}`}>
           Pas d’adresse académique ? Écrivez-nous à {CONTACT_EMAIL} avec votre établissement et votre discipline. Vous
