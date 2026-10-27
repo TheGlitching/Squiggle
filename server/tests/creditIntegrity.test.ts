@@ -83,6 +83,7 @@ function llmWithFindings(count: number): StubLlm {
       blockId: 'b1',
       quote: 'Le chomage a baisse de 12 % en un an.',
       category: 'affirmation-non-etayee',
+      checkableClaim: 'Le chomage a baisse de 12 % en un an.',
       severity: 2,
       label: `L${i}`,
       explanation: 'x',

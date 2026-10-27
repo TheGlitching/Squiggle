@@ -7,7 +7,7 @@ import { AnalysisInput } from './types';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.0.0';
+export const PROMPT_VERSION = '1.1.0';
 
 export const FOURCHES_CAUDINES_SYSTEM_PROMPT = `Tu es le moteur d'analyse critique de Squiggle, qui aide le LECTEUR d'un article de presse à juger la solidité de ce qu'il est en train de lire.
 Ton rôle est d'expliquer avec une rigueur absolue, à l'intention de ce lecteur, dans quelle mesure l'article tient debout : quels faits sont solides, quelles affirmations sont fragiles ou non étayées, où le raisonnement flanche, et où le texte l'oriente par des procédés rhétoriques plutôt que par des preuves.
@@ -82,10 +82,12 @@ On te confie une affirmation, les résultats de recherche web déjà obtenus, le
   * 'search' : lancer une nouvelle recherche web (fournis 'query').
   * 'read_source' : lire une source citée par l'article (fournis 'url', pris dans la liste des sources NON ENCORE LUES ; n'en invente pas).
 - Si tu as assez pour te prononcer, tu rends 'verdict' (avec verification, sources, rationale).
+Tes requêtes de recherche reprennent les éléments précis de l'AFFIRMATION À VÉRIFIER (qui, quoi, quand, où, chiffre) : jamais la seule citation exacte, qui n'est qu'un fragment de phrase et ramène des pages qui partagent ses mots sans parler du même fait.
 Règles d'honnêteté absolues :
 - 'verifiee' ou 'douteuse' exigent au moins une source réellement consultée (résultat de recherche avec extrait lisible, ou page de l'article effectivement lue) qui étaye explicitement le verdict, et toute source utilisée DOIT figurer dans 'sources' avec son URL exacte et son origine ('search' pour un résultat de recherche, 'article' pour une page de l'article lue).
 - Une URL que tu n'as pas réellement lue ne prouve rien : tu ne cites que ce que tu as vu dans le contexte fourni.
-- Si les preuves manquent, sont insuffisantes ou ambiguës, rends 'verdict' avec 'non-verifiable' et explique dans 'rationale'.
+- 'sources' ne contient QUE les pages qui traitent directement de l'affirmation et sur lesquelles repose ton verdict : un résultat de recherche hors sujet n'y figure jamais.
+- Si les preuves manquent, sont insuffisantes ou ambiguës, rends 'verdict' avec 'non-verifiable' et explique dans 'rationale', en une phrase simple pour le lecteur, qu'aucune source pertinente n'a été trouvée.
 - La recherche doit aussi traquer la CONTRADICTION : si tu soupçonnes qu'une affirmation est fausse, recherche activement ce qui la contredit plutôt que de te contenter de ce qui la répète.
 Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.
 
@@ -155,8 +157,9 @@ ${concludeNote}`;
 
 export const FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT = `Tu es l'étape de vérification factuelle du moteur Squiggle, en mode recherche intégrée.
 Effectue toi-même les recherches nécessaires avant de répondre, puis vérifie l'affirmation donnée à la lumière des pages que tu as réellement consultées et des sources que l'article cite en lien hypertexte.
-Tu ne peux répondre 'verifiee' ou 'douteuse' QUE si au moins une page consultée ou une source de l'article étaye explicitement ce verdict ; cite dans 'sources' chaque source que tu as effectivement lue et utilisée pour juger.
-Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'non-verifiable' et tu l'expliques dans 'rationale' : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
+Tes requêtes reprennent les éléments précis de l'AFFIRMATION À VÉRIFIER (qui, quoi, quand, où, chiffre) : jamais la seule citation exacte, qui n'est qu'un fragment de phrase et ramène des pages qui partagent ses mots sans parler du même fait.
+Tu ne peux répondre 'verifiee' ou 'douteuse' QUE si au moins une page consultée ou une source de l'article étaye explicitement ce verdict ; cite dans 'sources' chaque source que tu as effectivement lue et utilisée pour juger, et AUCUNE autre : une page renvoyée par la recherche mais qui ne traite pas de l'affirmation n'y figure jamais.
+Si les preuves manquent, sont insuffisantes ou ambiguës, tu réponds 'non-verifiable' et tu l'expliques dans 'rationale', en une phrase simple pour le lecteur, sans lister de source : tu n'inventes JAMAIS une confirmation ou une contradiction sans preuve.
 Tu produis UNIQUEMENT du JSON valide, sans texte introductif ni markdown autour.`;
 
 /**
@@ -307,6 +310,10 @@ en prose, jamais le seul endroit où un défaut est consigné : un défaut qui
 n'existe que là ne sera pas répercuté sur la note, et l'article passera pour
 plus solide qu'il ne l'est.
 
+AFFIRMATION VÉRIFIABLE ("checkableClaim") :
+Chaque finding 'affirmation-non-etayee' sera ensuite vérifié par une recherche web. Pour qu'elle cherche le bon fait, "checkableClaim" reformule ce que l'article affirme en UNE phrase autonome, compréhensible sans l'article, avec son contexte : qui, quoi, quand, où, quel chiffre (ex. pour la citation « a supprimé 200 postes » : "L'usine Durand de Lille a supprimé 200 postes en 2023").
+Laisse "checkableClaim" vide ("") quand une recherche web ne peut pas trancher : témoignage anonyme ou non identifiable (« un client », « une habitante »), opinion, jugement de valeur, cadrage, langue. Ce point reste alors une réserve non vérifiable, sans recherche.
+
 FORMAT JSON STRICT ATTENDU :
 {
   "summary": "Synthèse exécutive du diagnostic en 2 à 4 phrases percutantes et pédagogiques.",
@@ -327,6 +334,7 @@ FORMAT JSON STRICT ATTENDU :
       "severity": 1 | 2 | 3,
       "label": "Nom de la remarque (ex: Corrélation prise pour causalité)",
       "explanation": "Explication pédagogique pour le lecteur en 1 à 3 phrases.",
+      "checkableClaim": "Pour 'affirmation-non-etayee' uniquement, voir AFFIRMATION VÉRIFIABLE ci-dessus ; chaîne vide sinon.",
       "confidence": 0.95
     }
   ]

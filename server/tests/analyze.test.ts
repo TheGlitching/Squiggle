@@ -254,6 +254,7 @@ describe('analysis stages', () => {
           blockId: 'b1',
           quote: 'Le chômage a baissé de 12 % en un an.',
           category: 'affirmation-non-etayee',
+          checkableClaim: 'Le chômage a baissé de 12 % en un an.',
           severity: 2,
           label: 'A',
           explanation: 'x',
@@ -264,6 +265,7 @@ describe('analysis stages', () => {
           blockId: 'b2',
           quote: 'Tout le monde le sait.',
           category: 'affirmation-non-etayee',
+          checkableClaim: 'Tout le monde le sait.',
           severity: 2,
           label: 'B',
           explanation: 'y',
@@ -298,6 +300,50 @@ describe('analysis stages', () => {
     const report = finalized.json.report as { findings: Array<{ id: string }> };
     // f2 was confirmed and withdrawn; f1 could not be checked and still stands.
     expect(report.findings.map((f) => f.id)).toEqual(['f1']);
+  });
+
+  it('offers no research for an unsupported statement no search can settle', async () => {
+    const llm = new StubLlm();
+    llm.auditJson = JSON.stringify({
+      summary: 'Un chiffre et des témoins anonymes.',
+      scores: [{ domain: 'robustesse_factuelle', score: 20, strengths: [], weaknesses: [] }],
+      findings: [
+        {
+          id: 'f1',
+          blockId: 'b1',
+          quote: 'Le chômage a baissé de 12 % en un an.',
+          category: 'affirmation-non-etayee',
+          checkableClaim: 'Le chômage a baissé de 12 % en France en un an.',
+          severity: 2,
+          label: 'Chiffre non étayé',
+          explanation: 'x',
+          confidence: 0.9,
+        },
+        {
+          id: 'f2',
+          blockId: 'b2',
+          quote: 'confie un client',
+          category: 'affirmation-non-etayee',
+          checkableClaim: '',
+          severity: 1,
+          label: 'Témoins non identifiables',
+          explanation: 'Les personnes citées restent anonymes.',
+          confidence: 0.9,
+        },
+      ],
+      claims: [],
+    });
+    const env = makeTestEnv({ fetchImpl: pageFetch(), llm });
+    const who = await signedIn(env, 'marie@example.org');
+
+    const audit = await call(env, who, '/v1/analyze/audit', {
+      url: ARTICLE_URL,
+      title: 'T',
+      blocks: BLOCKS,
+      citedSources: CITED,
+    });
+
+    expect(audit.json.researchable).toEqual(['f1']);
   });
 
   it('reads only links the article itself cited', async () => {
