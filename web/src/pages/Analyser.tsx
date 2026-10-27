@@ -9,13 +9,16 @@
  * lands here with the shared text or address in the query string, which is
  * read once and wiped from the address bar. Where the share menu does not
  * list the app, "Coller le texte copié" reads the clipboard and starts the
- * analysis in the same tap.
+ * analysis in the same tap. A video's transcript pasted here is analysed
+ * without its timestamps, which come back beside each passage in the report
+ * (`transcript.ts`).
  */
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } from '../analysis';
 import { getAccount, type Account } from '../api';
+import { count } from '../count';
 import { StepFigure, type Step } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
@@ -28,6 +31,7 @@ import {
   MAX_TITLE_CHARS,
   MIN_TEXT_CHARS,
   PASTE_PROBLEMS,
+  pastedChars,
   pasteProblem,
   saveDraft,
   type PastedArticle,
@@ -35,6 +39,7 @@ import {
 } from '../paste';
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
+import { readTranscript, type Start } from '../transcript';
 import { describeAccount } from '../usage';
 
 const SIGN_IN = '/connexion?next=/analyser';
@@ -42,7 +47,7 @@ const SIGN_IN = '/connexion?next=/analyser';
 type Phase =
   | { kind: 'edit' }
   | { kind: 'running'; progress: Progress }
-  | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[] };
+  | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[]; times: Record<string, Start[]> | null };
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
 const MANUAL_PASTE = 'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement dans le champ, puis Coller.';
@@ -96,7 +101,8 @@ export function Analyser() {
   const problem = pasteProblem(article);
   const view = account ? describeAccount(account) : null;
   const running = phase.kind === 'running';
-  const chars = article.text.trim().length;
+  const chars = pastedChars(article.text);
+  const transcript = useMemo(() => readTranscript(article.text), [article.text]);
 
   function edit<K extends keyof PastedArticle>(key: K, value: PastedArticle[K]) {
     setArticle((current) => ({ ...current, [key]: value }));
@@ -159,9 +165,10 @@ export function Analyser() {
     setNotice(null);
     const abort = new AbortController();
     controller.current = abort;
+    if (readTranscript(article.text)) count('paste_transcript');
     setPhase({ kind: 'running', progress: { message: 'Préparation de l’analyse…', percent: 2 } });
     try {
-      const { report, blocks } = await analyzePasted(
+      const { report, blocks, times } = await analyzePasted(
         article,
         (progress) =>
           setPhase((current) =>
@@ -174,7 +181,7 @@ export function Analyser() {
           ),
         abort.signal,
       );
-      setPhase({ kind: 'done', report, blocks });
+      setPhase({ kind: 'done', report, blocks, times });
       window.scrollTo?.({ top: 0 });
     } catch (err) {
       setPhase({ kind: 'edit' });
@@ -225,7 +232,7 @@ export function Analyser() {
           </button>
           {view ? <p className="m-0 basis-full text-sm text-muted sm:basis-auto">{view.detail}</p> : null}
         </div>
-        <Rapport report={phase.report} blocks={phase.blocks} />
+        <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} />
       </div>
     );
   }
@@ -299,7 +306,16 @@ export function Analyser() {
                   : chars < MIN_TEXT_CHARS
                     ? `${chars} caractères : il en faut au moins ${MIN_TEXT_CHARS}.`
                     : `${chars.toLocaleString('fr-FR')} caractères.`}
+                {transcript
+                  ? ' Transcription reconnue : les horodatages sont retirés du texte analysé, et chaque passage garde le sien dans le rapport.'
+                  : null}
               </p>
+              {chars === 0 ? (
+                <p className="mt-1 mb-0 text-sm text-muted">
+                  Une vidéo YouTube ? Copiez sa transcription (« Afficher la transcription », sous la description)
+                  et collez-la ici.
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">

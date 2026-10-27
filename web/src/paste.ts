@@ -13,6 +13,7 @@
  */
 import type { TextBlock } from '../../shared/src/engine/types';
 import { articleLength, MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
+import { readTranscript, timeAt, type Start } from './transcript';
 
 /** Below this, the paste is a link or a title, not an article. */
 export const MIN_TEXT_CHARS = 200;
@@ -47,32 +48,65 @@ function splitLongLine(line: string): string[] {
 }
 
 /**
- * The engine's blocks for a paste. `charStart` places each block in the text
- * the blocks spell when joined by a blank line, which is what the validator
- * offsets a finding's quote against.
+ * The engine's blocks for a paste, and for a video's transcript where each of
+ * its passages starts in each block, by block id. `charStart` places each block
+ * in the text the blocks spell when joined by a blank line, which is what the
+ * validator offsets a finding's quote against.
  */
-export function blocksFromPaste(article: Pick<PastedArticle, 'title' | 'text'>): TextBlock[] {
+export function readPaste(article: Pick<PastedArticle, 'title' | 'text'>): {
+  blocks: TextBlock[];
+  times: Record<string, Start[]> | null;
+} {
   const blocks: TextBlock[] = [];
+  const times: Record<string, Start[]> = {};
   let offset = 0;
   const push = (type: TextBlock['type'], text: string) => {
-    blocks.push({ id: `b${blocks.length + 1}`, type, text, charStart: offset });
+    const id = `b${blocks.length + 1}`;
+    blocks.push({ id, type, text, charStart: offset });
     offset += text.length + 2;
+    return id;
   };
   const title = article.title.trim();
   if (title) push('heading', title);
-  for (const line of article.text.split(/\r?\n/)) {
-    const trimmed = line.replace(/\s+/g, ' ').trim();
-    if (trimmed) for (const part of splitLongLine(trimmed)) push('paragraph', part);
+
+  const transcript = readTranscript(article.text);
+  if (!transcript) {
+    for (const line of article.text.split(/\r?\n/)) {
+      const trimmed = line.replace(/\s+/g, ' ').trim();
+      if (trimmed) for (const part of splitLongLine(trimmed)) push('paragraph', part);
+    }
+    return { blocks, times: null };
   }
-  return blocks;
+  for (const paragraph of transcript) {
+    // A part of a cut paragraph keeps the starts that fall in it, and the time it opens on.
+    let from = 0;
+    for (const part of splitLongLine(paragraph.text)) {
+      from = paragraph.text.indexOf(part, from);
+      const inside = paragraph.starts
+        .filter((s) => s.offset > from && s.offset < from + part.length)
+        .map((s) => ({ offset: s.offset - from, at: s.at }));
+      times[push('paragraph', part)] = [{ offset: 0, at: timeAt(paragraph.starts, from) }, ...inside];
+      from += part.length;
+    }
+  }
+  return { blocks, times };
+}
+
+export function blocksFromPaste(article: Pick<PastedArticle, 'title' | 'text'>): TextBlock[] {
+  return readPaste(article).blocks;
+}
+
+/** The characters the analysis reads: a transcript's speech, without its times. */
+export function pastedChars(text: string): number {
+  const transcript = readTranscript(text);
+  return transcript ? transcript.reduce((sum, p) => sum + p.text.length, 0) : text.trim().length;
 }
 
 export type PasteProblem = 'too_short' | 'too_long' | 'too_many_lines' | 'title_too_long' | 'bad_source';
 
 /** What stops this paste from being analysed, if anything. */
 export function pasteProblem(article: PastedArticle): PasteProblem | null {
-  const text = article.text.trim();
-  if (text.length < MIN_TEXT_CHARS) return 'too_short';
+  if (pastedChars(article.text) < MIN_TEXT_CHARS) return 'too_short';
   const blocks = blocksFromPaste(article);
   // Counted as the server counts it, on the blocks it will receive.
   if (articleLength(blocks) > MAX_ARTICLE_CHARS) return 'too_long';

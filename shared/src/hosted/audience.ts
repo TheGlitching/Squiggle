@@ -18,6 +18,8 @@ export const AUDIENCE_METRIC_NAMES = [
   'click_teacher_access',
   'click_subscribe',
   'click_example',
+  // A kind of text pasted on /analyser, counted when it is analysed.
+  'paste_transcript',
 ] as const;
 export type AudienceMetricName = (typeof AUDIENCE_METRIC_NAMES)[number];
 
