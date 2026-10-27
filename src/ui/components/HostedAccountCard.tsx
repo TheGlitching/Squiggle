@@ -23,6 +23,11 @@ export interface HostedAccountCardProps {
   onSignIn: () => void;
   onRedeem: (code: string) => void;
   onSignOut: () => void;
+  /**
+   * The panel shows the subscribe box itself (`SubscribeOffer`), payable in place,
+   * so the card drops its link to the account page. The settings sheet keeps the link.
+   */
+  subscribeShownElsewhere?: boolean;
   /** Offered beside sign-out when signed in, entitled, and not the active engine. */
   onUseHosted?: () => void;
   /**
@@ -38,6 +43,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
   busy,
   showCode,
   isActive,
+  subscribeShownElsewhere,
   onSignIn,
   onRedeem,
   onSignOut,
@@ -74,7 +80,7 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
             </div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
-            {!view.canAnalyse && (
+            {!view.canAnalyse && !(view.needsSubscription && subscribeShownElsewhere) && (
               <a
                 href={ACCOUNT_URL}
                 target="_blank"

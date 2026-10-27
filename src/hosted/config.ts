@@ -34,6 +34,9 @@ export const TRANSPARENCY_URL = `${HOSTED_WEB_APP}/transparence`;
 /** The account page, where a reader subscribes or manages a plan. */
 export const ACCOUNT_URL = `${HOSTED_WEB_APP}/compte`;
 
+/** The conditions of sale, linked under the subscribe button as on the web app. */
+export const TERMS_OF_SALE_URL = `${HOSTED_WEB_APP}/cgv`;
+
 /** The host the extension names in the standing disclosure. */
 export function hostedProviderDomain(): string {
   try {

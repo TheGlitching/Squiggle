@@ -86,6 +86,7 @@ function serve(who: Account | null, stages: { audit?: () => Response } = {}) {
       if (path === '/web/analyze/check') return jsonResponse({ ok: true, hit: false });
       if (path === '/web/analyze/audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
       if (path === '/web/analyze/finalize') return jsonResponse({ ok: true, report: REPORT, cached: true });
+      if (path === '/web/account/checkout') return jsonResponse({ ok: true, url: 'https://checkout.stripe.example/cs_1' });
       return jsonResponse({ ok: false, error: 'not_found' }, 404);
     }),
   );
@@ -275,13 +276,52 @@ describe('Analyser, signed in', () => {
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
   });
 
-  it('offers the subscription, not the button, once the trial is used', async () => {
+  it('offers the subscription, payable here, not the button, once the trial is used', async () => {
     serve(account({ usage: { used: 3, limit: 3, remaining: 0, resetsAt: null } }));
     render(<Analyser />);
     paste(TEXT);
-    expect(await screen.findByText('Essai épuisé')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'S’abonner' })).toHaveAttribute('href', '/compte');
+    const offer = await screen.findByRole('region', { name: 'Essai épuisé' });
+    expect(within(offer).getByText('60 analyses par mois, 4,99 €, sans engagement.')).toBeInTheDocument();
+    expect(within(offer).getByRole('button', { name: /s’abonner : 4,99 €\/mois/i })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Analyser le texte' })).toBeNull();
+  });
+
+  it('says under each report how many trial analyses are left', async () => {
+    const me = account({ usage: { used: 0, limit: 3, remaining: 3, resetsAt: null } });
+    serve(me);
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    me.usage = { used: 1, limit: 3, remaining: 2, resetsAt: null };
+    await screen.findByText('58');
+    expect(await screen.findByText('Il vous reste 2 analyses offertes.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Essai épuisé' })).toBeNull();
+  });
+
+  it('after the last trial analysis, pays from under the report and comes back here', async () => {
+    const me = account({ usage: { used: 2, limit: 3, remaining: 1, resetsAt: null } });
+    const seen = serve(me);
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    me.usage = { used: 3, limit: 3, remaining: 0, resetsAt: null };
+    await screen.findByText('58');
+
+    const offer = await screen.findByRole('region', { name: 'Essai épuisé' });
+    const subscribe = within(offer).getByRole('button', { name: /s’abonner/i });
+    expect(subscribe).toBeDisabled();
+    fireEvent.click(within(offer).getByRole('checkbox', { name: /commence dès le paiement/ }));
+    fireEvent.click(subscribe);
+    await waitFor(() => expect(seen.some((s) => s.url === '/web/account/checkout')).toBe(true));
+    expect(seen.find((s) => s.url === '/web/account/checkout')?.body).toEqual({ retour: '/analyser' });
+  });
+
+  it('thanks the reader back from the payment, and keeps the text', async () => {
+    serve(account({ plan: 'active', usage: { used: 0, limit: 60, remaining: 60, resetsAt: null } }));
+    at('/analyser?paiement=ok');
+    render(<Analyser />);
+    expect(screen.getByRole('status')).toHaveTextContent(/Merci ! Votre abonnement s’active/);
+    await waitFor(() => expect(window.location.search).toBe(''));
   });
 });
 

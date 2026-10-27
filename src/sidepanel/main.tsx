@@ -11,6 +11,7 @@ import { CategoryFilterBar, type FindingCategory as FilterCategory } from '../ui
 import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { HostedAccountCard } from '../ui/components/HostedAccountCard';
+import { SubscribeOffer } from '../ui/components/SubscribeOffer';
 import { OnboardingTour, getTourCompletionStatus } from '../ui/components/OnboardingTour';
 import { SquiggleBadge } from '../ui/components/SquiggleBadge';
 import { ReviewPromptCard } from '../ui/components/ReviewPromptCard';
@@ -18,6 +19,7 @@ import { claimReviewPrompt } from '../review/reviewPrompt';
 import {
   beginHostedSignIn,
   describeHostedAccount,
+  startHostedCheckout,
   fetchHostedAccount,
   HostedAuthError,
   redeemHostedCode,
@@ -348,12 +350,16 @@ function SidepanelApp() {
       void claimReviewPrompt().then((ask) => {
         if (ask) setAskForReview(true);
       });
+      // The run spent an analysis: the count under the report must say what is left now.
+      void refreshHostedState();
     });
 
     const offError = bus.on<{ tabId: number; error: string }>('ANALYSIS_ERROR', (payload) => {
       if (!isTrackedTab(payload.tabId)) return;
       setError(payload.error);
       setProgress({ status: 'error', message: payload.error, progress: 0, notes: [] });
+      // A refusal for an exhausted trial is the account's state: read it, so the offer shows.
+      void refreshHostedState();
     });
 
     const offSelected = bus.on<{ findingId: string }>('FC_SIDEBAR_FINDING_SELECTED', (payload) => {
@@ -371,7 +377,7 @@ function SidepanelApp() {
       offSelected();
       offHovered();
     };
-  }, [bus]);
+  }, [bus, refreshHostedState]);
 
   useEffect(() => () => bus.destroy(), [bus]);
 
@@ -437,7 +443,18 @@ function SidepanelApp() {
 
   const busy = progress.status === 'extracting' || progress.status === 'analyzing';
   const hosted = mode === 'hosted';
-  const hostedCanAnalyse = hostedAccount ? describeHostedAccount(hostedAccount).canAnalyse : false;
+  const hostedView = hosted && hostedAccount ? describeHostedAccount(hostedAccount) : null;
+  const hostedCanAnalyse = hostedView?.canAnalyse ?? false;
+  // The trial is spent (or a plan lapsed): the subscription, payable from the panel,
+  // under the report when there is one and above the run button otherwise.
+  const offer = hostedView?.needsSubscription ? (
+    <SubscribeOffer
+      title={hostedView.title}
+      onSubscribe={async () => {
+        await startHostedCheckout(keyStorageRef.current!);
+      }}
+    />
+  ) : null;
   const canRun = hosted ? hostedCanAnalyse : hasKey !== false;
   // Hosted mode always has its card; BYOK has one only until a key is saved.
   const showHostedCard = hosted || hasKey === false;
@@ -495,8 +512,11 @@ function SidepanelApp() {
             onRedeem={(code) => void handleHostedRedeem(code)}
             onSignOut={() => void handleHostedSignOut()}
             onUseOwnKey={() => openSettings(true)}
+            subscribeShownElsewhere={offer !== null}
           />
         )}
+
+        {!report && offer}
 
         <button
           type="button"
@@ -634,6 +654,10 @@ function SidepanelApp() {
               </div>
             </section>
 
+            {offer ??
+              (hostedView && (
+                <p className="border-t border-line-soft pt-3 text-xs leading-relaxed text-muted">{hostedView.detail}</p>
+              ))}
             {askForReview && <ReviewPromptCard onClose={() => setAskForReview(false)} />}
           </>
         )}

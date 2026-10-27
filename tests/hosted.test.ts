@@ -8,10 +8,11 @@ import {
   redeemHostedCode,
   sameP256Jwk,
   signOutHosted,
+  startHostedCheckout,
   type HostedAccount,
 } from '../src/hosted/session';
 import { HostedRunner } from '../src/hosted/runner';
-import type { AnalysisReport } from '@squiggle/shared';
+import { base64urlDecode, buildSigningInput, type AnalysisReport } from '@squiggle/shared';
 
 function localStorageMock() {
   const map: Record<string, string> = {};
@@ -233,6 +234,63 @@ describe('Signed account read', () => {
     expect(headers['authorization']).toBe('Bearer tok');
     expect(headers['x-squiggle-sig']).toBeTruthy();
     expect(headers['x-squiggle-nonce']).toBeTruthy();
+  });
+});
+
+describe('startHostedCheckout', () => {
+  it('signs the POST over the body it sends and opens Stripe in a new tab', async () => {
+    const storage = new SecureKeyStorage('passphrase');
+    const { publicKeyJwk } = await storage.getOrCreateHostedKeyPair();
+    await storage.saveHostedSession({ token: 'tok', keyId: 'kid' });
+    const created: string[] = [];
+    vi.stubGlobal('chrome', { tabs: { create: (opts: { url: string }) => created.push(opts.url) } });
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ ok: true, url: 'https://checkout.stripe.example/cs_1' })
+    );
+
+    expect(await startHostedCheckout(storage, fetchMock as unknown as typeof fetch)).toBe(
+      'https://checkout.stripe.example/cs_1'
+    );
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://squiggle.example/v1/account/checkout');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe('{}');
+    const headers = init.headers as Record<string, string>;
+    expect(headers['authorization']).toBe('Bearer tok');
+    // The signature covers this exact body, as the server's gate checks it.
+    const input = await buildSigningInput({
+      method: 'POST',
+      path: '/v1/account/checkout',
+      nonce: headers['x-squiggle-nonce'],
+      timestamp: Number(headers['x-squiggle-ts']),
+      body: '{}',
+    });
+    const key = await crypto.subtle.importKey('jwk', publicKeyJwk as JsonWebKey, { name: 'ECDSA', namedCurve: 'P-256' }, false, [
+      'verify',
+    ]);
+    expect(
+      await crypto.subtle.verify(
+        { name: 'ECDSA', hash: 'SHA-256' },
+        key,
+        base64urlDecode(headers['x-squiggle-sig']) as Uint8Array<ArrayBuffer>,
+        new TextEncoder().encode(input)
+      )
+    ).toBe(true);
+    expect(created).toEqual(['https://checkout.stripe.example/cs_1']);
+  });
+
+  it('opens nothing when the server refuses, and says so in French', async () => {
+    const storage = new SecureKeyStorage('passphrase');
+    await storage.getOrCreateHostedKeyPair();
+    await storage.saveHostedSession({ token: 'tok', keyId: 'kid' });
+    const created: string[] = [];
+    vi.stubGlobal('chrome', { tabs: { create: (opts: { url: string }) => created.push(opts.url) } });
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: false, error: 'billing_unavailable' }, 503));
+
+    await expect(startHostedCheckout(storage, fetchMock as unknown as typeof fetch)).rejects.toThrow(
+      'Le paiement n’a pas pu s’ouvrir'
+    );
+    expect(created).toEqual([]);
   });
 });
 
