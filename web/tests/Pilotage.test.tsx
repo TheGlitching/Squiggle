@@ -24,7 +24,13 @@ const METRICS: OwnerMetrics = {
     clicks: {},
     flags: { categories: { sophisme: 2, cadrage: 0 }, reasons: { misread: 1, too_harsh: 1 } },
   },
-  funnel: { signin: { completed: 8 }, checkout: {}, runsStarted: { session: 12 }, finalized: { session: 11 }, refused: {} },
+  funnel: {
+    signin: { completed: 8, after_anon: 1 },
+    checkout: {},
+    runsStarted: { session: 12, anon: 6 },
+    finalized: { session: 11, anon: 5 },
+    refused: { anon_closed: 2 },
+  },
   headline: {
     newAccounts: { count: 7 },
     activationWithinWeek: { cohort: 4, activated: 3, share: 0.75 },
@@ -70,6 +76,13 @@ describe('/tableau', () => {
     expect(screen.getByText('Abonnés payants').nextSibling).toHaveTextContent('2');
     expect(screen.getByText('5 accès offerts · 0 résiliations')).toBeInTheDocument();
     expect(screen.getByText(/coût : indiquez la facture/)).toBeInTheDocument();
+    // The analysis without an account, read in one place.
+    const anon = screen.getByRole('heading', { name: 'Analyse sans compte' }).nextElementSibling as HTMLElement;
+    expect(anon).toHaveTextContent('Lancées6');
+    expect(anon).toHaveTextContent('Réussies5');
+    expect(anon).toHaveTextContent('Refusées : déjà faite ce jour-');
+    expect(anon).toHaveTextContent('Refusées : plafond du jour atteint2');
+    expect(anon).toHaveTextContent('Comptes créés ensuite1');
     expect(document.title).toBe('Tableau de bord - Squiggle');
 
     await userEvent.click(screen.getByRole('button', { name: '4 sem.' }));

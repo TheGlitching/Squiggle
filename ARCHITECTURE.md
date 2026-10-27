@@ -65,7 +65,9 @@ the session cookie instead of an install's signature and refused without an allo
 and the subscription are one, and the client is the same `HostedAnalysisClient`
 (`shared/src/hosted/client.ts`) in its session mode. A pasted text cites no links, so the
 web route refuses any `citedSources`: a run started from the site never makes the server
-read a page.
+read a page. A visitor without an account walks the same stages on `/web/anon/*`, with no
+cookie, the client in its `session: 'none'` mode: one analysis per IP and per day, 40 a
+day for the site, from the web app's origin only.
 
 ```
 +-----------------------------+

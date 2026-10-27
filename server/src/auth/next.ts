@@ -11,6 +11,13 @@
 
 export const DEFAULT_NEXT = '/compte';
 
+/**
+ * The analysis page, reached from the sign-in a visitor's report offers. It
+ * marks nothing but where the reader lands; the server counts an account
+ * created on it as one opened after an analysis without an account.
+ */
+export const AFTER_ANON_NEXT = '/analyser?apres=essai';
+
 /** A bridge URL carries a JWK, so it is long; this is a bound, not a target. */
 const MAX_NEXT_LENGTH = 2048;
 /** Never resolved against, only compared with: a parsed internal path keeps this origin. */
@@ -34,7 +41,7 @@ export function sanitizeNext(raw: unknown): string | null {
 
   if (url.pathname === '/compte') return DEFAULT_NEXT;
   // Nothing of the pasted text travels: it waits in the reader's own browser.
-  if (url.pathname === '/analyser') return '/analyser';
+  if (url.pathname === '/analyser') return url.searchParams.get('apres') === 'essai' ? AFTER_ANON_NEXT : '/analyser';
   if (url.pathname === '/pont') {
     const ext = url.searchParams.get('ext')?.trim();
     const pub = url.searchParams.get('pub')?.trim();
