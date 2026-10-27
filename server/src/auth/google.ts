@@ -85,7 +85,7 @@ export async function startGoogleAuth(deps: GoogleDeps, input: { next?: unknown 
 export async function completeGoogleAuth(
   deps: GoogleDeps,
   input: { state?: string; code?: string },
-): Promise<Outcome<{ userId: string; email: string | null; sessionToken: string; next: string | null }>> {
+): Promise<Outcome<{ userId: string; email: string | null; sessionToken: string; next: string | null; created: boolean }>> {
   const { state, code } = input;
   if (!state || !code) return apiError('invalid_state', 'Missing OAuth state or code.');
 
@@ -147,6 +147,7 @@ export async function completeGoogleAuth(
   // both are new do we create a user.
   let user = claims.email ? await deps.db.getUserByEmail(claims.email) : null;
   if (!user) user = await deps.db.getUserByGoogleSub(claims.sub);
+  const created = !user;
   if (!user) {
     user = await deps.db.createUser(
       {
@@ -162,5 +163,5 @@ export async function completeGoogleAuth(
   }
 
   const sessionToken = await createWebSession({ db: deps.db, clock: deps.clock }, user.id);
-  return { ok: true, userId: user.id, email: claims.email ?? null, sessionToken, next: pending.next };
+  return { ok: true, userId: user.id, email: claims.email ?? null, sessionToken, next: pending.next, created };
 }

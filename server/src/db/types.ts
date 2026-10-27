@@ -287,7 +287,8 @@ export interface PurgeReportsResult {
  */
 export interface AnalysisRunRow {
   id: string;
-  userId: string;
+  /** null for a visitor's run (the site's analysis without an account): its id is its only key. */
+  userId: string | null;
   /** SHA-256 hex of the canonical article URL — the shared cache key. */
   urlHash: string;
   /** The accumulated stage output, as a JSON string. */
@@ -300,7 +301,7 @@ export interface AnalysisRunRow {
 }
 
 export interface CreateAnalysisRunArgs {
-  userId: string;
+  userId: string | null;
   urlHash: string;
   state: string;
   now: number;
@@ -330,15 +331,21 @@ export const METRIC_NAMES = [
   'checkout_started',
   'checkout_paid',
   'checkout_free',
+  // An account created by a sign-in that began under a visitor's report.
+  'signin_after_anon',
   'run_started_install',
   'run_started_session',
+  'run_started_anon',
   'finalize_install',
   'finalize_session',
+  'finalize_anon',
   'refused_trial_exhausted',
   'refused_quota_exhausted',
   'refused_starts_exhausted',
   'refused_article_too_long',
   'refused_subscription_required',
+  'refused_anon_used',
+  'refused_anon_closed',
 ] as const;
 export type MetricName = (typeof METRIC_NAMES)[number];
 
@@ -504,6 +511,12 @@ export interface Db {
    * callers can both believe they are inside the limit.
    */
   recordAndCheckRate(args: RateCheckArgs): Promise<RateCheckResult>;
+
+  /**
+   * Take back one use counted in the current window of `scope` and `key`, for
+   * a use that ended up costing nothing. Never takes a count below zero.
+   */
+  releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void>;
 
   /**
    * Record one finished analysis: appends a ledger row and bumps that UTC

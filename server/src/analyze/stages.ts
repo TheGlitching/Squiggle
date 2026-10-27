@@ -69,8 +69,11 @@ import { logEvent } from '../lib/log';
 import { countMetric } from '../metrics';
 import { sanitizeReport } from '../lib/sanitize';
 import { REPORT_MAX_BYTES, REPORT_TTL_MS } from '../usage/limits';
+import { ANON_RATE_SCOPE_PREFIX, DAY_MS } from '../usage/limits';
 import {
   ANALYSES_GLOBAL_PER_HOUR,
+  ANON_ANALYSES_PER_DAY,
+  ANON_ANALYSES_PER_IP_PER_DAY,
   CONCURRENT_RUN_WINDOW_MS,
   HOUR_MS,
   MAX_CONCURRENT_RUNS,
@@ -140,9 +143,43 @@ export interface AnalyzeServices {
   fetchImpl?: typeof fetch;
   /** Correlation id of the request being served; logged, never derived from content. */
   requestId: string;
-  /** Who is asking: the extension (`install`) or the web app (`session`). Counted, never stored with the run. */
-  surface: 'install' | 'session';
+  /**
+   * Who is asking: the extension (`install`), the web app on an account
+   * (`session`), or a visitor on the web app without one (`anon`). Counted,
+   * never stored with the run.
+   */
+  surface: 'install' | 'session' | 'anon';
 }
+
+/**
+ * A visitor without an account, on the site's one free analysis a day. They
+ * are known only by the SHA-256 of their IP, which keys the day's count and
+ * nothing else.
+ */
+export interface Visitor {
+  visitor: true;
+  ipHash: string;
+}
+
+/** Who drives a run: an account, or a visitor without one. */
+export type Reader = UserRow | Visitor;
+
+function isVisitor(reader: Reader): reader is Visitor {
+  return 'visitor' in reader;
+}
+
+/** The account a run belongs to; null for a visitor's. */
+function ownerOf(reader: Reader): string | null {
+  return isVisitor(reader) ? null : reader.id;
+}
+
+/** The account id for a log line; a visitor has none, and their address is never logged. */
+function logIdOf(reader: Reader): string | undefined {
+  return ownerOf(reader) ?? undefined;
+}
+
+const ANON_IP_SCOPE = `${ANON_RATE_SCOPE_PREFIX}ip`;
+const ANON_ALL_SCOPE = `${ANON_RATE_SCOPE_PREFIX}all`;
 
 /**
  * The page reader every stage on this server uses. It is the SSRF-hardened
@@ -226,7 +263,7 @@ export interface AuditResult {
 
 export async function analyzeAudit(
   s: AnalyzeServices,
-  user: UserRow,
+  reader: Reader,
   payload: AuditRequest,
 ): Promise<Outcome<AuditResult>> {
   // The address is only ever a key and a line of the prompt: whatever it
@@ -240,7 +277,7 @@ export async function analyzeAudit(
   // be a verdict on something the reader never chose to read.
   const chars = articleLength(payload.blocks);
   if (chars > MAX_ARTICLE_CHARS) {
-    logEvent({ event: 'payload_rejected', requestId: s.requestId, userId: user.id, fields: ['blocks'], count: chars });
+    logEvent({ event: 'payload_rejected', requestId: s.requestId, userId: logIdOf(reader), fields: ['blocks'], count: chars });
     await count(s, 'refused_article_too_long');
     return apiError('article_too_long', articleTooLongMessage(chars));
   }
@@ -249,7 +286,7 @@ export async function analyzeAudit(
 
   // Every ceiling is checked BEFORE the provider is called: an abusive client
   // must not be able to spend a single token proving it is abusive.
-  const gate = await enforceStartCeilings(s, user, now);
+  const gate = isVisitor(reader) ? await enforceVisitorCeilings(s, reader, now) : await enforceStartCeilings(s, reader, now);
   if (!gate.ok) {
     await countRefusal(s, gate);
     return gate;
@@ -263,7 +300,7 @@ export async function analyzeAudit(
   // from an account entitled to one. Opening it first makes the row itself the
   // reservation.
   const run = await s.db.createAnalysisRun({
-    userId: user.id,
+    userId: ownerOf(reader),
     urlHash,
     state: serializeRunState(pendingState(now)),
     now,
@@ -331,7 +368,7 @@ export async function analyzeAudit(
       // hourly global ceiling bounds that, and the release can be narrowed to
       // provider refusals if timeouts ever show up in the failure counters.
       await s.db.finalizeAnalysisRun(run.id, now);
-      await s.db.releaseRunStart(user.id, now);
+      await releaseStart(s, reader, now);
       await count(s, 'audit_failed');
       return apiError('provider_unavailable', 'Service momentanément indisponible. Réessayez dans quelques minutes.');
     }
@@ -355,7 +392,7 @@ export async function analyzeAudit(
     // Our failure, not the reader's: the start is given back as for a provider
     // failure, and no credit was consumed.
     await s.db.finalizeAnalysisRun(run.id, now);
-    await s.db.releaseRunStart(user.id, now);
+    await releaseStart(s, reader, now);
     return apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
   }
 
@@ -386,7 +423,7 @@ export async function analyzeAudit(
 
   await s.db.updateAnalysisRunState(run.id, serializeRunState(state), now);
 
-  logEvent({ event: 'analysis_started', requestId: s.requestId, userId: user.id, urlHash });
+  logEvent({ event: 'analysis_started', requestId: s.requestId, userId: logIdOf(reader), urlHash });
 
   return {
     ok: true,
@@ -437,6 +474,11 @@ async function enforceStartCeilings(
     return tooManyStarts;
   }
 
+  return enforceHourlyCeiling(s, now);
+}
+
+/** The hourly ceiling for the whole service, accounts and visitors together. */
+async function enforceHourlyCeiling(s: AnalyzeServices, now: number): Promise<Outcome<Record<never, never>>> {
   const global = await s.db.recordAndCheckRate({
     scope: 'analyze:global',
     key: 'all',
@@ -448,8 +490,69 @@ async function enforceStartCeilings(
     logEvent({ event: 'rate_limited', requestId: s.requestId, scope: 'analyze:global', count: global.count });
     return apiError('rate_limited', 'Le service est momentanément saturé. Réessayez dans un moment.');
   }
-
   return { ok: true };
+}
+
+/**
+ * What a visitor's run has to clear: their one analysis of the day, the
+ * site's daily allowance for every visitor together, and the hourly ceiling
+ * accounts meet too. A use is counted when the run starts, since that is when
+ * it costs; a ceiling met further down gives back the ones counted above it,
+ * so a visitor turned away by the site's allowance keeps their own for later.
+ */
+async function enforceVisitorCeilings(
+  s: AnalyzeServices,
+  visitor: Visitor,
+  now: number,
+): Promise<Outcome<Record<never, never>>> {
+  const own = await s.db.recordAndCheckRate({
+    scope: ANON_IP_SCOPE,
+    key: visitor.ipHash,
+    limit: ANON_ANALYSES_PER_IP_PER_DAY,
+    windowMs: DAY_MS,
+    now,
+  });
+  if (!own.allowed) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, scope: ANON_IP_SCOPE, count: own.count });
+    return apiError(
+      'anon_used',
+      'Votre analyse sans compte du jour est faite. Créez un compte gratuit pour analyser ce texte : 3 analyses offertes.',
+    );
+  }
+
+  const all = await s.db.recordAndCheckRate({
+    scope: ANON_ALL_SCOPE,
+    key: 'all',
+    limit: ANON_ANALYSES_PER_DAY,
+    windowMs: DAY_MS,
+    now,
+  });
+  if (!all.allowed) {
+    await s.db.releaseRate({ scope: ANON_IP_SCOPE, key: visitor.ipHash, windowMs: DAY_MS, now });
+    logEvent({ event: 'rate_limited', requestId: s.requestId, scope: ANON_ALL_SCOPE, count: all.count });
+    return apiError(
+      'anon_closed',
+      'Les analyses sans compte de la journée sont toutes faites. Créez un compte gratuit pour analyser ce texte : 3 analyses offertes.',
+    );
+  }
+
+  const hourly = await enforceHourlyCeiling(s, now);
+  if (!hourly.ok) await releaseVisitorStart(s, visitor, now);
+  return hourly;
+}
+
+/**
+ * Give back a start the provider never served: an account's start, or the
+ * visitor's analysis of the day and its place in the site's allowance.
+ */
+async function releaseStart(s: AnalyzeServices, reader: Reader, now: number): Promise<void> {
+  if (isVisitor(reader)) await releaseVisitorStart(s, reader, now);
+  else await s.db.releaseRunStart(reader.id, now);
+}
+
+async function releaseVisitorStart(s: AnalyzeServices, visitor: Visitor, now: number): Promise<void> {
+  await s.db.releaseRate({ scope: ANON_IP_SCOPE, key: visitor.ipHash, windowMs: DAY_MS, now });
+  await s.db.releaseRate({ scope: ANON_ALL_SCOPE, key: 'all', windowMs: DAY_MS, now });
 }
 
 /**
@@ -471,13 +574,14 @@ function researchableFindingIds(state: AnalysisRunState): string[] {
 
 async function loadRun(
   s: AnalyzeServices,
-  user: UserRow,
+  reader: Reader,
   runId: string,
 ): Promise<Outcome<{ state: AnalysisRunState; urlHash: string; finalized: boolean }>> {
   const run = await s.db.getAnalysisRun(runId);
   // One error for "unknown", "someone else's" and "expired": a client that
-  // guesses run ids learns nothing from which of the three it hit.
-  if (!run || run.userId !== user.id || run.expiresAt <= s.clock.now()) {
+  // guesses run ids learns nothing from which of the three it hit. An account
+  // never reaches a visitor's run, nor a visitor an account's.
+  if (!run || run.userId !== ownerOf(reader) || run.expiresAt <= s.clock.now()) {
     return apiError('run_not_found', "Cette analyse n'est plus en cours. Relancez-la.");
   }
   return { ok: true, state: parseRunState(run.state), urlHash: run.urlHash, finalized: run.finalizedAt !== null };
@@ -489,10 +593,10 @@ async function loadRun(
 
 export async function analyzeResearch(
   s: AnalyzeServices,
-  user: UserRow,
+  reader: Reader,
   payload: { runId: string; findingId: string },
 ): Promise<Outcome<{ claim: AnalysisRunState['claims'][number] | null }>> {
-  const loaded = await loadRun(s, user, payload.runId);
+  const loaded = await loadRun(s, reader, payload.runId);
   if (!loaded.ok) return loaded;
   const { state } = loaded;
 
@@ -553,10 +657,10 @@ export async function analyzeResearch(
 
 export async function analyzeSourceCheck(
   s: AnalyzeServices,
-  user: UserRow,
+  reader: Reader,
   payload: { runId: string; claimId: string; sourceUrl: string },
 ): Promise<Outcome<{ check: AnalysisRunState['sourceChecks'][number] | null }>> {
-  const loaded = await loadRun(s, user, payload.runId);
+  const loaded = await loadRun(s, reader, payload.runId);
   if (!loaded.ok) return loaded;
   const { state } = loaded;
 
@@ -631,10 +735,10 @@ export interface FinalizeResult {
  */
 export async function analyzeFinalize(
   s: AnalyzeServices,
-  user: UserRow,
+  reader: Reader,
   payload: { runId: string },
 ): Promise<Outcome<FinalizeResult>> {
-  const loaded = await loadRun(s, user, payload.runId);
+  const loaded = await loadRun(s, reader, payload.runId);
   if (!loaded.ok) return loaded;
   const { state, urlHash } = loaded;
 
@@ -675,9 +779,10 @@ export async function analyzeFinalize(
   }
 
   // The ledger records that an analysis happened, not which article it was.
-  await s.db.recordAnalysis({ userId: user.id, now });
+  // A visitor has no ledger: their day's analysis was counted at its start.
+  if (!isVisitor(reader)) await s.db.recordAnalysis({ userId: reader.id, now });
   await count(s, `finalize_${s.surface}`);
-  logEvent({ event: 'analysis_finalized', requestId: s.requestId, userId: user.id, urlHash });
+  logEvent({ event: 'analysis_finalized', requestId: s.requestId, userId: logIdOf(reader), urlHash });
 
   return { ok: true, report, cached };
 }

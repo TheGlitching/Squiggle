@@ -88,13 +88,19 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   // Origin proving the web app sent it. The GET is included because it is
   // the same conversation, and a check is what a forged run would start with.
   // An audience counter carries no cookie and spends nothing, but only our
-  // own pages have a reason to send one.
+  // own pages have a reason to send one. A visitor's run has no cookie at
+  // all, and spends the site's daily allowance instead of an account's.
   { method: 'POST', path: '/web/count' },
   { method: 'GET', path: '/web/analyze/check' },
   { method: 'POST', path: '/web/analyze/audit' },
   { method: 'POST', path: '/web/analyze/research' },
   { method: 'POST', path: '/web/analyze/source-check' },
   { method: 'POST', path: '/web/analyze/finalize' },
+  { method: 'GET', path: '/web/anon/check' },
+  { method: 'POST', path: '/web/anon/audit' },
+  { method: 'POST', path: '/web/anon/research' },
+  { method: 'POST', path: '/web/anon/source-check' },
+  { method: 'POST', path: '/web/anon/finalize' },
 ];
 
 export function originRequired(method: string, path: string): boolean {

@@ -1,6 +1,7 @@
 /**
  * The analysis page, driven through `fetch` the way the browser drives it.
- * Pinned: a signed-out reader is sent to sign in without losing the paste; a
+ * Pinned: a signed-out visitor runs one analysis without an account, then is
+ * offered an account that keeps the report, without losing the paste; a
  * share lands in the form and leaves the address bar; a run walks the
  * session stages on the reader's cookie and never asks for the source page;
  * the report highlights the passages it discusses; a refusal says what to do.
@@ -12,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisReport } from '../../shared/src/engine/types';
 import type { Account } from '../src/api';
 import { loadSeance, saveSeance } from '../src/classe';
+import { loadDraft, saveDraft } from '../src/paste';
 import { Analyser } from '../src/pages/Analyser';
 import { account, jsonResponse, memoryStorage } from './helpers';
 
@@ -66,7 +68,7 @@ interface Seen {
 }
 
 /** The server as the page sees it: an account, then the five stages. */
-function serve(who: Account | null, stages: { audit?: () => Response } = {}) {
+function serve(who: Account | null, stages: { audit?: () => Response; hit?: boolean } = {}) {
   const seen: Seen[] = [];
   vi.stubGlobal('localStorage', memoryStorage());
   vi.stubGlobal(
@@ -84,9 +86,10 @@ function serve(who: Account | null, stages: { audit?: () => Response } = {}) {
       // button stays disabled until then, and a test must wait for it.
       if (path === '/web/account') await new Promise((resolve) => setTimeout(resolve, 20));
       if (path === '/web/account') return who ? jsonResponse({ ok: true, ...who }) : jsonResponse({ ok: false, error: 'invalid_session' }, 401);
-      if (path === '/web/analyze/check') return jsonResponse({ ok: true, hit: false });
-      if (path === '/web/analyze/audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
-      if (path === '/web/analyze/finalize') return jsonResponse({ ok: true, report: REPORT, cached: true });
+      const stage = path.replace(/^\/web\/(analyze|anon)\//, '');
+      if (stage === 'check') return jsonResponse(stages.hit ? { ok: true, hit: true, report: REPORT } : { ok: true, hit: false });
+      if (stage === 'audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
+      if (stage === 'finalize') return jsonResponse({ ok: true, report: REPORT, cached: true });
       if (path === '/web/account/checkout') return jsonResponse({ ok: true, url: 'https://checkout.stripe.example/cs_1' });
       return jsonResponse({ ok: false, error: 'not_found' }, 404);
     }),
@@ -96,9 +99,10 @@ function serve(who: Account | null, stages: { audit?: () => Response } = {}) {
 
 /** The analyse button once the account has loaded: until then it is rightly disabled. */
 async function analyseButton(): Promise<HTMLElement> {
-  const button = await screen.findByRole('button', { name: 'Analyser le texte' });
-  await waitFor(() => expect(button).toBeEnabled());
-  return button;
+  // Queried again on each try: a signed-out visitor's button replaces the loading one.
+  const button = () => screen.getByRole('button', { name: 'Analyser le texte' });
+  await waitFor(() => expect(button()).toBeEnabled());
+  return button();
 }
 
 function at(path: string) {
@@ -119,17 +123,61 @@ afterEach(() => {
 });
 
 describe('Analyser, signed out', () => {
-  it('asks the reader to sign in and keeps the paste for when they come back', async () => {
-    serve(null);
+  it('runs the visitor’s analysis without a cookie, then offers an account that keeps the report', async () => {
+    const seen = serve(null);
     const first = render(<Analyser />);
     paste(TEXT);
-    const signIn = await screen.findByRole('link', { name: 'Se connecter pour analyser' });
-    expect(signIn).toHaveAttribute('href', '/connexion?next=/analyser');
-    expect(screen.getByText(/Votre texte reste ici, dans ce navigateur/)).toBeInTheDocument();
+    expect(await screen.findByText(/Une analyse offerte sans compte, chaque jour/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion?next=/analyser');
+    fireEvent.click(await analyseButton());
+
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    const stages = seen.filter((s) => s.url.startsWith('/web/anon/'));
+    expect(stages.map((s) => s.url.split('?')[0])).toEqual(['/web/anon/check', '/web/anon/audit', '/web/anon/finalize']);
+    for (const stage of stages) expect(stage.credentials).toBe('omit');
+    expect(seen.some((s) => s.url.startsWith('/web/analyze/'))).toBe(false);
+
+    const keep = screen.getByRole('region', { name: 'Gardez ce rapport, et faites-en 3 de plus' });
+    expect(within(keep).getByRole('link', { name: 'Créer un compte gratuit' })).toHaveAttribute(
+      'href',
+      '/connexion?next=%2Fanalyser%3Fapres%3Dessai',
+    );
     first.unmount();
 
-    // Back from the sign-in, in the same browser.
+    // Back from that sign-in, in the same browser: the paste is there, and the
+    // report comes back from the shared cache, without an audit.
+    const draft = loadDraft();
+    const back = serve(account(), { hit: true });
+    saveDraft(draft);
+    at('/analyser?apres=essai');
     render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(back.map((s) => s.url.split('?')[0])).toEqual(['/web/account', '/web/analyze/check']);
+    expect(screen.queryByRole('region', { name: /Gardez ce rapport/ })).toBeNull();
+    await waitFor(() => expect(window.location.search).toBe(''));
+  });
+
+  it('leaves a returning reader on their text when the cache has no report for it', async () => {
+    const seen = serve(account());
+    saveDraft({ text: TEXT, title: '', source: '' });
+    at('/analyser?apres=essai');
+    render(<Analyser />);
+    await analyseButton();
+    await waitFor(() => expect(seen.some((s) => s.url.startsWith('/web/analyze/check'))).toBe(true));
+    expect(seen.some((s) => s.url === '/web/analyze/audit')).toBe(false);
+    expect(screen.queryByText('58')).toBeNull();
+  });
+
+  it('turns a refused visitor to an account, keeping the paste', async () => {
+    serve(null, {
+      audit: () => jsonResponse({ ok: false, error: 'anon_used', message: 'x' }, 429),
+    });
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent(/analyse sans compte du jour est faite/);
+    expect(screen.getByRole('link', { name: 'Créer un compte gratuit' })).toHaveAttribute('href', '/connexion?next=/analyser');
+    expect(screen.queryByRole('button', { name: 'Analyser le texte' })).toBeNull();
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
   });
 });
@@ -379,11 +427,21 @@ describe('Analyser, from the clipboard', () => {
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toHaveLength(3);
   });
 
-  it('fills the form but leaves the next step to the account when it cannot analyse', async () => {
+  it('starts a visitor’s analysis in the same tap', async () => {
     const seen = serve(null);
     clipboard(async () => TEXT);
     render(<Analyser />);
-    await screen.findByRole('link', { name: 'Se connecter pour analyser' });
+    await analyseButton();
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url.startsWith('/web/anon/'))).toHaveLength(3);
+  });
+
+  it('fills the form but leaves the next step to the account when it cannot analyse', async () => {
+    const seen = serve(account({ usage: { used: 3, limit: 3, remaining: 0, resetsAt: null } }));
+    clipboard(async () => TEXT);
+    render(<Analyser />);
+    await screen.findByText('Essai épuisé');
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
     await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT));
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);

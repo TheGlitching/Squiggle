@@ -140,7 +140,7 @@ export async function verifyMagicLink(
   deps: MagicLinkVerifyDeps,
   code: string,
   ip?: string | null,
-): Promise<Outcome<{ userId: string; email: string; sessionToken: string; next: string | null }>> {
+): Promise<Outcome<{ userId: string; email: string; sessionToken: string; next: string | null; created: boolean }>> {
   const normalized = normalizeHumanCode(code);
   if (!normalized) return apiError('invalid_code', 'The code is missing.');
 
@@ -171,6 +171,7 @@ export async function verifyMagicLink(
   await deps.db.markMagicLinkUsed(link.id, now);
 
   let user = await deps.db.getUserByEmail(link.email);
+  const created = !user;
   if (!user) {
     user = await deps.db.createUser({ email: link.email, emailVerified: true }, now);
   } else if (!user.emailVerified) {
@@ -178,5 +179,5 @@ export async function verifyMagicLink(
   }
 
   const sessionToken = await createWebSession(deps, user.id);
-  return { ok: true, userId: user.id, email: link.email, sessionToken, next: link.next };
+  return { ok: true, userId: user.id, email: link.email, sessionToken, next: link.next, created };
 }

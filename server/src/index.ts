@@ -41,6 +41,11 @@
  *   POST   /web/analyze/research
  *   POST   /web/analyze/source-check
  *   POST   /web/analyze/finalize
+ *   GET    /web/anon/check             (no account) the same five stages for a visitor's pasted
+ *   POST   /web/anon/audit                       text: one a day per IP, 40 a day for the site,
+ *   POST   /web/anon/research                    from the web app's own origin only
+ *   POST   /web/anon/source-check
+ *   POST   /web/anon/finalize
  *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
  *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
@@ -63,6 +68,7 @@ import {
   analyzeResearch,
   analyzeSourceCheck,
   type AnalyzeServices,
+  type Reader,
 } from './analyze/stages';
 import {
   AuditRequestSchema,
@@ -83,7 +89,7 @@ import {
 import { claimExtensionToken } from './auth/claim';
 import { issueBridgeCode, redeemBridgeCode } from './auth/bridge';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
-import { DEFAULT_NEXT } from './auth/next';
+import { AFTER_ANON_NEXT, DEFAULT_NEXT } from './auth/next';
 import { requestMagicLink, verifyMagicLink } from './auth/magicLink';
 import { verifySignedRequest } from './auth/requestSigning';
 import {
@@ -357,6 +363,14 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   const method = req.method;
   const count = (name: MetricName) => countMetric(s.db, name, s.clock.now(), requestId);
 
+  // An account opened from a visitor's report is the one figure that says
+  // whether the analysis without an account leads anywhere. The sign-in only
+  // carries where it lands; nothing ties it to the visitor's run.
+  const countSignin = async (outcome: { created: boolean; next: string | null }) => {
+    await count('signin_completed');
+    if (outcome.created && outcome.next === AFTER_ANON_NEXT) await count('signin_after_anon');
+  };
+
   if (path === '/health' && method === 'GET') {
     return Response.json({ ok: true });
   }
@@ -381,7 +395,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       code,
       req.headers.get('cf-connecting-ip'),
     );
-    if (outcome.ok) await count('signin_completed');
+    if (outcome.ok) await countSignin(outcome);
     return finish(outcome, outcome.ok ? sessionSetCookie(outcome.sessionToken) : null);
   }
 
@@ -417,7 +431,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
       },
     );
     if (outcome.ok) {
-      await count('signin_completed');
+      await countSignin(outcome);
       const res = new Response(null, {
         status: 302,
         headers: { location: `${s.webAppOrigin}${outcome.next ?? DEFAULT_NEXT}` },
@@ -526,6 +540,10 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
 
   if (path.startsWith('/web/analyze/')) {
     return analyzeRoute(req, url, s, 'session', path.slice('/web/analyze'.length), method, requestId);
+  }
+
+  if (path.startsWith('/web/anon/')) {
+    return analyzeRoute(req, url, s, 'anon', path.slice('/web/anon'.length), method, requestId);
   }
 
   // The owner's metrics page. Anyone else, signed in or not, gets exactly the
@@ -781,6 +799,9 @@ async function accountForUser(
  * an allowed Origin (`lib/cors.ts`); it may audit a text without an address
  * and never one that cites links. Past that, both run the same handlers on
  * the same account, so a pasted text spends the same trial and subscription.
+ * `anon` is the web app for a visitor without an account: the same pasted-text
+ * stages, from the web app's own origin only, on the visitor's one analysis
+ * of the day rather than on an account.
  *
  * Every body is parsed by its zod schema before a handler sees it, so a
  * handler only ever receives a value of the shape it declares, and an
@@ -790,7 +811,7 @@ async function analyzeRoute(
   req: Request,
   url: URL,
   s: Services,
-  caller: 'install' | 'session',
+  caller: 'install' | 'session' | 'anon',
   stage: string,
   method: string,
   requestId: string,
@@ -812,49 +833,58 @@ async function analyzeRoute(
   // read once and reused: re-reading a consumed body would verify one string
   // and parse another.
   const rawBody = method === 'GET' ? '' : await req.text();
-  let user: UserRow;
+  let reader: Reader;
   if (caller === 'install') {
     const auth = await verifySignedRequest({ db: s.db, clock: s.clock }, req, rawBody);
     if (!auth.ok) return finish(auth);
-    user = auth.user;
-  } else {
+    reader = auth.user;
+  } else if (caller === 'session') {
     const session = await sessionUser({ db: s.db, clock: s.clock }, req);
     if (!session) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
-    user = session;
+    reader = session;
+  } else {
+    // The site only: an extension signs in, it never runs as a visitor.
+    const origin = req.headers.get('origin');
+    if (origin !== null && origin !== s.webAppOrigin) {
+      return finish(apiError('origin_not_allowed', 'This origin is not allowed to call this API.'));
+    }
+    // Cloudflare always sets it; a request without one shares a single day's analysis with every other.
+    reader = { visitor: true, ipHash: await sha256Hex(req.headers.get('cf-connecting-ip') ?? 'unknown') };
   }
+  const userId = 'visitor' in reader ? undefined : reader.id;
 
   if (stage === '/check' && method === 'GET') {
     // A pasted text may come without an address; an install always has one,
     // so an absent `url` there stays the `invalid_url` it always was.
-    const target = url.searchParams.get('url') ?? (caller === 'session' ? undefined : '');
+    const target = url.searchParams.get('url') ?? (caller === 'install' ? '' : undefined);
     const query = CheckQuerySchema.safeParse({ text: url.searchParams.get('text') ?? '' });
-    if (!query.success) return finish(invalidPayload(query.error, requestId, user.id));
+    if (!query.success) return finish(invalidPayload(query.error, requestId, userId));
     return finish(await analyzeCheck(analyze, target, query.data.text));
   }
 
   if (stage === '/audit' && method === 'POST') {
     const schema = caller === 'install' ? AuditRequestSchema : PastedAuditRequestSchema;
     const parsed = schema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
-    return finish(await analyzeAudit(analyze, user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
+    return finish(await analyzeAudit(analyze, reader, parsed.data));
   }
 
   if (stage === '/research' && method === 'POST') {
     const parsed = ResearchRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
-    return finish(await analyzeResearch(analyze, user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
+    return finish(await analyzeResearch(analyze, reader, parsed.data));
   }
 
   if (stage === '/source-check' && method === 'POST') {
     const parsed = SourceCheckRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
-    return finish(await analyzeSourceCheck(analyze, user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
+    return finish(await analyzeSourceCheck(analyze, reader, parsed.data));
   }
 
   if (stage === '/finalize' && method === 'POST') {
     const parsed = FinalizeRequestSchema.safeParse(parseJson(rawBody));
-    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, user.id));
-    return finish(await analyzeFinalize(analyze, user, parsed.data));
+    if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
+    return finish(await analyzeFinalize(analyze, reader, parsed.data));
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
@@ -869,7 +899,7 @@ async function analyzeRoute(
 function invalidPayload(
   error: { issues: Array<{ path: PropertyKey[] }> },
   requestId: string,
-  userId: string,
+  userId: string | undefined,
 ) {
   const fields = [...new Set(error.issues.map((issue) => issue.path.join('.') || '(racine)'))].slice(0, 5);
   logEvent({ event: 'payload_rejected', requestId, userId, fields });

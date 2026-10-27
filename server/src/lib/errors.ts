@@ -34,6 +34,8 @@ export const ErrorCodes = {
   subscription_required: 'subscription_required',
   quota_exhausted: 'quota_exhausted',
   starts_exhausted: 'starts_exhausted',
+  anon_used: 'anon_used',
+  anon_closed: 'anon_closed',
   billing_unavailable: 'billing_unavailable',
   teacher_offer_closed: 'teacher_offer_closed',
   not_found: 'not_found',
@@ -80,6 +82,10 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   subscription_required: 402,
   quota_exhausted: 429,
   starts_exhausted: 429,
+  // A visitor without an account: today's one analysis is used, or the site's
+  // daily allowance for visitors is. Either way the next step is an account.
+  anon_used: 429,
+  anon_closed: 429,
   billing_unavailable: 502,
   teacher_offer_closed: 403,
   not_found: 404,
