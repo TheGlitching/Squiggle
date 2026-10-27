@@ -22,3 +22,4 @@ export * from './hosted/client';
 export * from './hosted/disclosure';
 export * from './hosted/limits';
 export * from './hosted/textHash';
+export * from './stores';
