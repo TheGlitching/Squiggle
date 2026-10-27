@@ -119,6 +119,12 @@ export interface Env {
    * secret. Firefox has no counterpart: see lib/cors.ts.
    */
   EXTENSION_CHROME_ORIGIN: string;
+  /**
+   * `chrome-extension://<id>` of the Edge Add-ons listing, set the same way. Edge
+   * draws its own id for the same package, so it is a second pinned origin.
+   * Optional: unset or empty, no Edge origin is accepted.
+   */
+  EXTENSION_EDGE_ORIGIN?: string;
   DATABASE_URL: string;
   BREVO_API_KEY: string;
   BREVO_FROM_ADDRESS: string;
@@ -228,6 +234,11 @@ export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
   }
 
   return undefined;
+}
+
+/** The extension origins CORS is pinned to: Chrome's, and Edge's once its listing exists. */
+export function extensionOriginsOf(env: Pick<Env, 'EXTENSION_CHROME_ORIGIN' | 'EXTENSION_EDGE_ORIGIN'>): string[] {
+  return [env.EXTENSION_CHROME_ORIGIN, env.EXTENSION_EDGE_ORIGIN].filter((origin): origin is string => !!origin);
 }
 
 /** Build the request handler from dependencies (the testable core). */
@@ -831,7 +842,7 @@ function servicesFromEnv(env: Env): Services {
       fromName: 'Squiggle',
     }),
     webAppOrigin: env.WEB_APP_ORIGIN,
-    extensionOrigins: [env.EXTENSION_CHROME_ORIGIN],
+    extensionOrigins: extensionOriginsOf(env),
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,
