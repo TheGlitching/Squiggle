@@ -28,6 +28,18 @@ const LABELS: Record<string, string> = {
   example: 'Exemple',
   // pastes
   transcript: 'Transcription de vidéo',
+  // reported findings: categories, then reasons
+  sophisme: 'Sophisme',
+  affirmation_non_etayee: 'Affirmation non étayée',
+  surinterpretation: 'Surinterprétation',
+  source_absente: 'Source absente',
+  cadrage: 'Cadrage',
+  point_fort: 'Point fort',
+  misread: 'Le passage ne dit pas cela',
+  sourced: 'L’article donne sa source',
+  wrong_kind: 'Ce n’est pas ce procédé',
+  too_harsh: 'Trop sévère',
+  other: 'Autre raison',
   // sign-in
   link_sent: 'Lien envoyé',
   google: 'Google',
@@ -142,6 +154,12 @@ function Figures({ m }: { m: OwnerMetrics }) {
         <Counts title="Campagnes" counts={m.audience.campaigns} />
         <Counts title="Boutons" counts={m.audience.clicks} />
         <Counts title="Textes collés" counts={m.audience.pastes ?? {}} />
+      </Band>
+
+      {/* An older server leaves the band out rather than blanking the page. */}
+      <Band title="Constats signalés comme erronés">
+        <Counts title="Par catégorie" counts={m.audience.flags?.categories ?? {}} />
+        <Counts title="Par motif" counts={m.audience.flags?.reasons ?? {}} />
       </Band>
 
       <Band title="Entonnoir">

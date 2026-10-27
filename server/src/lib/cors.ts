@@ -16,9 +16,12 @@
  * sidebar, and preflights the signed ones. So any origin of exactly that shape
  * is accepted, but only on the endpoints that authenticate without a cookie:
  * `/v1/*`, which is signed by the install's own key, and the bridge redeem,
- * whose credential is the single-use code. Those are the only two the
- * extension calls. The answer carries no `allow-credentials`. A web page can
- * never present a `moz-extension:` origin, so this opens nothing to the web;
+ * whose credential is the single-use code. The third is the audience
+ * counter, which the panel sends without a cookie when a reader reports a
+ * finding, and which takes nothing but a name from a closed list. Those are
+ * the only three the extension calls. The answer carries no
+ * `allow-credentials`. A web page can never present a `moz-extension:`
+ * origin, so this opens nothing to the web;
  * another installed Firefox extension can, which is why the cookie-carrying
  * endpoints stay closed to the shape.
  *
@@ -102,7 +105,10 @@ const FIREFOX_EXTENSION_ORIGIN = /^moz-extension:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-
 
 /** A Firefox install calling one of the endpoints it is allowed to reach. */
 export function firefoxExtensionCall(origin: string, path: string): boolean {
-  return FIREFOX_EXTENSION_ORIGIN.test(origin) && (path.startsWith('/v1/') || path === '/auth/bridge/redeem');
+  return (
+    FIREFOX_EXTENSION_ORIGIN.test(origin) &&
+    (path.startsWith('/v1/') || path === '/auth/bridge/redeem' || path === '/web/count')
+  );
 }
 
 export function corsHeaders(origin: string, credentials: boolean): Record<string, string> {
