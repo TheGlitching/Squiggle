@@ -105,6 +105,26 @@ describe('Compte', () => {
     expect(screen.queryByText(/en cours d’activation/)).toBeNull();
   });
 
+  it('offers an academic address the teacher access instead of the paid subscription', async () => {
+    const { calls } = installFetch((call) => {
+      if (call.url.endsWith('/web/account/installs')) return jsonResponse({ ok: true, installs: [] });
+      if (call.url.endsWith('/web/account/teacher-checkout')) {
+        return jsonResponse({ ok: true, url: 'https://checkout.stripe.example/teacher' });
+      }
+      return jsonResponse({ ok: true, ...makeAccount({ email: 'marie@ac-lyon.fr', teacherOffer: true }) });
+    });
+    window.history.pushState({}, '', '/compte');
+    render(<Compte />);
+
+    const access = await screen.findByRole('button', { name: 'Accès enseignant' });
+    expect(screen.queryByRole('button', { name: /s’abonner/i })).toBeNull();
+    expect(screen.getByText(/gratuit jusqu’au 30 juin/)).toBeInTheDocument();
+    // Nothing is paid, so there is no immediate-start request to tick first.
+    expect(access).toBeEnabled();
+    fireEvent.click(access);
+    await vi.waitFor(() => expect(calls.some((c) => c.url.endsWith('/web/account/teacher-checkout'))).toBe(true));
+  });
+
   it('invites a signed-out reader to sign in', async () => {
     installFetch(() => jsonResponse({ ok: false, error: 'invalid_session' }, 401));
     window.history.pushState({}, '', '/compte');

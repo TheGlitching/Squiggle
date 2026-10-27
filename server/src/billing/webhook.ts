@@ -19,6 +19,13 @@
  *   customer.subscription.deleted  the subscription is over → none
  *   invoice.payment_failed       the card failed → none, immediately
  *
+ * A teacher subscription (`metadata.offer`, set by the teacher checkout) is
+ * also given its end date here, the next 30 June, whenever an event shows it
+ * without one: Stripe then cancels it on that day and the reader goes back to
+ * `none` through `subscription.deleted`, with no failed invoice on the way.
+ * Setting it on every such event, not only the first, is what lets a call
+ * that failed once be made again by the next event.
+ *
  * `invoice.payment_failed` suspending immediately is a decision, not an
  * oversight: Stripe retries a failed payment for days, and every retry costs
  * us model calls if the account keeps analysing. The reader recovers the
@@ -29,7 +36,8 @@ import type { Clock } from '../lib/clock';
 import type { Db, UserRow } from '../db/types';
 import { apiError, type Outcome } from '../lib/errors';
 import { logEvent } from '../lib/log';
-import { verifyStripeSignature } from './stripe';
+import { setSubscriptionEnd, verifyStripeSignature, type StripeConfig } from './stripe';
+import { schoolYearEnd } from './teacher';
 
 /**
  * How long a checkout grants access before the subscription event that carries
@@ -40,7 +48,8 @@ const PROVISIONAL_ACCESS_MS = 7 * 24 * 60 * 60 * 1000;
 export interface WebhookDeps {
   db: Db;
   clock: Clock;
-  webhookSecret: string;
+  /** The webhook secret, and the API access the teacher end date is set with. */
+  stripe: StripeConfig;
   requestId: string;
 }
 
@@ -102,7 +111,7 @@ export async function handleStripeWebhook(
 
   // The raw bytes, not a re-serialization: re-encoding the parsed JSON would
   // change them and no signature would ever verify.
-  if (!(await verifyStripeSignature(deps.webhookSecret, rawBody, signatureHeader, now))) {
+  if (!(await verifyStripeSignature(deps.stripe.webhookSecret, rawBody, signatureHeader, now))) {
     logEvent({ event: 'auth_failed', requestId: deps.requestId, path: '/webhooks/stripe' });
     return apiError('bad_signature', 'Invalid webhook signature.');
   }
@@ -182,6 +191,16 @@ export async function handleStripeWebhook(
         // expiry (null means "never expires"). Keep what is on record; if
         // nothing is, fall back to the same provisional week as a checkout.
         await deps.db.setPlan(user.id, 'active', { start: now, end: now + PROVISIONAL_ACCESS_MS }, now);
+      }
+      const subId = str(object.id);
+      const metadata = (object.metadata ?? {}) as Record<string, unknown>;
+      if (entitled && subId && metadata.offer === 'teacher' && !object.cancel_at) {
+        // Not fatal: the plan above is already right, and the coupon's own
+        // duration bounds the subscription should every attempt fail.
+        const ended = await setSubscriptionEnd(deps.stripe, subId, schoolYearEnd(now));
+        if (!ended.ok) {
+          logEvent({ event: 'stripe_teacher_end_failed', requestId: deps.requestId, userId: user.id, code: ended.code });
+        }
       }
       break;
     }

@@ -70,6 +70,7 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   // without an Origin is refused rather than trusted.
   { method: 'GET', path: '/web/account' },
   { method: 'POST', path: '/web/account/checkout' },
+  { method: 'POST', path: '/web/account/teacher-checkout' },
   { method: 'POST', path: '/web/account/portal' },
   { method: 'POST', path: '/web/bridge/code' },
   // Account data: erasing the account, changing its address, listing and
