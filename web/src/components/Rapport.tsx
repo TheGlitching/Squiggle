@@ -22,6 +22,7 @@ import {
 import { frenchDate } from '../format';
 import { glossaryLink } from '../glossaire';
 import { locateFindings, passageTone, type Segment } from '../report';
+import { timeAt, videoTime, type Start } from '../transcript';
 
 const VERIFICATION = Object.fromEntries(VERIFICATION_STATES.map((v) => [v.state, v]));
 
@@ -108,11 +109,14 @@ function Badge({ className, children, title }: { className: string; children: st
 function FindingCard({
   finding,
   located,
+  at,
   selected,
   onSelect,
 }: {
   finding: Finding;
   located: boolean;
+  /** Where its passage starts in the video, for a transcript. */
+  at: number | undefined;
   selected: boolean;
   onSelect: (finding: Finding) => void;
 }) {
@@ -152,6 +156,11 @@ function FindingCard({
       <blockquote className="mt-3 mb-0 border-l border-borderControl pl-3 font-serif text-base italic leading-relaxed text-muted">
         « {finding.quote} »
       </blockquote>
+      {at !== undefined ? (
+        <p className="mt-2 mb-0 text-sm text-muted">
+          À <span className="tabular-nums">{videoTime(at)}</span> dans la vidéo
+        </p>
+      ) : null}
       <p className="mt-3 mb-0 text-base leading-relaxed">{finding.explanation}</p>
       {finding.sources && finding.sources.length > 0 ? <Sources sources={finding.sources} /> : null}
       {located ? null : (
@@ -212,11 +221,13 @@ function Sources({ sources, label = 'Sources consultées' }: { sources: Evidence
 
 function Block({
   block,
+  at,
   segments,
   selected,
   onSelect,
 }: {
   block: TextBlock;
+  at: number | undefined;
   segments: Segment[];
   selected: string | null;
   onSelect: (finding: Finding) => void;
@@ -231,26 +242,51 @@ function Block({
       </h3>
     );
   }
-  return <p className="mt-0 mb-5 last:mb-0">{content}</p>;
+  return (
+    <p className="mt-0 mb-5 last:mb-0">
+      {at !== undefined ? (
+        <span className="mb-1 block font-sans text-sm text-paperMuted tabular-nums">{videoTime(at)}</span>
+      ) : null}
+      {content}
+    </p>
+  );
 }
 
-export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: TextBlock[] }) {
+export function Rapport({
+  report,
+  blocks,
+  times = null,
+}: {
+  report: AnalysisReport;
+  blocks: TextBlock[];
+  /** For a video transcript, where each passage starts in each block, by block id. */
+  times?: Record<string, Start[]> | null;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const { segments, located } = useMemo(() => locateFindings(blocks, report.findings), [blocks, report.findings]);
 
   // In reading order: the passages as they come in the text, then those not found in it.
-  const findings = useMemo(() => {
+  const { findings, findingAt } = useMemo(() => {
     const order = new Map<string, number>();
+    const findingAt = new Map<string, number>();
     let rank = 0;
     for (const block of blocks) {
+      let offset = 0;
       for (const segment of segments.get(block.id) ?? []) {
-        for (const finding of segment.starts) if (!order.has(finding.id)) order.set(finding.id, rank++);
+        for (const finding of segment.starts) {
+          if (order.has(finding.id)) continue;
+          order.set(finding.id, rank++);
+          const starts = times?.[block.id];
+          if (starts) findingAt.set(finding.id, timeAt(starts, offset));
+        }
+        offset += segment.text.length;
       }
     }
-    return [...report.findings].sort(
+    const findings = [...report.findings].sort(
       (a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER),
     );
-  }, [blocks, segments, report.findings]);
+    return { findings, findingAt };
+  }, [blocks, segments, report.findings, times]);
 
   const band = getScoreBandLabel(report.scoreBand);
   const bandTone = severityColor(SCORE_BANDS[report.scoreBand].tone);
@@ -324,6 +360,7 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
               <Block
                 key={block.id}
                 block={block}
+                at={times?.[block.id]?.[0].at}
                 segments={segments.get(block.id) ?? []}
                 selected={selected}
                 onSelect={select}
@@ -353,6 +390,7 @@ export function Rapport({ report, blocks }: { report: AnalysisReport; blocks: Te
                   key={finding.id}
                   finding={finding}
                   located={located.has(finding.id)}
+                  at={findingAt.get(finding.id)}
                   selected={selected === finding.id}
                   onSelect={select}
                 />
