@@ -11,10 +11,12 @@ import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
 import { Corrige, Fiche } from './pages/Feuilles';
+import { Glossaire, NotionPage } from './pages/Glossaire';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pont } from './pages/Pont';
 import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
+import { notion } from './glossaire';
 import { titleFor } from './seo';
 
 /** An old address that must keep working: emailed /magic-link links, the first /legal. */
@@ -115,8 +117,13 @@ export function App({ path: at }: { path?: string }) {
     case '/pont':
       page = <Pont />;
       break;
-    default:
-      page = <NotFound />;
+    case '/glossaire':
+      page = <Glossaire />;
+      break;
+    default: {
+      const item = route.startsWith('/glossaire/') ? notion(route.slice('/glossaire/'.length)) : undefined;
+      page = item ? <NotionPage item={item} /> : <NotFound />;
+    }
   }
 
   // Inside the app, the header leads to the reader's account rather than to sign-in.

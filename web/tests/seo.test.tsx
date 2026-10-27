@@ -10,6 +10,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
+import { NOTIONS } from '../src/glossaire';
 import { ORIGIN, PUBLIC_PAGES, headFor, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
@@ -46,8 +47,22 @@ describe('search engines and link previews', () => {
     ];
     expect(types.map((item) => item['@type'])).toEqual(['Organization', 'WebSite', 'SoftwareApplication']);
     expect(types[2].offers?.map((offer) => offer.price)).toEqual(['0', '4.99']);
-    for (const page of PUBLIC_PAGES.slice(1)) expect(headFor(page)).not.toContain('ld+json');
+    for (const page of PUBLIC_PAGES.slice(1)) expect(headFor(page)).not.toContain('Organization');
+    for (const page of PUBLIC_PAGES.filter((item) => !item.jsonLd).slice(1)) expect(headFor(page)).not.toContain('ld+json');
     expect(PUBLIC_PAGES.map(headFor).join('')).not.toContain('FAQPage');
+  });
+
+  it('describes the glossary as a set of defined terms, each notion one of them', () => {
+    const data = (path: string) =>
+      JSON.parse(headFor(PUBLIC_PAGES.find((page) => page.path === path)!).match(/ld\+json">(.+)<\/script>/)![1]);
+    const set = data('/glossaire');
+    expect(set['@type']).toBe('DefinedTermSet');
+    expect(set.hasDefinedTerm).toHaveLength(NOTIONS.length);
+    for (const notion of NOTIONS) {
+      const term = data(`/glossaire/${notion.slug}`);
+      expect(term).toMatchObject({ '@type': 'DefinedTerm', name: notion.nom, url: `${ORIGIN}/glossaire/${notion.slug}` });
+      expect(term.inDefinedTermSet['@id']).toBe(set['@id']);
+    }
   });
 
   it('lists every public page in the sitemap, which robots.txt names', () => {

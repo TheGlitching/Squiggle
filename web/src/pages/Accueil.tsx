@@ -344,6 +344,11 @@ export function Accueil() {
             ))}
           </tbody>
         </table>
+        <p className="mt-8 mb-0">
+          <Link to="/glossaire" className={QUIET_LINK}>
+            Faux dilemme, homme de paille, chiffre sans origine : les noms de ce qui cloche, expliqués
+          </Link>
+        </p>
 
         <div className="mt-16 grid gap-14 md:mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-20">
           <div>

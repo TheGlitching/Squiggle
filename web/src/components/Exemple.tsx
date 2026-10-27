@@ -20,6 +20,8 @@ import {
   scoreBand,
   type HighlightSeverity,
 } from '../demo';
+import { glossaryLink } from '../glossaire';
+import { Link } from '../router';
 
 const SCORE = HERO_REPORT.marks.reduce((sum, mark) => sum + mark, 0);
 const BAND = SCORE_BANDS[scoreBand(SCORE)];
@@ -73,6 +75,7 @@ function FindingCard({ index, current }: { index: number; current: boolean }) {
   const finding = EXAMPLES[index];
   const style = tone(findingTone(finding.severity, finding.category));
   const verification = VERIFICATION_STATES.find((state) => state.state === finding.verification);
+  const glossary = glossaryLink(finding);
   return (
     <div
       className="exemple-card grid content-start gap-3"
@@ -98,6 +101,16 @@ function FindingCard({ index, current }: { index: number; current: boolean }) {
         {`« ${`${finding.before}${finding.mark}${finding.after}`.trim()} »`}
       </p>
       <p className="m-0 text-base leading-relaxed text-foreground">{finding.detail}</p>
+      {glossary ? (
+        <p className="m-0">
+          <Link
+            to={glossary.to}
+            className="inline-block py-2 text-base text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk"
+          >
+            {glossary.label}
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }
