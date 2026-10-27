@@ -681,3 +681,370 @@ export function ClassFigure() {
     </svg>
   );
 }
+
+/* ---------- The classroom mode's walkthrough ---------- */
+
+export type GuideStep = 'preparer' | 'telecharger' | 'adresse' | 'ouvrir' | 'etendre' | 'reveler';
+
+/** Each drawing's frame, fitted to what it draws, all at one 4:3 shape. */
+const GUIDE_VIEW: Record<GuideStep, string> = {
+  preparer: '21 8 297 223',
+  telecharger: '-40 -4 387 290',
+  adresse: '58 -72 283 212',
+  ouvrir: '27 -72 344 258',
+  etendre: '-78 -59 457 343',
+  reveler: '-39 -72 437 328',
+};
+
+/** Text drawn flat on a face, in the site's face. */
+function Label({
+  x,
+  y,
+  size,
+  fill,
+  children,
+  weight = 600,
+  anchor = 'start',
+}: {
+  x: number;
+  y: number;
+  size: number;
+  fill: string;
+  children: string;
+  weight?: number;
+  anchor?: 'start' | 'middle';
+}) {
+  return (
+    <text x={x} y={y} fontSize={size} fontWeight={weight} fill={fill} textAnchor={anchor} fontFamily="var(--font-sans)">
+      {children}
+    </text>
+  );
+}
+
+/** A laptop on the desk; `children` draw on its screen, from its top-left corner. */
+function Laptop({ v, at: [x, y], w, d, h, children }: { v: Iso; at: [number, number]; w: number; d: number; h: number; children: ReactNode }) {
+  return (
+    <g>
+      <Box v={v} at={[x, y + 6, 0]} size={[w, d, 4]} r={4} />
+      <g transform={v.top(x, y + 6, 4)}>
+        {[0, 1, 2].map((row) => (
+          <path key={row} d={`M 10 ${10 + row * 9} H ${w - 10}`} className="iso-line" stroke="#2c2c33" />
+        ))}
+      </g>
+      <Box v={v} at={[x, y, 4]} size={[w, 6, h]} r={4} />
+      <g transform={v.front(x, y + 6, 4 + h)}>
+        <rect x={4} y={4} width={w - 8} height={h - 8} rx={2.5} fill="#0a0a0b" />
+        <g transform="translate(4 4)">{children}</g>
+      </g>
+    </g>
+  );
+}
+
+/** The classroom computer: a monitor on its stand; `children` draw on its screen. */
+function Monitor({ v, at: [x, y], w, h, children }: { v: Iso; at: [number, number]; w: number; h: number; children: ReactNode }) {
+  return (
+    <g>
+      <Box v={v} at={[x + w / 2 - 18, y - 4, 0]} size={[36, 26, 3]} r={3} />
+      <Box v={v} at={[x + w / 2 - 5, y + 2, 3]} size={[10, 6, 22]} r={1} />
+      <Box v={v} at={[x, y, 22]} size={[w, 6, h]} r={4} />
+      <g transform={v.front(x, y + 6, 22 + h)}>
+        <rect x={4} y={4} width={w - 8} height={h - 8} rx={2.5} fill="#0a0a0b" />
+        <g transform="translate(4 4)">{children}</g>
+      </g>
+    </g>
+  );
+}
+
+/** A projection screen on the wall; `children` draw on it. */
+function Wall({ v, at: [x, y, z], w, h, children }: { v: Iso; at: V3; w: number; h: number; children: ReactNode }) {
+  return (
+    <g>
+      <Box v={v} at={[x, y, z]} size={[w, 4, h]} r={3} />
+      <g transform={v.front(x, y + 4, z + h)}>
+        <rect x={3} y={3} width={w - 6} height={h - 6} rx={2} fill="#0a0a0b" />
+        <g transform="translate(3 3)">{children}</g>
+      </g>
+    </g>
+  );
+}
+
+/** The session file: a page with the badge on it, standing up. */
+function SeanceFile({ v, at: [x, y, z], s = 1 }: { v: Iso; at: V3; s?: number }) {
+  const w = 30 * s;
+  const h = 38 * s;
+  return (
+    <g>
+      <Box v={v} at={[x, y, z]} size={[w, 2, h]} r={2} face="iso-paper" edge="iso-paper" />
+      <g transform={v.front(x, y + 2, z + h)}>
+        <BadgeMark x={5 * s} y={5 * s} s={10 * s} />
+        <Lines
+          lines={[
+            [19 * s, 5 * s, 25 * s],
+            [24 * s, 5 * s, 22 * s],
+            [29 * s, 5 * s, 24 * s],
+          ]}
+          h={2.5 * s}
+        />
+      </g>
+    </g>
+  );
+}
+
+function UsbKey({ v, at: [x, y] }: { v: Iso; at: [number, number] }) {
+  return (
+    <g>
+      <Box v={v} at={[x + 3, y - 9, 1]} size={[10, 10, 4]} r={1} face="iso-paper" edge="iso-paper-edge" />
+      <Box v={v} at={[x, y, 0]} size={[16, 38, 7]} r={3} />
+      <g transform={v.top(x, y, 7)}>
+        <rect x={4} y={10} width={8} height={18} rx={2} fill="var(--color-accent)" />
+      </g>
+    </g>
+  );
+}
+
+/**
+ * A key on the desk, pressed in time with the motion (`.guide-press`). Its
+ * label stands upright, as a key's print reads from where you sit.
+ */
+function Key({ v, at: [x, y], label, press }: { v: Iso; at: [number, number]; label: string; press?: boolean }) {
+  const [cx, cy] = v.P(x + 12, y + 12, 6);
+  return (
+    <g className={press ? 'guide-press' : undefined}>
+      <Box v={v} at={[x, y, 0]} size={[24, 24, 6]} r={4} />
+      {label === 'windows' ? (
+        <g transform={`translate(${n(cx - 6)} ${n(cy - 6)})`}>
+          {[
+            [0, 0],
+            [6.5, 0],
+            [0, 6.5],
+            [6.5, 6.5],
+          ].map(([kx, ky]) => (
+            <rect key={`${kx}-${ky}`} x={kx} y={ky} width={5.5} height={5.5} rx={0.6} fill="var(--color-foreground)" />
+          ))}
+        </g>
+      ) : (
+        <Label x={n(cx)} y={n(cy + 5)} size={14} fill="var(--color-foreground)" anchor="middle">
+          {label}
+        </Label>
+      )}
+    </g>
+  );
+}
+
+/** The board as the projector shows it: the article, and a panel beside it. `marks` light up in order. */
+function MiniBoard({ w, h, marks = 0, live = false }: { w: number; h: number; marks?: number; live?: boolean }) {
+  const paper = w * 0.6;
+  const lines = Array.from({ length: Math.floor((h - 26) / 8) }, (_, i) => [18 + i * 8, 6, paper - 6 - (i % 3) * 5] as const);
+  const passages: Array<[number, number, number, HighlightSeverity]> = [
+    [1, 18, paper * 0.62, 'warning'],
+    [4, 6, paper * 0.48, 'info'],
+    [7, 22, paper * 0.72, 'positive'],
+  ];
+  return (
+    <g>
+      <rect x={2} y={2} width={paper} height={h - 4} rx={2} fill="var(--color-paper)" />
+      <rect x={6} y={7} width={paper * 0.55} height={5} rx={1.5} fill="var(--color-paperInk)" />
+      <Lines lines={lines} h={3} />
+      {passages.slice(0, marks).map(([line, from, to, severity], index) =>
+        lines[line] ? (
+          <g key={index} className={live ? 'guide-mark' : undefined} style={{ '--i': index } as CSSProperties}>
+            <rect x={from - 1} y={lines[line][0] - 1.5} width={to - from + 2} height={6} rx={1.5} fill={tint(severity, 0.6)} />
+            <rect x={from - 1} y={lines[line][0] + 4.5} width={to - from + 2} height={1.2} fill={SEVERITY_COLORS[severity].color} />
+          </g>
+        ) : null,
+      )}
+      <rect x={paper + 6} y={2} width={w - paper - 8} height={h - 4} rx={2} fill="#17171a" stroke="var(--color-accent)" strokeWidth={0.6} />
+      {[10, 17, 24].map((y, i) => (
+        <rect key={y} x={paper + 11} y={y} width={(w - paper - 18) * (i ? 0.7 : 1)} height={3} rx={1.5} fill="#55555d" />
+      ))}
+    </g>
+  );
+}
+
+/**
+ * One step of a lesson, from the teacher's home to the class, in the hero's
+ * materials: paper for the article, violet for Squiggle. Each step has one
+ * motion that says what happens (a file drops into the downloads, a window
+ * slides onto the projector); with reduced motion, every drawing is its last
+ * frame, and the step's text says the same thing in words.
+ */
+export function GuideFigure({ step }: { step: GuideStep }) {
+  const frame = (children: ReactNode) => (
+    <svg viewBox={GUIDE_VIEW[step]} className="block h-auto w-full overflow-visible" aria-hidden="true">
+      {children}
+    </svg>
+  );
+
+  if (step === 'preparer') {
+    const v = iso(150, 108);
+    return frame(
+      <Laptop v={v} at={[0, 0]} w={136} d={84} h={86}>
+        <MiniBoard w={128} h={78} marks={3} live />
+        {/* A passage the analysis missed, which the teacher marks as a remark of their own. */}
+        <g className="guide-late">
+          <rect x={7} y={54.5} width={42} height={7} rx={1.5} fill="none" stroke="var(--color-accent)" strokeWidth={0.9} strokeDasharray="2.5 1.5" />
+          <circle cx={53} cy={58} r={4.5} fill="var(--color-accent)" />
+          <path d="M 53 55.6 V 60.4 M 50.6 58 H 55.4" className="iso-line" stroke="var(--color-accentForeground)" strokeWidth={1.2} strokeLinecap="round" />
+        </g>
+        {/* The reveal order, numbered beside each passage: the teacher's own. */}
+        {[
+          [52, 23],
+          [36, 47],
+          [58, 71],
+        ].map(([x, y], i) => (
+          <g key={i} className="guide-mark" style={{ '--i': i + 0.5 } as CSSProperties}>
+            <circle cx={x} cy={y - 4} r={4} fill="var(--color-paperInk)" />
+            <Label x={x} y={y - 2.2} size={5.5} fill="var(--color-paper)" anchor="middle">
+              {String(i + 1)}
+            </Label>
+          </g>
+        ))}
+      </Laptop>,
+    );
+  }
+
+  if (step === 'telecharger') {
+    const v = iso(118, 70);
+    return frame(
+      <>
+        <Laptop v={v} at={[0, 0]} w={96} d={60} h={60}>
+          <rect x={6} y={6} width={50} height={40} rx={2} fill="var(--color-paper)" />
+          <Lines
+            lines={[
+              [13, 11, 48],
+              [20, 11, 44],
+              [27, 11, 50],
+              [34, 11, 40],
+            ]}
+            h={3}
+          />
+          <rect x={60} y={20} width={28} height={12} rx={3} fill="var(--color-accent)" />
+          <path d="M 74 22.5 V 28.5 M 71 26 L 74 29 L 77 26" className="iso-line" stroke="var(--color-accentForeground)" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+        </Laptop>
+        {/* The downloads folder: a back and a front panel, the file slipping in between. */}
+        <Box v={v} at={[130, 62, 0]} size={[80, 4, 40]} r={3} />
+        <g transform={v.front(130, 66, 40)}>
+          <rect x={4} y={-6} width={20} height={8} rx={2} fill="#17171a" stroke="#55555d" />
+        </g>
+        <g className="guide-drop" style={{ '--dx': '-46px', '--dy': '-58px' } as CSSProperties}>
+          <SeanceFile v={v} at={[154, 70, 12]} />
+        </g>
+        <Box v={v} at={[130, 76, 0]} size={[80, 4, 26]} r={3} />
+        <g transform={v.front(130, 80, 26)}>
+          <Label x={40} y={16} size={8} fill="var(--color-foreground)" anchor="middle">
+            Téléchargements
+          </Label>
+        </g>
+        {/* Then, onto a USB key. */}
+        <g className="guide-late">
+          <path
+            d={(() => {
+              const [ax, ay] = v.P(214, 92, 14);
+              const [bx, by] = v.P(232, 132, 12);
+              return `M ${ax} ${ay} Q ${(ax + bx) / 2 + 26} ${(ay + by) / 2 - 18} ${bx} ${by}`;
+            })()}
+            className="iso-line"
+            stroke="var(--color-accent)"
+            strokeWidth={1.4}
+            strokeDasharray="4 4"
+          />
+          <UsbKey v={v} at={[226, 132]} />
+        </g>
+      </>,
+    );
+  }
+
+  if (step === 'adresse' || step === 'ouvrir') {
+    const v = iso(128, 64);
+    const W = 170;
+    const H = 104;
+    const opened = step === 'ouvrir';
+    return frame(
+      <>
+        <Monitor v={v} at={[0, 0]} w={W} h={H}>
+          <rect width={W - 8} height={14} rx={2.5} fill="#17171a" />
+          {[0, 1, 2].map((i) => (
+            <circle key={i} cx={7 + i * 6} cy={7} r={1.8} fill="#3a3a42" />
+          ))}
+          <rect x={28} y={3} width={106} height={8} rx={4} fill="#2c2c33" />
+          <Label x={34} y={9.3} size={6} fill="var(--color-foreground)" weight={500}>
+            squiggle.fr/classe
+          </Label>
+          {opened ? null : (
+            // The address typed in, a letter at a time.
+            <rect className="guide-type" x={33} y={3.5} width={98} height={7} fill="#2c2c33" />
+          )}
+          {opened ? (
+            <g className="guide-late">
+              <MiniBoard w={W - 8} h={H - 22} />
+              <rect y={14} width={W - 8} height={H - 22} fill="none" />
+            </g>
+          ) : (
+            <g className="guide-late">
+              <BadgeMark x={10} y={24} s={12} />
+              <Label x={26} y={33} size={9} fill="var(--color-foreground)">
+                Le mode classe
+              </Label>
+              <rect x={10} y={46} width={112} height={18} rx={4} fill="var(--color-accent)" />
+              <Label x={66} y={57.5} size={6.8} fill="var(--color-accentForeground)" anchor="middle">
+                Ouvrir le fichier de séance
+              </Label>
+              <rect x={10} y={72} width={70} height={3} rx={1.5} fill="#55555d" />
+            </g>
+          )}
+        </Monitor>
+        {opened ? (
+          <>
+            <UsbKey v={v} at={[140, 30]} />
+            {/* The file goes from the key into the browser. */}
+            <g className="guide-rise" style={{ '--dx': '38px', '--dy': '115px' } as CSSProperties}>
+              <SeanceFile v={v} at={[66, 0, 70]} s={0.9} />
+            </g>
+          </>
+        ) : null}
+      </>,
+    );
+  }
+
+  if (step === 'etendre') {
+    const v = iso(74, 120);
+    return frame(
+      <>
+        <Wall v={v} at={[40, -70, 50]} w={170} h={104}>
+          <g className="guide-late">
+            <MiniBoard w={164} h={98} />
+          </g>
+        </Wall>
+        <Laptop v={v} at={[0, 40]} w={96} d={58} h={58}>
+          <rect x={4} y={4} width={80} height={14} rx={2} fill="#17171a" stroke="var(--color-accent)" strokeWidth={0.6} />
+          <rect x={4} y={22} width={80} height={24} rx={2} fill="#17171a" />
+          {[27, 33, 39].map((y) => (
+            <rect key={y} x={9} y={y} width={50} height={2.5} rx={1.25} fill="#55555d" />
+          ))}
+          {/* The board's window leaves the laptop for the projector. */}
+          <g className="guide-slide" style={{ '--dx': '102px', '--dy': '-96px' } as CSSProperties}>
+            <rect x={10} y={8} width={64} height={40} rx={2} fill="#0a0a0b" stroke="var(--color-accent)" />
+            <g transform="translate(12 10) scale(0.37)">
+              <MiniBoard w={164} h={98} />
+            </g>
+          </g>
+        </Laptop>
+        <Key v={v} at={[112, 120]} label="windows" press />
+        <Key v={v} at={[140, 120]} label="P" press />
+      </>,
+    );
+  }
+
+  // Reveal, one finding at a time: a press of the arrow, a passage on the board.
+  const v = iso(60, 112);
+  return frame(
+    <>
+      <Wall v={v} at={[0, -40, 30]} w={200} h={124}>
+        <MiniBoard w={194} h={118} marks={3} live />
+      </Wall>
+      <g className="guide-press guide-press-3">
+        <Key v={v} at={[150, 70]} label="→" />
+      </g>
+    </>,
+  );
+}

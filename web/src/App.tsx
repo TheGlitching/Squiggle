@@ -2,14 +2,18 @@ import { useEffect } from 'react';
 
 import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from './components/Landing';
 import { Layout } from './components/Layout';
+import { ModeEmploiPage } from './components/ModeEmploi';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
 import { Analyser } from './pages/Analyser';
+import { Classe } from './pages/Classe';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
+import { Corrige, Fiche } from './pages/Feuilles';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pont } from './pages/Pont';
+import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
 import { titleFor } from './seo';
 
@@ -52,6 +56,9 @@ export function App({ path: at }: { path?: string }) {
     document.title = titleFor(route);
   }, [route]);
 
+  // The projector's window is the board alone: no header, no footer, nothing to click.
+  if (route === '/classe/tableau') return <Tableau />;
+
   let page;
   switch (route) {
     case '/':
@@ -63,6 +70,18 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/enseignants':
       page = <Enseignants />;
+      break;
+    case '/classe':
+      page = <Classe />;
+      break;
+    case '/classe/fiche':
+      page = <Fiche />;
+      break;
+    case '/classe/corrige':
+      page = <Corrige />;
+      break;
+    case '/classe/mode-emploi':
+      page = <ModeEmploiPage />;
       break;
     case '/connexion':
       page = <Connexion />;
