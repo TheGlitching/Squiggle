@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { generateSigningKeyPair } from '@squiggle/shared';
 
+import { extensionOriginsOf } from '../src/index';
 import {
   accountRequest,
   claim,
   CHROME_ORIGIN,
+  EDGE_ORIGIN,
   exportJwk,
   FIREFOX_ORIGIN,
   magicLogin,
@@ -134,7 +136,16 @@ describe('end to end', () => {
     expect((await res.json()).error).toBe('invalid_token');
   });
 
-  it('CORS is pinned to the web app and the Chrome listing, with no wildcard', async () => {
+  it('pins the Edge listing only once its origin is set', () => {
+    const chrome = 'chrome-extension://chrome-id';
+    expect(extensionOriginsOf({ EXTENSION_CHROME_ORIGIN: chrome })).toEqual([chrome]);
+    expect(extensionOriginsOf({ EXTENSION_CHROME_ORIGIN: chrome, EXTENSION_EDGE_ORIGIN: '' })).toEqual([chrome]);
+    expect(
+      extensionOriginsOf({ EXTENSION_CHROME_ORIGIN: chrome, EXTENSION_EDGE_ORIGIN: 'chrome-extension://edge-id' }),
+    ).toEqual([chrome, 'chrome-extension://edge-id']);
+  });
+
+  it('CORS is pinned to the web app and the Chrome and Edge listings, with no wildcard', async () => {
     const env = makeTestEnv();
 
     const fromWeb = await env.handler(
@@ -146,6 +157,17 @@ describe('end to end', () => {
       new Request(`${env.webAppOrigin}/health`, { headers: { origin: CHROME_ORIGIN } }),
     );
     expect(fromChrome.headers.get('access-control-allow-origin')).toBe(CHROME_ORIGIN);
+
+    const fromEdge = await env.handler(
+      new Request(`${env.webAppOrigin}/health`, { headers: { origin: EDGE_ORIGIN } }),
+    );
+    expect(fromEdge.headers.get('access-control-allow-origin')).toBe(EDGE_ORIGIN);
+
+    // Another Chromium extension is not a listing of ours.
+    const otherExtension = await env.handler(
+      new Request(`${env.webAppOrigin}/health`, { headers: { origin: 'chrome-extension://another-id' } }),
+    );
+    expect(otherExtension.status).toBe(403);
 
     const fromElsewhere = await env.handler(
       new Request(`${env.webAppOrigin}/health`, { headers: { origin: 'https://evil.example' } }),

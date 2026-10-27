@@ -30,7 +30,8 @@
   // the Cloudflare secret store, never in this file, never in the repo (see
   // AGENTS.md). So is EXTENSION_CHROME_ORIGIN, the origin CORS is pinned to for
   // the Chrome listing: not sensitive, but it is a real extension id, which the
-  // repo never carries. Firefox has no such value (see src/lib/cors.ts).
+  // repo never carries. The optional EXTENSION_EDGE_ORIGIN, for the Edge listing,
+  // is set the same way. Firefox has no such value (see src/lib/cors.ts).
   // `GEMINI_MODEL` is an optional var, set only to select Gemini.
   //
   // A value that is not decided yet is a PENDING_… placeholder, and

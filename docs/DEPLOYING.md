@@ -22,8 +22,9 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
 1. **A Cloudflare account**, then `npx wrangler login`. Production is served on the
    custom domain named in `env.production.routes`, which has to be a zone on that
    account. Staging is served on its `workers.dev` address.
-2. **A Neon database** for the environment. Staging gets its own, never the
-   production one.
+2. **A Neon database** for the environment, in the AWS Frankfurt region
+   (`aws-eu-central-1`): the privacy policy (`PRIVACY.md`, `/confidentialite`) names
+   that location. Staging gets its own, never the production one.
 3. **Fill the `PENDING_…` values** of the environment in `server/wrangler.jsonc`:
    - `WEB_APP_ORIGIN` of staging, once its `workers.dev` address is known;
    - `STRIPE_PRICE_ID`: the recurring price, from the test-mode catalogue for staging.
@@ -47,13 +48,17 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
    | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate` and `GET /admin/metrics`; any long random string |
    | `EXTENSION_CHROME_ORIGIN` | `chrome-extension://<id>`, the id of the Chrome Web Store listing |
+   | `EXTENSION_EDGE_ORIGIN` | optional: `chrome-extension://<id>`, the id of the Edge Add-ons listing |
 
    `GEMINI_API_KEY` is only needed to select Gemini with `LLM_PROVIDER=gemini`.
 
    `EXTENSION_CHROME_ORIGIN` is not sensitive, but it is a real extension id, and the
    repository never carries one, so it is set like a secret. CORS is pinned to it:
    without it every Chrome reader is refused, and `npm run deploy:production` refuses
-   to run while `wrangler secret list` does not show it. Firefox needs nothing here:
+   to run while `wrangler secret list` does not show it. `EXTENSION_EDGE_ORIGIN` is set
+   the same way once the Edge listing exists: Edge gives the same package an id of its
+   own, so it is a second pinned origin. Unset, no Edge origin is accepted, and the
+   deploy does not require it. Firefox needs nothing here:
    its extension origin is `moz-extension://<uuid>` with a UUID drawn on every
    install, so the server accepts any origin of that shape, on the endpoints the
    extension signs or redeems a code on and nowhere else (`server/src/lib/cors.ts`).
