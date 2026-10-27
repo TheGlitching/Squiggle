@@ -74,6 +74,9 @@ describe('Compte', () => {
     );
     expect(await screen.findByText('Quota du mois atteint')).toBeInTheDocument();
     expect(screen.getByText('Vos 60 analyses de ce mois sont utilisées. Le compteur repart le 26 novembre.')).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: 'Analyses restantes' })).toHaveAttribute('aria-valuemax', '60');
+    expect(screen.getByText('analyse restante sur 60')).toBeInTheDocument();
+    expect(screen.getByText('Renouvellement le 26 novembre 2026')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /s’abonner/i })).toBeNull();
     expect(screen.getByRole('button', { name: /gérer ou résilier/i })).toBeInTheDocument();
   });
