@@ -53,8 +53,13 @@ import type {
 
 type RawRow = Record<string, unknown>;
 
-/** BIGINT arrives as a string; numeric types arrive as numbers. */
+/**
+ * BIGINT arrives as a string; numeric types arrive as numbers. A missing
+ * value (a `GROUP BY` with no row for that key, a `SUM` over nothing) is 0,
+ * so a count is always a number on the wire, never an omitted field.
+ */
 function num(value: unknown): number {
+  if (value == null) return 0;
   return typeof value === 'string' ? Number(value) : (value as number);
 }
 
