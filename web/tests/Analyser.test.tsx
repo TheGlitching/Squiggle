@@ -68,7 +68,10 @@ interface Seen {
 }
 
 /** The server as the page sees it: an account, then the five stages. */
-function serve(who: Account | null, stages: { audit?: () => Response; hit?: boolean } = {}) {
+function serve(
+  who: Account | null,
+  stages: { account?: () => Response; audit?: () => Response; hit?: boolean } = {},
+) {
   const seen: Seen[] = [];
   vi.stubGlobal('localStorage', memoryStorage());
   vi.stubGlobal(
@@ -85,6 +88,7 @@ function serve(who: Account | null, stages: { audit?: () => Response; hit?: bool
       // The account answers a tick after the first render, as a network does: the
       // button stays disabled until then, and a test must wait for it.
       if (path === '/web/account') await new Promise((resolve) => setTimeout(resolve, 20));
+      if (path === '/web/account' && stages.account) return stages.account();
       if (path === '/web/account') return who ? jsonResponse({ ok: true, ...who }) : jsonResponse({ ok: false, error: 'invalid_session' }, 401);
       const stage = path.replace(/^\/web\/(analyze|anon)\//, '');
       if (stage === 'check') return jsonResponse(stages.hit ? { ok: true, hit: true, report: REPORT } : { ok: true, hit: false });
@@ -166,6 +170,18 @@ describe('Analyser, signed out', () => {
     await waitFor(() => expect(seen.some((s) => s.url.startsWith('/web/analyze/check'))).toBe(true));
     expect(seen.some((s) => s.url === '/web/analyze/audit')).toBe(false);
     expect(screen.queryByText('58')).toBeNull();
+  });
+
+  it('keeps the analysis without an account when the account cannot be checked', async () => {
+    const seen = serve(null, {
+      account: () => jsonResponse({ ok: false, error: 'origin_not_allowed', message: 'x' }, 403),
+    });
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.some((s) => s.url === '/web/anon/audit')).toBe(true);
+    expect(screen.queryByText(/n’a pas pu être vérifié/)).toBeNull();
   });
 
   it('turns a refused visitor to an account, keeping the paste', async () => {
