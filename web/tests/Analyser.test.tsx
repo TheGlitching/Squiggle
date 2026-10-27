@@ -175,6 +175,13 @@ describe('Analyser, signed in', () => {
     const card = screen.getByRole('article', { name: 'Chiffre sans source' });
     expect(within(card).getByText('Douteuse')).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: 'Statistiques publiques' })).toHaveAttribute('href', 'https://stats.example/cantines');
+    // Each finding names its notion in the glossary, in a new tab so the report stays open.
+    const notion = within(card).getByRole('link', { name: 'Glossaire : Chiffre sans origine (nouvel onglet)' });
+    expect(notion).toHaveAttribute('href', '/glossaire/chiffre-sans-origine');
+    expect(notion).toHaveAttribute('target', '_blank');
+    expect(
+      within(screen.getByRole('article', { name: 'Formule appuyée' })).getByRole('link', { name: /Glossaire : Vocabulaire chargé/ }),
+    ).toHaveAttribute('href', '/glossaire/vocabulaire-charge');
     // A quote the text does not contain is still reported, and says so.
     expect(
       within(screen.getByRole('article', { name: 'Formule appuyée' })).getByText(/n’a pas été retrouvé tel quel/),

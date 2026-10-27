@@ -20,6 +20,7 @@ import {
   type HighlightSeverity,
 } from '../demo';
 import { frenchDate } from '../format';
+import { glossaryLink } from '../glossaire';
 import { locateFindings, passageTone, type Segment } from '../report';
 
 const VERIFICATION = Object.fromEntries(VERIFICATION_STATES.map((v) => [v.state, v]));
@@ -36,6 +37,9 @@ function domainOf(url: string): string {
     return url;
   }
 }
+
+const CARD_LINK =
+  'inline-block py-3 text-sm text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk';
 
 const passageId = (finding: Finding) => `passage-${finding.id}`;
 const findingId = (finding: Finding) => `constat-${finding.id}`;
@@ -113,6 +117,7 @@ function FindingCard({
   onSelect: (finding: Finding) => void;
 }) {
   const verification = finding.verification ? VERIFICATION[finding.verification] : undefined;
+  const glossary = glossaryLink(finding);
   return (
     <article
       id={findingId(finding)}
@@ -149,21 +154,33 @@ function FindingCard({
       </blockquote>
       <p className="mt-3 mb-0 text-base leading-relaxed">{finding.explanation}</p>
       {finding.sources && finding.sources.length > 0 ? <Sources sources={finding.sources} /> : null}
-      {located ? (
-        <a
-          href={`#${passageId(finding)}`}
-          className="mt-2 inline-block py-3 text-sm text-accentInk underline decoration-borderControl underline-offset-4 hover:decoration-accentInk"
-          onClick={(event) => {
-            event.preventDefault();
-            onSelect(finding);
-            reveal(passageId(finding));
-          }}
-        >
-          Voir le passage dans le texte
-        </a>
-      ) : (
+      {located ? null : (
         <p className="mt-4 mb-0 text-sm text-muted">Ce passage n’a pas été retrouvé tel quel dans le texte collé.</p>
       )}
+      {located || glossary ? (
+        <p className="mt-2 mb-0 flex flex-wrap gap-x-5">
+          {located ? (
+            <a
+              href={`#${passageId(finding)}`}
+              className={CARD_LINK}
+              onClick={(event) => {
+                event.preventDefault();
+                onSelect(finding);
+                reveal(passageId(finding));
+              }}
+            >
+              Voir le passage dans le texte
+            </a>
+          ) : null}
+          {/* A new tab: leaving would lose the report, which costs an analysis to get back. */}
+          {glossary ? (
+            <a href={glossary.to} target="_blank" rel="noopener" className={CARD_LINK}>
+              {glossary.label}
+              <span className="sr-only"> (nouvel onglet)</span>
+            </a>
+          ) : null}
+        </p>
+      ) : null}
     </article>
   );
 }

@@ -77,6 +77,9 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
             <Link to="/enseignants" className={QUIET_LINK}>
               Enseignants
             </Link>
+            <Link to="/glossaire" className={QUIET_LINK}>
+              Glossaire
+            </Link>
             <Link to="/transparence" className={QUIET_LINK}>
               Transparence
             </Link>

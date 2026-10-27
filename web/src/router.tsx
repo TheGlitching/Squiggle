@@ -25,6 +25,8 @@ export function usePath(at?: Path): Path {
 export function navigate(to: string): void {
   window.history.pushState({}, '', to);
   window.dispatchEvent(new PopStateEvent('popstate'));
+  // A new page opens at its top, as it would on a full load, not at the scroll of the last one.
+  window.scrollTo(0, 0);
 }
 
 interface LinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
