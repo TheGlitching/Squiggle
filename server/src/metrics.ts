@@ -60,9 +60,8 @@ export interface Metrics {
     sourceCheck: ReturnType<typeof stage>;
   };
   analyses: { finalized: number; costPerAnalysisUsd: number | null };
+  /** Visits themselves are read in Cloudflare Web Analytics. */
   audience: {
-    views: Record<string, number>;
-    entries: Record<string, number>;
     campaigns: Record<string, number>;
     clicks: Record<string, number>;
   };
@@ -74,8 +73,8 @@ export interface Metrics {
     refused: Record<string, number>;
   };
   headline: {
-    /** New accounts, beside where visits came from: the two are never linked. */
-    newAccounts: { count: number; entries: Record<string, number>; campaigns: Record<string, number> };
+    /** New accounts, beside the campaign links visits came through: the two are never linked. */
+    newAccounts: { count: number; campaigns: Record<string, number> };
     /** Of the accounts created a week before the window, the share that finished an analysis in their first week. */
     activationWithinWeek: { cohort: number; activated: number; share: number | null };
     successRate: { started: number; finalized: number; share: number | null };
@@ -106,7 +105,6 @@ export async function collectLaunchMetrics(
         ? Math.round((providerCostUsd / raw.finalizes) * 10000) / 10000
         : null,
   };
-  const entries = family(c, 'entry_');
   const campaigns = family(c, 'ref_');
   return {
     windowWeeks: weeks,
@@ -139,7 +137,7 @@ export async function collectLaunchMetrics(
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },
     analyses,
-    audience: { views: family(c, 'view_'), entries, campaigns, clicks: family(c, 'click_') },
+    audience: { campaigns, clicks: family(c, 'click_') },
     funnel: {
       signin: family(c, 'signin_'),
       checkout: family(c, 'checkout_'),
@@ -148,7 +146,7 @@ export async function collectLaunchMetrics(
       refused: family(c, 'refused_'),
     },
     headline: {
-      newAccounts: { count: raw.accountsPerWeek.reduce((a, b) => a + b, 0), entries, campaigns },
+      newAccounts: { count: raw.accountsPerWeek.reduce((a, b) => a + b, 0), campaigns },
       activationWithinWeek: {
         cohort: raw.activationCohort,
         activated: raw.activatedWithinWeek,

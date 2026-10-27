@@ -1,12 +1,10 @@
-/** The audience counters: what is sent, and how a visit's origin is reduced before it leaves the page. */
+/** The audience counters: what is sent, and that a page view is never one of them. */
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AUDIENCE_METRIC_NAMES } from '@squiggle/shared/src/hosted/audience';
-
 import { App } from '../src/App';
-import { campaignOf, count, entryOf, installClick, viewOf } from '../src/count';
+import { campaignOf, count, countCampaign, installClick } from '../src/count';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { Enseignants } from '../src/pages/Enseignants';
 import { installFetch } from './helpers';
@@ -26,42 +24,14 @@ describe('count', () => {
       throw new TypeError('offline');
     });
     vi.stubGlobal('fetch', fetchMock);
-    count('view_tarifs');
+    count('click_example');
     expect(fetchMock).toHaveBeenCalledWith('/web/count', {
       method: 'POST',
       credentials: 'omit',
       keepalive: true,
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'view_tarifs' }),
+      body: JSON.stringify({ name: 'click_example' }),
     });
-  });
-});
-
-describe('entryOf', () => {
-  const entry = (referrer: string, search = '') => entryOf(referrer, 'squiggle.fr', search);
-
-  it('reduces the referring address to a kind of site', () => {
-    expect(entry('')).toBe('entry_direct');
-    expect(entry('https://www.google.fr/')).toBe('entry_search');
-    expect(entry('https://www.qwant.com/?q=squiggle')).toBe('entry_search');
-    expect(entry('https://addons.mozilla.org/fr/firefox/addon/squiggle-analysis/')).toBe('entry_store');
-    expect(entry('https://chromewebstore.google.com/detail/x')).toBe('entry_store');
-    expect(entry('https://www.ac-versailles.fr/')).toBe('entry_edu');
-    expect(entry('https://eduscol.education.gouv.fr/')).toBe('entry_edu');
-    expect(entry('https://www.clemi.fr/')).toBe('entry_edu');
-    expect(entry('https://mastodon.social/@someone')).toBe('entry_social');
-    expect(entry('https://www.linkedin.com/feed/')).toBe('entry_social');
-    expect(entry('https://linuxfr.org/news/x')).toBe('entry_other');
-    // A look-alike host is not the site it imitates.
-    expect(entry('https://google.fr.example.net/')).toBe('entry_other');
-    expect(entry('https://notclemi.fr/')).toBe('entry_other');
-  });
-
-  it('does not count a move inside the site or a return from our own flows', () => {
-    expect(entry('https://squiggle.fr/tarifs')).toBeNull();
-    expect(entry('https://checkout.stripe.com/c/pay/x')).toBeNull();
-    expect(entry('https://accounts.google.com/')).toBeNull();
-    expect(entry('', '?code=ABCD-EFGH')).toBeNull();
   });
 });
 
@@ -73,36 +43,32 @@ describe('campaignOf', () => {
     expect(campaignOf('?ref=')).toBeNull();
     expect(campaignOf('')).toBeNull();
   });
+
+  it('counts the campaign a page was opened from, and nothing for a plain visit', () => {
+    const { calls } = installFetch(() => undefined);
+    window.history.pushState({}, '', '/enseignants?ref=clemi');
+    countCampaign();
+    window.history.pushState({}, '', '/enseignants');
+    countCampaign();
+    expect(counted(calls)).toEqual(['ref_clemi']);
+  });
 });
 
-describe('viewOf', () => {
-  it('names a page by its route, and only from the list the server accepts', () => {
-    expect(viewOf('/')).toBe('view_accueil');
-    expect(viewOf('/tarifs')).toBe('view_tarifs');
-    expect(viewOf('/cgv')).toBe('view_legal');
-    expect(viewOf('/legal')).toBeNull();
-    expect(viewOf('/nulle-part')).toBe('view_introuvable');
-    expect(viewOf('/classe/tableau')).toBe('view_classe');
-    expect(viewOf('/enseignants/grille-lecture')).toBe('view_kit');
-    expect(viewOf('/glossaire')).toBe('view_glossaire');
-    expect(viewOf('/glossaire/faux-dilemme')).toBe('view_glossaire');
-    expect(viewOf('/glossaire/nulle-part')).toBe('view_introuvable');
-    for (const route of ['/', '/analyser', '/enseignants', '/connexion', '/compte', '/transparence', '/pont', '/x']) {
-      expect(AUDIENCE_METRIC_NAMES).toContain(viewOf(route));
-    }
-    expect(installClick(FIREFOX_URL)).toBe('click_install_firefox');
-    expect(installClick(CHROME_URL)).toBe('click_install_chrome');
-  });
-
-  it('is counted by the app on every page it shows', async () => {
+describe('pages', () => {
+  it('counts no page view: visits are read in Cloudflare Web Analytics', () => {
     const { calls } = installFetch(() => undefined);
     window.history.pushState({}, '', '/enseignants');
     render(<App />);
-    expect(counted(calls)).toEqual(['view_enseignants']);
+    expect(counted(calls)).toEqual([]);
   });
 });
 
 describe('clicks', () => {
+  it('names the install button by its store', () => {
+    expect(installClick(FIREFOX_URL)).toBe('click_install_firefox');
+    expect(installClick(CHROME_URL)).toBe('click_install_chrome');
+  });
+
   it('counts the teacher access request', async () => {
     const { calls } = installFetch(() => undefined);
     render(<Enseignants />);

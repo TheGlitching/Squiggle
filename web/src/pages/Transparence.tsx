@@ -56,7 +56,7 @@ export const RETENTION = [
   ],
   ['Identifiants Stripe (client, abonnement)', 'Base de données', 'Tant que le compte existe'],
   [
-    'Compteurs de fonctionnement et d’audience : réponses du cache, échecs par étape d’analyse, pages ouvertes, type de site d’où vient la visite, boutons utilisés',
+    'Compteurs de fonctionnement et d’audience : réponses du cache, échecs par étape d’analyse, visites par un lien de campagne, boutons utilisés',
     'Base de données',
     'Un nombre par jour et par nom d’événement, sans compte et sans article',
   ],
@@ -75,7 +75,11 @@ const SUBPROCESSORS = [
     'Les requêtes de recherche rédigées par le modèle à partir des constats, jamais l’article ni votre identité',
   ],
   ['Google (connexion)', 'Authentification, si vous choisissez « continuer avec Google »', 'Votre identité Google'],
-  ['Cloudflare (Workers)', 'Hébergement du serveur', 'Le trafic, sans contenu d’article dans les journaux'],
+  [
+    'Cloudflare (Workers, Web Analytics)',
+    'Hébergement du serveur et du site, mesure d’audience du site',
+    'Le trafic, sans contenu d’article dans les journaux ; pour l’audience, des totaux sans cookie ni empreinte',
+  ],
   ['Neon', 'Base de données', 'Ce que décrit le tableau de conservation'],
   ['Stripe', 'Paiement', 'Votre e-mail et vos données de paiement ; nous ne voyons aucun numéro de carte'],
   ['Brevo', 'Envoi des e-mails de connexion', 'Votre adresse e-mail'],
@@ -201,10 +205,10 @@ export function Transparence() {
             Une ligne de journal ne peut contenir qu’un nom d’événement, un nombre, un identifiant opaque ou l’empreinte
             d’une adresse : aucun champ de texte libre. Une requête refusée est journalisée par le nom du champ, jamais
             par sa valeur. Nos mesures sont des totaux par jour comptés sur le serveur, jamais par un traceur, et ne
-            désignent ni un lecteur ni un article. La mesure d’audience du site en fait partie : combien de fois chaque
-            page est ouverte, de quel type de site vient la visite, parmi une liste fixe, et combien de fois quelques
-            boutons sont utilisés, sans cookie, sans rien enregistrer dans votre navigateur, sans identifiant et sans
-            adresse IP.
+            désignent ni un lecteur ni un article : combien de visites arrivent par un lien de campagne connu, combien
+            de fois quelques boutons sont utilisés, sans cookie, sans identifiant et sans adresse IP. La fréquentation
+            du site, elle, est mesurée par Cloudflare Web Analytics : sans cookie, sans empreinte, sans rien enregistrer
+            dans votre navigateur, en données agrégées.
           </p>
         </section>
 
@@ -226,7 +230,7 @@ export function Transparence() {
               'Aucune donnée n’est vendue.',
               'Aucune donnée n’est utilisée pour entraîner un modèle.',
               'Les données reçues du navigateur ne servent qu’à fournir l’analyse demandée : elles ne sont ni transférées ni utilisées pour autre chose, ni pour de la publicité, ni pour évaluer une solvabilité (exigence « Limited Use » du Chrome Web Store).',
-              'Aucune publicité, aucun traceur, aucun mouchard analytique.',
+              'Aucune publicité, aucun traceur : la mesure d’audience ne dépose aucun cookie.',
               'Aucun code n’est téléchargé ni exécuté depuis l’extérieur.',
             ].map((text) => (
               <li key={text} className="flex gap-3">

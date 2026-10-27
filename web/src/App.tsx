@@ -4,7 +4,6 @@ import { OWNER_PATH } from './api';
 import { PAGE, PRIMARY_BUTTON, SECONDARY_BUTTON, TITLE } from './components/Landing';
 import { Layout } from './components/Layout';
 import { ModeEmploiPage } from './components/ModeEmploi';
-import { count, viewOf } from './count';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
 import { Analyser } from './pages/Analyser';
@@ -60,8 +59,6 @@ export function App({ path: at }: { path?: string }) {
 
   useEffect(() => {
     document.title = titleFor(route);
-    const view = viewOf(route);
-    if (view) count(view);
   }, [route]);
 
   // The projector's window is the board alone: no header, no footer, nothing to click.
