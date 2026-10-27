@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
 
+import { ownerEmailsOf } from '../src/index';
 import { TRIAL_ANALYSES } from '../src/billing/quota';
 import { WEEK_MS } from '../src/usage/limits';
 import {
@@ -180,6 +181,54 @@ describe('GET /admin/metrics', () => {
     const { body } = await metrics(env, '?weeks=3');
     expect(body.metrics.accounts).toEqual({ total: 3, perWeek: [0, 1, 1] });
     expect(body.metrics.cache.checks).toBe(1);
+  });
+});
+
+/** What the owner's page sends: same origin, with the session cookie if there is one. */
+async function tableau(env: TestEnv, cookie?: string, path = '/web/tableau', method = 'GET') {
+  const headers: Record<string, string> = { 'sec-fetch-site': 'same-origin' };
+  if (cookie) headers.cookie = cookie;
+  const res = await env.handler(new Request(`${env.webAppOrigin}${path}`, { method, headers }));
+  return { status: res.status, text: await res.text() };
+}
+
+describe('GET /web/tableau', () => {
+  const OWNERS = ownerEmailsOf(' Moi@Example.org , associe@example.org,');
+
+  it('reads the owner list without case or blanks, and an unset or empty one admits no one', () => {
+    expect(OWNERS).toEqual(['moi@example.org', 'associe@example.org']);
+    expect(ownerEmailsOf(undefined)).toEqual([]);
+    expect(ownerEmailsOf(' , ')).toEqual([]);
+  });
+
+  it('answers anyone but the owner exactly as it answers an address that does not exist', async () => {
+    const env = makeTestEnv({ ownerEmails: OWNERS });
+    const unknown = await tableau(env, undefined, '/web/inconnu');
+    expect(unknown.status).toBe(404);
+
+    const { sessionCookie: other } = await magicLogin(env, 'paul@example.org');
+    expect(await tableau(env)).toEqual(unknown);
+    expect(await tableau(env, other)).toEqual(unknown);
+    expect(await tableau(env, 'squiggle_session=forged')).toEqual(unknown);
+
+    // No owner configured: the owner's own session is refused the same way.
+    for (const ownerEmails of [[], undefined]) {
+      const closed = makeTestEnv({ ownerEmails });
+      const { sessionCookie } = await magicLogin(closed, 'moi@example.org');
+      expect(await tableau(closed, sessionCookie)).toEqual(unknown);
+    }
+  });
+
+  it('gives the owner the same metrics the admin token reads', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret', ownerEmails: OWNERS });
+    const { sessionCookie } = await magicLogin(env, 'moi@example.org');
+
+    const res = await tableau(env, sessionCookie, '/web/tableau?weeks=1&costUsd=2');
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.text)).toEqual((await metrics(env, '?weeks=1&costUsd=2')).body);
+    expect((await tableau(env, sessionCookie, '/web/tableau?weeks=53')).status).toBe(400);
+    // Only the read exists.
+    expect((await tableau(env, sessionCookie, '/web/tableau', 'POST')).status).toBe(404);
   });
 });
 

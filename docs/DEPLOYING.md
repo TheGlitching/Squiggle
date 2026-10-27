@@ -47,6 +47,7 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | `OPENROUTER_API_KEY` | the key hosted analyses run on |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
    | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate` and `GET /admin/metrics`; any long random string |
+   | `OWNER_EMAILS` | optional: comma-separated addresses whose web session can open `/tableau` (see Launch metrics) |
    | `EXTENSION_CHROME_ORIGIN` | `chrome-extension://<id>`, the id of the Chrome Web Store listing |
    | `EXTENSION_EDGE_ORIGIN` | optional: `chrome-extension://<id>`, the id of the Edge Add-ons listing |
 
@@ -160,3 +161,16 @@ curl -H "authorization: Bearer $ADMIN_TOKEN" "https://<origin>/admin/metrics?wee
 provider invoiced over the same window, which the server cannot know: pass it and the
 answer carries the cost per analysis (invoice divided by analyses finalized). Counters
 written between a deploy and its migration are dropped, never an error for the reader.
+
+The same figures are readable from a phone at `/tableau`, signed in to the site with an
+address listed in the `OWNER_EMAILS` secret (comma-separated, compared without case):
+
+```bash
+cd server && npx wrangler secret put OWNER_EMAILS --env production
+```
+
+The page asks `GET /web/tableau`, which computes exactly what `/admin/metrics` does, from
+the web session instead of the admin token. To anyone else, signed in or not, the page and
+its API answer exactly as an unknown address: a 404, so neither admits it is there. Unset or empty, the secret admits no one. The page is not in the sitemap or
+`robots.txt`, nothing links to it, and it counts no audience. Its cost field takes the
+provider's invoice over the window, as `costUsd` does.

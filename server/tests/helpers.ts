@@ -373,6 +373,7 @@ export function makeTestEnv(
   opts: {
     fetchImpl?: FetchLike;
     adminToken?: string;
+    ownerEmails?: string[];
     llm?: StubLlm;
     db?: MemoryDb;
     stripe?: FakeStripe;
@@ -400,6 +401,7 @@ export function makeTestEnv(
     googleClientId: 'test-google-client-id',
     fetchImpl: opts.fetchImpl,
     adminToken: opts.adminToken,
+    ownerEmails: opts.ownerEmails,
     llm: () => llm,
     stripe: {
       secretKey: STRIPE_SECRET_KEY,
