@@ -5,38 +5,21 @@
  * The build writes no page for this address, so it is served as the 404, and to
  * anyone the server does not recognise as the owner it stays exactly that: the
  * page shows `fallback`, the 404, until the server has answered with the figures.
- * Nothing links here, no search indexes it, and it counts no audience.
+ * Nothing links here, no search indexes it, and it counts no audience. Visits are
+ * not here: Cloudflare Web Analytics reads them, and the page links to it.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { getOwnerMetrics, messageForError, type OwnerMetrics } from '../api';
-import { FIELD, H3, PAGE, TITLE } from '../components/Landing';
+import { FIELD, H3, PAGE, QUIET_LINK, TITLE } from '../components/Landing';
 import { Layout } from '../components/Layout';
 
 const WINDOWS = [1, 4, 12] as const;
 
+/** Visits are counted there, at the edge, without a cookie. */
+const CLOUDFLARE_WEB_ANALYTICS = 'https://dash.cloudflare.com/?to=/:account/web-analytics';
+
 const LABELS: Record<string, string> = {
-  // views
-  accueil: 'Accueil',
-  tarifs: 'Tarifs',
-  analyser: 'Analyser',
-  enseignants: 'Enseignants',
-  kit: 'Kit enseignant',
-  classe: 'Mode classe',
-  glossaire: 'Glossaire',
-  connexion: 'Connexion',
-  compte: 'Compte',
-  transparence: 'Transparence',
-  legal: 'Pages légales',
-  pont: 'Pont extension',
-  introuvable: 'Page introuvable',
-  // entries
-  search: 'Recherche',
-  direct: 'Direct',
-  store: 'Boutiques d’extensions',
-  edu: 'Sites éducatifs',
-  social: 'Réseaux sociaux',
-  other: 'Autres sites',
   // clicks
   install_chrome: 'Installer (Chrome)',
   install_firefox: 'Installer (Firefox)',
@@ -67,7 +50,6 @@ const number = (n: number | undefined) => (n == null ? '-' : n.toLocaleString('f
 const percent = (share: number | null | undefined) =>
   share == null ? '-' : share.toLocaleString('fr-FR', { style: 'percent', maximumFractionDigits: 1 });
 const usd = (n: number) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 });
-const sum = (counts: Record<string, number>) => Object.values(counts).reduce((a, b) => a + b, 0);
 
 function Tile({ label, value, children }: { label: string; value: string; children?: ReactNode }) {
   return (
@@ -138,10 +120,7 @@ function Figures({ m }: { m: OwnerMetrics }) {
     [label, `${number(s.failed)} / ${number(s.calls)} · ${percent(s.failureRate)}`] as [string, string];
   return (
     <>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Tile label="Visites" value={number(sum(m.audience.views))}>
-          {number(sum(m.audience.entries))} arrivées, dont {number(m.audience.entries.search ?? 0)} par la recherche
-        </Tile>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="Nouveaux comptes" value={number(h.newAccounts.count)}>
           {number(h.activeAccounts)} comptes actifs
         </Tile>
@@ -157,9 +136,7 @@ function Figures({ m }: { m: OwnerMetrics }) {
         </Tile>
       </div>
 
-      <Band title="Audience">
-        <Counts title="Vues par page" counts={m.audience.views} />
-        <Counts title="D’où viennent les visites" counts={m.audience.entries} />
+      <Band title="Campagnes et boutons">
         <Counts title="Campagnes" counts={m.audience.campaigns} />
         <Counts title="Boutons" counts={m.audience.clicks} />
       </Band>
@@ -237,7 +214,7 @@ export function Pilotage({ fallback }: { fallback: ReactNode }) {
               type="button"
               aria-pressed={weeks === w}
               onClick={() => setWeeks(w)}
-              className={`min-h-11 rounded-control px-4 text-base ${
+              className={`inline-flex min-h-11 items-center whitespace-nowrap rounded-control px-4 text-base ${
                 weeks === w ? 'bg-accent font-semibold text-accentForeground' : 'text-muted hover:text-foreground'
               }`}
             >
@@ -247,6 +224,11 @@ export function Pilotage({ fallback }: { fallback: ReactNode }) {
         </div>
         <p className="m-0 mt-3 text-sm text-muted">
           Événements sur {weeks === 1 ? 'la dernière semaine' : `les ${weeks} dernières semaines`}.
+        </p>
+        <p className="m-0 mt-1 text-sm">
+          <a href={CLOUDFLARE_WEB_ANALYTICS} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+            Visites : Cloudflare Web Analytics
+          </a>
         </p>
         <label className="mt-4 block max-w-xs text-sm text-muted">
           Facture du fournisseur d’IA sur la période (USD)

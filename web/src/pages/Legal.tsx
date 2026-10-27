@@ -276,7 +276,7 @@ const PROCESSING = [
   ['Conserver les pièces de facturation', 'Obligation légale (art. 6.1.c)'],
   ['Protéger le service contre les abus : limites de fréquence, signature des requêtes, journaux techniques', 'Intérêt légitime (art. 6.1.f) : la sécurité du service'],
   [
-    'Mesurer l’audience du site, en totaux par jour, sans rien conserver qui vous désigne (section 6)',
+    'Mesurer l’audience du site, en données agrégées, sans cookie ni rien qui vous désigne (section 6)',
     'Intérêt légitime (art. 6.1.f) : savoir ce qui est utile',
   ],
   ['Répondre à vos demandes et réclamations', 'Exécution du contrat (art. 6.1.b), ou intérêt légitime si vous n’êtes pas client'],
@@ -294,7 +294,7 @@ const TRANSFERS = [
     'États-Unis',
     'Engagements d’OpenRouter envers ses fournisseurs ; seules les requêtes de recherche sont transmises, jamais l’article ni une identité',
   ],
-  ['Cloudflare, Inc. (hébergement)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
+  ['Cloudflare, Inc. (hébergement, mesure d’audience)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Stripe (paiement)', 'Irlande, et États-Unis pour Stripe, Inc.', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Google (connexion, si vous la choisissez)', 'États-Unis', 'Data Privacy Framework UE-États-Unis'],
   [
@@ -403,17 +403,18 @@ export function Confidentialite() {
           Le site dépose un seul cookie, la session de connexion, strictement nécessaire au service : il n’appelle pas
           votre consentement. Il garde aussi dans votre navigateur le texte que vous collez pour l’analyser, la séance du mode
           classe le temps de l’onglet et, si vous l’installez sur votre écran d’accueil, ses propres fichiers pour
-          s’ouvrir sans attendre ; rien de cela ne sert à vous suivre. Aucun traceur publicitaire ou analytique n’est utilisé, sur le site comme dans
-          l’extension.
+          s’ouvrir sans attendre ; rien de cela ne sert à vous suivre. Aucun traceur publicitaire n’est utilisé, et rien ne
+          sert à vous suivre d’un site à l’autre, sur le site comme dans l’extension.
         </p>
         <p>
-          Mesure d’audience. Le site compte, jour par jour, combien de fois chaque page est ouverte, de quel type de
-          site vient la visite (un moteur de recherche, une boutique d’extensions, un site académique…, parmi une liste
-          fixe) et combien de fois quelques boutons sont utilisés, comme « Installer l’extension » ou « S’abonner ».
-          Chaque compte est un simple nombre par jour et par nom d’événement : sans cookie, sans rien enregistrer dans
-          votre navigateur, sans identifiant, sans adresse IP, et sans lien avec votre compte. Rien ne permet de vous
-          reconnaître d’une visite à l’autre : ce n’est pas un traceur. Ces totaux ne servent qu’à nous, pour savoir ce
-          qui est utile.
+          Mesure d’audience. La fréquentation du site est mesurée par Cloudflare Web Analytics, l’outil de Cloudflare,
+          qui héberge déjà le site. Il ne dépose aucun cookie, ne calcule aucune empreinte de votre navigateur, n’y
+          enregistre rien, et ne nous montre que des données agrégées : combien de pages sont vues, d’où viennent les
+          visites, depuis quel pays et quel type d’appareil. Rien ne permet de vous reconnaître d’une visite à l’autre.
+          Le site compte aussi lui-même, jour par jour, combien de fois quelques boutons sont utilisés, comme « Installer
+          l’extension » ou « S’abonner », et combien de visites arrivent par un lien de campagne connu : un simple
+          nombre par jour et par nom d’événement, sans cookie, sans identifiant, sans adresse IP et sans lien avec votre
+          compte. Ces totaux ne servent qu’à nous, pour savoir ce qui est utile.
         </p>
       </Article>
     </LegalPage>

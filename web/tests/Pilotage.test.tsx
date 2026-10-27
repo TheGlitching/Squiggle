@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
 import type { OwnerMetrics } from '../src/api';
-import { countArrival } from '../src/count';
+import { countCampaign } from '../src/count';
 import { installFetch, jsonResponse } from './helpers';
 
 afterEach(() => {
@@ -19,7 +19,7 @@ const METRICS: OwnerMetrics = {
   windowWeeks: 1,
   cache: { checks: 20, hits: 5, hitRate: 0.25 },
   stages: { audit: { ...stage, truncated: 0 }, research: stage, sourceCheck: stage },
-  audience: { views: { accueil: 120, analyser: 30 }, entries: { search: 40, direct: 60 }, campaigns: {}, clicks: {} },
+  audience: { campaigns: { clemi: 3 }, clicks: {} },
   funnel: { signin: { completed: 8 }, checkout: {}, runsStarted: { session: 12 }, finalized: { session: 11 }, refused: {} },
   headline: {
     newAccounts: { count: 7 },
@@ -35,7 +35,7 @@ describe('/tableau', () => {
   it('is the 404 page, counting nothing, for anyone the server refuses', async () => {
     window.history.pushState({}, '', '/tableau');
     const { calls } = installFetch(() => undefined);
-    countArrival();
+    countCampaign();
     render(<App />);
     expect(screen.getByText('Page introuvable')).toBeInTheDocument();
     await waitFor(() => expect(calls.some((call) => call.url.startsWith('/web/tableau?weeks=1'))).toBe(true));
@@ -51,7 +51,12 @@ describe('/tableau', () => {
     );
     render(<App />);
     expect(await screen.findByRole('heading', { name: 'Tableau de bord' })).toBeInTheDocument();
-    expect(screen.getByText('Visites').nextSibling).toHaveTextContent('150');
+    expect(screen.queryByText('Visites')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Visites : Cloudflare Web Analytics' })).toHaveAttribute(
+      'href',
+      'https://dash.cloudflare.com/?to=/:account/web-analytics',
+    );
+    expect(screen.getByRole('heading', { name: 'Campagnes et boutons' })).toBeInTheDocument();
     expect(screen.getByText('Nouveaux comptes').nextSibling).toHaveTextContent('7');
     expect(screen.getByText('Première analyse dans la semaine').nextSibling).toHaveTextContent('75 %');
     expect(screen.getByText('Abonnés payants').nextSibling).toHaveTextContent('2');

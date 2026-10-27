@@ -187,7 +187,7 @@ export interface OwnerMetrics {
   windowWeeks: number;
   cache: { checks: number; hits: number; hitRate: number | null };
   stages: { audit: Stage & { truncated: number }; research: Stage; sourceCheck: Stage };
-  audience: { views: Counts; entries: Counts; campaigns: Counts; clicks: Counts };
+  audience: { campaigns: Counts; clicks: Counts };
   funnel: { signin: Counts; checkout: Counts; runsStarted: Counts; finalized: Counts; refused: Counts };
   headline: {
     newAccounts: { count: number };

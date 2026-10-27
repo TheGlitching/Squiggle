@@ -144,8 +144,13 @@ daily event counters, a number per day and per fixed name:
   a 100 % promotion code), analyses started and finalized by surface (extension or site),
   and refusals by reason;
 - sent by the site (`POST /web/count`, no cookie, closed list in
-  `shared/src/hosted/audience.ts`): pages opened, the kind of site a visit came from,
-  known campaign links (`?ref=clemi`), and a few buttons.
+  `shared/src/hosted/audience.ts`): known campaign links (`?ref=clemi`) and a few
+  buttons.
+
+Visits themselves (pages viewed, referrers, countries) are not counted here: they are
+read in Cloudflare Web Analytics, which Cloudflare injects at the edge on the site's zone
+(automatic setup, no cookie). The site has no Content-Security-Policy, so nothing has to
+allow `static.cloudflareinsights.com` or `cloudflareinsights.com`; one added later must.
 
 `headline` gathers the five figures to read every week; ask with `?weeks=1` to read them
 over the last week. Revenue is read in Stripe, net of discounts: `subscriptions.active`
