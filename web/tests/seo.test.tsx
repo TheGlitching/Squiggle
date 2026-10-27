@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
 import { NOTIONS } from '../src/glossaire';
+import { OWNER_PATH } from '../src/api';
 import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, shareImagePath, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
@@ -108,6 +109,10 @@ describe('search engines and link previews', () => {
       (match) => match[1],
     );
     const written = new Set([...PUBLIC_PAGES.map((page) => page.path), ...APP_PATHS, '/tarifs']);
+    // The owner's page is the one route served as the 404 on purpose.
+    expect(written.has(OWNER_PATH)).toBe(false);
+    expect(sitemap()).not.toContain(OWNER_PATH);
+    expect(readFileSync(resolve(__dirname, '../public/robots.txt'), 'utf8')).not.toContain(OWNER_PATH);
     for (const route of routes) expect(written.has(route), route).toBe(true);
     for (const path of APP_PATHS) expect(routes, path).toContain(path);
     for (const path of APP_PATHS) expect(PUBLIC_PAGES.map((page) => page.path)).not.toContain(path);

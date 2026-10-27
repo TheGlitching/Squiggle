@@ -167,3 +167,47 @@ export function messageForError(err: unknown): string {
   if (err instanceof ApiError) return FRENCH_ERRORS[err.code] ?? err.message;
   return 'Une erreur est survenue. Réessayez.';
 }
+
+/**
+ * The owner's metrics page (`pages/Pilotage.tsx`). Deliberately neither a public
+ * page nor an app page (`seo.ts`): the build writes nothing for it, so it is
+ * served as the 404, and only the owner's session turns it into anything else.
+ */
+export const OWNER_PATH = '/tableau';
+
+type Counts = Record<string, number>;
+interface Stage {
+  calls: number;
+  failed: number;
+  failureRate: number | null;
+}
+
+/** The part of the server's launch metrics (`server/src/metrics.ts`) the owner's page shows. */
+export interface OwnerMetrics {
+  windowWeeks: number;
+  cache: { checks: number; hits: number; hitRate: number | null };
+  stages: { audit: Stage & { truncated: number }; research: Stage; sourceCheck: Stage };
+  audience: { views: Counts; entries: Counts; campaigns: Counts; clicks: Counts };
+  funnel: { signin: Counts; checkout: Counts; runsStarted: Counts; finalized: Counts; refused: Counts };
+  headline: {
+    newAccounts: { count: number };
+    activationWithinWeek: { cohort: number; activated: number; share: number | null };
+    successRate: { started: number; finalized: number; share: number | null };
+    subscribers: { paying: number; free: number; cancelled: number };
+    aiCost: { finalized: number; costPerAnalysisUsd: number | null };
+    activeAccounts: number;
+  };
+}
+
+/** The owner's metrics, or null for anyone else: the server answers them as it answers an unknown address. */
+export async function getOwnerMetrics(weeks: number, costUsd?: number): Promise<OwnerMetrics | null> {
+  const query = new URLSearchParams({ weeks: String(weeks) });
+  if (costUsd !== undefined) query.set('costUsd', String(costUsd));
+  try {
+    const { metrics } = await call<{ metrics: OwnerMetrics }>(`/web/tableau?${query}`);
+    return metrics;
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'not_found') return null;
+    throw err;
+  }
+}

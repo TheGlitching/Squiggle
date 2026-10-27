@@ -42,6 +42,7 @@
  *   POST   /web/analyze/source-check
  *   POST   /web/analyze/finalize
  *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
+ *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
  */
@@ -133,6 +134,11 @@ export interface Env {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
+  /**
+   * Comma-separated addresses whose web session may read the metrics page
+   * (`/tableau`). Unset or empty, no one can.
+   */
+  OWNER_EMAILS?: string;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   /** Non-secret: the `price_…` the subscription is sold at (wrangler.jsonc var). */
@@ -161,6 +167,8 @@ export interface Services {
   googleClientSecret?: string;
   fetchImpl?: FetchLike;
   adminToken?: string;
+  /** Lower-cased addresses allowed on `/web/tableau` (`OWNER_EMAILS`). */
+  ownerEmails?: string[];
   /**
    * Builds the LLM client hosted analyses run on. A factory, not an instance,
    * so a test can supply a stub and no code path can reach a real provider
@@ -254,6 +262,13 @@ export function extensionOriginsOf(env: Pick<Env, 'EXTENSION_CHROME_ORIGIN' | 'E
 }
 
 /** Build the request handler from dependencies (the testable core). */
+export function ownerEmailsOf(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function createWorker(services: Services) {
   const allowedOrigins = new Set([services.webAppOrigin, ...services.extensionOrigins]);
   return { fetch: (req: Request) => handle(req, services, allowedOrigins) };
@@ -513,20 +528,18 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     return analyzeRoute(req, url, s, 'session', path.slice('/web/analyze'.length), method, requestId);
   }
 
+  // The owner's metrics page. Anyone else, signed in or not, gets exactly the
+  // answer an unknown path gets, so the page does not admit it exists.
+  if (path === '/web/tableau' && method === 'GET') {
+    const user = await sessionUser({ db: s.db, clock: s.clock }, req);
+    const email = user?.email?.toLowerCase();
+    if (!email || !s.ownerEmails?.includes(email)) return finish(apiError('not_found', 'No such endpoint.'));
+    return metricsAnswer(url, s);
+  }
+
   if (path === '/admin/metrics' && method === 'GET') {
     if (!(await adminAuthorized(req, s))) return finish(apiError('invalid_token', 'Invalid admin token.'));
-    const weeks = Number(url.searchParams.get('weeks') ?? DEFAULT_METRICS_WEEKS);
-    const costParam = url.searchParams.get('costUsd');
-    const cost = costParam === null ? undefined : Number(costParam);
-    if (
-      !Number.isInteger(weeks) ||
-      weeks < 1 ||
-      weeks > MAX_METRICS_WEEKS ||
-      (cost !== undefined && !(Number.isFinite(cost) && cost >= 0))
-    ) {
-      return finish(apiError('invalid_payload', 'weeks is a whole number of weeks, costUsd a non-negative number.'));
-    }
-    return finish({ ok: true, metrics: await collectLaunchMetrics(s.db, s.clock.now(), weeks, cost) });
+    return metricsAnswer(url, s);
   }
 
   if (path === '/admin/migrate' && method === 'POST') {
@@ -543,6 +556,22 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/** The launch metrics over `?weeks=`, with the cost per analysis when `?costUsd=` is given. */
+async function metricsAnswer(url: URL, s: Services): Promise<Response> {
+  const weeks = Number(url.searchParams.get('weeks') ?? DEFAULT_METRICS_WEEKS);
+  const costParam = url.searchParams.get('costUsd');
+  const cost = costParam === null ? undefined : Number(costParam);
+  if (
+    !Number.isInteger(weeks) ||
+    weeks < 1 ||
+    weeks > MAX_METRICS_WEEKS ||
+    (cost !== undefined && !(Number.isFinite(cost) && cost >= 0))
+  ) {
+    return finish(apiError('invalid_payload', 'weeks is a whole number of weeks, costUsd a non-negative number.'));
+  }
+  return finish({ ok: true, metrics: await collectLaunchMetrics(s.db, s.clock.now(), weeks, cost) });
 }
 
 /**
@@ -882,6 +911,7 @@ function servicesFromEnv(env: Env): Services {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,
+    ownerEmails: ownerEmailsOf(env.OWNER_EMAILS),
     llm: hostedLlm ? () => hostedLlm : undefined,
     promptVersion: PROMPT_VERSION,
     stripe: {
