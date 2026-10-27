@@ -618,7 +618,7 @@ async function webAccountRoute(
   if (!user) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
   return (
     (await accountDataRoute(req, s, user, path, method, requestId)) ??
-    accountForUser(s, user, path, method, requestId)
+    accountForUser(s, user, path, method, requestId, await checkoutReturn(req, path, method))
   );
 }
 
@@ -671,6 +671,16 @@ async function accountDataRoute(
 }
 
 /**
+ * The page a web checkout comes back to: the analysis page when the reader paid
+ * from under a report, so they land where they were, and the account page
+ * otherwise. A closed list, never a URL from the client.
+ */
+async function checkoutReturn(req: Request, path: string, method: string): Promise<'/analyser' | null> {
+  if (method !== 'POST' || (path !== '/web/account/checkout' && path !== '/web/account/teacher-checkout')) return null;
+  return (await readJson(req)).retour === '/analyser' ? '/analyser' : null;
+}
+
+/**
  * The shared capability body. Both the signed `/v1/account*` route and the
  * cookie-authenticated `/web/account*` route land here, so the billing logic
  * and the response shape exist once and cannot diverge between the extension
@@ -682,6 +692,7 @@ async function accountForUser(
   path: string,
   method: string,
   requestId: string,
+  returnPage: '/analyser' | null = null,
 ): Promise<Response> {
   const now = s.clock.now();
 
@@ -720,8 +731,8 @@ async function accountForUser(
       userId: user.id,
       email: user.email,
       customerId: user.stripeCustomerId,
-      successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
-      cancelUrl: `${s.webAppOrigin}/tarifs?paiement=annule`,
+      successUrl: `${s.webAppOrigin}${returnPage ?? '/compte'}?paiement=ok`,
+      cancelUrl: `${s.webAppOrigin}${returnPage ?? '/tarifs'}?paiement=annule`,
     });
     if (outcome.ok) await countMetric(s.db, 'checkout_started', now, requestId);
     return finish(outcome);
@@ -743,8 +754,8 @@ async function accountForUser(
       userId: user.id,
       email: user.email,
       customerId: null,
-      successUrl: `${s.webAppOrigin}/compte?paiement=ok`,
-      cancelUrl: `${s.webAppOrigin}/compte?paiement=annule`,
+      successUrl: `${s.webAppOrigin}${returnPage ?? '/compte'}?paiement=ok`,
+      cancelUrl: `${s.webAppOrigin}${returnPage ?? '/compte'}?paiement=annule`,
       teacherCoupon: coupon,
     });
     // Completed, it comes back free: counted as `checkout_free` by the webhook.

@@ -1,9 +1,12 @@
-/** What a reader is offered and what it costs, stated once for the landing pages. */
-export const FREE_ANALYSES = 3;
-export const MONTHLY_ANALYSES = 60;
-export const PRICE_MONTHLY = '4,99 €';
-export const VAT_NOTE = 'TVA non applicable, art. 293 B du CGI';
-export const SUBSCRIBE_LABEL = `S’abonner : ${PRICE_MONTHLY}/mois`;
+/** What a reader is offered and what it costs: the extension panel says the same, from `shared/`. */
+export {
+  FREE_ANALYSES,
+  MONTHLY_ANALYSES,
+  OFFER_LINE,
+  PRICE_MONTHLY,
+  SUBSCRIBE_LABEL,
+  VAT_NOTE,
+} from '@squiggle/shared/src/hosted/offer';
 
 /**
  * What the own-key route costs with a high-end model a reader could plug in, for the same

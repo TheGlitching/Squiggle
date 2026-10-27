@@ -1,6 +1,7 @@
 /**
  * The extension's hosted-mode account handling: the two sign-in paths from
- * `web/BRIDGE.md`, the signed reads of `/v1/account`, and sign-out.
+ * `web/BRIDGE.md`, the signed reads of `/v1/account`, the subscription's
+ * Checkout, and sign-out.
  *
  * It talks to `SecureKeyStorage` rather than owning any storage, so the keypair
  * and token stay in the one encrypted place. `web/BRIDGE.md` is the contract;
@@ -157,32 +158,38 @@ export async function redeemHostedCode(
 }
 
 /**
- * Read `/v1/account` with a signed request. On an invalid token the stale
+ * One signed request to an `/v1/account*` route. On an invalid token the stale
  * session is cleared here so the panel falls back to the sign-in state instead
  * of retrying a dead credential forever.
  */
-export async function fetchHostedAccount(
+async function signedAccountCall(
   storage: SecureKeyStorage,
-  fetchImpl: typeof fetch = fetch
-): Promise<HostedAccount> {
+  method: 'GET' | 'POST',
+  path: string,
+  failure: string,
+  fetchImpl: typeof fetch
+): Promise<Record<string, unknown>> {
   const session = await storage.getHostedSession();
   if (!session) throw new HostedAuthError('not_signed_in', 'Connectez-vous pour utiliser le mode hébergé.');
 
-  const path = '/v1/account';
+  const body = method === 'POST' ? '{}' : null;
   const nonce = randomToken(16);
   const timestamp = Math.floor(Date.now() / 1000);
-  const input = await buildSigningInput({ method: 'GET', path, nonce, timestamp, body: null });
+  const input = await buildSigningInput({ method, path, nonce, timestamp, body });
   const signature = await signRequest(session.privateKey, input);
 
   let res: Response;
   try {
     res = await fetchImpl(`${HOSTED_ORIGIN}${path}`, {
+      method,
       headers: {
         [SigningHeaders.authorization]: `Bearer ${session.token}`,
         [SigningHeaders.signature]: signature,
         [SigningHeaders.nonce]: nonce,
         [SigningHeaders.timestamp]: String(timestamp),
+        ...(body === null ? {} : { 'content-type': 'application/json' }),
       },
+      ...(body === null ? {} : { body }),
     });
   } catch {
     throw new HostedAuthError('network', 'Impossible de joindre le serveur. Vérifiez votre connexion.');
@@ -195,10 +202,48 @@ export async function fetchHostedAccount(
       await storage.clearHostedSession();
       throw new HostedAuthError('expired', 'Votre connexion a expiré. Reconnectez-vous.');
     }
-    throw new HostedAuthError(codeName, 'Impossible de lire l’état de votre compte.');
+    throw new HostedAuthError(codeName, failure);
   }
+  return payload;
+}
 
+/** Read `/v1/account` with a signed request. */
+export async function fetchHostedAccount(
+  storage: SecureKeyStorage,
+  fetchImpl: typeof fetch = fetch
+): Promise<HostedAccount> {
+  const payload = await signedAccountCall(
+    storage,
+    'GET',
+    '/v1/account',
+    'Impossible de lire l’état de votre compte.',
+    fetchImpl
+  );
   return payload as unknown as HostedAccount;
+}
+
+/**
+ * Open Stripe Checkout for the subscription in a new tab, straight from the
+ * panel: no detour through the account page. Stripe brings the reader back to
+ * the web app's account page, and the panel reads the new plan when it regains focus.
+ */
+export async function startHostedCheckout(
+  storage: SecureKeyStorage,
+  fetchImpl: typeof fetch = fetch
+): Promise<string> {
+  const payload = await signedAccountCall(
+    storage,
+    'POST',
+    '/v1/account/checkout',
+    'Le paiement n’a pas pu s’ouvrir. Réessayez dans un instant.',
+    fetchImpl
+  );
+  const url = typeof payload.url === 'string' ? payload.url : '';
+  if (!url.startsWith('https://')) {
+    throw new HostedAuthError('internal', 'Le paiement n’a pas pu s’ouvrir. Réessayez dans un instant.');
+  }
+  openTab(url);
+  return url;
 }
 
 /** `chrome.runtime.id`, or the Firefox polyfill's, or empty outside a browser. */

@@ -19,11 +19,12 @@ import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types
 import { analysisFailure, analyzePasted, type AnalysisFailure, type Progress } from '../analysis';
 import { getAccount, type Account } from '../api';
 import { count } from '../count';
+import { Abonnement } from '../components/Abonnement';
 import { StepFigure, type Step } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
-import { FREE_ANALYSES } from '../offer';
+import { FREE_ANALYSES, OFFER_LINE } from '../offer';
 import {
   articleFromShare,
   EMPTY_ARTICLE,
@@ -40,7 +41,7 @@ import {
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
 import { readTranscript, type Start } from '../transcript';
-import { describeAccount } from '../usage';
+import { describeAccount, type AccountView } from '../usage';
 
 const SIGN_IN = '/connexion?next=/analyser';
 
@@ -50,6 +51,17 @@ type Phase =
   | { kind: 'done'; report: AnalysisReport; blocks: TextBlock[]; times: Record<string, Start[]> | null };
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
+/** Checkout started from this page comes back here; the query is read once, as a share is. */
+const PAYMENT_NOTICES: Record<string, string> = {
+  ok: 'Merci ! Votre abonnement s’active : vous pouvez lancer votre analyse.',
+  annule: 'Le paiement a été annulé. Votre texte est toujours là.',
+};
+
+function paymentNotice(): string | null {
+  if (typeof window === 'undefined') return null;
+  return PAYMENT_NOTICES[new URLSearchParams(window.location.search).get('paiement') ?? ''] ?? null;
+}
+
 const MANUAL_PASTE = 'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement dans le champ, puis Coller.';
 
 /** The draft, with whatever a share just brought on top of it. */
@@ -71,8 +83,8 @@ export function Analyser() {
   const [accountFailed, setAccountFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: 'edit' });
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
-  const [notice, setNotice] = useState<string | null>(
-    shared && !shared.text ? ADDRESS_ONLY : null,
+  const [notice, setNotice] = useState<string | null>(() =>
+    shared && !shared.text ? ADDRESS_ONLY : paymentNotice(),
   );
   const [showProblem, setShowProblem] = useState(false);
   const controller = useRef<AbortController | null>(null);
@@ -230,9 +242,17 @@ export function Analyser() {
           >
             Préparer pour la classe
           </button>
-          {view ? <p className="m-0 basis-full text-sm text-muted sm:basis-auto">{view.detail}</p> : null}
         </div>
         <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} />
+        {account && view ? (
+          view.needsSubscription ? (
+            <div className="mt-12">
+              <Offre account={account} view={view} />
+            </div>
+          ) : (
+            <p className="mt-12 mb-0 border-t border-lineSoft pt-6 text-base text-muted">{view.detail}</p>
+          )
+        ) : null}
       </div>
     );
   }
@@ -355,7 +375,14 @@ export function Analyser() {
             </div>
           </fieldset>
 
-          <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          {/* On a phone the button stays in reach as the text scrolls; the subscription box is too tall to pin. */}
+          <div
+            className={
+              view?.needsSubscription
+                ? 'mt-6'
+                : 'sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0'
+            }
+          >
             {showProblem && problem ? (
               <p role="alert" className="mt-0 mb-3 text-sm text-warningInk">
                 {PASTE_PROBLEMS[problem]}
@@ -490,6 +517,7 @@ function Action({
   }
 
   const view = account ? describeAccount(account) : null;
+  if (account && view?.needsSubscription) return <Offre account={account} view={view} />;
   if (view && !view.canAnalyse) {
     return (
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -497,8 +525,8 @@ function Action({
           <p className="m-0 text-base font-semibold">{view.title}</p>
           <p className="m-0 text-sm text-muted">{view.detail}</p>
         </div>
-        <Link to="/compte" className={view.needsSubscription ? `${PRIMARY_BUTTON} max-sm:w-full` : SECONDARY_BUTTON}>
-          {view.needsSubscription ? 'S’abonner' : 'Mon compte'}
+        <Link to="/compte" className={SECONDARY_BUTTON}>
+          Mon compte
         </Link>
       </div>
     );
@@ -512,6 +540,27 @@ function Action({
     >
       Analyser le texte
     </button>
+  );
+}
+
+/**
+ * The moment the trial runs out, under the report that used it or in place of
+ * the analyse button: the offer in one line and the payment right here.
+ */
+function Offre({ account, view }: { account: Account; view: AccountView }) {
+  return (
+    <section
+      aria-labelledby="offre-titre"
+      className="max-w-2xl rounded-card border border-border bg-surface p-5 sm:p-7"
+    >
+      <h2 id="offre-titre" className="m-0 font-display text-xl font-semibold tracking-[-0.01em]">
+        {view.title}
+      </h2>
+      <p className="mt-1 mb-5 text-base text-muted">
+        {account.teacherOffer ? view.detail : OFFER_LINE}
+      </p>
+      <Abonnement account={account} retour="/analyser" />
+    </section>
   );
 }
 

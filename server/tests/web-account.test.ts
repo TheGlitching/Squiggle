@@ -131,6 +131,23 @@ describe('POST /web/account/checkout', () => {
     expect(call?.form['metadata[user_id]']).toBe(user.id);
   });
 
+  it('comes back to the analysis page when the reader paid from under a report, and nowhere else', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+
+    await web(env, '/web/account/checkout', { method: 'POST', cookie: sessionCookie, body: { retour: '/analyser' } });
+    await web(env, '/web/account/checkout', {
+      method: 'POST',
+      cookie: sessionCookie,
+      body: { retour: 'https://evil.example/' },
+    });
+
+    const [fromReport, other] = env.stripe.calls.filter((c) => c.path === '/checkout/sessions');
+    expect(fromReport?.form.success_url).toBe(`${env.webAppOrigin}/analyser?paiement=ok`);
+    expect(fromReport?.form.cancel_url).toBe(`${env.webAppOrigin}/analyser?paiement=annule`);
+    expect(other?.form.success_url).toBe(`${env.webAppOrigin}/compte?paiement=ok`);
+  });
+
   it('refuses without a session', async () => {
     const env = makeTestEnv();
     const res = await web(env, '/web/account/checkout', { method: 'POST', body: {} });

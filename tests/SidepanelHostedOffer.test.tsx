@@ -14,6 +14,7 @@ import { SecureKeyStorage } from '../src/crypto/storage';
 import { DEFAULT_STORAGE_KEY } from '../src/ui/components/OnboardingTour';
 import { SidepanelApp } from '../src/sidepanel/main';
 import type { FcRpcMap } from '../src/messaging/protocol';
+import type { AnalysisResult } from '@squiggle/shared';
 import { HostedAuthError, type HostedAccount } from '../src/hosted/session';
 
 declare global {
@@ -24,6 +25,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const hostedMock = vi.hoisted(() => ({
   fetchHostedAccount: vi.fn(),
   beginHostedSignIn: vi.fn(),
+  startHostedCheckout: vi.fn(),
 }));
 
 // The network and the sign-in tab are out of reach here; everything else in the
@@ -34,6 +36,7 @@ vi.mock('../src/hosted/session', async (importOriginal) => {
     ...actual,
     fetchHostedAccount: hostedMock.fetchHostedAccount,
     beginHostedSignIn: hostedMock.beginHostedSignIn,
+    startHostedCheckout: hostedMock.startHostedCheckout,
   };
 });
 
@@ -77,6 +80,7 @@ describe('sidepanel first screen', () => {
   let bgBus: TypedMessageBus;
   let storageData: Record<string, unknown>;
   let changedListeners: Array<(changes: Record<string, unknown>, area: string) => void>;
+  let runtimeListeners: Array<(msg: unknown, sender: unknown, respond: (resp: unknown) => void) => unknown>;
 
   const mount = async () => {
     await act(async () => {
@@ -93,16 +97,30 @@ describe('sidepanel first screen', () => {
   beforeEach(() => {
     storageData = {};
     changedListeners = [];
+    runtimeListeners = [];
     hostedMock.fetchHostedAccount.mockReset().mockRejectedValue(NOT_SIGNED_IN);
     hostedMock.beginHostedSignIn.mockReset().mockResolvedValue('https://app.example/bridge');
+    hostedMock.startHostedCheckout.mockReset().mockResolvedValue('https://checkout.stripe.example/cs_1');
     vi.stubGlobal('localStorage', memoryStorage());
     // Tour already seen unless a case says otherwise, so its overlay stays out of the way.
     localStorage.setItem(DEFAULT_STORAGE_KEY, JSON.stringify({ completed: true, version: '1.0.0' }));
 
     (globalThis as unknown as { chrome: unknown }).chrome = {
       runtime: {
-        sendMessage: vi.fn(),
-        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+        // Routed to the listeners, so the background's events reach the panel.
+        sendMessage: vi.fn((msg: unknown, callback?: (resp: unknown) => void) => {
+          let handledAsync = false;
+          for (const listener of runtimeListeners) {
+            if (listener(msg, { id: 'mock-sender' }, (resp: unknown) => callback?.(resp)) === true) handledAsync = true;
+          }
+          if (!handledAsync && callback) callback(undefined);
+        }),
+        onMessage: {
+          addListener: vi.fn((listener) => runtimeListeners.push(listener)),
+          removeListener: vi.fn((listener) => {
+            runtimeListeners.splice(runtimeListeners.indexOf(listener), 1);
+          }),
+        },
         getURL: vi.fn((path: string) => `chrome-extension://mock-id/${path}`),
         lastError: null,
       },
@@ -211,6 +229,63 @@ describe('sidepanel first screen', () => {
       expect(button('Se connecter')).toBeUndefined();
       expect(primaries().map((b) => b.textContent)).toEqual(['Lancer l’analyse critique']);
       expect(button('Lancer l’analyse critique')!.disabled).toBe(false);
+    });
+
+    it('trial spent: the subscription box replaces the link, and pays from the panel once asked to start now', async () => {
+      hostedMock.fetchHostedAccount.mockResolvedValue(account('trial', 3, 3));
+      await mount();
+
+      const offer = container.querySelector('section[aria-label="Essai épuisé"]')!;
+      expect(offer.textContent).toContain('60 analyses par mois, 4,99 €, sans engagement.');
+      expect(offer.textContent).toContain('TVA non applicable, art. 293 B du CGI');
+      expect(offer.querySelector('a')!.getAttribute('href')).toBe('https://squiggle.example/cgv');
+      // No detour through the account page: the card's own link is gone.
+      expect(container.querySelector('a[href$="/compte"]')).toBeNull();
+      expect(button('Lancer l’analyse critique')!.disabled).toBe(true);
+
+      const subscribe = button('S’abonner : 4,99 €/mois')!;
+      expect(subscribe.disabled).toBe(true);
+      await act(async () => {
+        offer.querySelector('input[type="checkbox"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(subscribe.disabled).toBe(false);
+      await act(async () => {
+        subscribe.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flush();
+      expect(hostedMock.startHostedCheckout).toHaveBeenCalledTimes(1);
+    });
+
+    it('says under the report what is left, and offers the subscription there after the last trial analysis', async () => {
+      const report: AnalysisResult = {
+        schemaVersion: 1,
+        score: 70,
+        scoreBand: 'perfectible',
+        summary: 'Résumé',
+        categories: [],
+        findings: [],
+        claims: [],
+        research: { performed: false, queries: [], withdrawn: [] },
+        meta: { model: 'm', promptVersion: '1', analyzedAt: new Date().toISOString(), durationMs: 1 },
+      };
+      hostedMock.fetchHostedAccount.mockResolvedValue(account('trial', 0, 3));
+      await mount();
+
+      hostedMock.fetchHostedAccount.mockResolvedValue(account('trial', 1, 3));
+      await act(async () => {
+        await bgBus.dispatch('ANALYSIS_COMPLETE', { tabId: 101, result: report });
+      });
+      await flush();
+      const main = container.querySelector('main')!;
+      expect(main.lastElementChild!.textContent).toBe('Il vous reste 2 analyses offertes.');
+
+      hostedMock.fetchHostedAccount.mockResolvedValue(account('trial', 3, 3));
+      await act(async () => {
+        await bgBus.dispatch('ANALYSIS_COMPLETE', { tabId: 101, result: report });
+      });
+      await flush();
+      expect(main.lastElementChild!.getAttribute('aria-label')).toBe('Essai épuisé');
+      expect(container.querySelectorAll('section[aria-label="Essai épuisé"]')).toHaveLength(1);
     });
 
     it('active: states the subscription and lets the reader run', async () => {
