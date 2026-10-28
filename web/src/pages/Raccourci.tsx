@@ -10,6 +10,7 @@
 import type { ReactNode } from 'react';
 
 import { LEAD, PAGE, PRIMARY_BUTTON, QUIET_LINK, TITLE } from '../components/Landing';
+import { Label, Lines, Phone, H, W } from '../components/PhoneDrawing';
 import { Link } from '../router';
 
 export const SHORTCUT_NAME = 'Analyser avec Squiggle';
@@ -122,38 +123,6 @@ export function Raccourci() {
 }
 
 /* The drawings: an iPhone seen from the front, the screen each step shows, with what to touch in the accent. */
-
-const W = 180;
-const H = 360;
-
-function Phone({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <svg role="img" aria-label={label} viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full">
-      <rect x={2} y={2} width={W - 4} height={H - 4} rx={28} className="fill-surface stroke-borderControl" strokeWidth={2} />
-      <rect x={68} y={14} width={44} height={12} rx={6} className="fill-background" />
-      {children}
-    </svg>
-  );
-}
-
-/** A line of placeholder text, as the eye reads a paragraph from afar. */
-function Lines({ x, y, widths, gap = 10 }: { x: number; y: number; widths: number[]; gap?: number }) {
-  return (
-    <>
-      {widths.map((w, i) => (
-        <rect key={i} x={x} y={y + i * gap} width={w} height={4} rx={2} className="fill-border" />
-      ))}
-    </>
-  );
-}
-
-function Label({ x, y, children, accent = false, size = 9, anchor = 'start' }: { x: number; y: number; children: string; accent?: boolean; size?: number; anchor?: 'start' | 'middle' }) {
-  return (
-    <text x={x} y={y} fontSize={size} textAnchor={anchor} className={accent ? 'fill-accentForeground font-semibold' : 'fill-foreground'}>
-      {children}
-    </text>
-  );
-}
 
 /** The share sheet's list of actions, the shortcut's row in the accent. */
 function ShareSheet({ top }: { top: number }) {
