@@ -298,6 +298,29 @@ describe('Analyser, from the bookmark', () => {
     expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_bookmarklet' }]);
   });
 
+  it('shows the analysis as started from the first frame, with nothing to tap', async () => {
+    const seen = serve(account());
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    render(<Analyser />);
+    // The account is still being checked, and the page already says the analysis is running.
+    expect(screen.getByRole('status')).toHaveTextContent('Analyse lancée automatiquement');
+    expect(screen.getByRole('progressbar', { name: 'Avancement de l’analyse' })).toBeInTheDocument();
+    expect(screen.getByText(/Le favori a lancé l’analyse, rien à toucher/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Analyser le texte' })).not.toBeInTheDocument();
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url === '/web/analyze/audit')).toHaveLength(1);
+  });
+
+  it('can be cancelled before the account has answered', async () => {
+    const seen = serve(account());
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(await screen.findByText('Analyse annulée. Votre texte est toujours là.')).toBeInTheDocument();
+    await analyseButton();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
   it('leaves the article in the form when the account cannot analyse it', async () => {
     const seen = serve(account({ usage: { used: 3, limit: 3, remaining: 0, resetsAt: null } }));
     at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
@@ -398,6 +421,20 @@ describe('Analyser, signed in', () => {
     expect(
       within(screen.getByRole('article', { name: 'Formule appuyée' })).getByText(/n’a pas été retrouvé tel quel/),
     ).toBeInTheDocument();
+  });
+
+  it('sends one analysis for two taps in a row', async () => {
+    const seen = serve(account());
+    render(<Analyser />);
+    paste(TEXT);
+    const button = await analyseButton();
+    // The second tap lands before the page has redrawn without the button.
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url === '/web/analyze/audit')).toHaveLength(1);
   });
 
   it('counts a finding reported as wrong by its category and a reason from the list, never its text', async () => {

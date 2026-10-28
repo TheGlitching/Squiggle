@@ -153,6 +153,9 @@ const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un arti
 /** Where a reading of screenshots stands: `done` is null while the reader itself loads. */
 type Reading = { done: number | null; total: number };
 
+/** The bookmark's analysis, from the moment the page opens. */
+const AUTO_START: Progress = { message: 'Analyse lancée automatiquement…', percent: 2 };
+
 /** The draft, with whatever a share or the bookmark just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null; favori: boolean } {
   const draft = loadDraft();
@@ -174,11 +177,17 @@ export function Analyser() {
   const [{ article: start, shared, favori }] = useState(initialArticle);
   /** The bookmark's article is analysed as soon as the account says it can be. */
   const [autoRun, setAutoRun] = useState(favori);
+  /** The run on screen is the bookmark's, which the reader never asked for with a tap. */
+  const [autoStarted, setAutoStarted] = useState(favori);
   const [sharedCount] = useState(sharedCaptures);
   const [returning] = useState(backFromVisit);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
-  const [phase, setPhase] = useState<Phase>({ kind: 'edit' });
+  // The bookmark's analysis shows as started from the first frame, while the
+  // account is still being checked: nothing on screen asks for a tap.
+  const [phase, setPhase] = useState<Phase>(() =>
+    favori && !pasteProblem(start) ? { kind: 'running', progress: AUTO_START } : { kind: 'edit' },
+  );
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
   // A link shared alone is looked up first: someone may already have analysed it with the extension.
   const [notice, setNotice] = useState<string | null>(() =>
@@ -201,6 +210,9 @@ export function Analyser() {
   }, []);
 
   useEffect(() => saveDraft(article), [article]);
+
+  // A page left mid-run stops driving it: opened again, the same text joins the run on the server.
+  useEffect(() => () => controller.current?.abort(), []);
 
   // Once, for the link a share brought without its text.
   useEffect(() => {
@@ -250,7 +262,8 @@ export function Analyser() {
     if (!autoRun || account === undefined) return;
     setAutoRun(false);
     if (pasteProblem(article)) setShowProblem(true);
-    else if (account === null || describeAccount(account).canAnalyse) void run(article);
+    else if (account === null || describeAccount(account).canAnalyse) return void run(article, AUTO_START);
+    setPhase({ kind: 'edit' });
     // Once, when the account is known, with the article the bookmark brought.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRun, account]);
@@ -403,13 +416,16 @@ export function Analyser() {
     if (files.length) void importCaptures(files, 'import_screenshots');
   }
 
-  async function run(article: PastedArticle) {
+  async function run(article: PastedArticle, progress: Progress = { message: 'Préparation de l’analyse…', percent: 2 }) {
+    // One analysis per page: a second start would only race the first.
+    if (controller.current) return;
     setFailure(null);
     setNotice(null);
     const abort = new AbortController();
     controller.current = abort;
     if (readTranscript(article.text)) count('paste_transcript');
-    setPhase({ kind: 'running', progress: { message: 'Préparation de l’analyse…', percent: 2 } });
+    setAutoStarted(progress === AUTO_START);
+    setPhase({ kind: 'running', progress });
     const visitor = account === null;
     try {
       const { report, blocks, times } = await analyzePasted(
@@ -443,6 +459,14 @@ export function Analyser() {
         .then(setAccount)
         .catch(() => {});
     }
+  }
+
+  /** The run in flight, or the bookmark's, still waiting on the account. */
+  function cancel() {
+    if (controller.current) return controller.current.abort();
+    setAutoRun(false);
+    setPhase({ kind: 'edit' });
+    setNotice('Analyse annulée. Votre texte est toujours là.');
   }
 
   function startOver() {
@@ -681,7 +705,7 @@ export function Analyser() {
             ) : null}
             {failure ? <FailureNotice failure={failure} /> : null}
             {running ? (
-              <RunningPanel progress={phase.progress} onCancel={() => controller.current?.abort()} />
+              <RunningPanel progress={phase.progress} onCancel={cancel} auto={autoStarted} />
             ) : (
               <Action
                 account={account}
@@ -1008,7 +1032,7 @@ function ReadingPanel({ reading, onCancel }: { reading: Reading; onCancel: () =>
   );
 }
 
-function RunningPanel({ progress, onCancel }: { progress: Progress; onCancel: () => void }) {
+function RunningPanel({ progress, onCancel, auto }: { progress: Progress; onCancel: () => void; auto: boolean }) {
   return (
     <div className="grid gap-3">
       <div className="flex items-baseline justify-between gap-4">
@@ -1037,6 +1061,7 @@ function RunningPanel({ progress, onCancel }: { progress: Progress; onCancel: ()
         />
       </div>
       <p className="m-0 text-sm text-muted">
+        {auto ? 'Le favori a lancé l’analyse, rien à toucher. ' : ''}
         Une analyse prend en général une à deux minutes. Gardez cette page ouverte.
       </p>
     </div>
