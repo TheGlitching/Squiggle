@@ -4,7 +4,7 @@
  * A phone browser has no extension, and a news app blocks copying, but the
  * site of the same paper lets the subscriber read the whole article. The
  * bookmark is a `javascript:` address (`virtual:favori`, built from
- * `src/favori/`): saved once, it reads the article in the page and opens it
+ * `src/favori/`): saved once, it takes the article's page and opens it
  * on /analyser, with no selection and no copy.
  *
  * No browser lets a page add a bookmark, so the page does the rest: the tab
@@ -319,8 +319,9 @@ export function Favori() {
           </li>
           <li>Si le site n’affiche la fin d’un long article qu’au fil de la lecture, il fait défiler la page jusqu’au bout.</li>
           <li>
-            Il ouvre Squiggle avec le texte dans la partie de l’adresse qui suit « # », que le navigateur n’envoie à
-            aucun serveur. Le texte ne quitte votre téléphone que lorsque l’analyse est lancée, comme un texte collé.
+            Il ouvre Squiggle avec la page dans la partie de l’adresse qui suit « # », que le navigateur n’envoie à
+            aucun serveur. Squiggle en lit l’article sur votre téléphone, et le texte ne le quitte que lorsque
+            l’analyse est lancée, comme un texte collé.
           </li>
           <li>Il ne charge aucun code dans la page : tout ce qu’il fait est écrit dans l’adresse que vous copiez.</li>
         </ul>
