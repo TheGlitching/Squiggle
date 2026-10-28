@@ -17,6 +17,17 @@ if (!existsSync(new URL('../../web/dist/index.html', import.meta.url))) {
   process.exit(1);
 }
 
+// The site loads Cloudflare Web Analytics itself, after its first paint, and only
+// when the build was given the site's token (web/vite.config.ts). Production is
+// the one environment whose audience is read, so it is not shipped without it.
+const page = readFileSync(new URL('../../web/dist/index.html', import.meta.url), 'utf8');
+if (env === 'production' && !page.includes('static.cloudflareinsights.com/beacon.min.js')) {
+  console.error(
+    'Refusing to deploy production: web/dist was built without SQUIGGLE_WEB_ANALYTICS_TOKEN. See docs/DEPLOYING.md.',
+  );
+  process.exit(1);
+}
+
 const pending = pendingVars(readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8'), env);
 if (pending.length > 0) {
   const list = pending.join(', ');

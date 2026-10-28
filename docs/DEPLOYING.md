@@ -84,12 +84,13 @@ From the repository root:
 
 ```bash
 npm run deploy:staging
-npm run deploy:production
+SQUIGGLE_WEB_ANALYTICS_TOKEN=… npm run deploy:production
 ```
 
 Each builds `web/dist`, then deploys the Worker, which uploads those files as its
 static assets. Both cron triggers (hourly and daily retention sweeps) are part of the
-deployment.
+deployment. `SQUIGGLE_WEB_ANALYTICS_TOKEN` is the Cloudflare Web Analytics token of the
+site (see Launch metrics); a production deploy whose build was not given it is refused.
 
 ## Migrate
 
@@ -149,9 +150,15 @@ daily event counters, a number per day and per fixed name:
   reason picked from a closed list.
 
 Visits themselves (pages viewed, referrers, countries) are not counted here: they are
-read in Cloudflare Web Analytics, which Cloudflare injects at the edge on the site's zone
-(automatic setup, no cookie). The site has no Content-Security-Policy, so nothing has to
-allow `static.cloudflareinsights.com` or `cloudflareinsights.com`; one added later must.
+read in Cloudflare Web Analytics (no cookie). The site loads its script itself, once the
+page has painted (`firstPaintReady` in `web/vite.config.ts`): injected by Cloudflare at
+the edge, it was fetched during the first paint, and PageSpeed counted it as holding that
+paint back. So the site is set up in the dashboard as *Enable with JS Snippet
+installation* (Web Analytics, the site, *Manage site*), never *Enable*, which injects it
+a second time and counts every visit twice. The token is the one in the snippet that
+setting shows; it is not committed, it is given to the build. The site has no
+Content-Security-Policy, so nothing has to allow `static.cloudflareinsights.com` or
+`cloudflareinsights.com`; one added later must.
 
 `headline` gathers the five figures to read every week; ask with `?weeks=1` to read them
 over the last week. Revenue is read in Stripe, net of discounts: `subscriptions.active`
