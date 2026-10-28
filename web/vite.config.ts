@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
@@ -124,6 +124,14 @@ function ocr(): Plugin {
   };
 }
 
+/**
+ * Whether the signed iPhone shortcut (`shortcut/build.mjs`) is in `public/`. Only a Mac
+ * signed into an Apple account can sign it; until it is committed, nothing links to it.
+ */
+const SHORTCUT_DEFINE = {
+  __SHORTCUT_PUBLISHED__: JSON.stringify(existsSync(new URL('./public/raccourci/Analyser avec Squiggle.shortcut', import.meta.url))),
+};
+
 /** Where the built page lives: `/enseignants` is `enseignants.html`, which Cloudflare serves without a redirect. */
 const pageFile = (path: string) => (path === '/' ? 'index.html' : `${path.slice(1)}.html`);
 
@@ -167,6 +175,7 @@ function prerender(): Plugin {
         configFile: false,
         root: new URL('.', import.meta.url).pathname,
         plugins: [favori()],
+        define: SHORTCUT_DEFINE,
         logLevel: 'error',
         server: { middlewareMode: true, hmr: false, ws: false },
         appType: 'custom',
@@ -205,6 +214,7 @@ function prerender(): Plugin {
 
 export default defineConfig({
   plugins: [react(), favori(), serviceWorker(), prerender(), ocr()],
+  define: SHORTCUT_DEFINE,
   // The API origin is same-origin in production. A local dev build points at
   // a local server with VITE_API_BASE_URL; it is never a secret.
   server: { port: 5174, strictPort: true },

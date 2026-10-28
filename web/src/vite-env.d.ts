@@ -8,6 +8,9 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
 }
 
+/** Whether the signed iPhone shortcut is in the build, set by `vite.config.ts`. */
+declare const __SHORTCUT_PUBLISHED__: boolean;
+
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }

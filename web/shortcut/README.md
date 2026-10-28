@@ -3,6 +3,9 @@
 `page.ts` is the script the shortcut runs in a Safari page; `build.mjs` bundles
 it, writes the shortcut and signs it. The signed file is served from
 `web/public/raccourci/Analyser avec Squiggle.shortcut` and offered on `/raccourci`.
+The build checks for that file (`vite.config.ts`): until it is committed, no page
+links to `/raccourci`, which sends the reader to `/favori`, and it is left out of
+the sitemap.
 
 ## Signing
 
