@@ -13,11 +13,12 @@
  * address.
  *
  * The normalisation is deliberately conservative — it only removes what is
- * known to be reader-identifying or campaign tracking. A query parameter this
+ * known to be reader-identifying or campaign tracking, or to name a rendering
+ * of the same page (its mobile or AMP edition, or Google's AMP cache). A query parameter this
  * list does not know stays in the key, because on many sites (`?p=1234`,
  * `?articleId=…`) it *is* the article.
  */
-import { sha256Hex } from '@squiggle/shared';
+import { sha256Hex, youtubeVideoId, youtubeWatchUrl } from '@squiggle/shared';
 
 /** Query parameters that never change which article is being read. */
 const TRACKING_PARAMS = [
@@ -39,10 +40,52 @@ const TRACKING_PARAMS = [
   /^at_campaign$/i,
   /^_ga$/i,
   /^yclid$/i,
+  // The AMP and app-share variants of a page, which serve the same article.
+  /^amp$/i,
+  /^_amp$/i,
+  /^amp_js_v$/i,
+  /^amp_gsa$/i,
+  /^usqp$/i,
+  /^_gl$/i,
 ];
 
-function isTracking(name: string): boolean {
-  return TRACKING_PARAMS.some((re) => re.test(name));
+function isTracking(name: string, value: string): boolean {
+  return TRACKING_PARAMS.some((re) => re.test(name)) || (/^outputtype$/i.test(name) && /^amp$/i.test(value));
+}
+
+/**
+ * Subdomains that name a rendering of a site, not another site: the mobile
+ * and AMP editions of `lemonde.fr` publish the articles of `lemonde.fr`.
+ */
+const EDITION_PREFIX = /^(?:www|m|mobile|amp)\./;
+
+/**
+ * The publisher's own address behind an AMP cache link: Google's
+ * `cdn.ampproject.org/c/s/<host>/<path>` and `google.com/amp/s/<host>/<path>`.
+ */
+function unwrapAmpCache(url: URL): URL {
+  const host = url.hostname.toLowerCase();
+  const path =
+    host.endsWith('.cdn.ampproject.org')
+      ? /^\/[cv](?:\/s)?\/(.+)$/.exec(url.pathname)
+      : /^(?:www\.)?google\.[a-z.]+$/.test(host)
+        ? /^\/amp\/(?:s\/)?(.+)$/.exec(url.pathname)
+        : null;
+  if (!path) return url;
+  try {
+    return new URL(`https://${path[1]}${url.search}`);
+  } catch {
+    return url;
+  }
+}
+
+/** A page's path without its AMP marker: `/amp/x`, `/x/amp`, `/x.amp.html`, `/x.amp`. */
+function withoutAmpPath(pathname: string): string {
+  return pathname
+    .replace(/^\/amp(?=\/)/i, '')
+    .replace(/\/amp\/?$/i, '')
+    .replace(/\.amp(\.html?)$/i, '$1')
+    .replace(/\.amp$/i, '');
 }
 
 /**
@@ -50,23 +93,31 @@ function isTracking(name: string): boolean {
  * http(s) URL at all (the only kind a reader can be looking at).
  */
 export function canonicalArticleUrl(raw: string): string | null {
+  // Every link to one video is one address: the extension's watch page, the
+  // app's `youtu.be/<id>?si=…`, a Short, a link timed with `&t=90s`.
+  const videoId = youtubeVideoId(raw.trim());
   let parsed: URL;
   try {
-    parsed = new URL(raw.trim());
+    parsed = new URL(videoId ? youtubeWatchUrl(videoId) : raw.trim());
   } catch {
     return null;
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+  parsed = unwrapAmpCache(parsed);
 
   // http and https of the same page are the same page.
   parsed.protocol = 'https:';
-  parsed.hostname = parsed.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  const site = host.replace(EDITION_PREFIX, '');
+  // Only while a domain is left: `m.fr` is a site, not the mobile edition of `fr`.
+  parsed.hostname = site.includes('.') ? site : host;
+  parsed.pathname = withoutAmpPath(parsed.pathname) || '/';
   parsed.port = '';
   parsed.hash = '';
   parsed.username = '';
   parsed.password = '';
 
-  const kept = [...parsed.searchParams.entries()].filter(([name]) => !isTracking(name));
+  const kept = [...parsed.searchParams.entries()].filter(([name, value]) => !isTracking(name, value));
   kept.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   parsed.search = '';
   for (const [name, value] of kept) parsed.searchParams.append(name, value);

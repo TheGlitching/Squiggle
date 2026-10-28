@@ -25,6 +25,7 @@ import { name as startedName, sql as startedSql } from './011_usage_started';
 import { name as periodName, sql as periodSql } from './012_plan_period_start';
 import { name as freeName, sql as freeSql } from './013_subscription_free';
 import { name as visitorRunsName, sql as visitorRunsSql } from './014_visitor_runs';
+import { name as byLinkName, sql as byLinkSql } from './015_reports_by_link';
 
 export interface Migration {
   name: string;
@@ -51,6 +52,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { name: periodName, sql: periodSql },
   { name: freeName, sql: freeSql },
   { name: visitorRunsName, sql: visitorRunsSql },
+  { name: byLinkName, sql: byLinkSql },
 ];
 
 function splitStatements(sql: string): string[] {

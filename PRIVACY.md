@@ -168,6 +168,17 @@ servi qu'à un lecteur dont la page donne le même texte. Un texte collé sans a
 rangé sous une clé fixe, avec la même empreinte : son rapport n'est servi qu'à un
 lecteur qui colle le même texte.
 
+**Un lien partagé seul retrouve un rapport.** Depuis l'appli d'un journal ou de
+YouTube, un lien partagé vers Squiggle affiche le rapport qu'un lecteur a déjà fait
+avec l'extension, sur la page même ; jamais celui d'un texte collé, qui pourrait être
+inventé. Seul le lien est envoyé, et notre serveur ne le visite pas : il cherche parmi
+ses rapports. Les différentes formes d'un même lien (lien court de YouTube, versions
+AMP ou mobiles d'un article, paramètres de suivi) mènent au même rapport. Pour ne pas
+léser l'éditeur, ce rapport s'ouvre sur un lien vers l'article chez lui, ne garde que
+de courtes citations (25 mots au plus chacune, un dixième du texte au plus en tout) et
+ne résume pas l'article : son diagnostic dit comment le texte argumente, pas ce qu'il
+raconte.
+
 ## Ce que nous conservons, et combien de temps
 
 | Donnée | Où | Durée |

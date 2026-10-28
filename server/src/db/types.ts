@@ -256,6 +256,12 @@ export interface ReportRow {
   sizeBytes: number;
   createdAt: number;
   expiresAt: number;
+  /**
+   * Built from a text the extension read on the page itself (an article, or a
+   * video's captions), never from one pasted on the site. Only such a report
+   * is served to a reader who has the link and nothing more.
+   */
+  readByExtension: boolean;
 }
 
 export interface CreateReportArgs {
@@ -263,6 +269,8 @@ export interface CreateReportArgs {
   textHash: string;
   model: string;
   promptVersion: string;
+  /** See `ReportRow.readByExtension`. */
+  readByExtension?: boolean;
   report: string;
   sizeBytes: number;
   now: number;
@@ -338,6 +346,9 @@ export const METRIC_NAMES = [
   'run_started_anon',
   // Of those, the runs on a video's transcript (a YouTube address), whichever surface.
   'run_started_video',
+  // A link shared without its text, looked up among the extension's reports; and those that found one.
+  'link_check',
+  'link_hit',
   'finalize_install',
   'finalize_session',
   'finalize_anon',
@@ -551,6 +562,12 @@ export interface Db {
 
   /** The cached report for this exact (url, text, model, prompt version), if any. */
   findReport(urlHash: string, textHash: string, model: string, promptVersion: string): Promise<ReportRow | null>;
+
+  /**
+   * The most recent unexpired report the extension filed under this address,
+   * for this model and prompt version, whatever its text: a lookup by link alone.
+   */
+  findLinkReport(urlHash: string, model: string, promptVersion: string, now: number): Promise<ReportRow | null>;
 
   /**
    * Store a report in the shared cache. Rejects payloads over the size cap

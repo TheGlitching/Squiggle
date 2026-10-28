@@ -136,6 +136,17 @@ http(s) URL can canonicalise to, so its report is keyed by the fingerprint alone
 words get the same report, any other words another one. The web app makes the title the
 first block, so the fingerprint covers it too.
 
+A link shared from a phone app (a newspaper's or YouTube's) carries no text, so it can
+never meet that key. `GET /web/anon/link` answers it by address alone, among the reports
+flagged `read_by_extension`: those built from a text the extension read on the page
+itself, never one pasted on the site, which anyone could have invented under a real
+address. It returns the most recent unexpired one for today's model and prompt version,
+fetches nothing, and costs no credit. Every link to one page canonicalises to one address
+(`canonicalUrl.ts`): a video's `youtu.be`, Shorts and watch links to its watch page, an
+article's AMP, mobile and Google AMP cache editions to the publisher's page. What it serves
+holds the article's words to short quotations (`citations.ts`: 25 words at most each, a
+tenth of the text's words in all), and the web app opens it on a link to the publisher.
+
 ## The installed app
 
 The web app is a PWA (`web/public/manifest.webmanifest`, `web/sw.js`), opening on the
