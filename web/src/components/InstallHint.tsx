@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { isMobile, useInstall, useUserAgent } from '../install';
 import { PAGE, PRIMARY_BUTTON } from './Landing';
@@ -44,16 +44,35 @@ function ShareGlyph() {
 }
 
 /**
- * The app, offered above the fold on a phone: the browser's own install prompt where it
- * has one, the Share-menu path on iOS Safari. Never on a computer, never inside the
- * installed app, and gone for good once the reader closes it.
+ * The app, offered on a phone: the browser's own install prompt where it has one, the
+ * Share-menu path on iOS Safari. Never on a computer, never inside the installed app,
+ * and gone for good once the reader closes it.
+ *
+ * It arrives after the page has painted (Chromium offers its prompt when it decides),
+ * so it lies over the bottom of the screen rather than push the page down. Its height
+ * is `--install-hint-height`: the page ends that much lower (`Layout`), and a bar of
+ * the page's own pinned to the bottom stands on it.
  */
 export function InstallHint() {
   const install = useInstall();
   const [dismissed, setDismissed] = useState(wasDismissed);
   const ua = useUserAgent();
+  const box = useRef<HTMLElement>(null);
+  const shown = Boolean(install) && !dismissed && (isMobile(ua) || install?.kind === 'ios');
 
-  if (!install || dismissed || !(isMobile(ua) || install.kind === 'ios')) return null;
+  useEffect(() => {
+    const element = box.current;
+    if (!shown || !element || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement.style;
+    const observer = new ResizeObserver(() => root.setProperty('--install-hint-height', `${element.offsetHeight}px`));
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.removeProperty('--install-hint-height');
+    };
+  }, [shown]);
+
+  if (!install || !shown) return null;
 
   const close = () => {
     remember();
@@ -61,7 +80,11 @@ export function InstallHint() {
   };
 
   return (
-    <aside aria-label="L’appli Squiggle" className="border-b border-lineSoft bg-surface print:hidden">
+    <aside
+      ref={box}
+      aria-label="L’appli Squiggle"
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-lineSoft bg-surface pb-[env(safe-area-inset-bottom)] print:hidden"
+    >
       <div className={`${PAGE} flex items-center gap-3 py-3`}>
         <img src="/icons/icon-192.png" alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-[9px]" />
         <p className="m-0 min-w-0 flex-1 text-base leading-snug">

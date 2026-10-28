@@ -24,7 +24,7 @@ const NAV_LINK = 'inline-block py-2 text-base text-muted transition-colors durat
  */
 export function Layout({ children, account = 'Se connecter' }: { children: ReactNode; account?: string }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-base text-foreground print:bg-white">
+    <div className="flex min-h-screen flex-col bg-background pb-[var(--install-hint-height,0px)] text-base text-foreground print:bg-white print:pb-0">
       <header className="border-b border-lineSoft print:hidden">
         <div className={`${PAGE} flex items-center justify-between gap-x-6 py-4`}>
           <Link to="/" aria-label="Squiggle, accueil" className="inline-block shrink-0 py-1">

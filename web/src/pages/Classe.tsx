@@ -393,7 +393,7 @@ function Preparation({
         <div
           role="region"
           aria-label="Le passage sélectionné"
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur"
+          className="fixed inset-x-0 bottom-[var(--install-hint-height,0px)] z-20 border-t border-border bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur"
         >
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:px-2">
             {picked.blockId ? (
