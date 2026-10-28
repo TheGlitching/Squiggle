@@ -277,11 +277,9 @@ export async function readCaptures(
   signal?: AbortSignal,
 ): Promise<string> {
   const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('fra', 1, {
-    workerPath: `${OCR_BASE}worker.min.js`,
-    corePath: OCR_BASE,
-    langPath: OCR_BASE,
-  });
+  // Absolute: the worker starts from a blob URL, against which a path resolves to nothing.
+  const base = new URL(OCR_BASE, window.location.origin).href;
+  const worker = await createWorker('fra', 1, { workerPath: `${base}worker.min.js`, corePath: base, langPath: base });
   const stop = () => void worker.terminate();
   signal?.addEventListener('abort', stop);
   try {
@@ -297,5 +295,30 @@ export async function readCaptures(
   } finally {
     signal?.removeEventListener('abort', stop);
     await worker.terminate().catch(() => {});
+  }
+}
+
+/** Where the service worker leaves screenshots shared to the installed app (`sw.js`, SHARE_CACHE). */
+const SHARE_CACHE = 'squiggle-partage';
+
+/**
+ * The screenshots a "Partager vers Squiggle" just brought, taken out of the
+ * device's cache where the service worker left them, in the order shared.
+ */
+export async function takeSharedCaptures(): Promise<Blob[]> {
+  if (typeof caches === 'undefined') return [];
+  try {
+    const cache = await caches.open(SHARE_CACHE);
+    const keys = await cache.keys();
+    const order = (request: Request) => Number(new URL(request.url).pathname.split('/').pop());
+    const blobs: Blob[] = [];
+    for (const request of [...keys].sort((x, y) => order(x) - order(y))) {
+      const response = await cache.match(request);
+      if (response) blobs.push(await response.blob());
+    }
+    await caches.delete(SHARE_CACHE);
+    return blobs;
+  } catch {
+    return [];
   }
 }

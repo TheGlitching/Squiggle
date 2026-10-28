@@ -153,11 +153,21 @@ The web app is a PWA (`web/public/manifest.webmanifest`, `web/sw.js`), opening o
 analysis page. Its service worker caches the build's own files and nothing else: a page
 navigation gets the app's one `index.html`, fresh or from the cache when offline, and
 every request under the Worker's paths goes to the network and is never stored. Android
-can share an article to it (Web Share Target, `GET /analyser?title&text&url`); the
-worker answers every navigation by fetching the bare `/`, so a shared text in that query
-string never leaves the device, and the page moves it into the form and wipes it from the
-address bar. `vite.config.ts` writes the file list and a content-derived version into the
-worker at build time.
+can share an article to it, or screenshots of one (Web Share Target, a multipart `POST
+/analyser`). The worker reads that POST itself and never sends it on: the screenshots wait
+in its `squiggle-partage` cache, and the title, text and address go into the query string
+of a redirect to `/analyser`. It answers every navigation by fetching the bare `/`, so a
+shared text in that query string never leaves the device, and the page moves it into the
+form and wipes it from the address bar. `vite.config.ts` writes the file list and a
+content-derived version into the worker at build time.
+
+Screenshots, imported on `/analyser` or shared, are read on the device (`web/src/captures.ts`):
+Tesseract in WebAssembly with its French model, served from `/ocr/` on our own origin
+(copied beside the build by `vite.config.ts`, kept out of the worker's shell, loaded on a
+first import only). The lines repeated at the same place of most screenshots (status bar,
+app header, tab bar) are dropped, an overlap between two screenshots is kept once, and the
+text lands in the form for the reader to check. What reaches the server is that text, as
+for a paste; no image ever does.
 
 `SECURITY.md` has the controls and the residual risks; `PRIVACY.md` has the retention
 table and the subprocessors.

@@ -19,9 +19,14 @@
  * wiped like a share; it is then analysed at once, as a copied text is. A
  * video's transcript pasted here is analysed
  * without its timestamps, which come back beside each passage in the report
- * (`transcript.ts`).
+ * (`transcript.ts`). Where nothing can be copied, the reader imports
+ * screenshots, or shares them to the installed app: their text is read on the
+ * device and lands in the form to be checked before anything is analysed
+ * (`captures.ts`).
  */
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react';
+
+import { screenshotsCounter } from '@squiggle/shared/src/hosted/audience';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { youtubeVideoId } from '../../../shared/src/engine/video';
@@ -34,6 +39,7 @@ import {
   type Progress,
 } from '../analysis';
 import { getAccount, type Account } from '../api';
+import { MAX_CAPTURES, readCaptures, takeSharedCaptures } from '../captures';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
 import { StepFigure, type Step } from '../components/Iso';
@@ -128,6 +134,25 @@ const NOTHING_READ =
 const NOTHING_TO_APPEND =
   'Squiggle ne trouve pas de texte copié. Si vous venez de copier la suite, appuyez longuement à la fin du texte, puis Coller. Sinon, copiez d’abord le passage suivant.';
 
+/** Screenshots shared to the installed app wait in its cache; the worker says how many in the query. */
+function sharedCaptures(): number {
+  if (typeof window === 'undefined') return 0;
+  return Number(new URLSearchParams(window.location.search).get('captures')) || 0;
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
+
+const CAPTURES_READ = (count: number) =>
+  `Texte lu sur ${plural(count, 'capture')}, sur cet appareil : aucune image n’a été envoyée. Relisez-le avant de lancer l’analyse : une ligne peut être mal lue, et un reste de menu ou de publicité s’efface ici.`;
+const CAPTURES_EMPTY = 'Aucun texte n’a été lu sur ces images. Importez des captures d’écran de l’article lui-même.';
+const CAPTURES_FAILED =
+  'La lecture des captures n’a pas pu démarrer. Vérifiez la connexion : le lecteur de texte se télécharge la première fois.';
+const CAPTURES_LOST = 'Les captures partagées n’ont pas été retrouvées. Importez-les ici.';
+const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un article tient d’ordinaire en moins de dix.`;
+
+/** Where a reading of screenshots stands: `done` is null while the reader itself loads. */
+type Reading = { done: number | null; total: number };
+
 /** The draft, with whatever a share or the bookmark just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null; favori: boolean } {
   const draft = loadDraft();
@@ -149,6 +174,7 @@ export function Analyser() {
   const [{ article: start, shared, favori }] = useState(initialArticle);
   /** The bookmark's article is analysed as soon as the account says it can be. */
   const [autoRun, setAutoRun] = useState(favori);
+  const [sharedCount] = useState(sharedCaptures);
   const [returning] = useState(backFromVisit);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
@@ -156,11 +182,14 @@ export function Analyser() {
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
   // A link shared alone is looked up first: someone may already have analysed it with the extension.
   const [notice, setNotice] = useState<string | null>(() =>
-    shared && !shared.text ? (shared.source ? LOOKING_UP : ADDRESS_ONLY) : paymentNotice(),
+    // Shared screenshots bring their own text.
+    shared && !shared.text && !sharedCount ? (shared.source ? LOOKING_UP : ADDRESS_ONLY) : paymentNotice(),
   );
   const [showProblem, setShowProblem] = useState(false);
+  const [reading, setReading] = useState<Reading | null>(null);
   const controller = useRef<AbortController | null>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const reportTop = useRef<HTMLHeadingElement>(null);
 
   // The shared text is in the form now; it does not stay in the address bar or the history.
@@ -175,7 +204,18 @@ export function Analyser() {
 
   // Once, for the link a share brought without its text.
   useEffect(() => {
-    if (shared && !shared.text && shared.source) void findByLink(shared.source);
+    if (shared && !shared.text && shared.source && !sharedCount) void findByLink(shared.source);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Screenshots shared to the installed app: read at once, as imported ones are.
+  useEffect(() => {
+    if (!sharedCount) return;
+    takeSharedCaptures().then((images) => {
+      if (images.length) void importCaptures(images, 'share_screenshots');
+      else setNotice(CAPTURES_LOST);
+    });
+    // Once, for the share the page opened with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -264,6 +304,7 @@ export function Analyser() {
 
   function analyse(event: FormEvent) {
     event.preventDefault();
+    if (reading) return;
     if (problem) {
       setShowProblem(true);
       textArea.current?.focus();
@@ -323,6 +364,43 @@ export function Analyser() {
         ? 'Ce passage est déjà dans le texte : copiez le suivant.'
         : `Suite ajoutée : ${added.toLocaleString('fr-FR')} caractères de plus.`,
     );
+  }
+
+  /**
+   * Screenshots, read on this device, into the text field: the reader checks
+   * the text there and starts the analysis. Nothing leaves the device here.
+   */
+  async function importCaptures(files: readonly Blob[], via: 'import_screenshots' | 'share_screenshots') {
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    setFailure(null);
+    setShowProblem(false);
+    if (!images.length) return setNotice(CAPTURES_EMPTY);
+    if (images.length > MAX_CAPTURES) return setNotice(TOO_MANY_CAPTURES);
+    setNotice(null);
+    const abort = new AbortController();
+    controller.current = abort;
+    setReading({ done: null, total: images.length });
+    try {
+      const text = await readCaptures(images, (done, total) => setReading({ done, total }), abort.signal);
+      count(via);
+      count(screenshotsCounter(images.length));
+      if (!text.trim()) return setNotice(CAPTURES_EMPTY);
+      setArticle((current) => ({ ...current, text }));
+      setNotice(CAPTURES_READ(images.length));
+      textArea.current?.focus();
+    } catch {
+      setNotice(abort.signal.aborted ? 'Lecture annulée.' : CAPTURES_FAILED);
+    } finally {
+      controller.current = null;
+      setReading(null);
+    }
+  }
+
+  function pickCaptures(event: ChangeEvent<HTMLInputElement>) {
+    const files = [...(event.target.files ?? [])];
+    // The same screenshots picked again are a new choice.
+    event.target.value = '';
+    if (files.length) void importCaptures(files, 'import_screenshots');
   }
 
   async function run(article: PastedArticle) {
@@ -451,13 +529,14 @@ export function Analyser() {
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-16">
         <form onSubmit={analyse} noValidate>
+          {/* Not disabled while screenshots are read: the reading's own Annuler is inside. */}
           <fieldset disabled={running} className="m-0 grid gap-6 border-0 p-0">
             <div>
               <div className="flex items-baseline justify-between gap-4">
                 <label htmlFor="texte" className="text-base font-medium">
                   Texte de l’article
                 </label>
-                {!running && (article.text || article.title || article.source) ? (
+                {!running && !reading && (article.text || article.title || article.source) ? (
                   <div className="-my-2 -mr-2 flex gap-2">
                     {article.text ? (
                       <button type="button" onClick={appendCopied} className={TEXT_BUTTON}>
@@ -470,14 +549,35 @@ export function Analyser() {
                   </div>
                 ) : null}
               </div>
-              {!running && !article.text ? (
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={pickCaptures}
+                data-testid="captures"
+              />
+              {reading ? (
+                <ReadingPanel reading={reading} onCancel={() => controller.current?.abort()} />
+              ) : !running && !article.text ? (
                 <div className="mt-3">
-                  <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto`}>
-                    Coller le texte copié
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto`}>
+                      Coller le texte copié
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                      className={`${SECONDARY_BUTTON} w-full sm:w-auto`}
+                    >
+                      Importer des captures
+                    </button>
+                  </div>
                   <p className="mt-2 mb-0 text-sm text-muted">
-                    Le partage depuis d’autres applis demande Chrome avec les services Google ; sinon, copiez puis
-                    Coller.
+                    Une appli qui empêche de copier ? Faites des captures d’écran en descendant dans l’article, en
+                    gardant quelques lignes d’une capture à l’autre, puis importez-les : leur texte est lu sur cet
+                    appareil, aucune image n’est envoyée.
                   </p>
                 </div>
               ) : null}
@@ -498,6 +598,7 @@ export function Analyser() {
                 value={article.text}
                 onChange={(event) => edit('text', event.target.value)}
                 onPaste={pasteMarkup}
+                readOnly={reading !== null}
                 rows={12}
                 spellCheck={false}
                 aria-describedby="texte-aide"
@@ -523,7 +624,7 @@ export function Analyser() {
               {chars === 0 ? (
                 <p className="mt-1 mb-0 text-sm text-muted">
                   Une vidéo YouTube ? Copiez sa transcription (« Afficher la transcription », sous la description)
-                  et collez-la ici.
+                  et collez-la ici. Dans l’appli, où elle ne se copie pas, faites-en des captures.
                 </p>
               ) : null}
             </div>
@@ -661,6 +762,12 @@ function PhoneGuide({ os }: { os: PhoneOs }) {
       <p className="mt-2 mb-0">
         Sans favori, copiez un passage, collez-le, puis « Ajouter la suite » pour chacun des suivants : les répétitions
         sont retirées.
+      </p>
+      <p className="mt-2 mb-0">
+        Une appli qui bloque tout, ou la transcription d’une vidéo dans l’appli YouTube : faites des captures d’écran
+        en descendant, puis « Importer des captures »
+        {os === 'android' ? ', ou partagez-les depuis Photos vers Squiggle' : ''}. Leur texte est lu sur ce
+        téléphone.
       </p>
     </div>
   );
@@ -857,6 +964,47 @@ function Offre({ account, view }: { account: Account; view: AccountView }) {
       </p>
       <Abonnement account={account} retour="/analyser" />
     </section>
+  );
+}
+
+/** Screenshots being read, one after the other, on the device. */
+function ReadingPanel({ reading, onCancel }: { reading: Reading; onCancel: () => void }) {
+  const { done, total } = reading;
+  // The reader loads first, then each screenshot counts for an equal part.
+  const percent = done === null ? 4 : Math.max(4, Math.round((done / total) * 100));
+  return (
+    <div className="mt-3 grid gap-3 rounded-control border border-border bg-surface px-4 py-4">
+      <div className="flex items-baseline justify-between gap-4">
+        <p role="status" aria-live="polite" className="m-0 text-base font-medium">
+          {done === null
+            ? 'Préparation de la lecture…'
+            : `Lecture de la capture ${Math.min(done + 1, total)} sur ${total}…`}
+        </p>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="-my-2 -mr-2 shrink-0 px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground"
+        >
+          Annuler
+        </button>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Lecture des captures"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="h-1.5 overflow-hidden rounded-full bg-border"
+      >
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-200 ease-out motion-reduce:transition-none"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="m-0 text-sm text-muted">
+        Le texte est lu sur cet appareil, sans rien envoyer. La première fois, le lecteur se télécharge (quelques Mo).
+      </p>
+    </div>
   );
 }
 
