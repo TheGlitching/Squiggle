@@ -14,6 +14,18 @@ import {
   TextBlock,
 } from './types';
 
+/**
+ * The hidden element a passage sits in, if any. Mobile pages collapse their
+ * sections (`hidden="until-found"` on mobile Wikipedia), and a range inside one
+ * still reports rectangles: they are not where the text would be, so a
+ * highlight drawn from them lands on whatever is shown there instead.
+ */
+export function collapsedAncestor(range: Range): HTMLElement | null {
+  const node = range.commonAncestorContainer;
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return element?.closest<HTMLElement>('[hidden]') ?? null;
+}
+
 export class RangeTracker {
   private doc: Document;
 
@@ -374,6 +386,7 @@ export class RangeTracker {
    * Compute line-by-line bounding rects relative to document viewport / page coordinates
    */
   public computeRangeRects(range: Range): HighlightRect[] {
+    if (collapsedAncestor(range)) return [];
     const clientRects = Array.from(range.getClientRects());
     const scrollX = typeof window !== 'undefined' ? window.scrollX || window.pageXOffset || 0 : 0;
     const scrollY = typeof window !== 'undefined' ? window.scrollY || window.pageYOffset || 0 : 0;
