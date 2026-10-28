@@ -116,7 +116,8 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
   },
   {
     path: '/favori',
-    title: 'Le favori « Analyser avec Squiggle » - Squiggle',
+    // The page's title is the bookmark's name: the browser fills it in when the page is saved.
+    title: 'Analyser avec Squiggle',
     description:
       'Sur téléphone, analysez d’un geste l’article ouvert dans le navigateur : le favori lit son texte dans la page. Chrome Android et Safari iPhone.',
   },
