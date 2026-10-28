@@ -26,6 +26,14 @@ export const AUDIENCE_METRIC_NAMES = [
   'entry_bookmarklet',
   // A kind of text pasted on /analyser, counted when it is analysed.
   'paste_transcript',
+  // Screenshots read on the device on /analyser: imported from the page or
+  // shared to the installed app, then how many (`screenshotsCounter`).
+  'import_screenshots',
+  'share_screenshots',
+  'screenshots_1',
+  'screenshots_2_4',
+  'screenshots_5_9',
+  'screenshots_10_plus',
   // A finding reported as wrong, by its category (`flagCounters`).
   'flag_finding_sophisme',
   'flag_finding_affirmation_non_etayee',
@@ -44,6 +52,14 @@ export type AudienceMetricName = (typeof AUDIENCE_METRIC_NAMES)[number];
 
 export function isAudienceMetricName(value: unknown): value is AudienceMetricName {
   return (AUDIENCE_METRIC_NAMES as readonly unknown[]).includes(value);
+}
+
+/** The counter for a number of screenshots read at once: a bucket, never the number. */
+export function screenshotsCounter(count: number): AudienceMetricName {
+  if (count <= 1) return 'screenshots_1';
+  if (count <= 4) return 'screenshots_2_4';
+  if (count <= 9) return 'screenshots_5_9';
+  return 'screenshots_10_plus';
 }
 
 /**

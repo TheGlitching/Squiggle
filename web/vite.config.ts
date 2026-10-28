@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 import { build as esbuild } from 'esbuild';
@@ -87,6 +88,42 @@ function favori(): Plugin {
   };
 }
 
+/**
+ * The OCR that reads imported screenshots (`src/captures.ts`), served from our
+ * own origin under `/ocr/`: Tesseract's worker, its WebAssembly core in the
+ * three builds a browser may pick (LSTM only, with SIMD, with relaxed SIMD),
+ * and the French model. Left to its defaults it would fetch them from a CDN.
+ * They are copied beside the build, not bundled, so the service worker's
+ * shell never carries their dozen megabytes: they load on a first import only.
+ */
+const OCR_FILES: Record<string, string> = {
+  'worker.min.js': 'tesseract.js/dist/worker.min.js',
+  'tesseract-core-lstm.wasm.js': 'tesseract.js-core/tesseract-core-lstm.wasm.js',
+  'tesseract-core-simd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js',
+  'tesseract-core-relaxedsimd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js',
+  'fra.traineddata.gz': '@tesseract.js-data/fra/4.0.0_best_int/fra.traineddata.gz',
+};
+
+function ocr(): Plugin {
+  const source = (name: string) => createRequire(import.meta.url).resolve(OCR_FILES[name]);
+  return {
+    name: 'squiggle-ocr',
+    configureServer(server) {
+      server.middlewares.use('/ocr', (request, response, next) => {
+        const name = request.url?.split('?')[0].slice(1) ?? '';
+        if (!Object.hasOwn(OCR_FILES, name)) return next();
+        response.setHeader('content-type', name.endsWith('.js') ? 'text/javascript' : 'application/gzip');
+        response.end(readFileSync(source(name)));
+      });
+    },
+    writeBundle(options) {
+      const dir = `${options.dir}/ocr`;
+      mkdirSync(dir, { recursive: true });
+      for (const name of Object.keys(OCR_FILES)) copyFileSync(source(name), `${dir}/${name}`);
+    },
+  };
+}
+
 /** Where the built page lives: `/enseignants` is `enseignants.html`, which Cloudflare serves without a redirect. */
 const pageFile = (path: string) => (path === '/' ? 'index.html' : `${path.slice(1)}.html`);
 
@@ -167,7 +204,7 @@ function prerender(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), favori(), serviceWorker(), prerender()],
+  plugins: [react(), favori(), serviceWorker(), prerender(), ocr()],
   // The API origin is same-origin in production. A local dev build points at
   // a local server with VITE_API_BASE_URL; it is never a secret.
   server: { port: 5174, strictPort: true },
