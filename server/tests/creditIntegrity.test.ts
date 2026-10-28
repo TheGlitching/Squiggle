@@ -130,7 +130,7 @@ describe('a paid-for run is closed', () => {
 });
 
 describe('the run is reserved before the provider is called', () => {
-  it('lets only one of two simultaneous audits through', async () => {
+  it('audits once for two simultaneous requests on the same article, and hands both the one run', async () => {
     const env = makeTestEnv({ fetchImpl: pageFetch() });
     const who = await signedIn(env, 'marie@example.org');
 
@@ -141,8 +141,35 @@ describe('the run is reserved before the provider is called', () => {
       call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS }),
     ]);
 
-    const statuses = [a.status, b.status].sort();
-    expect(statuses).toEqual([200, 429]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(b.json.runId).toBe(a.json.runId);
+    expect(env.llm.calls.complete).toBe(1);
+  });
+
+  it('lets only one of two simultaneous audits of different articles through', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+    const other = [{ id: 'b1', type: 'paragraph' as const, text: 'Un autre article, sur un autre sujet entièrement.', charStart: 0 }];
+
+    const [a, b] = await Promise.all([
+      call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS }),
+      call(env, who, '/v1/analyze/audit', { url: `${ARTICLE_URL}-bis`, title: 'T', blocks: other }),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 429]);
+  });
+
+  it('starts a run of its own when the audit it waited on fails', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch() });
+    const who = await signedIn(env, 'marie@example.org');
+
+    env.llm.failNextComplete = true;
+    const [a, b] = await Promise.all([
+      call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS }),
+      call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS }),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 502]);
   });
 
   it('releases the reservation when the audit itself fails', async () => {

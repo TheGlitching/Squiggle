@@ -51,8 +51,14 @@ export const CONCURRENT_RUN_WINDOW_MS = 5 * 60 * 1000;
 export const ANON_ANALYSES_PER_IP_PER_DAY = 1;
 export const ANON_ANALYSES_PER_DAY = 40;
 
-/** Concurrent analyses allowed per account. */
-export const MAX_CONCURRENT_RUNS = 1;
+/**
+ * How long a second request on the text of a run whose audit is still being
+ * written waits for it, and how often it looks. Past the audit's own 5-25
+ * seconds, with room for a slow provider; a run silent for longer is treated
+ * as lost.
+ */
+export const JOIN_WAIT_MS = 60 * 1000;
+export const JOIN_POLL_MS = 1000;
 
 /** Verify attempts one IP may make per hour against magic-link codes. */
 export const MAGIC_LINK_VERIFY_PER_IP_PER_HOUR = 30;

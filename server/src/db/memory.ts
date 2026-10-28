@@ -591,12 +591,13 @@ export class MemoryDb implements Db {
     row.updatedAt = now;
   }
 
-  async countActiveAnalysisRuns(userId: string, since: number): Promise<number> {
-    let count = 0;
+  async activeAnalysisRun(userId: string, since: number): Promise<AnalysisRunRow | null> {
+    let latest: AnalysisRunRow | null = null;
     for (const row of this.runs.values()) {
-      if (row.userId === userId && row.finalizedAt === null && row.updatedAt >= since) count += 1;
+      if (row.userId !== userId || row.finalizedAt !== null || row.updatedAt < since) continue;
+      if (!latest || row.updatedAt >= latest.updatedAt) latest = row;
     }
-    return count;
+    return latest;
   }
 
   async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {

@@ -77,7 +77,8 @@ import {
   ANON_ANALYSES_PER_IP_PER_DAY,
   CONCURRENT_RUN_WINDOW_MS,
   HOUR_MS,
-  MAX_CONCURRENT_RUNS,
+  JOIN_POLL_MS,
+  JOIN_WAIT_MS,
 } from '../usage/abuse';
 import { articleUrlHash, canonicalAddress, PASTED_TEXT_KEY } from './canonicalUrl';
 import { shortQuotes } from './citations';
@@ -312,6 +313,12 @@ export async function analyzeAudit(
     return apiError('article_too_long', articleTooLongMessage(chars));
   }
 
+  const textHash = await articleTextHash(payload.blocks);
+  if (!isVisitor(reader)) {
+    const joined = await joinOpenRun(s, reader, urlHash, textHash);
+    if (joined) return joined;
+  }
+
   const now = s.clock.now();
 
   // Every ceiling is checked BEFORE the provider is called: an abusive client
@@ -333,7 +340,7 @@ export async function analyzeAudit(
   const run = await s.db.createAnalysisRun({
     userId: ownerOf(reader),
     urlHash,
-    state: serializeRunState(pendingState(now)),
+    state: serializeRunState(pendingState(now, textHash)),
     now,
     ttlMs: RUN_TTL_MS,
   });
@@ -437,7 +444,7 @@ export async function analyzeAudit(
     promptVersion: s.promptVersion,
     // From the blocks the audit was just run on, not from anything the client
     // declared: this is the key the finished report will be filed under.
-    textHash: await articleTextHash(payload.blocks),
+    textHash,
     // Only the extension reads the page itself; the site's text is whatever
     // the reader pasted, so its report is never served by link alone.
     readByExtension: s.surface === 'install',
@@ -468,6 +475,48 @@ export async function analyzeAudit(
 }
 
 /**
+ * The account's run in flight on this same text, handed back instead of
+ * refused: a second tap on « Analyser », a page reloaded mid-analysis, a
+ * bookmark launched again. The reader is told nothing went wrong, and the
+ * article is not audited twice: the client carries on from that run, and the
+ * stages after the audit return what the run already holds. No start is
+ * counted and no ceiling is met again, since the run already cleared them.
+ *
+ * A run whose audit is still being written is waited for, a poll at a time,
+ * since only its answer says what to hand back. If that audit fails, the run
+ * closes and this returns null: the reader's request starts a run of its own.
+ * Null too for a run on another text, which the concurrency check refuses.
+ */
+async function joinOpenRun(
+  s: AnalyzeServices,
+  user: UserRow,
+  urlHash: string,
+  textHash: string,
+): Promise<Outcome<AuditResult> | null> {
+  for (let waited = 0; ; waited += JOIN_POLL_MS) {
+    const now = s.clock.now();
+    const open = await s.db.activeAnalysisRun(user.id, now - CONCURRENT_RUN_WINDOW_MS);
+    if (!open || open.urlHash !== urlHash) return null;
+    const state = parseRunState(open.state);
+    if (state.textHash !== textHash) return null;
+    if (state.model) {
+      await s.db.updateAnalysisRunState(open.id, open.state, now);
+      logEvent({ event: 'analysis_joined', requestId: s.requestId, userId: user.id, urlHash });
+      return {
+        ok: true,
+        runId: open.id,
+        report: sanitizeReport(buildReport(state, now)),
+        researchable: researchableFindingIds(state),
+      };
+    }
+    // ponytail: the request waits on the audit in a poll loop; a run that never
+    // answers (its Worker died) is left to the concurrency check after JOIN_WAIT_MS.
+    if (waited >= JOIN_WAIT_MS) return null;
+    await new Promise((resolve) => setTimeout(resolve, JOIN_POLL_MS));
+  }
+}
+
+/**
  * What a run has to clear to start: the reader's own entitlement, one analysis
  * in flight per account, a ceiling on runs started per account, and an hourly
  * ceiling for the whole service. That last one is the only thing standing
@@ -492,9 +541,9 @@ async function enforceStartCeilings(
   // call takes. Closing it completely would need a unique partial index on
   // "one open run per user", which is worth doing if this ever proves to
   // matter and is not worth the schema today.
-  const active = await s.db.countActiveAnalysisRuns(user.id, now - CONCURRENT_RUN_WINDOW_MS);
-  if (active >= MAX_CONCURRENT_RUNS) {
-    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:concurrent', count: active });
+  const active = await s.db.activeAnalysisRun(user.id, now - CONCURRENT_RUN_WINDOW_MS);
+  if (active) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, userId: user.id, scope: 'analyze:concurrent', count: 1 });
     return apiError('rate_limited', 'Une analyse est déjà en cours. Attendez qu’elle se termine.');
   }
 
@@ -827,14 +876,16 @@ export async function analyzeFinalize(
  * exists so the reservation can be written before the provider is called; no
  * stage other than the audit ever sees it.
  */
-function pendingState(now: number): AnalysisRunState {
+function pendingState(now: number, textHash: string): AnalysisRunState {
   return {
     url: '',
     title: '',
     partialAccess: false,
+    // Empty until the audit answers: what tells a joining request to wait.
     model: '',
     promptVersion: '',
-    textHash: '',
+    // Known before the audit: a second request on the same text joins this run.
+    textHash,
     auditDurationMs: 0,
     textLengthChars: 0,
     blocksCount: 0,

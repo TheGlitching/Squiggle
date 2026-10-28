@@ -666,19 +666,7 @@ export class NeonDb implements Db {
 
   async getAnalysisRun(id: string): Promise<AnalysisRunRow | null> {
     const rows = await this.q`SELECT * FROM analysis_runs WHERE id = ${id}`;
-    if (!rows[0]) return null;
-    const r = rows[0];
-    return {
-      id: r.id as string,
-      userId: (r.user_id as string | null) ?? null,
-      urlHash: r.url_hash as string,
-      // JSONB comes back parsed; the rest of the server treats state as text.
-      state: typeof r.state === 'string' ? r.state : JSON.stringify(r.state),
-      createdAt: num(r.created_at),
-      updatedAt: num(r.updated_at),
-      expiresAt: num(r.expires_at),
-      finalizedAt: r.finalized_at === null ? null : num(r.finalized_at),
-    };
+    return rows[0] ? runRow(rows[0]) : null;
   }
 
   async updateAnalysisRunState(id: string, state: string, now: number): Promise<void> {
@@ -687,12 +675,14 @@ export class NeonDb implements Db {
     `;
   }
 
-  async countActiveAnalysisRuns(userId: string, since: number): Promise<number> {
+  async activeAnalysisRun(userId: string, since: number): Promise<AnalysisRunRow | null> {
     const rows = await this.q`
-      SELECT COUNT(*) AS n FROM analysis_runs
+      SELECT * FROM analysis_runs
       WHERE user_id = ${userId} AND finalized_at IS NULL AND updated_at >= ${since}
+      ORDER BY updated_at DESC
+      LIMIT 1
     `;
-    return num(rows[0].n);
+    return rows[0] ? runRow(rows[0]) : null;
   }
 
   async finalizeAnalysisRun(id: string, now: number): Promise<boolean> {
@@ -801,4 +791,18 @@ export class NeonDb implements Db {
     ]);
     return swept.reduce((n, rows) => n + rows.length, 0);
   }
+}
+
+function runRow(r: Record<string, unknown>): AnalysisRunRow {
+  return {
+    id: r.id as string,
+    userId: (r.user_id as string | null) ?? null,
+    urlHash: r.url_hash as string,
+    // JSONB comes back parsed; the rest of the server treats state as text.
+    state: typeof r.state === 'string' ? r.state : JSON.stringify(r.state),
+    createdAt: num(r.created_at),
+    updatedAt: num(r.updated_at),
+    expiresAt: num(r.expires_at),
+    finalizedAt: r.finalized_at === null ? null : num(r.finalized_at),
+  };
 }
