@@ -634,6 +634,66 @@ describe('Analyser, from the clipboard', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(/déjà dans le texte/);
   });
 
+  it('adds a markup-only next passage, and hands an empty read over to the field', async () => {
+    serve(account());
+    const [first, second, third] = TEXT.split('\n\n');
+    render(<Analyser />);
+    paste(first);
+    const html = `<p>${second}</p>\n<p>${third}</p>`;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { read: async () => [{ types: ['text/html'], getType: async () => new Blob([html], { type: 'text/html' }) }] },
+      configurable: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
+    await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(`${first}\n${second}\n${third}`));
+
+    clipboard(async () => '');
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement à la fin du texte, puis Coller/);
+    expect(screen.getByLabelText('Texte de l’article')).toHaveFocus();
+  });
+
+  it('analyses a copy the page only put on the clipboard as markup', async () => {
+    const seen = serve(account());
+    const html = TEXT.split('\n\n').map((p) => `<p>${p}</p>`).join('');
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { read: async () => [{ types: ['text/html'], getType: async () => new Blob([html], { type: 'text/html' }) }] },
+      configurable: true,
+    });
+    render(<Analyser />);
+    await analyseButton();
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toHaveLength(3);
+  });
+
+  it('hands an empty read over to the field’s own paste, with what to do', async () => {
+    serve(account());
+    clipboard(async () => '');
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /ne trouve pas de texte copié\. Si vous venez de copier l’article, appuyez longuement dans le champ, puis Coller/,
+    );
+    expect(screen.getByLabelText('Texte de l’article')).toHaveFocus();
+  });
+
+  it('pastes the text of a markup-only copy into the field, where the cursor is', async () => {
+    serve(account());
+    render(<Analyser />);
+    const field = screen.getByLabelText('Texte de l’article') as HTMLTextAreaElement;
+    paste('Début. ');
+    field.setSelectionRange(7, 7);
+    const data = { getData: (type: string) => (type === 'text/html' ? '<p>Un.</p><p>Deux.</p>' : '') };
+    fireEvent.paste(field, { clipboardData: data });
+    expect(field).toHaveValue('Début. Un.\n\nDeux.');
+
+    // A copy with plain text is left to the browser's own paste.
+    const plain = { getData: (type: string) => (type === 'text/plain' ? 'Simple' : '<p>Riche</p>') };
+    expect(fireEvent.paste(field, { clipboardData: plain })).toBe(true);
+    expect(field).toHaveValue('Début. Un.\n\nDeux.');
+  });
+
   it('falls back to a long press when the clipboard is refused or missing', async () => {
     serve(account());
     clipboard(() => Promise.reject(new DOMException('denied', 'NotAllowedError')));
