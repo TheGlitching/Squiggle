@@ -25,7 +25,7 @@ import {
 import { CONTACT_URL } from '../components/Layout';
 import { count, installClick } from '../count';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
-import { installLabelFor, installUrlFor, isMobile, useInstall } from '../install';
+import { installLabelFor, installUrlFor, isMobile, useInstall, useUserAgent } from '../install';
 import {
   MONTHLY_ANALYSES,
   FREE_ANALYSES,
@@ -204,7 +204,7 @@ function Then({ label }: { label: string }) {
 }
 
 export function Accueil() {
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const userAgent = useUserAgent();
   const storeUrl = installUrlFor(userAgent);
   const mobile = isMobile(userAgent);
   const install = useInstall();

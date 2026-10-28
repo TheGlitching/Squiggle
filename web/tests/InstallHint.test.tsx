@@ -45,13 +45,14 @@ afterEach(async () => {
 });
 
 describe('InstallHint', () => {
-  it('shows iOS Safari where its install lives, right under the header', () => {
+  it('shows iOS Safari where its install lives, over the bottom of the screen', () => {
     at(IPHONE);
     const banner = within(hint()!);
     expect(banner.getByText('L’appli Squiggle')).toBeInTheDocument();
     expect(banner.getByRole('img', { name: 'Partager' })).toBeInTheDocument();
     expect(banner.getByText(/Sur l’écran d’accueil/)).toBeInTheDocument();
-    expect(hint()!.previousElementSibling?.tagName).toBe('HEADER');
+    // Pinned, so that arriving after the first paint moves nothing on the page.
+    expect(hint()).toHaveClass('fixed', 'bottom-0');
   });
 
   it('hands Android the browser’s own prompt, and leaves once the app is installed', async () => {
