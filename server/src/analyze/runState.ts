@@ -32,6 +32,12 @@ export interface AnalysisRunState {
    * from that text. Part of the cache key; empty on a run that predates it.
    */
   textHash: string;
+  /**
+   * The extension read this text on the page itself, so the report may be
+   * served to a reader who has only the link. Never set for a text pasted on
+   * the site; absent on a run that predates it.
+   */
+  readByExtension?: boolean;
   /** Wall time of the audit call, reported in the finished report's meta. */
   auditDurationMs: number;
   /** When the run was reserved, before the audit call was made. */

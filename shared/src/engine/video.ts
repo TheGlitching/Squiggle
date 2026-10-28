@@ -11,9 +11,11 @@
  */
 
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com']);
+/** The short link the YouTube app shares: `https://youtu.be/<id>?si=…`. */
+const SHORT_LINK_HOST = 'youtu.be';
 const VIDEO_ID = /^[\w-]{11}$/;
 
-/** The video a YouTube watch, Shorts or live page shows, or null for any other address. */
+/** The video a YouTube watch, Shorts or live page, or a shared short link, shows; null for any other address. */
 export function youtubeVideoId(rawUrl: string): string | null {
   let url: URL;
   try {
@@ -22,7 +24,12 @@ export function youtubeVideoId(rawUrl: string): string | null {
     return null;
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-  if (!YOUTUBE_HOSTS.has(url.hostname.toLowerCase())) return null;
+  const host = url.hostname.toLowerCase();
+  if (host === SHORT_LINK_HOST) {
+    const short = /^\/([\w-]{11})\/?$/.exec(url.pathname);
+    return short ? short[1] : null;
+  }
+  if (!YOUTUBE_HOSTS.has(host)) return null;
   if (url.pathname === '/watch') {
     const id = url.searchParams.get('v') ?? '';
     return VIDEO_ID.test(id) ? id : null;

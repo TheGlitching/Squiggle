@@ -80,6 +80,7 @@ import {
   MAX_CONCURRENT_RUNS,
 } from '../usage/abuse';
 import { articleUrlHash, canonicalAddress, PASTED_TEXT_KEY } from './canonicalUrl';
+import { shortQuotes } from './citations';
 import type { AuditRequest } from './schemas';
 import { parseRunState, serializeRunState, type AnalysisRunState } from './runState';
 
@@ -251,6 +252,34 @@ export async function analyzeCheck(
   };
 }
 
+/**
+ * A report from its link alone, for the reader who shares an article or a
+ * video from a phone app and has no text to fingerprint. Nothing is fetched:
+ * it is a lookup in the reports this server already filed, and only among
+ * those built from a text the extension read on the page itself (see
+ * migration 015), under the model and prompt version in use today, and not
+ * yet expired. The article's words in it are held to short quotations
+ * (`citations.ts`). A miss is the ordinary answer for a page nobody has
+ * analysed with the extension.
+ */
+export async function analyzeLink(s: AnalyzeServices, rawUrl: string): Promise<Outcome<CheckResult>> {
+  const urlHash = await articleUrlHash(rawUrl);
+  if (!urlHash) return apiError('invalid_url', "Cette adresse n'est pas une page web analysable.");
+
+  await count(s, 'link_check');
+  const cached = await s.db.findLinkReport(urlHash, modelIdOf(s.llm()), s.promptVersion, s.clock.now());
+  if (!cached) return { ok: true, hit: false };
+
+  logEvent({ event: 'cache_hit', requestId: s.requestId, urlHash });
+  await count(s, 'link_hit');
+  return {
+    ok: true,
+    hit: true,
+    report: shortQuotes(sanitizeReport(JSON.parse(cached.report) as AnalysisReport)),
+    cachedAt: cached.createdAt,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // audit
 // ---------------------------------------------------------------------------
@@ -409,6 +438,9 @@ export async function analyzeAudit(
     // From the blocks the audit was just run on, not from anything the client
     // declared: this is the key the finished report will be filed under.
     textHash: await articleTextHash(payload.blocks),
+    // Only the extension reads the page itself; the site's text is whatever
+    // the reader pasted, so its report is never served by link alone.
+    readByExtension: s.surface === 'install',
     auditDurationMs: audited.meta.durationMs,
     textLengthChars: audited.meta.textLengthChars ?? 0,
     blocksCount: audited.meta.blocksCount ?? payload.blocks.length,
@@ -767,6 +799,7 @@ export async function analyzeFinalize(
         textHash: state.textHash,
         model: state.model,
         promptVersion: state.promptVersion,
+        readByExtension: state.readByExtension ?? false,
         report: serialized,
         sizeBytes,
         now,

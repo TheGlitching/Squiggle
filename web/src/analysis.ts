@@ -66,6 +66,22 @@ export async function cachedReport(
   return report ? { report, blocks, times } : null;
 }
 
+/**
+ * The report a reader using the extension already made for this link, or null.
+ * Only the link is sent: the server looks it up among the reports it filed and
+ * fetches nothing, so this is what a link shared from a phone app can find.
+ * Any failure is a miss: the reader then pastes the text, as before.
+ */
+export async function reportByLink(link: string): Promise<{ report: AnalysisReport; cachedAt: number } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/web/anon/link?url=${encodeURIComponent(link)}`, { credentials: 'omit' });
+    const body = (await res.json()) as { ok?: boolean; hit?: boolean; report?: AnalysisReport; cachedAt?: number };
+    return body.ok && body.hit && body.report ? { report: body.report, cachedAt: body.cachedAt ?? Date.now() } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** What the reader is told, by the code the server named. */
 const ANALYSIS_ERRORS: Record<string, string> = {
   rate_limited: 'Une analyse est déjà en cours, ou le service est très demandé. Réessayez dans un instant.',
