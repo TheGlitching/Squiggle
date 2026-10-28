@@ -14,6 +14,7 @@ import type { AnalysisReport } from '../../shared/src/engine/types';
 import type { Account } from '../src/api';
 import { loadSeance, saveSeance } from '../src/classe';
 import { readCaptures, takeSharedCaptures } from '../src/captures';
+import { pageFragment } from '../src/favori/payload';
 import { loadDraft, saveDraft } from '../src/paste';
 import { Analyser } from '../src/pages/Analyser';
 import { account, jsonResponse, memoryStorage } from './helpers';
@@ -327,6 +328,43 @@ describe('Analyser, from the bookmark', () => {
     render(<Analyser />);
     await screen.findByText('Essai épuisé');
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+});
+
+describe('Analyser, from the bookmark that brings the page', () => {
+  const html = (body: string) =>
+    `<html><head><title>Cantines</title><link rel="canonical" href="https://presse.example/cantines"></head><body>${body}</body></html>`;
+  const articlePage = html(`<article><h1>Cantines</h1>${TEXT.split('\n').map((line) => `<p>${line}</p>`).join('')}</article>`);
+
+  it('reads the article out of the page, then analyses it at once', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(articlePage, 'https://presse.example/cantines?xtor=RSS')}`);
+    render(<Analyser />);
+    expect(screen.getByRole('status')).toHaveTextContent('Analyse lancée automatiquement');
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    const audit = seen.find((s) => s.url === '/web/analyze/audit');
+    expect(audit?.body).toMatchObject({ url: 'https://presse.example/cantines', title: 'Cantines' });
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_bookmarklet' }]);
+  });
+
+  it('says so, and analyses nothing, when the page has no article in it', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(html('<nav><a href="/">Accueil</a></nav>'), 'https://presse.example/')}`);
+    render(<Analyser />);
+    expect(await screen.findByText(/Squiggle n’a pas trouvé d’article dans la page que le favori a apportée/)).toBeInTheDocument();
+    await analyseButton();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  it('can be cancelled while the page is still being read', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(articlePage, 'https://presse.example/cantines')}`);
+    render(<Analyser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    await analyseButton();
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 });

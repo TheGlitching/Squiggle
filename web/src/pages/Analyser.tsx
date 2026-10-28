@@ -14,8 +14,8 @@
  * analysis in the same tap, and "Ajouter la suite" adds a further passage to
  * it, for an app that only lets a reader copy one screen at a time. A link
  * received alone opens in the phone's browser rather than the publisher's app,
- * where the bookmark "Analyser avec Squiggle" (`/favori`) reads the article
- * and brings it back here in the address's fragment, which is read once and
+ * where the bookmark "Analyser avec Squiggle" (`/favori`) takes the page
+ * and brings it back here in the address's fragment, where the article is read out of it (`favori/article.ts`), which is read once and
  * wiped like a share; it is then analysed at once, as a copied text is. A
  * video's transcript pasted here is analysed
  * without its timestamps, which come back beside each passage in the report
@@ -64,6 +64,7 @@ import {
   type PastedArticle,
   webAddress,
 } from '../paste';
+import { carriesPage, readFavori } from '../favori/article';
 import { FAVORI_PARAM, FAVORI_VALUE } from '../favori/payload';
 import { browserLink, currentPhoneOs, type PhoneOs } from '../phone';
 import { newSeance, saveSeance } from '../classe';
@@ -147,6 +148,7 @@ const CAPTURES_READ = (count: number) =>
 const CAPTURES_EMPTY = 'Aucun texte n’a été lu sur ces images. Importez des captures d’écran de l’article lui-même.';
 const CAPTURES_FAILED =
   'La lecture des captures n’a pas pu démarrer. Vérifiez la connexion : le lecteur de texte se télécharge la première fois.';
+const FAVORI_UNREAD = 'Squiggle n’a pas trouvé d’article dans la page que le favori a apportée. Copiez le texte, puis collez-le ici.';
 const CAPTURES_LOST = 'Les captures partagées n’ont pas été retrouvées. Importez-les ici.';
 const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un article tient d’ordinaire en moins de dix.`;
 
@@ -156,11 +158,20 @@ type Reading = { done: number | null; total: number };
 /** The bookmark's analysis, from the moment the page opens. */
 const AUTO_START: Progress = { message: 'Analyse lancée automatiquement…', percent: 2 };
 
-/** The draft, with whatever a share or the bookmark just brought on top of it. */
-function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null; favori: boolean } {
+/**
+ * The draft, with whatever a share or the bookmark just brought on top of it.
+ * The bookmark brings a page, whose article is read once the page has opened: `page` until then.
+ */
+function initialArticle(): {
+  article: PastedArticle;
+  shared: Partial<PastedArticle> | null;
+  favori: boolean;
+  page?: URLSearchParams;
+} {
   const draft = loadDraft();
   if (typeof window === 'undefined') return { article: draft, shared: null, favori: false };
   const params = sharedParams(window.location);
+  if (carriesPage(params)) return { article: EMPTY_ARTICLE, shared: null, favori: true, page: params };
   const shared = articleFromShare(params);
   if (!shared) return { article: draft, shared: null, favori: false };
   // A shared text replaces the draft; a shared address alone keeps the draft's text,
@@ -174,9 +185,11 @@ function initialArticle(): { article: PastedArticle; shared: Partial<PastedArtic
 }
 
 export function Analyser() {
-  const [{ article: start, shared, favori }] = useState(initialArticle);
-  /** The bookmark's article is analysed as soon as the account says it can be. */
-  const [autoRun, setAutoRun] = useState(favori);
+  const [{ article: start, shared, favori, page }] = useState(initialArticle);
+  /** The bookmark's article is analysed as soon as it is read and the account says it can be. */
+  const [autoRun, setAutoRun] = useState(favori && !page);
+  /** Cleared by a cancel that comes while the bookmark's page is still being read. */
+  const readingPage = useRef(Boolean(page));
   /** The run on screen is the bookmark's, which the reader never asked for with a tap. */
   const [autoStarted, setAutoStarted] = useState(favori);
   const [sharedCount] = useState(sharedCaptures);
@@ -186,7 +199,7 @@ export function Analyser() {
   // The bookmark's analysis shows as started from the first frame, while the
   // account is still being checked: nothing on screen asks for a tap.
   const [phase, setPhase] = useState<Phase>(() =>
-    favori && !pasteProblem(start) ? { kind: 'running', progress: AUTO_START } : { kind: 'edit' },
+    favori && (page || !pasteProblem(start)) ? { kind: 'running', progress: AUTO_START } : { kind: 'edit' },
   );
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
   // A link shared alone is looked up first: someone may already have analysed it with the extension.
@@ -210,6 +223,28 @@ export function Analyser() {
   }, []);
 
   useEffect(() => saveDraft(article), [article]);
+
+  // Once, for the page the bookmark brought.
+  useEffect(() => {
+    if (!page) return;
+    readFavori(page).then(
+      (read) => {
+        if (!readingPage.current) return;
+        readingPage.current = false;
+        setArticle({ title: read.title, source: read.url, text: read.text });
+        if (read.text) return void setAutoRun(true);
+        setPhase({ kind: 'edit' });
+        setNotice(FAVORI_UNREAD);
+      },
+      () => {
+        if (!readingPage.current) return;
+        readingPage.current = false;
+        setPhase({ kind: 'edit' });
+        setNotice(FAVORI_UNREAD);
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A page left mid-run stops driving it: opened again, the same text joins the run on the server.
   useEffect(() => () => controller.current?.abort(), []);
@@ -464,6 +499,7 @@ export function Analyser() {
   /** The run in flight, or the bookmark's, still waiting on the account. */
   function cancel() {
     if (controller.current) return controller.current.abort();
+    readingPage.current = false;
     setAutoRun(false);
     setPhase({ kind: 'edit' });
     setNotice('Analyse annulée. Votre texte est toujours là.');

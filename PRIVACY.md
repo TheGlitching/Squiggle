@@ -157,9 +157,11 @@ site, l'adresse que vous indiquez à côté d'un texte collé reste une simple m
 elle accompagne le rapport et sert de clé au cache, mais **elle n'est jamais visitée**,
 et un texte collé ne cite aucun lien, si bien qu'une analyse lancée depuis le site ne
 fait lire aucune page à notre serveur. Le favori « Analyser avec Squiggle », sur
-téléphone, lit l'article dans la page que vous avez ouverte et l'apporte au site dans
-la partie de l'adresse qui suit `#`, que le navigateur n'envoie à aucun serveur : il
-est ensuite traité exactement comme un texte collé.
+téléphone, copie la page que vous avez ouverte, sans ce qui n'y est pas affiché, et
+l'apporte au site dans la partie de l'adresse qui suit `#`, que le navigateur n'envoie à
+aucun serveur : le site en lit l'article dans votre navigateur, avec l'extracteur de
+l'extension, et ce texte est ensuite traité exactement comme un texte collé. La page
+elle-même ne quitte pas votre téléphone.
 
 **Le rapport est mis en cache et partagé.** Deux lecteurs du même article obtiennent le
 même rapport, et c'est ce qui rend le service abordable : le second ne consomme aucun

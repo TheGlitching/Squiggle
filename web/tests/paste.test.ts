@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 import { articleTextHash } from '../../shared/src/hosted/textHash';
-import { favoriFragment } from '../src/favori/payload';
 import {
   appendPaste,
   articleFromShare,
@@ -118,10 +117,11 @@ describe('articleFromShare', () => {
   });
 });
 
-describe('the bookmark’s fragment', () => {
+describe('the fragment of a bookmark saved before it brought the page', () => {
   it('reaches the form as the iPhone shortcut’s does, whatever the text holds', () => {
     const text = `${BODY}\nUn « & », un « = », un « # » et 100 % de caractères à garder.`;
-    const hash = favoriFragment({ title: 'Emploi & chômage', url: 'https://presse.example/emploi?utm_source=x', text });
+    const title = 'Emploi & chômage';
+    const hash = `#${new URLSearchParams({ title, url: 'https://presse.example/emploi?utm_source=x', text, via: 'favori' })}`;
     const params = sharedParams({ search: '', hash });
     expect(params.get('via')).toBe('favori');
     expect(articleFromShare(params)).toEqual({ title: 'Emploi & chômage', source: 'https://presse.example/emploi?utm_source=x', text });
