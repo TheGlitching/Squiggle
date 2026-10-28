@@ -8,7 +8,7 @@
  * - Bidirectional synchronization with Chrome / Firefox Sidepanel & Background Service Worker
  */
 
-import { ArticleExtractor } from './extractor';
+import { ArticleExtractor } from '../../shared/src/extract/extractor';
 import { detectSocialPlatform } from './socialPlatform';
 import { SocialExtractor } from './socialExtractor';
 import { RangeTracker } from './rangeTracker';

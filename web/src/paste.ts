@@ -181,6 +181,63 @@ export function sharedParams(location: Pick<Location, 'search' | 'hash'>): URLSe
   return new URLSearchParams(location.hash.length > 1 ? location.hash.slice(1) : location.search);
 }
 
+/** Below this, a line is too short to be told apart from another one like it ("Publicité", a time). */
+const SAME_LINE_CHARS = 40;
+/** The shortest run of words two copies must share to be one passage cut in two. */
+const MIN_OVERLAP_CHARS = 20;
+
+/** Where `next` picks up the end of `line`, as a copy that starts inside the paragraph the last one ended in. */
+function overlap(line: string, next: string): number {
+  for (let size = Math.min(line.length, next.length); size >= MIN_OVERLAP_CHARS; size--) {
+    if (line.endsWith(next.slice(0, size))) return size;
+  }
+  return 0;
+}
+
+/**
+ * The text with one more passage copied after it ("Ajouter la suite"): an
+ * app that only lets the reader select what is on screen is copied a screen
+ * at a time, and two copies overlap. What the new passage repeats at its
+ * start is dropped, the paragraph the last copy cut short is completed, and a
+ * long line already in the text is not added twice.
+ */
+export function appendPaste(current: string, added: string): string {
+  const clean = (text: string) =>
+    text
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+  const lines = clean(current);
+  const next = clean(added);
+
+  // The overlap at the start of the new passage.
+  while (next.length && lines.length) {
+    const first = next[0];
+    const lastIndex = lines.length - 1;
+    const last = lines[lastIndex];
+    const long = first.length >= MIN_OVERLAP_CHARS;
+    if (lines.some((line) => line === first || (long && line.includes(first)))) {
+      next.shift();
+    } else if (last.length >= MIN_OVERLAP_CHARS && first.includes(last)) {
+      // The last copy stopped inside this paragraph: the new one has all of it.
+      lines[lastIndex] = first;
+      next.shift();
+    } else {
+      const shared = overlap(last, first);
+      if (shared) {
+        lines[lastIndex] = last + first.slice(shared);
+        next.shift();
+      }
+      break;
+    }
+  }
+  for (const line of next) {
+    if (line.length >= SAME_LINE_CHARS && lines.includes(line)) continue;
+    lines.push(line);
+  }
+  return lines.join('\n');
+}
+
 const DRAFT_KEY = 'squiggle:texte-a-analyser';
 
 /**

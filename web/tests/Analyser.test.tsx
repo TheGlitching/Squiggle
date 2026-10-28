@@ -276,6 +276,86 @@ describe('Analyser, from a share', () => {
   });
 });
 
+describe('Analyser, from the bookmark', () => {
+  const favori = (payload: Record<string, string>) => `/analyser#${new URLSearchParams({ ...payload, via: 'favori' })}`;
+
+  it('analyses the article the bookmark read, and wipes it from the address bar', async () => {
+    const seen = serve(account());
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    const audit = seen.find((s) => s.url === '/web/analyze/audit');
+    expect(audit?.body).toMatchObject({ url: 'https://presse.example/cantines', title: 'Cantines' });
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_bookmarklet' }]);
+  });
+
+  it('leaves the article in the form when the account cannot analyse it', async () => {
+    const seen = serve(account({ usage: { used: 3, limit: 3, remaining: 0, resetsAt: null } }));
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    render(<Analyser />);
+    await screen.findByText('Essai épuisé');
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+});
+
+describe('Analyser, a link received alone', () => {
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36';
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+  const original = navigator.userAgent;
+  const agent = (value: string) => Object.defineProperty(navigator, 'userAgent', { value, configurable: true });
+
+  afterEach(() => agent(original));
+
+  function receive() {
+    serve(account());
+    at(`/analyser?${new URLSearchParams({ text: 'https://presse.example/cantines?xtor=RSS' })}`);
+    render(<Analyser />);
+  }
+
+  it('opens it in Chrome on Android, not in the publisher’s app', () => {
+    agent(ANDROID);
+    receive();
+    expect(screen.getByRole('link', { name: 'Ouvrir dans le navigateur' })).toHaveAttribute(
+      'href',
+      `intent://presse.example/cantines?xtor=RSS#Intent;scheme=https;action=android.intent.action.VIEW;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent('https://presse.example/cantines?xtor=RSS')};end`,
+    );
+    expect(screen.getByRole('heading', { name: 'Depuis une appli de presse' })).toBeInTheDocument();
+  });
+
+  it('opens it in Safari on an iPhone', () => {
+    agent(IPHONE);
+    receive();
+    expect(screen.getByRole('link', { name: 'Ouvrir dans le navigateur' })).toHaveAttribute(
+      'href',
+      'x-safari-https://presse.example/cantines?xtor=RSS',
+    );
+  });
+
+  it('leaves the last report’s article behind, and keeps a text pasted before its address', () => {
+    serve(account());
+    saveDraft({ title: 'Budget', source: 'https://presse.example/budget', text: TEXT });
+    at(`/analyser?${new URLSearchParams({ text: 'https://presse.example/cantines' })}`);
+    render(<Analyser />);
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue('');
+    expect(screen.getByRole('link', { name: 'Ouvrir l’article' })).toBeInTheDocument();
+    cleanup();
+
+    saveDraft({ title: '', source: '', text: TEXT });
+    at(`/analyser?${new URLSearchParams({ text: 'https://presse.example/cantines' })}`);
+    render(<Analyser />);
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
+  });
+
+  it('is a plain link on a computer, with no phone guide', () => {
+    receive();
+    expect(screen.getByRole('link', { name: 'Ouvrir l’article' })).toHaveAttribute('href', 'https://presse.example/cantines?xtor=RSS');
+    expect(screen.queryByRole('heading', { name: 'Depuis une appli de presse' })).toBeNull();
+  });
+});
+
 describe('Analyser, signed in', () => {
   it('runs the session stages on the cookie, never fetches the source, and annotates the text', async () => {
     const seen = serve(account());
@@ -538,6 +618,20 @@ describe('Analyser, from the clipboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
     await waitFor(() => expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines'));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Collez maintenant le texte de l’article/));
+  });
+
+  it('adds the next passage copied after the text, without what it repeats', async () => {
+    serve(account());
+    const [first, second, third] = TEXT.split('\n\n');
+    render(<Analyser />);
+    paste(`${first}\n${second}`);
+    clipboard(async () => `${second}\n\n${third}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
+    await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(`${first}\n${second}\n${third}`));
+    expect(screen.getByRole('status')).toHaveTextContent(/Suite ajoutée/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/déjà dans le texte/);
   });
 
   it('falls back to a long press when the clipboard is refused or missing', async () => {
