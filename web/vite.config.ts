@@ -144,12 +144,71 @@ const STALE_PAGE_GUARD =
   "<script>if (document.getElementById('root').dataset.path !== location.pathname) document.getElementById('root').replaceChildren();</script>";
 
 /**
+ * The pages whose first screen, on a phone or a computer, sets text in Newsreader. Every
+ * other page leaves it out of its first paint (see `firstPaintReady`).
+ */
+const serifInFirstScreen = (path: string) =>
+  path === '/transparence' ||
+  path === '/enseignants/fiche-activite' ||
+  path === '/enseignants/grille-lecture' ||
+  path.startsWith('/glossaire/');
+
+/**
+ * Lets a page paint from its HTML alone. The stylesheet is written into the page
+ * rather than linked: on a slow phone connection its own request held the first paint
+ * back by seconds. The faces of the page's first screen are preloaded: Bricolage
+ * Grotesque, which sets every page's largest text, and Newsreader where the first
+ * screen sets text in it. Elsewhere Newsreader is only declared once the page has
+ * painted, so its two files do not take a slow connection's bandwidth from the first
+ * screen; until then its text is set in a face of the same size (`index.css`). The
+ * app's script, too, is only fetched once the page has painted: the page is already
+ * there in the HTML. The stylesheet file is still emitted, and the service worker keeps
+ * it in the installed app's shell.
+ */
+function firstPaintReady(
+  html: string,
+  read: (file: string) => string,
+): ((serifFirst: boolean) => string) | { error: string } {
+  const link = /<link rel="stylesheet" crossorigin href="\/(assets\/[^"]+\.css)">/.exec(html);
+  if (!link) return { error: 'index.html no longer links the one stylesheet this plugin inlines' };
+  const scripts = [...html.matchAll(/<script type="module" crossorigin src="(\/assets\/[^"]+\.js)"><\/script>/g)];
+  if (scripts.length !== 1 || html.includes('modulepreload')) {
+    return { error: 'index.html no longer has the one module script, and no other, that this plugin loads after the first paint' };
+  }
+  const css = read(link[1]);
+  const fileOf = (rule: string) => /url\((\/assets\/[^)]+\.woff2)\)/.exec(rule)?.[1];
+  const sans = css.match(/@font-face\{font-family:Bricolage Grotesque;[^}]*\}/g) ?? [];
+  const serif = css.match(/@font-face\{font-family:Newsreader;[^}]*\}/g) ?? [];
+  if (sans.length !== 1 || serif.length !== 2 || ![...sans, ...serif].every(fileOf)) {
+    return { error: 'the stylesheet no longer has the one Bricolage Grotesque face and two Newsreader faces this plugin loads' };
+  }
+  const withoutSerif = serif.reduce((rest, rule) => rest.replace(rule, ''), css);
+  const preload = (rules: string[]) =>
+    rules.map((rule) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="${fileOf(rule)}">`).join('\n    ');
+  const [script, src] = scripts[0];
+  const after = (serifFirst: boolean) => {
+    const declare = serifFirst
+      ? ''
+      : `const faces = document.createElement('style'); faces.textContent = ${JSON.stringify(serif.join(''))}; document.head.append(faces); `;
+    return `<script>requestAnimationFrame(() => setTimeout(() => { ${declare}import('${src}'); }));</script>`;
+  };
+  return (serifFirst) =>
+    html
+      .replace(script, () => after(serifFirst))
+      .replace(
+        link[0],
+        () => `${preload(serifFirst ? [...sans, ...serif] : sans)}\n    <style>${serifFirst ? css : withoutSerif}</style>`,
+      );
+}
+
+/**
  * Writes every public page (`src/seo.ts`) as its own HTML file, with its own head and
  * its content rendered in, and `sitemap.xml` beside them. A crawler or a link preview
- * reads only the HTML and never runs the app. The browser then renders the app over
- * it with `createRoot`, not `hydrateRoot`: a page that reads the reader's device on
- * first render (a draft, the install hint) differs from the build's copy, and that
- * must not be an error.
+ * reads only the HTML and never runs the app. The browser then hydrates it
+ * (`src/main.tsx`), so a page's first render must match the build's: what depends on
+ * the reader's device (the user agent) is read after it, never during it. The pages
+ * whose first render is the reader's own (`READER_STATE_PAGES` in `src/App.tsx`) are
+ * rendered afresh instead.
  */
 function prerender(): Plugin {
   type Entry = typeof import('./src/prerender');
@@ -167,10 +226,12 @@ function prerender(): Plugin {
     async closeBundle() {
       if (this.environment?.config.command !== 'build') return;
       const dist = (file: string) => new URL(`./dist/${file}`, import.meta.url);
-      const template = readFileSync(dist('index.html'), 'utf8');
-      if (!template.includes('<!--page-head-->') || !template.includes('<div id="root"></div>')) {
+      const built = readFileSync(dist('index.html'), 'utf8');
+      if (!built.includes('<!--page-head-->') || !built.includes('<div id="root"></div>')) {
         this.error('index.html no longer has the <!--page-head--> and empty #root this plugin fills in');
       }
+      const template = firstPaintReady(built, (file) => readFileSync(dist(file), 'utf8'));
+      if (typeof template !== 'function') this.error(template.error);
       const server = await createServer({
         configFile: false,
         root: new URL('.', import.meta.url).pathname,
@@ -188,13 +249,15 @@ function prerender(): Plugin {
           mkdirSync(new URL('.', dist(file)), { recursive: true });
           writeFileSync(dist(file), content);
         };
-        const page = (head: string, root: string) =>
-          template.replace('<!--page-head-->', head).replace('<div id="root"></div>', root);
+        const page = (head: string, root: string, path?: string) =>
+          template(path !== undefined && serifInFirstScreen(path))
+            .replace('<!--page-head-->', head)
+            .replace('<div id="root"></div>', root);
         const rendered = (path: string) =>
           `<div id="root" data-path="${path}">${render(path)}</div>\n    ${STALE_PAGE_GUARD}`;
 
         for (const item of PUBLIC_PAGES) {
-          write(pageFile(item.path), page(headFor(item), rendered(item.path)));
+          write(pageFile(item.path), page(headFor(item), rendered(item.path), item.path));
           if (item.share) write(shareImagePath(item).slice(1), await shareImage(item));
         }
         // The pricing anchor is the home page, under its own address.

@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 
 import { CHROME_STORE_URL, FIREFOX_STORE_URL } from '@squiggle/shared/src/stores';
 
+import { useBrowserValue } from './client';
+
 /**
  * Where the install button sends the reader. One named constant per store,
  * routed by user agent so the button is never dead: Firefox goes to AMO, a
@@ -47,11 +49,12 @@ interface InstallPromptEvent extends Event {
 }
 
 /**
- * The browser's install prompt, held once for the whole page. It is captured as the
- * module loads, so a prompt fired before React mounts is not lost, and every install
- * button shares it: the event can only be used once.
+ * The browser's install prompt, held once for the whole page. A prompt fired before
+ * this module loaded was caught by `index.html`; any later one is caught here. Every
+ * install button shares it: the event can only be used once.
  */
-let deferred: InstallPromptEvent | null = null;
+let deferred: InstallPromptEvent | null =
+  typeof window === 'undefined' ? null : ((window as { earlyInstallPrompt?: InstallPromptEvent }).earlyInstallPrompt ?? null);
 const listeners = new Set<() => void>();
 
 function publish(next: InstallPromptEvent | null) {
@@ -74,6 +77,11 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** The browser's user agent, and `''` while the app takes over a page the build rendered. */
+export function useUserAgent(): string {
+  return useBrowserValue(() => navigator.userAgent, '');
+}
+
 /**
  * How this browser installs the app, if it does and it is not installed yet:
  * Chromium hands over its own prompt, iOS Safari only has its Share menu.
@@ -81,11 +89,12 @@ function subscribe(listener: () => void) {
  */
 export function useInstall(): { kind: 'prompt'; prompt: () => void } | { kind: 'ios' } | null {
   const event = useSyncExternalStore(subscribe, () => deferred, () => null);
-  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const ua = useUserAgent();
+  const standalone = useBrowserValue(isStandalone, false);
   const ios =
     (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) && !/CriOS|FxiOS/.test(ua);
 
-  if (isStandalone()) return null;
+  if (standalone) return null;
   if (event) return { kind: 'prompt', prompt: () => void event.prompt().finally(() => publish(null)) };
   return ios ? { kind: 'ios' } : null;
 }

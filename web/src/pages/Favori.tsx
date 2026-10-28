@@ -24,6 +24,7 @@ import { FAVORI_PARAM, FAVORI_VALUE, URL_PARAM } from '../favori/payload';
 import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
 import { Page } from '../components/Layout';
 import { Label, Lines, Phone, Tap, W } from '../components/PhoneDrawing';
+import { useBrowserValue } from '../client';
 import { currentPhoneOs, type PhoneOs } from '../phone';
 import { sharedParams } from '../paste';
 import { Link } from '../router';
@@ -45,6 +46,23 @@ const DEVICES: Array<{ id: Device; label: string }> = [
   { id: 'ios', label: 'iPhone' },
   { id: 'ordinateur', label: 'Ordinateur' },
 ];
+
+/**
+ * The page the build rendered holds every device's guide, and `index.html` names the
+ * reader's device on `<html data-device>` before the first paint: these show that
+ * device's guide and press its button, so a first visit is drawn once, the way the
+ * app then renders it.
+ */
+const SHOWN_ON: Record<Device, string> = {
+  android: 'hidden [html[data-device=android]_&]:block',
+  ios: 'hidden [html[data-device=ios]_&]:block',
+  ordinateur: 'hidden [html[data-device=ordinateur]_&]:block',
+};
+const PRESSED_ON: Record<Device, string> = {
+  android: '[html[data-device=android]_&]:bg-accent [html[data-device=android]_&]:text-accentForeground',
+  ios: '[html[data-device=ios]_&]:bg-accent [html[data-device=ios]_&]:text-accentForeground',
+  ordinateur: '[html[data-device=ordinateur]_&]:bg-accent [html[data-device=ordinateur]_&]:text-accentForeground',
+};
 
 interface Step {
   title: string;
@@ -204,16 +222,19 @@ function essaiOutcome(): Outcome {
 export function Favori() {
   const [outcome] = useState(essaiOutcome);
   const [resumed] = useState(() => savedProgress(currentPhoneOs()));
-  const [device, setDevice] = useState<Device>(() => currentPhoneOs() ?? 'ordinateur');
+  // `undefined` only in the build, which renders every device's guide.
+  const detected = useBrowserValue<Device | undefined>(() => currentPhoneOs() ?? 'ordinateur', undefined);
+  const [chosen, setDevice] = useState<Device | null>(null);
+  const device = chosen ?? detected;
   // 0 is the copy; 1 and on are the device's steps.
   const [step, setStep] = useState(() => {
-    if (device === 'ordinateur') return 0;
+    if (!device || device === 'ordinateur') return 0;
     if (outcome === 'works') return STEPS[device].length;
     if (outcome === 'unchanged') return PASTE_STEP;
     return resumed?.step ?? 0;
   });
   const [copied, setCopied] = useState<'ok' | 'manual' | null>(null);
-  const code = bookmarkletFor(typeof window === 'undefined' ? ORIGIN : window.location.origin);
+  const code = bookmarkletFor(useBrowserValue(() => window.location.origin, ORIGIN));
   const field = useRef<HTMLTextAreaElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
@@ -233,7 +254,7 @@ export function Favori() {
   }, [step, device]);
 
   useEffect(() => {
-    if (device !== 'ordinateur') write(PROGRESS_KEY, JSON.stringify({ os: device, step } satisfies Progress));
+    if (device && device !== 'ordinateur') write(PROGRESS_KEY, JSON.stringify({ os: device, step } satisfies Progress));
   }, [device, step]);
 
   function go(next: number) {
@@ -291,7 +312,9 @@ export function Favori() {
             aria-pressed={device === item.id}
             onClick={() => choose(item.id)}
             className={`min-h-11 rounded-[calc(var(--radius-control)-4px)] px-4 text-base font-medium transition-colors duration-160 ease-out ${
-              device === item.id ? 'bg-accent text-accentForeground' : 'text-muted hover:text-foreground'
+              device === item.id
+                ? 'bg-accent text-accentForeground'
+                : `text-muted hover:text-foreground ${device ? '' : PRESSED_ON[item.id]}`
             }`}
           >
             {item.label}
@@ -299,23 +322,27 @@ export function Favori() {
         ))}
       </div>
 
-      {device === 'ordinateur' ? (
-        <Computer code={code} />
-      ) : (
-        <>
-          {step === 0 ? <Overview os={device} /> : null}
-          <Guide
-            os={device}
-            step={step}
-            copied={copied}
-            code={code}
-            field={field}
-            heading={heading}
-            onCopy={copy}
-            onGo={go}
-          />
-        </>
-      )}
+      {(device ? [device] : DEVICES.map((item) => item.id)).map((id) => (
+        <div key={id} className={device ? undefined : SHOWN_ON[id]}>
+          {id === 'ordinateur' ? (
+            <Computer code={code} />
+          ) : (
+            <>
+              {step === 0 ? <Overview os={id} /> : null}
+              <Guide
+                os={id}
+                step={step}
+                copied={copied}
+                code={code}
+                field={field}
+                heading={heading}
+                onCopy={copy}
+                onGo={go}
+              />
+            </>
+          )}
+        </div>
+      ))}
 
       <section aria-labelledby="favori-trajet" className="mt-16 border-t border-lineSoft pt-10">
         <h2 id="favori-trajet" className="m-0 font-display text-2xl font-semibold tracking-[-0.01em]">
@@ -369,12 +396,12 @@ function Guide({
   const total = steps.length + 1;
   const current = step === 0 ? null : steps[step - 1];
   return (
-    <section aria-labelledby="favori-etape" className="mt-8 scroll-mt-4">
+    <section aria-labelledby={`favori-etape-${os}`} className="mt-8 scroll-mt-4">
       <p className="m-0 text-base font-medium text-accentInk tabular-nums">
         Étape {step + 1} sur {total}
       </p>
       <h2
-        id="favori-etape"
+        id={`favori-etape-${os}`}
         ref={heading}
         tabIndex={-1}
         className="mt-2 mb-0 scroll-mt-4 font-display text-2xl leading-tight font-semibold tracking-[-0.01em] outline-none"
@@ -499,9 +526,9 @@ function Overview({ os }: { os: PhoneOs }) {
     ...STEPS[os].map(({ short, screen }) => ({ short, screen })),
   ];
   return (
-    <section aria-labelledby="favori-apercu" data-paused={paused || undefined} className="favori-apercu mt-8">
+    <section aria-labelledby={`favori-apercu-${os}`} data-paused={paused || undefined} className="favori-apercu mt-8">
       <style>{overviewStyle(frames.length)}</style>
-      <h2 id="favori-apercu" className="m-0 font-display text-2xl leading-tight font-semibold tracking-[-0.01em]">
+      <h2 id={`favori-apercu-${os}`} className="m-0 font-display text-2xl leading-tight font-semibold tracking-[-0.01em]">
         Toute la marche, d’un coup d’œil
       </h2>
       <p className="mt-2 mb-0 text-lg leading-relaxed text-pretty text-muted">

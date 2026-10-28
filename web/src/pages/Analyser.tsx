@@ -731,7 +731,7 @@ export function Analyser() {
             className={
               view?.needsSubscription
                 ? 'mt-6'
-                : 'sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0'
+                : 'sticky bottom-[var(--install-hint-height,0px)] z-10 -mx-4 mt-6 border-t border-border bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0'
             }
           >
             {showProblem && problem ? (
