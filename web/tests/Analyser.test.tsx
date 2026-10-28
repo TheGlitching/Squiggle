@@ -208,6 +208,18 @@ describe('Analyser, from a share', () => {
     await waitFor(() => expect(window.location.search).toBe(''));
   });
 
+  it('reads the iPhone shortcut’s article after the #, and wipes it from the address bar', async () => {
+    serve(account());
+    // As `web/shortcut/page.ts` writes it: encodeURIComponent, so a "+" stays a "+".
+    const fields = { title: 'Cantines', text: `${TEXT}\n1 + 1 = 2 & c’est tout`, url: 'https://presse.example/cantines' };
+    at(`/analyser#${Object.entries(fields).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`);
+    render(<Analyser />);
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(fields.text);
+    expect(screen.getByLabelText(/Titre/)).toHaveValue('Cantines');
+    expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
+    await waitFor(() => expect(window.location.hash).toBe(''));
+  });
+
   it('takes a shared address as the source only, and asks for the text', async () => {
     serve(account());
     at(`/analyser?${new URLSearchParams({ title: 'Cantines', text: 'https://presse.example/cantines' })}`);

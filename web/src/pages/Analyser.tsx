@@ -37,6 +37,7 @@ import {
   pastedChars,
   pasteProblem,
   saveDraft,
+  sharedParams,
   type PastedArticle,
   webAddress,
 } from '../paste';
@@ -83,7 +84,7 @@ const MANUAL_PASTE = 'Ce navigateur ne laisse pas lire le presse-papiers : appuy
 /** The draft, with whatever a share just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null } {
   const draft = loadDraft();
-  const shared = articleFromShare(new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
+  const shared = typeof window === 'undefined' ? null : articleFromShare(sharedParams(window.location));
   if (!shared) return { article: draft, shared: null };
   // A shared text replaces the draft; a shared address alone keeps the draft's text.
   const article = shared.text
@@ -109,7 +110,7 @@ export function Analyser() {
 
   // The shared text is in the form now; it does not stay in the address bar or the history.
   useEffect(() => {
-    if (window.location.search) window.history.replaceState(window.history.state, '', '/analyser');
+    if (window.location.search || window.location.hash) window.history.replaceState(window.history.state, '', '/analyser');
   }, []);
 
   useEffect(() => saveDraft(article), [article]);
@@ -476,6 +477,15 @@ function Aside() {
               ? 'Installez l’appli : un article partagé vers Squiggle arrive directement ici.'
               : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil ».'}
           </p>
+          {install.kind === 'ios' ? (
+            <p className="mt-3 mb-0">
+              Un article dans Safari ou des captures :{' '}
+              <Link to="/raccourci" className={QUIET_LINK}>
+                le raccourci Analyser avec Squiggle
+              </Link>{' '}
+              les envoie ici sans copier-coller.
+            </p>
+          ) : null}
           {install.kind === 'prompt' ? (
             <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3 max-sm:w-full`}>
               Installer l’appli
