@@ -16,6 +16,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Squiggle" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- The reader's device, before the first paint, for a page that shows only that device's guide (src/pages/Favori.tsx). Same rule as phoneOs in src/phone.ts. -->
+    <script>
+      document.documentElement.dataset.device = /Android/i.test(navigator.userAgent)
+        ? 'android'
+        : /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+          ? 'ios'
+          : 'ordinateur';
+    </script>
     <!-- The app's script runs after the first paint: a browser install prompt fired before it is kept for src/install.ts. -->
     <script>
       addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); window.earlyInstallPrompt = event; }, { once: true });

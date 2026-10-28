@@ -56,10 +56,10 @@ function NotFound() {
 
 /**
  * The public pages whose first render reads the reader's browser: the draft on
- * `/analyser`, the class session on `/classe`. The build cannot know either, so these
- * are rendered afresh rather than hydrated (`src/main.tsx`).
+ * `/analyser`, the class session on `/classe`, the step reached on `/favori`. The build
+ * cannot know them, so these are rendered afresh rather than hydrated (`src/main.tsx`).
  */
-export const READER_STATE_PAGES: readonly string[] = ['/analyser', '/classe'];
+export const READER_STATE_PAGES: readonly string[] = ['/analyser', '/classe', '/favori'];
 
 /** `path` is given only by the build, which renders each public page outside a browser (`src/prerender.tsx`). */
 export function App({ path: at }: { path?: string }) {

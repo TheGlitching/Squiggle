@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 
 import { CHROME_STORE_URL, FIREFOX_STORE_URL } from '@squiggle/shared/src/stores';
 
+import { useBrowserValue } from './client';
+
 /**
  * Where the install button sends the reader. One named constant per store,
  * routed by user agent so the button is never dead: Firefox goes to AMO, a
@@ -75,15 +77,9 @@ function subscribe(listener: () => void) {
   };
 }
 
-const unchanging = () => () => {};
-
-/**
- * The browser's user agent, and `''` while the app takes over a page the build rendered
- * (see `src/main.tsx`): that first render must match the build's, which had no browser.
- * React renders again with the real one straight after.
- */
+/** The browser's user agent, and `''` while the app takes over a page the build rendered. */
 export function useUserAgent(): string {
-  return useSyncExternalStore(unchanging, () => navigator.userAgent, () => '');
+  return useBrowserValue(() => navigator.userAgent, '');
 }
 
 /**
@@ -94,7 +90,7 @@ export function useUserAgent(): string {
 export function useInstall(): { kind: 'prompt'; prompt: () => void } | { kind: 'ios' } | null {
   const event = useSyncExternalStore(subscribe, () => deferred, () => null);
   const ua = useUserAgent();
-  const standalone = useSyncExternalStore(unchanging, isStandalone, () => false);
+  const standalone = useBrowserValue(isStandalone, false);
   const ios =
     (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) && !/CriOS|FxiOS/.test(ua);
 
