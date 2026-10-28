@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The R2-02 badge's lines and squiggle (web/src/components/Brand.tsx), centred in the adaptive icon's safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:translateX="6"
+        android:translateY="6">
+        <path
+            android:fillColor="#faf9f5"
+            android:pathData="M36.5,30h55a6.5,6.5 0,0 1,0 13h-55a6.5,6.5 0,0 1,0 -13z" />
+        <path
+            android:fillColor="#faf9f5"
+            android:pathData="M36.5,52h37a6.5,6.5 0,0 1,0 13h-37a6.5,6.5 0,0 1,0 -13z" />
+        <path
+            android:pathData="M35,87 Q45,73 55,87 Q65,101 75,87 Q85,73 95,87"
+            android:strokeWidth="10"
+            android:strokeColor="#faf9f5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>
