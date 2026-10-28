@@ -10,15 +10,22 @@
  * No browser lets a page add a bookmark, so the page does the rest: the tab
  * title is already the bookmark's name, one button copies the address and
  * moves on, and only the reader's own browser is shown, one gesture a screen,
- * each with the screen it shows.
+ * each with the screen it shows. Editing the bookmark takes the reader out of
+ * the page, so before starting a looping drawing and a short list show every
+ * gesture at once, to keep in mind; the step reached is kept in this browser,
+ * and /favori/essai lets the reader try the bookmark on an example article,
+ * which says whether it works or what to fix.
  */
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { BOOKMARKLET, FAVORI_ORIGIN } from 'virtual:favori';
+
+import { FAVORI_PARAM, FAVORI_VALUE } from '../favori/payload';
 
 import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
 import { Page } from '../components/Layout';
 import { Label, Lines, Phone, Tap, W } from '../components/PhoneDrawing';
 import { currentPhoneOs, type PhoneOs } from '../phone';
+import { sharedParams } from '../paste';
 import { Link } from '../router';
 import { ORIGIN } from '../seo';
 import { SHORTCUT_PUBLISHED } from '../shortcut';
@@ -41,30 +48,39 @@ const DEVICES: Array<{ id: Device; label: string }> = [
 
 interface Step {
   title: string;
+  /** The step in a few words, for the list read before starting. */
+  short: string;
   text: ReactNode;
   screen: ReactNode;
 }
+
+/** The step that pastes the address: where a bookmark that still opens this page is sent back to. */
+const PASTE_STEP = 3;
 
 /** After the copy, each phone's gestures to save it, then the one that uses it. */
 const STEPS: Record<PhoneOs, Step[]> = {
   android: [
     {
       title: 'Mettez cette page en favori',
+      short: '⋮, puis l’étoile ☆',
       text: <>Touchez ⋮ en haut à droite, puis l’étoile ☆.</>,
       screen: <ChromeMenu />,
     },
     {
       title: 'Touchez « Modifier »',
+      short: '« Modifier », dans le bandeau en bas',
       text: <>Dans le bandeau qui apparaît en bas.</>,
       screen: <ChromeSnackbar />,
     },
     {
       title: 'Collez le favori dans « URL »',
+      short: 'Collez dans « URL », puis retour',
       text: <>Effacez l’adresse, appuyez longuement, puis Coller. Revenez en arrière : c’est enregistré.</>,
       screen: <ChromeEdit />,
     },
     {
       title: 'C’est prêt',
+      short: 'Sur un article : barre d’adresse, « Analyser »',
       text: (
         <>
           Sur un article, touchez la barre d’adresse, tapez « Analyser », puis touchez « {NAME} ». Chrome n’ouvre pas
@@ -77,36 +93,128 @@ const STEPS: Record<PhoneOs, Step[]> = {
   ios: [
     {
       title: 'Ajoutez un signet',
+      short: 'Partager, « Ajouter un signet », Enregistrer',
       text: <>Touchez Partager, puis « Ajouter un signet », puis Enregistrer.</>,
       screen: <SafariShare />,
     },
     {
       title: 'Ouvrez-le pour le modifier',
+      short: 'Signets (le livre), Modifier, le signet',
       text: <>Touchez Signets (le livre), puis Modifier, puis « {NAME} ».</>,
       screen: <SafariBookmarks editing />,
     },
     {
       title: 'Collez le favori dans l’adresse',
+      short: 'Collez dans l’adresse, puis retour',
       text: <>Effacez l’adresse, touchez le champ, puis Coller. Revenez en arrière : c’est enregistré.</>,
       screen: <SafariEdit />,
     },
     {
       title: 'C’est prêt',
+      short: `Sur un article : Signets, « ${NAME} »`,
       text: <>Sur un article, touchez Signets (le livre), puis « {NAME} ».</>,
       screen: <SafariBookmarks />,
     },
   ],
 };
 
+/** The example article /favori/essai, where the reader tries the bookmark. */
+export const ESSAI_PATH = '/favori/essai';
+/** The example article's first sentence: the bookmark that brings it to /analyser is being tried. */
+const ESSAI_MARK = `Ce court article sert d’essai au favori « ${NAME} ».`;
+
+/** The guide's step on this phone, kept in this browser for a reader who comes back from the browser's own screens. */
+const PROGRESS_KEY = 'squiggle.favori';
+/** When the reader last opened /favori/essai. */
+const ESSAI_KEY = 'squiggle.favori.essai';
+/** A bookmark touched later than this after opening the example is not that try. */
+const ESSAI_WINDOW_MS = 10 * 60_000;
+
+interface Progress {
+  os: PhoneOs;
+  step: number;
+}
+
+/** Storage that is missing, full or refused (a private window, the build) keeps nothing, and the guide starts over. */
+function read(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function write(key: string, value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // Nothing kept: the guide still works, it only starts from the top next time.
+  }
+}
+
+function savedProgress(os: PhoneOs | null): Progress | null {
+  try {
+    const saved = JSON.parse(read(PROGRESS_KEY) ?? 'null') as Progress | null;
+    return saved && saved.os === os && Number.isInteger(saved.step) && saved.step > 0 && saved.step <= STEPS[os].length
+      ? saved
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** /analyser opened by the bookmark from the example article: the bookmark works, and nothing is analysed. */
+export function favoriTried(location: Pick<Location, 'search' | 'hash'>): boolean {
+  const params = sharedParams(location);
+  return params.get(FAVORI_PARAM) === FAVORI_VALUE && (params.get('text') ?? '').includes(ESSAI_MARK);
+}
+
+type Outcome = 'works' | 'unchanged' | null;
+
+/**
+ * What the try on the example article showed. The bookmark that works comes
+ * back through /analyser with `?essai=ok`. A bookmark whose address is still
+ * this page's opens this page afresh: a new document, with no referrer, after
+ * the example was opened in an earlier one.
+ */
+function essaiOutcome(): Outcome {
+  if (typeof window === 'undefined') return null;
+  if (new URLSearchParams(window.location.search).get('essai') === 'ok') return 'works';
+  const tried = Number(read(ESSAI_KEY));
+  const load = performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined;
+  const reopened =
+    tried > 0 &&
+    tried < performance.timeOrigin &&
+    Date.now() - tried < ESSAI_WINDOW_MS &&
+    load?.type === 'navigate' &&
+    !document.referrer;
+  return reopened ? 'unchanged' : null;
+}
+
 export function Favori() {
+  const [outcome] = useState(essaiOutcome);
+  const [resumed] = useState(() => savedProgress(currentPhoneOs()));
   const [device, setDevice] = useState<Device>(() => currentPhoneOs() ?? 'ordinateur');
   // 0 is the copy; 1 and on are the device's steps.
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => {
+    if (device === 'ordinateur') return 0;
+    if (outcome === 'works') return STEPS[device].length;
+    if (outcome === 'unchanged') return PASTE_STEP;
+    return resumed?.step ?? 0;
+  });
   const [copied, setCopied] = useState<'ok' | 'manual' | null>(null);
   const code = bookmarkletFor(typeof window === 'undefined' ? ORIGIN : window.location.origin);
   const field = useRef<HTMLTextAreaElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
+
+  // The try is read once: reloaded, the page is the guide again.
+  useEffect(() => {
+    if (!outcome) return;
+    write(ESSAI_KEY, null);
+    if (window.location.search) window.history.replaceState(window.history.state, '', '/favori');
+  }, [outcome]);
 
   // A screen reader hears the new step, and a phone shows it from the top.
   useEffect(() => {
@@ -114,6 +222,10 @@ export function Favori() {
     heading.current?.closest('section')?.scrollIntoView({ block: 'start' });
     heading.current?.focus({ preventScroll: true });
   }, [step, device]);
+
+  useEffect(() => {
+    if (device !== 'ordinateur') write(PROGRESS_KEY, JSON.stringify({ os: device, step } satisfies Progress));
+  }, [device, step]);
 
   function go(next: number) {
     moved.current = true;
@@ -126,11 +238,12 @@ export function Favori() {
     setStep(0);
   }
 
-  async function copy() {
+  /** `again` is the paste step's copy, for a reader whose clipboard has moved on since: it stays on the step. */
+  async function copy(again = false) {
     try {
       await navigator.clipboard.writeText(code);
       setCopied('ok');
-      go(1);
+      if (!again) go(1);
     } catch {
       // No clipboard API: the address is shown, selected, for the reader's own Copy.
       setCopied('manual');
@@ -138,11 +251,29 @@ export function Favori() {
     }
   }
 
+  const note =
+    outcome === 'works'
+      ? 'Votre favori marche : il a lu l’article d’essai et l’a ouvert dans Squiggle.'
+      : outcome === 'unchanged'
+        ? 'Votre favori a rouvert cette page au lieu de lire l’article : son adresse est encore celle de la page. Recopiez le favori, puis collez-le dans son adresse.'
+        : resumed && step === resumed.step && step > 0
+          ? `Vous reprenez à l’étape ${step + 1}.`
+          : null;
+
   return (
     <Page
       title={NAME}
       lead="Sur votre téléphone, l’article ouvert dans le navigateur s’analyse d’un geste : le favori lit son texte dans la page et l’ouvre dans Squiggle. Rien à sélectionner, rien à copier."
     >
+      {/* The try's outcome, or where a returning reader resumes. */}
+      {note ? (
+        <p
+          role="status"
+          className={`mt-0 mb-6 rounded-control border p-4 text-lg leading-relaxed text-pretty ${outcome === 'works' ? 'border-accent' : 'border-borderControl'}`}
+        >
+          {note}
+        </p>
+      ) : null}
       <div role="group" aria-label="Votre appareil" className="inline-flex rounded-control border border-borderControl p-1">
         {DEVICES.map((item) => (
           <button
@@ -162,16 +293,19 @@ export function Favori() {
       {device === 'ordinateur' ? (
         <Computer code={code} />
       ) : (
-        <Guide
-          os={device}
-          step={step}
-          copied={copied}
-          code={code}
-          field={field}
-          heading={heading}
-          onCopy={copy}
-          onGo={go}
-        />
+        <>
+          {step === 0 ? <Overview os={device} /> : null}
+          <Guide
+            os={device}
+            step={step}
+            copied={copied}
+            code={code}
+            field={field}
+            heading={heading}
+            onCopy={copy}
+            onGo={go}
+          />
+        </>
       )}
 
       <section aria-labelledby="favori-trajet" className="mt-16 border-t border-lineSoft pt-10">
@@ -218,7 +352,7 @@ function Guide({
   code: string;
   field: RefObject<HTMLTextAreaElement>;
   heading: RefObject<HTMLHeadingElement>;
-  onCopy: () => void;
+  onCopy: (again?: boolean) => void;
   onGo: (step: number) => void;
 }) {
   const steps = STEPS[os];
@@ -241,14 +375,21 @@ function Guide({
       {current ? (
         <div className="mt-4 grid items-center gap-6 sm:grid-cols-[15rem_minmax(0,1fr)] sm:gap-10">
           <div className="mx-auto w-full max-w-[15rem] sm:order-first">{current.screen}</div>
-          <p className="m-0 text-lg leading-relaxed text-pretty max-sm:order-first">{current.text}</p>
+          <div className="max-sm:order-first">
+            <p className="m-0 text-lg leading-relaxed text-pretty">{current.text}</p>
+            {step === PASTE_STEP ? (
+              <button type="button" onClick={() => onCopy(true)} className={`${QUIET_LINK} mt-3 min-h-11 text-base`}>
+                Recopier le favori
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : (
         <>
           <p className="mt-3 mb-0 text-lg leading-relaxed text-pretty">
             Le favori est une adresse : vous la collerez à l’étape 4. Son nom, « {NAME} », est déjà prêt.
           </p>
-          <button type="button" onClick={onCopy} className={`${PRIMARY_BUTTON} mt-6 w-full sm:w-auto`}>
+          <button type="button" onClick={() => onCopy()} className={`${PRIMARY_BUTTON} mt-6 w-full sm:w-auto`}>
             Copier le favori
           </button>
           {copied === 'manual' ? (
@@ -295,7 +436,153 @@ function Guide({
           ) : null}
         </div>
       ) : null}
+      {step >= PASTE_STEP ? (
+        <div className="mt-6 border-t border-lineSoft pt-6">
+          <p className="m-0 text-lg leading-relaxed text-pretty">
+            Essayez-le sur un article d’exemple : il vous dira si le favori marche, ou quoi corriger.
+          </p>
+          <Link to={ESSAI_PATH} className={`${SECONDARY_BUTTON} mt-4 w-full sm:w-auto`}>
+            Tester mon favori
+          </Link>
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+/** How long each screen of the overview shows, in seconds. */
+const FRAME_S = 3;
+
+/**
+ * The overview's motion, written only by this page so that no other page loads
+ * it: every screen in a row, or, for a reader who has not asked for less
+ * motion, one phone that shows them in turn with the list's line in step.
+ */
+function overviewStyle(frames: number): string {
+  const share = 100 / frames;
+  const fade = share / 10;
+  const period = FRAME_S * frames;
+  return `
+.favori-apercu-corps{display:grid;gap:1.25rem}
+.favori-film{display:grid;grid-template-columns:repeat(${frames},minmax(0,1fr));gap:.5rem}
+.favori-pause{display:none}
+@media (prefers-reduced-motion:no-preference){
+  .favori-apercu-corps{display:flex;align-items:flex-start}
+  .favori-film{flex:0 0 7.5rem;grid-template-columns:minmax(0,1fr)}
+  .favori-liste{flex:1 1 0;min-width:0}
+  .favori-film>div{grid-area:1/1;opacity:0;animation:favori-ecran ${period}s linear infinite}
+  .favori-film>div>span{display:none}
+  .favori-liste>li{animation:favori-geste ${period}s step-end infinite}
+  .favori-apercu[data-paused] .favori-film>div,.favori-apercu[data-paused] .favori-liste>li{animation-play-state:paused}
+  .favori-pause{display:inline-flex}
+}
+@keyframes favori-ecran{0%{opacity:0}${fade}%{opacity:1}${share}%{opacity:1}${share + fade}%{opacity:0}100%{opacity:0}}
+@keyframes favori-geste{0%{color:var(--color-accentInk)}${share}%{color:var(--color-foreground)}}
+`;
+}
+
+/** Every gesture at once, before starting: editing the bookmark takes the reader out of this page. */
+function Overview({ os }: { os: PhoneOs }) {
+  const [paused, setPaused] = useState(false);
+  const frames = [
+    { short: 'Copiez le favori, ici', screen: <CopyScreen android={os === 'android'} /> },
+    ...STEPS[os].map(({ short, screen }) => ({ short, screen })),
+  ];
+  return (
+    <section aria-labelledby="favori-apercu" data-paused={paused || undefined} className="favori-apercu mt-8">
+      <style>{overviewStyle(frames.length)}</style>
+      <h2 id="favori-apercu" className="m-0 font-display text-2xl leading-tight font-semibold tracking-[-0.01em]">
+        Toute la marche, d’un coup d’œil
+      </h2>
+      <p className="mt-2 mb-0 text-lg leading-relaxed text-pretty text-muted">
+        Retenez-la : pendant que vous collerez le favori, cette page ne sera plus à l’écran.
+      </p>
+      <div className="favori-apercu-corps mt-5">
+        {/* The list says it all; the drawing only shows it. */}
+        <div aria-hidden="true" className="favori-film">
+          {frames.map((frame, i) => (
+            <div key={frame.short} style={{ animationDelay: `${i * FRAME_S}s` }}>
+              {frame.screen}
+              <span className="mt-1 block text-center text-sm text-muted tabular-nums">{i + 1}</span>
+            </div>
+          ))}
+        </div>
+        <ol className="favori-liste m-0 grid list-decimal gap-2 pl-6 text-lg leading-snug">
+          {frames.map((frame, i) => (
+            <li key={frame.short} style={{ animationDelay: `${i * FRAME_S}s` }}>
+              {frame.short}
+            </li>
+          ))}
+        </ol>
+      </div>
+      <button
+        type="button"
+        onClick={() => setPaused((was) => !was)}
+        className="favori-pause mt-3 min-h-11 items-center text-base text-muted underline underline-offset-4 hover:text-foreground"
+      >
+        {paused ? 'Reprendre l’animation' : 'Mettre l’animation en pause'}
+      </button>
+    </section>
+  );
+}
+
+/**
+ * Where the reader tries the bookmark: an example article, read by the
+ * bookmark like any other. The bookmark that works opens /analyser with it,
+ * which sends the reader back to /favori with `?essai=ok` instead of analysing
+ * it; one that still opens /favori is caught there.
+ */
+export function FavoriEssai() {
+  const os = currentPhoneOs();
+  useEffect(() => write(ESSAI_KEY, String(Date.now())), []);
+  const gesture =
+    os === 'android'
+      ? `Touchez la barre d’adresse, tapez « Analyser », puis touchez « ${NAME} ».`
+      : os === 'ios'
+        ? `Touchez Signets (le livre), puis « ${NAME} ».`
+        : `Cliquez « ${NAME} » dans la barre des favoris.`;
+  return (
+    <Page title="Testez votre favori" lead={`${gesture} S’il marche, il vous ramène au guide, qui vous le dit.`}>
+      <section aria-labelledby="essai-rien" className="rounded-control border border-borderControl p-5">
+        <h2 id="essai-rien" className="m-0 font-display text-xl leading-snug font-semibold">
+          Rien ne se passe ?
+        </h2>
+        <ul className="mt-3 mb-0 grid list-disc gap-2 pl-6 text-lg leading-relaxed">
+          {os !== 'android' ? null : (
+            <li>
+              Sur Chrome, ouvrez le favori depuis la barre d’adresse : Chrome ne lance pas un favori de ce genre depuis la
+              liste des favoris.
+            </li>
+          )}
+          <li>
+            Le favori rouvre le guide ? Son adresse n’a pas été remplacée :{' '}
+            <Link to="/favori" className={QUIET_LINK}>
+              reprenez le guide
+            </Link>{' '}
+            et collez le favori à la place.
+          </li>
+          <li>
+            Le favori ne figure pas dans la liste ? Il n’a pas été enregistré : reprenez le guide depuis le début.
+          </li>
+        </ul>
+      </section>
+
+      <article className="mt-12 border-t border-lineSoft pt-10">
+        <p className="m-0 text-base font-medium text-accentInk">Article d’exemple</p>
+        <h2 className="mt-2 mb-0 font-display text-2xl leading-tight font-semibold tracking-[-0.01em]">
+          Le favori à l’essai
+        </h2>
+        <p className="mt-4 mb-0 text-lg leading-relaxed">{ESSAI_MARK}</p>
+        <p className="mt-4 mb-0 text-lg leading-relaxed">
+          Sur un vrai site de presse, le favori lit l’article de la même façon : le titre, puis chaque paragraphe, tel
+          que la page l’affiche. Un article payant est lu en entier si vous êtes abonné et connecté.
+        </p>
+        <p className="mt-4 mb-0 text-lg leading-relaxed">
+          Il ouvre ensuite Squiggle avec ce texte, et l’analyse commence d’elle-même. Ici, rien n’est analysé : Squiggle
+          vérifie seulement que le texte est bien arrivé.
+        </p>
+      </article>
+    </Page>
   );
 }
 
@@ -337,6 +624,22 @@ function Computer({ code }: { code: string }) {
 /* The drawings: the reader's browser, the screen each step shows, with where to touch numbered in the accent. */
 
 const PASTED = 'javascript:(()=>{…';
+
+/** This page, its button that copies the favori. */
+function CopyScreen({ android }: { android: boolean }) {
+  return (
+    <Phone android={android} label="Cette page : le bouton « Copier le favori »">
+      {android ? <ChromeBar address="squiggle.fr/favori" /> : null}
+      <Lines x={18} y={76} widths={[136, 96]} gap={14} />
+      <Lines x={18} y={118} widths={[144, 140, 120, 132]} />
+      <rect x={18} y={176} width={W - 36} height={30} rx={8} className="fill-accent" />
+      <Label x={W / 2} y={194.5} size={9} accent anchor="middle">
+        Copier le favori
+      </Label>
+      <Tap x={W - 26} y={168} n={1} />
+    </Phone>
+  );
+}
 
 /** A text field of a settings form, the one to fill in the accent. */
 function Field({ y, label, value, accent = false }: { y: number; label: string; value: string; accent?: boolean }) {
