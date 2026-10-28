@@ -6,16 +6,24 @@
  * session stages on the reader's cookie and never asks for the source page;
  * the report highlights the passages it discusses; a refusal says what to do.
  */
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AnalysisReport } from '../../shared/src/engine/types';
 import type { Account } from '../src/api';
 import { loadSeance, saveSeance } from '../src/classe';
+import { readCaptures, takeSharedCaptures } from '../src/captures';
 import { loadDraft, saveDraft } from '../src/paste';
 import { Analyser } from '../src/pages/Analyser';
 import { account, jsonResponse, memoryStorage } from './helpers';
+
+// The OCR itself is pinned on real screenshots in captures-ocr.test.ts; here it is the page around it.
+vi.mock('../src/captures', async (actual) => ({
+  ...(await actual<typeof import('../src/captures')>()),
+  readCaptures: vi.fn(),
+  takeSharedCaptures: vi.fn(),
+}));
 
 const TEXT = [
   'Depuis la rentrée, les cantines servent un repas végétarien par semaine, une mesure votée en juin.',
@@ -707,5 +715,92 @@ describe('Analyser, from the clipboard', () => {
     render(<Analyser />);
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
     expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement/);
+  });
+});
+
+describe('Analyser, from screenshots', () => {
+  const image = (name: string) => new File(['png'], name, { type: 'image/png' });
+  const counted = (seen: Seen[]) => seen.filter((s) => s.url === '/web/count').map((s) => s.body?.name);
+
+  beforeEach(() => {
+    vi.mocked(readCaptures).mockReset();
+    vi.mocked(takeSharedCaptures).mockReset();
+  });
+
+  it('reads the imported screenshots into the form, for the reader to check before the analysis', async () => {
+    const seen = serve(account());
+    vi.mocked(readCaptures).mockImplementation(async (files, onProgress) => {
+      onProgress(0, files.length);
+      onProgress(1, files.length);
+      return TEXT;
+    });
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('captures'), [image('capture-1.png'), image('capture-2.png')]);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu sur 2 captures, sur cet appareil : aucune image n’a été envoyée/);
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(vi.mocked(readCaptures).mock.calls[0][0].map((file) => (file as File).name)).toEqual(['capture-1.png', 'capture-2.png']);
+    // Nothing is analysed, and no image goes anywhere: only the counters, by kind and by bucket.
+    expect(seen.some((s) => s.url.startsWith('/web/analyze/'))).toBe(false);
+    expect(counted(seen)).toEqual(['import_screenshots', 'screenshots_2_4']);
+
+    fireEvent.click(await analyseButton());
+    expect(await screen.findByText('58')).toBeInTheDocument();
+  });
+
+  it('shows where the reading stands, and lets it be cancelled', async () => {
+    serve(account());
+    let progress: (done: number, total: number) => void = () => {};
+    vi.mocked(readCaptures).mockImplementation(
+      (_, onProgress, signal) =>
+        new Promise((_, reject) => {
+          progress = onProgress;
+          signal?.addEventListener('abort', () => reject(new DOMException('Lecture annulée', 'AbortError')));
+        }),
+    );
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('captures'), [image('a.png'), image('b.png'), image('c.png')]);
+    expect(await screen.findByText('Préparation de la lecture…')).toBeInTheDocument();
+    act(() => progress(1, 3));
+    expect(screen.getByText('Lecture de la capture 2 sur 3…')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(await screen.findByText('Lecture annulée.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Importer des captures' })).toBeInTheDocument();
+  });
+
+  it('says so when nothing was read, or when the reader could not load', async () => {
+    serve(account());
+    vi.mocked(readCaptures).mockResolvedValueOnce('  ').mockRejectedValueOnce(new Error('network'));
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('captures'), [image('vide.png')]);
+    expect(await screen.findByText(/Aucun texte n’a été lu sur ces images/)).toBeInTheDocument();
+    await userEvent.upload(screen.getByTestId('captures'), [image('hors-ligne.png')]);
+    expect(await screen.findByText(/le lecteur de texte se télécharge la première fois/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue('');
+  });
+
+  it('reads the screenshots shared to the installed app, and wipes the share from the address bar', async () => {
+    const seen = serve(account());
+    vi.mocked(takeSharedCaptures).mockResolvedValue([image('0'), image('1'), image('2'), image('3'), image('4')]);
+    vi.mocked(readCaptures).mockResolvedValue(TEXT);
+    at('/analyser?title=Un+article&captures=5');
+    render(<Analyser />);
+    // The title came with the screenshots, which bring the text: no request for a paste.
+    expect(screen.queryByText(/Adresse reçue/)).not.toBeInTheDocument();
+
+    expect(await screen.findByText(/Texte lu sur 5 captures/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText(/Titre/)).toHaveValue('Un article');
+    expect(window.location.search).toBe('');
+    expect(counted(seen)).toEqual(['share_screenshots', 'screenshots_5_9']);
+  });
+
+  it('asks for an import when the shared screenshots are gone', async () => {
+    serve(account());
+    vi.mocked(takeSharedCaptures).mockResolvedValue([]);
+    at('/analyser?captures=2');
+    render(<Analyser />);
+    expect(await screen.findByText(/Les captures partagées n’ont pas été retrouvées/)).toBeInTheDocument();
+    expect(readCaptures).not.toHaveBeenCalled();
   });
 });

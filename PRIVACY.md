@@ -188,6 +188,7 @@ raconte.
 |---|---|---|
 | Texte de l'article, lu par l'extension ou collé sur le site | mémoire, le temps de l'appel d'audit | **jamais écrit** |
 | Texte collé sur le site, avant l'analyse | **votre navigateur** (stockage local du site), jamais notre serveur | jusqu'à ce que vous l'effaciez |
+| Captures d'écran importées sur le site, ou partagées vers l'appli installée | **votre appareil** : leur texte y est lu, et seul ce texte part à l'analyse, comme un texte collé ; **aucune image n'est envoyée** | le temps de la lecture ; une capture partagée attend la page dans le cache du site, qui la vide dès qu'elle l'a prise |
 | Séance du mode classe : l'article, le rapport, l'ordre de révélation et vos remarques | **l'onglet de votre navigateur** (stockage de session), et le fichier de séance que vous téléchargez ; jamais notre serveur | jusqu'à la fermeture de l'onglet ; le fichier, tant que vous le gardez |
 | Fichiers du site installé sur l'écran d'accueil | votre navigateur | jusqu'à la version suivante du site ; **jamais une réponse de compte ou d'analyse** |
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |

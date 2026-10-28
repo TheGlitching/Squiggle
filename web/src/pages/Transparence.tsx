@@ -27,6 +27,11 @@ export const RETENTION = [
     'Jusqu’à ce que vous l’effaciez',
   ],
   [
+    'Captures d’écran importées sur le site, ou partagées vers l’appli',
+    'Votre appareil, qui en lit le texte ; aucune image n’est envoyée',
+    'Le temps de la lecture',
+  ],
+  [
     'Séance du mode classe : l’article et sa préparation',
     'L’onglet de votre navigateur, et le fichier de séance que vous téléchargez ; jamais nos serveurs',
     'Jusqu’à la fermeture de l’onglet ; le fichier, tant que vous le gardez',

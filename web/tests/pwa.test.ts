@@ -33,6 +33,9 @@ function loadWorker(version = 'v1') {
       stores.set(name, store);
       return {
         match: async (path: string) => store.get(path),
+        put: async (path: string, response: Response) => {
+          store.set(path, `${response.headers.get('content-type')} ${await response.text()}`);
+        },
         addAll: async (requests: Request[]) => {
           for (const request of requests) store.set(new URL(request.url, ORIGIN).pathname, `cached ${request.url}`);
         },
@@ -68,10 +71,15 @@ function loadWorker(version = 'v1') {
   }
 
   /** What the worker answers for this request, or `undefined` when it lets it through. */
-  async function request(url: string, init: { method?: string; mode?: string } = {}) {
+  async function request(url: string, init: { method?: string; mode?: string; form?: FormData } = {}) {
     let answer: Promise<unknown> | undefined;
     listeners.fetch({
-      request: { url: new URL(url, ORIGIN).toString(), method: init.method ?? 'GET', mode: init.mode ?? 'cors' },
+      request: {
+        url: new URL(url, ORIGIN).toString(),
+        method: init.method ?? 'GET',
+        mode: init.mode ?? 'cors',
+        formData: async () => init.form,
+      },
       respondWith: (p: Promise<unknown>) => (answer = p),
     });
     return answer ? await answer : undefined;
@@ -112,6 +120,38 @@ describe('the service worker', () => {
     const worker = loadWorker();
     await worker.lifecycle('install');
     expect(await worker.request(url, { mode })).toBeUndefined();
+  });
+
+  it('keeps a share on the device: screenshots wait in its cache, the text goes to the page’s address', async () => {
+    const worker = loadWorker();
+    await worker.lifecycle('install');
+    const before = worker.network.length;
+    const form = new FormData();
+    form.set('title', 'Un article');
+    form.set('text', '');
+    form.append('captures', new File(['première'], 'capture-1.png', { type: 'image/png' }));
+    form.append('captures', new File(['seconde'], 'capture-2.jpg', { type: 'image/jpeg' }));
+    form.append('captures', new File(['%PDF'], 'document.pdf', { type: 'application/pdf' }));
+
+    const answer = (await worker.request('/analyser', { method: 'POST', mode: 'navigate', form })) as Response;
+    expect(answer.status).toBe(303);
+    expect(answer.headers.get('location')).toBe('https://squiggle.fr/analyser?title=Un+article&captures=2');
+    expect([...(worker.stores.get('squiggle-partage') ?? new Map()).entries()]).toEqual([
+      ['/partage/0', 'image/png première'],
+      ['/partage/1', 'image/jpeg seconde'],
+    ]);
+    expect(worker.network.slice(before)).toEqual([]);
+  });
+
+  it('turns a shared text into the page’s address, as a share by GET did', async () => {
+    const worker = loadWorker();
+    const form = new FormData();
+    form.set('text', 'Le texte partagé https://exemple.fr/article');
+    const answer = (await worker.request('/analyser', { method: 'POST', mode: 'navigate', form })) as Response;
+    expect(answer.headers.get('location')).toBe(
+      `https://squiggle.fr/analyser?${new URLSearchParams({ text: 'Le texte partagé https://exemple.fr/article' })}`,
+    );
+    expect(worker.stores.has('squiggle-partage')).toBe(false);
   });
 
   it('never touches a write, or another origin', async () => {
@@ -164,12 +204,12 @@ describe('the manifest', () => {
     expect(pngSize('/icons/apple-touch-icon.png')).toEqual([180, 180]);
   });
 
-  it('receives a share on the analysis page by GET, the only method the worker keeps on the device', () => {
+  it('receives a share on the analysis page, screenshots included, by a POST the worker keeps on the device', () => {
     expect(manifest.share_target).toEqual({
       action: '/analyser',
-      method: 'GET',
-      enctype: 'application/x-www-form-urlencoded',
-      params: { title: 'title', text: 'text', url: 'url' },
+      method: 'POST',
+      enctype: 'multipart/form-data',
+      params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'captures', accept: ['image/*'] }] },
     });
   });
 
