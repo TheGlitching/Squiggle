@@ -17,8 +17,10 @@ export function usePath(at?: Path): Path {
   useEffect(() => {
     const onChange = () => setPath(currentPath());
     window.addEventListener('popstate', onChange);
+    // A child's effect runs before this one: a redirect on the first render has already moved the URL.
+    if (at === undefined) onChange();
     return () => window.removeEventListener('popstate', onChange);
-  }, []);
+  }, [at]);
   return path;
 }
 
