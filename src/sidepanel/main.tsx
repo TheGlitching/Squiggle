@@ -86,6 +86,9 @@ function SidepanelApp() {
   const [category, setCategory] = useState<FilterCategory>('all');
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [hoveredFindingId, setHoveredFindingId] = useState<string | null>(null);
+  // Firefox for Android shows the panel as a popup over the page, and the page
+  // under it is frozen until the popup closes: no scroll, no video player.
+  const [overPage, setOverPage] = useState(false);
   const [expandedDomain, setExpandedDomain] = useState<ScoreDomainKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsOnOwnKey, setSettingsOnOwnKey] = useState(false);
@@ -394,6 +397,10 @@ function SidepanelApp() {
 
   useEffect(() => () => bus.destroy(), [bus]);
 
+  useEffect(() => {
+    void UnifiedRuntime.isAndroid().then(setOverPage);
+  }, []);
+
   const isVideoPage = pageUrl ? youtubeVideoId(pageUrl) !== null : false;
 
   const runAnalysis = useCallback(async () => {
@@ -417,6 +424,17 @@ function SidepanelApp() {
       notes: [],
     });
 
+    // A video is read by its own player, which cannot load captions while the
+    // popup freezes its page: once the background has taken the reading over,
+    // the popup gets out of the way. Reopening it shows the analysis.
+    if (overPage && isVideoPage) {
+      const off = bus.on<{ tabId: number }>('ANALYSIS_PROGRESS', (payload) => {
+        if (payload.tabId !== tabId) return;
+        off();
+        window.close();
+      });
+    }
+
     try {
       const response = (await bus.callRPC('TRIGGER_ANALYSIS', { tabId: tabId ?? undefined })) as {
         success: boolean;
@@ -438,16 +456,22 @@ function SidepanelApp() {
       setError(message);
       setProgress({ status: 'error', message, progress: 0, notes: [] });
     }
-  }, [bus, tabId, isVideoPage]);
+  }, [bus, tabId, isVideoPage, overPage]);
 
   const selectFinding = useCallback(
     (id: string | null) => {
       setSelectedFindingId(id);
-      void bus.callRPC('SELECT_FINDING', { tabId: tabId ?? undefined, findingId: id }).catch(() => {
-        // Content script not injected on this page; selection stays panel-local.
-      });
+      void bus
+        .callRPC('SELECT_FINDING', { tabId: tabId ?? undefined, findingId: id })
+        .then(() => {
+          // The passage, or the moment of the video, is under the popup: show it.
+          if (overPage && id) window.close();
+        })
+        .catch(() => {
+          // Content script not injected on this page; selection stays panel-local.
+        });
     },
-    [bus, tabId]
+    [bus, tabId, overPage]
   );
 
   const findings: Finding[] = report?.findings ?? [];
@@ -568,6 +592,9 @@ function SidepanelApp() {
             Inutile de revoir la vidéo : Squiggle active ses sous-titres un instant pour les lire
             en entier, sans toucher à votre lecture. Chaque constat portera l’heure de son passage,
             où un clic ramène la vidéo.
+            {overPage &&
+              ' Squiggle se ferme le temps de cette lecture, qui demande la vidéo à l’écran : ' +
+                'rouvrez-le ensuite pour voir l’analyse.'}
           </p>
         )}
 

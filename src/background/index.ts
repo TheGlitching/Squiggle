@@ -54,6 +54,7 @@ type VideoRead =
 /** Firefox-only action API: MV3 replaced `browser.browserAction` with `browser.action`. */
 interface FirefoxActionApi {
   onClicked: { addListener(callback: (tab: { id?: number }) => void): void };
+  setPopup(details: { popup: string }): Promise<void>;
 }
 
 /** Firefox sidebar toggle API (`open` available from Firefox 136 for MV3). */
@@ -66,6 +67,12 @@ interface FirefoxNamespace {
   action?: FirefoxActionApi;
   sidebarAction?: FirefoxSidebarApi;
 }
+
+/**
+ * The panel page, served as the action's popup where a browser has no sidebar.
+ * The path is the one `sidebar_action.default_panel` names in the manifest.
+ */
+const PANEL_PAGE = 'src/sidepanel/index.html';
 
 /**
  * Narrow the polyfill global to the Firefox-only namespace. One unchecked cast,
@@ -126,6 +133,16 @@ export class BackgroundServiceWorker {
       // action API is `browser.action`), so the MV2-flavoured listener is
       // dropped and the sidebar is toggled by its own action.
       const actionApi = firefoxNamespace(browser)?.action;
+      // Firefox for Android has no sidebar: the same panel page opens as the
+      // action's popup instead. The manifest cannot declare that popup, because
+      // on the desktop a `default_popup` would take the click from the sidebar.
+      // The popup lasts until the browser quits, so the background must run
+      // once per launch: a startup listener is what makes Firefox start it then
+      // rather than on a first click, which would find no popup and do nothing.
+      void UnifiedRuntime.isAndroid().then((android) => {
+        if (android) void actionApi?.setPopup({ popup: PANEL_PAGE });
+      });
+      UnifiedRuntime.getRuntime().onStartup?.addListener(() => {});
       if (actionApi?.onClicked) {
         actionApi.onClicked.addListener(async (tab) => {
           if (!tab.id) return;

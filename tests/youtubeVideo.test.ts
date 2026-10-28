@@ -249,6 +249,22 @@ describe('reading the captions in the page', () => {
     expect(player.dataset.squiggleMutedStart).toBeUndefined();
   });
 
+  it('still waits for the file when the page was frozen under a popup', async () => {
+    // Firefox for Android freezes the page while the popup covers it: the clock
+    // runs a minute ahead while the player has not fetched anything yet.
+    const now = Date.now;
+    let frozenFor = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now() + frozenFor);
+    (player.toggleSubtitlesOn as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      captionsOn = true;
+      setTimeout(() => (frozenFor = 60_000), 50);
+      setTimeout(loadFile, 300);
+    });
+    expect((await captureYoutubeCaptions(VIDEO, false)).kind).toBe('ok');
+    expect(player.toggleSubtitlesOn).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
+
   it('ignores a caption file that belongs to another video, such as an ad', async () => {
     entries.push(`https://www.youtube.com/api/timedtext?v=AAAAAAAAAAA&lang=en&pot=AD`);
     const read = await captureYoutubeCaptions(VIDEO, false);
