@@ -15,7 +15,9 @@ import {
   blocksFromPaste,
   MIN_TEXT_CHARS,
   pasteProblem,
+  readCopied,
   sharedParams,
+  textFromHtml,
   webAddress,
 } from '../src/paste';
 
@@ -152,5 +154,53 @@ describe('appendPaste', () => {
 
   it('starts from an empty text', () => {
     expect(appendPaste('', `${P1}\n\n${P2}`)).toBe(`${P1}\n${P2}`);
+  });
+});
+
+describe('textFromHtml', () => {
+  it('gives one line per paragraph, heading and list item, and nothing hidden', () => {
+    const html =
+      '<meta charset="utf-8"><style>p{color:red}</style><h1>Le titre</h1>' +
+      '<p>Un <b>premier</b>\n   paragraphe.</p><script>track()</script>' +
+      '<div><p>Le second.</p><ul><li>Un point</li><li>Un autre</li></ul></div>Ligne<br>coupée';
+    expect(textFromHtml(html)).toBe(
+      ['Le titre', 'Un premier paragraphe.', 'Le second.', 'Un point', 'Un autre', 'Ligne', 'coupée'].join('\n\n'),
+    );
+  });
+
+  it('reads a copy with no text as empty', () => {
+    expect(textFromHtml('<img src="photo.jpg"><script>x()</script>')).toBe('');
+  });
+});
+
+describe('readCopied', () => {
+  const item = (data: Record<string, string>) => ({
+    types: Object.keys(data),
+    getType: async (type: string) => new Blob([data[type]], { type }),
+  });
+  const clipboard = (value: Partial<Clipboard>) => value as Clipboard;
+
+  it('prefers the plain text, and falls back to the markup when it is missing or blank', async () => {
+    const both = clipboard({ read: async () => [item({ 'text/html': '<p>Riche</p>', 'text/plain': 'Simple' })] as never });
+    expect(await readCopied(both)).toEqual({ kind: 'text', text: 'Simple' });
+
+    const htmlOnly = clipboard({ read: async () => [item({ 'text/html': '<p>Un.</p><p>Deux.</p>' })] as never });
+    expect(await readCopied(htmlOnly)).toEqual({ kind: 'text', text: 'Un.\n\nDeux.' });
+
+    const blankPlain = clipboard({ read: async () => [item({ 'text/plain': '  ', 'text/html': '<p>Un.</p>' })] as never });
+    expect(await readCopied(blankPlain)).toEqual({ kind: 'text', text: 'Un.' });
+  });
+
+  it('tells a clipboard with no text from one the page may not read', async () => {
+    expect(await readCopied(clipboard({ read: async () => [item({ 'image/png': 'x' })] as never }))).toEqual({ kind: 'empty' });
+    expect(await readCopied(clipboard({ readText: async () => ' ' }))).toEqual({ kind: 'empty' });
+    const denied = () => Promise.reject(new DOMException('denied', 'NotAllowedError'));
+    expect(await readCopied(clipboard({ read: denied }))).toEqual({ kind: 'refused' });
+    expect(await readCopied(clipboard({ readText: denied }))).toEqual({ kind: 'refused' });
+    expect(await readCopied(undefined)).toEqual({ kind: 'refused' });
+  });
+
+  it('reads the text alone where the browser has no rich read', async () => {
+    expect(await readCopied(clipboard({ readText: async () => ' Un texte. ' }))).toEqual({ kind: 'text', text: 'Un texte.' });
   });
 });
