@@ -207,16 +207,31 @@ Run the lint on the built package before uploading; the validator AMO runs is th
 npx web-ext lint -s dist/firefox
 ```
 
-It reports no error and three expected warnings. Two `UNSAFE_VAR_ASSIGNMENT` point at
+It reports no error and two expected warnings. Both `UNSAFE_VAR_ASSIGNMENT` point at
 `innerHTML` inside the bundled React runtime (the `SquiggleBadge-*.js` chunk); the
-extension's own code never assigns `innerHTML`, and AMO review accepts them. One
-`KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION` notes that Firefox for Android only reads
-`data_collection_permissions` from 142; the add-on is not offered on Android, which has no
-sidebar, so it does not apply.
+extension's own code never assigns `innerHTML`, and AMO review accepts them.
 
-`data_collection_permissions` in the Firefox manifest is only understood from Firefox 140,
-which is why `strict_min_version` is `140.0`. Lowering one without the other either
+`data_collection_permissions` in the Firefox manifest is only understood from Firefox 140
+on the desktop and 142 on Android, which is why `gecko.strict_min_version` is `140.0` and
+`gecko_android.strict_min_version` is `142.0`. Lowering one without the other either
 fails validation or installs the add-on without showing its data disclosure.
+
+### Firefox for Android
+
+The same package runs on Firefox for Android, which has no sidebar: the background sets
+the panel page as the toolbar button's popup there, and Firefox shows it full screen
+over the page. On the AMO upload, tick Firefox for Android beside Firefox.
+
+To try a build on a phone or an emulator, enable *Remote debugging via USB* in Firefox's
+settings, then:
+
+```bash
+npx web-ext run -t firefox-android --adb-device <device> --firefox-apk org.mozilla.firefox -s dist/firefox
+```
+
+Firefox for Android caches a temporary add-on by version: to load a second build of the
+same version, raise the version in a copy of the package's `manifest.json`, or Firefox
+looks for the previous build's background script and the add-on stays inert.
 
 ## Submitting a version
 

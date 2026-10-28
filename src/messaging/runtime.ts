@@ -66,6 +66,18 @@ export class UnifiedRuntime {
     throw new Error('No compatible browser runtime detected');
   }
 
+  /**
+   * Firefox for Android, where there is no sidebar: the panel opens as the
+   * action's popup, drawn full screen over the page it reads.
+   */
+  public static async isAndroid(): Promise<boolean> {
+    try {
+      return (await this.getRuntime().getPlatformInfo()).os === 'android';
+    } catch {
+      return false;
+    }
+  }
+
   public static getTabs(): typeof chrome.tabs {
     const browserGlobal = (globalThis as unknown as { browser?: BrowserNamespace }).browser;
     if (browserGlobal && browserGlobal.tabs) {

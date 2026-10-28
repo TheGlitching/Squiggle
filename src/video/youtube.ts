@@ -144,9 +144,16 @@ export async function captureYoutubeCaptions(
       for (const entry of list.getEntries()) if (!fileUrl && isCaptionFile(entry.name)) fileUrl = entry.name;
     });
     observer.observe({ type: 'resource' });
+    // Only the time the page actually ran counts: Firefox for Android freezes
+    // a page while Squiggle's popup covers it, and a wait measured on the clock
+    // would be over before the player, frozen too, had fetched anything.
     const waitForFile = async (ms: number) => {
-      const until = Date.now() + ms;
-      while (!fileUrl && Date.now() < until) await sleep(100);
+      let waited = 0;
+      while (!fileUrl && waited < ms) {
+        const before = Date.now();
+        await sleep(100);
+        waited += Math.min(Date.now() - before, 1000);
+      }
     };
     const wasOn = player.isSubtitlesOn();
     try {

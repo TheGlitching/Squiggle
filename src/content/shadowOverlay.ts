@@ -11,6 +11,7 @@
 
 import { AnchoredHighlight, OverlayTheme } from './types';
 import { HIGHLIGHT_CATEGORY_LABELS_FR } from '../adapters/findingAdapters';
+import { collapsedAncestor } from './rangeTracker';
 
 export const DEFAULT_OVERLAY_THEME: OverlayTheme = {
   criticalColor: '#dc2626',
@@ -119,7 +120,9 @@ export class ShadowHighlightOverlay {
   public setHighlights(highlights: AnchoredHighlight[]): void {
     this.highlightsMap.clear();
     for (const hl of highlights) {
-      if (hl.tier !== 'unanchored' && hl.rects.length > 0) {
+      // A passage in a collapsed section has no rectangle yet, but is kept:
+      // selecting it opens the section.
+      if (hl.tier !== 'unanchored' && (hl.rects.length > 0 || hl.range)) {
         this.highlightsMap.set(hl.findingId, hl);
       }
     }
@@ -147,7 +150,9 @@ export class ShadowHighlightOverlay {
    */
   public scrollToHighlight(findingId: string): boolean {
     const highlight = this.highlightsMap.get(findingId);
-    if (!highlight || highlight.rects.length === 0) return false;
+    if (!highlight) return false;
+    if (highlight.range && this.openCollapsedSections(highlight.range)) this.reposition();
+    if (highlight.rects.length === 0) return false;
 
     const top = highlight.boundingBox.top;
     const targetY = Math.max(0, top - window.innerHeight / 3);
@@ -164,6 +169,21 @@ export class ShadowHighlightOverlay {
   }
 
   /**
+   * Open the collapsed sections a passage sits in, the way the browser's own
+   * find-in-page does: a `beforematch` event, so the page updates its section
+   * toggle, then the `hidden` attribute removed. Returns whether any opened.
+   */
+  private openCollapsedSections(range: Range): boolean {
+    let opened = false;
+    for (let el = collapsedAncestor(range); el?.getAttribute('hidden') === 'until-found'; el = collapsedAncestor(range)) {
+      el.dispatchEvent(new Event('beforematch', { bubbles: true }));
+      el.removeAttribute('hidden');
+      opened = true;
+    }
+    return opened;
+  }
+
+  /**
    * Recalculate coordinates and re-render visual boxes on scroll/resize/mutation
    */
   public reposition(): void {
@@ -173,7 +193,7 @@ export class ShadowHighlightOverlay {
     for (const hl of this.highlightsMap.values()) {
       if (hl.range) {
         try {
-          const clientRects = Array.from(hl.range.getClientRects());
+          const clientRects = collapsedAncestor(hl.range) ? [] : Array.from(hl.range.getClientRects());
           const scrollX = window.scrollX || window.pageXOffset || 0;
           const scrollY = window.scrollY || window.pageYOffset || 0;
 

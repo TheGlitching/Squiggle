@@ -45,7 +45,7 @@ script**, and the extension reads a page only after the reader invokes it there.
   in the package: no remote code.
 - **`storage`** - keeps the user's encrypted API key so it is not asked for again. In
   hosted mode, keeps the session token and the install's signing key the same way.
-- **`sidePanel`** (Chrome; Firefox uses `sidebar_action`) - displays the analysis beside
+- **`sidePanel`** (Chrome; Firefox uses `sidebar_action`, and a popup on Android) - displays the analysis beside
   the article.
 - **Host permissions** - exactly the four model providers a reader can bring a key for:
   `api.anthropic.com`, `api.openai.com`, `openrouter.ai`,
