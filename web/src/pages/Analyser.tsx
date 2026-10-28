@@ -21,7 +21,7 @@
  * without its timestamps, which come back beside each passage in the report
  * (`transcript.ts`).
  */
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { youtubeVideoId } from '../../../shared/src/engine/video';
@@ -51,8 +51,10 @@ import {
   PASTE_PROBLEMS,
   pastedChars,
   pasteProblem,
+  readCopied,
   saveDraft,
   sharedParams,
+  textFromHtml,
   type PastedArticle,
   webAddress,
 } from '../paste';
@@ -120,6 +122,11 @@ function paymentNotice(): string | null {
 const MANUAL_PASTE = 'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement dans le champ, puis Coller.';
 const MANUAL_APPEND =
   'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement à la fin du texte, puis Coller.';
+/** The clipboard read as empty. On a phone the system can hide a copy from the page, so the field's paste comes first. */
+const NOTHING_READ =
+  'Squiggle ne trouve pas de texte copié. Si vous venez de copier l’article, appuyez longuement dans le champ, puis Coller. Sinon, copiez d’abord son texte.';
+const NOTHING_TO_APPEND =
+  'Squiggle ne trouve pas de texte copié. Si vous venez de copier la suite, appuyez longuement à la fin du texte, puis Coller. Sinon, copiez d’abord le passage suivant.';
 
 /** The draft, with whatever a share or the bookmark just brought on top of it. */
 function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null; favori: boolean } {
@@ -244,6 +251,17 @@ export function Analyser() {
     if (key === 'text') setNotice(null);
   }
 
+  /** A copy that is only markup pastes as nothing in a textarea: insert its text instead. */
+  function pasteMarkup(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const data = event.clipboardData;
+    if (!data || data.getData('text/plain').trim()) return;
+    const text = textFromHtml(data.getData('text/html'));
+    if (!text) return;
+    event.preventDefault();
+    const field = event.currentTarget;
+    edit('text', field.value.slice(0, field.selectionStart) + text + field.value.slice(field.selectionEnd));
+  }
+
   function analyse(event: FormEvent) {
     event.preventDefault();
     if (problem) {
@@ -261,20 +279,14 @@ export function Analyser() {
    * analysis leaves the text in the form with the same next step as a paste.
    */
   async function pasteCopied() {
-    let copied: string;
-    try {
-      copied = await navigator.clipboard.readText();
-    } catch {
-      // No clipboard API (Firefox, an old browser) or the reader refused it.
-      setNotice(MANUAL_PASTE);
+    const copied = await readCopied(navigator.clipboard);
+    if (copied.kind !== 'text') {
+      // The field's own paste reaches what the button may not: hand over to it.
+      setNotice(copied.kind === 'empty' ? NOTHING_READ : MANUAL_PASTE);
       textArea.current?.focus();
       return;
     }
-    const text = copied.trim();
-    if (!text) {
-      setNotice('Rien à coller : copiez d’abord le texte de l’article.');
-      return;
-    }
+    const { text } = copied;
     setFailure(null);
     const address = /^https?:\/\/\S+$/i.test(text) ? webAddress(text) : null;
     if (address) {
@@ -296,19 +308,13 @@ export function Analyser() {
 
   /** "Ajouter la suite": the next passage copied in the article goes after the text, without what it repeats. */
   async function appendCopied() {
-    let copied: string;
-    try {
-      copied = await navigator.clipboard.readText();
-    } catch {
-      setNotice(MANUAL_APPEND);
+    const copied = await readCopied(navigator.clipboard);
+    if (copied.kind !== 'text') {
+      setNotice(copied.kind === 'empty' ? NOTHING_TO_APPEND : MANUAL_APPEND);
       textArea.current?.focus();
       return;
     }
-    if (!copied.trim()) {
-      setNotice('Rien à ajouter : copiez d’abord le passage suivant de l’article.');
-      return;
-    }
-    const text = appendPaste(article.text, copied);
+    const text = appendPaste(article.text, copied.text);
     const added = text.length - article.text.length;
     setFailure(null);
     setArticle({ ...article, text });
@@ -491,6 +497,7 @@ export function Analyser() {
                 ref={textArea}
                 value={article.text}
                 onChange={(event) => edit('text', event.target.value)}
+                onPaste={pasteMarkup}
                 rows={12}
                 spellCheck={false}
                 aria-describedby="texte-aide"

@@ -134,6 +134,81 @@ export function webAddress(raw: string): string | null {
   }
 }
 
+/** Elements a copied page breaks lines on; everything else runs on inline. */
+const BLOCK_TAGS = new Set([
+  'address', 'article', 'aside', 'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'footer',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'ol', 'p', 'pre', 'section', 'table',
+  'td', 'th', 'tr', 'ul',
+]);
+const SKIPPED_TAGS = new Set(['head', 'noscript', 'script', 'style', 'template', 'title']);
+
+/**
+ * Copied markup as the text a plain paste would give: one line per paragraph,
+ * heading or list item, scripts and styles left out. Some pages and apps put
+ * only `text/html` on the clipboard, which a textarea would paste as nothing.
+ */
+export function textFromHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  let out = '';
+  const walk = (node: Node): void => {
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        // A line break in the markup's source is a space, as on screen.
+        out += (child.nodeValue ?? '').replace(/\s+/g, ' ');
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = (child as Element).tagName.toLowerCase();
+        if (SKIPPED_TAGS.has(tag)) continue;
+        if (tag === 'br') {
+          out += '\n';
+          continue;
+        }
+        const block = BLOCK_TAGS.has(tag);
+        if (block) out += '\n';
+        walk(child);
+        if (block) out += '\n';
+      }
+    }
+  };
+  walk(doc.body);
+  return out
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export type Copied = { kind: 'text'; text: string } | { kind: 'empty' } | { kind: 'refused' };
+
+/**
+ * What the reader copied, read in the tap on "Coller le texte copié". Plain
+ * text first, the copied markup turned into text when the plain part is
+ * missing or blank. `refused` covers a browser without the API and a reader or
+ * system that said no; `empty` is a clipboard with no text this page may see,
+ * which on a phone is often not the reader's doing, so neither is a dead end.
+ */
+export async function readCopied(clipboard: Clipboard | undefined): Promise<Copied> {
+  if (!clipboard) return { kind: 'refused' };
+  try {
+    if (typeof clipboard.read === 'function') {
+      const items = await clipboard.read();
+      for (const type of ['text/plain', 'text/html']) {
+        for (const item of items) {
+          if (!item.types.includes(type)) continue;
+          const raw = await (await item.getType(type)).text();
+          const text = (type === 'text/html' ? textFromHtml(raw) : raw).trim();
+          if (text) return { kind: 'text', text };
+        }
+      }
+      return { kind: 'empty' };
+    }
+    if (typeof clipboard.readText !== 'function') return { kind: 'refused' };
+    const text = (await clipboard.readText()).trim();
+    return text ? { kind: 'text', text } : { kind: 'empty' };
+  } catch {
+    return { kind: 'refused' };
+  }
+}
+
 /** A share that is only an address: Android often puts the link in `text`. */
 const LONE_URL = /^\s*(https?:\/\/\S+)\s*$/i;
 /** An address at the end of shared text, as news apps send "headline https://…". */
