@@ -8,7 +8,16 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 import { articleTextHash } from '../../shared/src/hosted/textHash';
-import { articleFromShare, blocksFromPaste, MIN_TEXT_CHARS, pasteProblem, webAddress } from '../src/paste';
+import { favoriFragment } from '../src/favori/payload';
+import {
+  appendPaste,
+  articleFromShare,
+  blocksFromPaste,
+  MIN_TEXT_CHARS,
+  pasteProblem,
+  sharedParams,
+  webAddress,
+} from '../src/paste';
 
 const BODY = 'Le chômage a baissé de 12 % en un an.\n\n  Tout le monde   le sait.\r\nUne troisième ligne.';
 
@@ -104,5 +113,44 @@ describe('articleFromShare', () => {
 
   it('drops a shared address that is not a web page', () => {
     expect(share({ url: 'javascript:alert(1)', text: 'Un texte.' })?.source).toBe('');
+  });
+});
+
+describe('the bookmark’s fragment', () => {
+  it('reaches the form as the iPhone shortcut’s does, whatever the text holds', () => {
+    const text = `${BODY}\nUn « & », un « = », un « # » et 100 % de caractères à garder.`;
+    const hash = favoriFragment({ title: 'Emploi & chômage', url: 'https://presse.example/emploi?utm_source=x', text });
+    const params = sharedParams({ search: '', hash });
+    expect(params.get('via')).toBe('favori');
+    expect(articleFromShare(params)).toEqual({ title: 'Emploi & chômage', source: 'https://presse.example/emploi?utm_source=x', text });
+  });
+});
+
+describe('appendPaste', () => {
+  const P1 = 'Le gouvernement a présenté mardi son projet de budget pour l’année prochaine.';
+  const P2 = 'Les économies prévues portent surtout sur les dépenses de fonctionnement des ministères.';
+  const P3 = 'L’opposition dénonce un texte qui ne tient pas compte de la hausse des prix.';
+
+  it('adds the next passage after the text', () => {
+    expect(appendPaste(P1, P2)).toBe(`${P1}\n${P2}`);
+  });
+
+  it('drops what the new copy repeats of the last one', () => {
+    expect(appendPaste(`${P1}\n${P2}`, `${P2}\n\n${P3}`)).toBe(`${P1}\n${P2}\n${P3}`);
+  });
+
+  it('completes the paragraph the last copy cut short', () => {
+    const cut = P2.slice(0, 40);
+    expect(appendPaste(`${P1}\n${cut}`, `${P2}\n${P3}`)).toBe(`${P1}\n${P2}\n${P3}`);
+    // A copy that starts inside the paragraph the last one ended in.
+    expect(appendPaste(`${P1}\n${P2.slice(0, 50)}`, `${P2.slice(25)}\n${P3}`)).toBe(`${P1}\n${P2}\n${P3}`);
+  });
+
+  it('drops a long line already in the text, never a short one that may well repeat', () => {
+    expect(appendPaste(`${P1}\nPublicité\n${P2}`, `${P3}\nPublicité\n${P1}`)).toBe(`${P1}\nPublicité\n${P2}\n${P3}\nPublicité`);
+  });
+
+  it('starts from an empty text', () => {
+    expect(appendPaste('', `${P1}\n\n${P2}`)).toBe(`${P1}\n${P2}`);
   });
 });

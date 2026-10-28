@@ -11,6 +11,7 @@ import { Classe } from './pages/Classe';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
+import { Favori } from './pages/Favori';
 import { Corrige, Fiche } from './pages/Feuilles';
 import { Glossaire, NotionPage } from './pages/Glossaire';
 import { FicheActivite, GrilleLecture } from './pages/Kit';
@@ -79,6 +80,9 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/raccourci':
       page = <Raccourci />;
+      break;
+    case '/favori':
+      page = <Favori />;
       break;
     case '/enseignants':
       page = <Enseignants />;

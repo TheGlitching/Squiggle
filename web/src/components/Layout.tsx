@@ -80,6 +80,9 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
             <Link to="/glossaire" className={QUIET_LINK}>
               Glossaire
             </Link>
+            <Link to="/favori" className={QUIET_LINK}>
+              Sur téléphone
+            </Link>
             <Link to="/transparence" className={QUIET_LINK}>
               Transparence
             </Link>

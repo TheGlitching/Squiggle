@@ -185,7 +185,7 @@ earlier arrangement produced a specific failure.
 extract -> audit -> research -> reconcile -> score
 ```
 
-1. **Extract** (`src/content/extractor.ts`) turns the page into ordered blocks with
+1. **Extract** (`shared/src/extract/extractor.ts`) turns the page into ordered blocks with
    stable coordinates, plus the sources the article itself hyperlinks. Links to the
    publisher's own registrable domain are navigation, not citations, and are excluded.
 

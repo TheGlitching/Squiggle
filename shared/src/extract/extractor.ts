@@ -9,7 +9,7 @@
  * 4. Readability-grade text block extraction with XPath and Character-offset mapping
  */
 
-import { ArticleMetadata, CitedSource, ExtractedArticle, TextBlock } from './types';
+import type { ArticleMetadata, CitedSource, ExtractedArticle, TextBlock } from './types';
 
 // Subtrees a reader never sees. With scripting on, a <noscript> fallback is parsed as
 // raw markup text, so its textContent is HTML source ("<img src=...>"), not prose.
@@ -28,6 +28,9 @@ const BOILERPLATE_LEAD_IN =
 const BOILERPLATE_PROMPT =
   /^(abonnez-vous|connectez-vous|créez un compte|j['’]ai déjà un compte|je n['’]ai pas de compte|signaler un abus|article rédigé par|sign in|log in|subscribe)\b/i;
 const BOILERPLATE_MAX_CHARS = 300;
+
+// An <article> scoring less than a fifth of the <main> around it is a box in the page, not the article.
+const MINOR_ARTICLE_SHARE = 5;
 
 // A block this made of links is navigation (a menu, a card, a list of headlines).
 const LINK_DENSITY_LIMIT = 0.8;
@@ -253,9 +256,7 @@ export class ArticleExtractor {
   } {
     // Tier 1: Explicit <article> or role="article"
     const articles = Array.from(this.doc.querySelectorAll('article, [role="article"]')) as HTMLElement[];
-    if (articles.length === 1) {
-      return { container: articles[0], method: 'semantic-article', confidence: 0.95 };
-    } else if (articles.length > 1) {
+    if (articles.length > 0) {
       // Find the article tag with highest paragraph word count
       let bestArticle = articles[0];
       let maxScore = -1;
@@ -266,7 +267,14 @@ export class ArticleExtractor {
           bestArticle = art;
         }
       }
-      return { container: bestArticle, method: 'semantic-article', confidence: 0.9 };
+      // An <article> holding a small part of the page's main text is a box inside it (a live
+      // page's credits, a teaser), not the article: the main container is read instead.
+      const main = this.doc.querySelector('main, [role="main"]') as HTMLElement | null;
+      const boxInMain =
+        main !== null && main.contains(bestArticle) && maxScore * MINOR_ARTICLE_SHARE < this.calculateTextDensityScore(main);
+      if (!boxInMain) {
+        return { container: bestArticle, method: 'semantic-article', confidence: articles.length === 1 ? 0.95 : 0.9 };
+      }
     }
 
     // Tier 2: Common semantic containers

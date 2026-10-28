@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
+import { articleTextHash, generateSigningKeyPair, isVideoTranscriptUrl } from '@squiggle/shared';
 
 import {
   claim as claimToken,
@@ -115,6 +115,22 @@ describe('canonical article URL', () => {
     expect(canonicalArticleUrl(`${ARTICLE_URL}?utm_source=newsletter&utm_medium=email`)).toBe(canonical);
     expect(canonicalArticleUrl(`${ARTICLE_URL}#lire-la-suite`)).toBe(canonical);
     expect(canonicalArticleUrl(`http://www.presse.example/politique/emploi-2026/`)).toBe(canonical);
+  });
+
+  it('files every link to a YouTube video, as the app or the site shares it, under one address', () => {
+    const video = 'dQw4w9WgXcQ';
+    const forms = [
+      `https://youtu.be/${video}?si=AbCdEf123`,
+      `https://www.youtube.com/watch?v=${video}&si=x`,
+      `https://m.youtube.com/watch?v=${video}&feature=share`,
+      `https://www.youtube.com/shorts/${video}?si=x`,
+      `https://www.youtube.com/watch?v=${video}`,
+    ];
+    for (const form of forms) {
+      const canonical = canonicalArticleUrl(form);
+      expect(canonical).toBe(`https://youtube.com/watch?v=${video}`);
+      expect(isVideoTranscriptUrl(canonical!)).toBe(true);
+    }
   });
 
   it('keeps a query parameter that may be the article itself', () => {

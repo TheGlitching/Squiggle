@@ -115,6 +115,12 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
       'Un article dans Safari ou des captures d’une appli de presse : partagez-les vers Squiggle, l’analyse s’ouvre avec le texte. Rien à copier.',
   },
   {
+    path: '/favori',
+    title: 'Le favori « Analyser avec Squiggle » - Squiggle',
+    description:
+      'Sur téléphone, analysez d’un geste l’article ouvert dans le navigateur : le favori lit son texte dans la page. Chrome Android et Safari iPhone.',
+  },
+  {
     path: '/enseignants',
     title: 'Squiggle pour les enseignants',
     description:
