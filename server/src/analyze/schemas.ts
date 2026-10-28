@@ -51,6 +51,9 @@ export const CheckQuerySchema = z.object({
   text: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
+/** A link looked up on its own: the address itself is judged by `analyzeLink`. */
+export const LinkQuerySchema = z.object({ url });
+
 const auditFields = {
   url,
   title: z.string().max(500).default(''),

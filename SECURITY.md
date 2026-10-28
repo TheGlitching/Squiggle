@@ -64,6 +64,9 @@ with a request. What that means concretely:
   the server, plus a fingerprint of the article's text, plus the model and the
   prompt version. A text pasted on the website without an address is filed under a
   fixed key no URL can canonicalise to, so it is keyed by its fingerprint alone.
+  A report the extension built from the page itself can also be found by its address
+  alone, for a link shared from a phone app; served that way, each quote of the
+  article is cut to 25 words at most, and all of them to a tenth of the text.
 - **our server never fetches the article itself.** It only ever fetches pages
   the article cites, and only through an SSRF-hardened fetcher. Nor does it fetch a
   video or its captions: a YouTube video reaches it as the caption text the extension
@@ -113,6 +116,13 @@ with a request. What that means concretely:
   same rule stops a corrected article from being served its old report. The
   title, author and outlet are not part of the fingerprint, except that the
   website sends a pasted title as the text's first block.
+- **A link alone is answered only from what the extension read.** A reader who
+  shares a link from a phone app has no text to fingerprint, so the lookup by
+  address (`/web/anon/link`) is the one place a report is served without the
+  reader's own text matching it. It therefore only ever serves reports flagged
+  as read by the extension on the page itself, never one built from a text
+  pasted on the website, under the model and prompt version in use and before
+  the report expires. A client still names an address, never a report.
 - **Report sanitization.** A cached report is written by one reader's analysis
   and served to every later reader of the same article, which makes the cache
   the one place where text derived from a hostile article could reach someone

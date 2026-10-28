@@ -111,12 +111,15 @@ function Badge({ className, children, title }: { className: string; children: st
 function FindingCard({
   finding,
   located,
+  inText = true,
   at,
   selected,
   onSelect,
 }: {
   finding: Finding;
   located: boolean;
+  /** False for a report found by its link alone: there is no text on the page to point into. */
+  inText?: boolean;
   /** Where its passage starts in the video, for a transcript. */
   at: number | undefined;
   selected: boolean;
@@ -167,12 +170,12 @@ function FindingCard({
       ) : null}
       <p className="mt-3 mb-0 text-base leading-relaxed">{finding.explanation}</p>
       {finding.sources && finding.sources.length > 0 ? <Sources sources={finding.sources} /> : null}
-      {located ? null : (
+      {located || !inText ? null : (
         <p className="mt-4 mb-0 text-sm text-muted">Ce passage n’a pas été retrouvé tel quel dans le texte collé.</p>
       )}
-      {located || glossary ? (
+      {(located && inText) || glossary ? (
         <p className="mt-2 mb-0 flex flex-wrap gap-x-5">
-          {located ? (
+          {located && inText ? (
             <a
               href={`#${passageId(finding)}`}
               className={CARD_LINK}
@@ -302,11 +305,14 @@ export function Rapport({
   report,
   blocks,
   times = null,
+  byLink = false,
 }: {
   report: AnalysisReport;
   blocks: TextBlock[];
   /** For a video transcript, where each passage starts in each block, by block id. */
   times?: Record<string, Start[]> | null;
+  /** Found by its link alone: there is no text here to annotate, only the report and its short quotes. */
+  byLink?: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { segments, located } = useMemo(() => locateFindings(blocks, report.findings), [blocks, report.findings]);
@@ -391,36 +397,46 @@ export function Rapport({
         </div>
       </section>
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-12">
-        <section aria-labelledby="texte-titre">
-          <h2 id="texte-titre" className="m-0 text-base font-semibold">
-            Le texte, annoté
-          </h2>
-          <p className="mt-1 mb-0 text-sm text-muted">Sélectionnez un passage surligné pour lire son constat.</p>
-          {/* The same sheet as the landing's example article: the text is the article, Squiggle's notes sit beside it. */}
-          <article
-            aria-label="Le texte collé, surligné par Squiggle"
-            className="mt-5 rounded-card bg-paper px-6 py-7 font-serif text-lg leading-[1.6] text-paperInk md:px-12 md:py-10"
-          >
-            {blocks.map((block) => (
-              <Block
-                key={block.id}
-                block={block}
-                at={times?.[block.id]?.[0].at}
-                segments={segments.get(block.id) ?? []}
-                selected={selected}
-                onSelect={select}
-              />
-            ))}
-          </article>
-        </section>
+      <div
+        className={
+          byLink ? 'grid max-w-2xl gap-10' : 'grid gap-10 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-12'
+        }
+      >
+        {byLink ? null : (
+          <section aria-labelledby="texte-titre">
+            <h2 id="texte-titre" className="m-0 text-base font-semibold">
+              Le texte, annoté
+            </h2>
+            <p className="mt-1 mb-0 text-sm text-muted">Sélectionnez un passage surligné pour lire son constat.</p>
+            {/* The same sheet as the landing's example article: the text is the article, Squiggle's notes sit beside it. */}
+            <article
+              aria-label="Le texte collé, surligné par Squiggle"
+              className="mt-5 rounded-card bg-paper px-6 py-7 font-serif text-lg leading-[1.6] text-paperInk md:px-12 md:py-10"
+            >
+              {blocks.map((block) => (
+                <Block
+                  key={block.id}
+                  block={block}
+                  at={times?.[block.id]?.[0].at}
+                  segments={segments.get(block.id) ?? []}
+                  selected={selected}
+                  onSelect={select}
+                />
+              ))}
+            </article>
+          </section>
+        )}
 
         {/* The column scrolls on its own; its right padding, borrowed from the page gutter, keeps
             the cards clear of a macOS overlay scrollbar, whose expanded track paints the page
             background over whatever sits under it. The cards keep the full 24rem. */}
         <section
           aria-labelledby="constats-titre"
-          className="lg:sticky lg:top-6 lg:-mr-4 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-4"
+          className={
+            byLink
+              ? undefined
+              : 'lg:sticky lg:top-6 lg:-mr-4 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-4'
+          }
         >
           <h2 id="constats-titre" className="m-0 text-base font-semibold">
             {findings.length === 0 ? 'Constats' : `${findings.length} constat${findings.length > 1 ? 's' : ''}`}
@@ -436,6 +452,7 @@ export function Rapport({
                   key={finding.id}
                   finding={finding}
                   located={located.has(finding.id)}
+                  inText={!byLink}
                   at={findingAt.get(finding.id)}
                   selected={selected === finding.id}
                   onSelect={select}
@@ -475,8 +492,10 @@ export function Rapport({
       <p className="m-0 max-w-[55ch] text-sm text-muted">
         {/* The model behind an analysis changes over time; the page names the method, not the model. */}
         Analyse effectuée par Squiggle, consignes v{report.meta.promptVersion}
-        {analysedOn ? `, le ${analysedOn}` : ''}. Elle porte sur le texte collé : l’adresse source, si vous en avez
-        donné une, n’a pas été consultée.
+        {analysedOn ? `, le ${analysedOn}` : ''}.{' '}
+        {byLink
+          ? 'Elle porte sur le texte que l’extension a lu sur la page, ou sur les sous-titres d’une vidéo ; Squiggle n’a pas consulté ce lien.'
+          : 'Elle porte sur le texte collé : l’adresse source, si vous en avez donné une, n’a pas été consultée.'}
       </p>
     </div>
   );

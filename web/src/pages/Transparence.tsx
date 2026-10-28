@@ -173,7 +173,7 @@ export function Transparence() {
             </Link>
             , avec les garanties de leurs transferts.
           </p>
-          <dl className="mt-10 grid gap-8 md:grid-cols-3 md:gap-10">
+          <dl className="mt-10 grid gap-8 md:grid-cols-2 md:gap-10">
             <div>
               <dt className="font-display text-lg font-semibold">Nous voyons l’article, le temps de l’analyser.</dt>
               <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
@@ -192,8 +192,19 @@ export function Transparence() {
               <dt className="font-display text-lg font-semibold">Le rapport est mis en cache et partagé.</dt>
               <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
                 Deux lecteurs du même article obtiennent le même rapport, et le second ne consomme rien. Le rapport
-                contient des extraits de l’article (la citation de chaque constat) et un résumé, jamais le texte
-                intégral.
+                contient des extraits de l’article (la citation de chaque constat) et un diagnostic de quelques
+                phrases, jamais le texte intégral.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-display text-lg font-semibold">Un lien partagé seul retrouve un rapport.</dt>
+              <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
+                Partagé depuis l’appli d’un journal ou de YouTube, un lien affiche le rapport qu’un lecteur a déjà fait
+                avec l’extension, sur la page même, jamais sur un texte collé, qui pourrait être inventé. Notre serveur
+                ne visite pas ce lien : il cherche parmi ses rapports. Pour ne pas léser l’éditeur, ce rapport s’ouvre
+                sur un lien vers l’article chez lui, ne garde que de courtes citations (25 mots au plus chacune, une
+                faible part du texte en tout) et ne résume pas l’article : il dit comment le texte argumente, pas ce
+                qu’il raconte.
               </dd>
             </div>
           </dl>

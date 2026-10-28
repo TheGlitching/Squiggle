@@ -506,6 +506,23 @@ export class MemoryDb implements Db {
     return null;
   }
 
+  async findLinkReport(urlHash: string, model: string, promptVersion: string, now: number): Promise<ReportRow | null> {
+    let latest: ReportRow | null = null;
+    for (const report of this.reports.values()) {
+      if (
+        report.urlHash === urlHash &&
+        report.readByExtension &&
+        report.model === model &&
+        report.promptVersion === promptVersion &&
+        report.expiresAt > now &&
+        (!latest || report.createdAt > latest.createdAt)
+      ) {
+        latest = report;
+      }
+    }
+    return latest;
+  }
+
   async createReport(args: CreateReportArgs): Promise<ReportRow> {
     if (args.sizeBytes > REPORT_MAX_BYTES) throw new Error('report exceeds the size cap');
     if (await this.findReport(args.urlHash, args.textHash, args.model, args.promptVersion)) {
@@ -521,6 +538,7 @@ export class MemoryDb implements Db {
       sizeBytes: args.sizeBytes,
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
+      readByExtension: args.readByExtension ?? false,
     };
     this.reports.set(row.id, row);
     return row;

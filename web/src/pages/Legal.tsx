@@ -470,6 +470,11 @@ export function Conditions() {
           texte. Il ne cite que de
           courts extraits de l’article, pour montrer ce qu’il discute ; il n’en reproduit jamais le texte intégral.
         </p>
+        <p>
+          Un rapport fait avec l’extension, sur la page même, est aussi servi à qui partage le seul lien de l’article
+          ou de la vidéo. Il s’ouvre alors sur un lien vers la page de l’éditeur, et ses citations sont ramenées à 25
+          mots au plus chacune, un dixième du texte au plus en tout.
+        </p>
       </Article>
 
       <Article title="4. Éditeurs et auteurs : contester un rapport">

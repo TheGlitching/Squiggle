@@ -18,7 +18,15 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
-import { analysisFailure, analyzePasted, cachedReport, type AnalysisFailure, type Progress } from '../analysis';
+import { youtubeVideoId } from '../../../shared/src/engine/video';
+import {
+  analysisFailure,
+  analyzePasted,
+  cachedReport,
+  reportByLink,
+  type AnalysisFailure,
+  type Progress,
+} from '../analysis';
 import { getAccount, type Account } from '../api';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
@@ -59,6 +67,8 @@ type Phase =
       blocks: TextBlock[];
       times: Record<string, Start[]> | null;
       visitor: boolean;
+      /** Found by this link alone: the report of a reader who used the extension, without the text. */
+      link?: string;
     };
 
 /** Back from the sign-in a visitor's report offered. Read before the address bar is wiped. */
@@ -67,6 +77,25 @@ function backFromVisit(): boolean {
 }
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
+const LOOKING_UP = 'Adresse reçue. Recherche d’un rapport déjà fait pour ce lien…';
+
+/** What to do with a link nobody has analysed with the extension yet, in one sentence. */
+function noReportFor(link: string): string {
+  return youtubeVideoId(link)
+    ? 'Cette vidéo n’a pas encore de rapport : collez ici sa transcription (« Afficher la transcription », sous la description), ou ouvrez-la sur ordinateur avec l’extension Squiggle.'
+    : 'Cet article n’a pas encore de rapport. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
+}
+
+/** Where the publisher's link sends the reader, named in the button. */
+function publisherAction(link: string): string {
+  if (youtubeVideoId(link)) return 'Regarder la vidéo sur YouTube';
+  try {
+    // The site, not the edition the link came from: m.lemonde.fr is lemonde.fr.
+    return `Lire l’article sur ${new URL(link).hostname.replace(/^(?:www|m|mobile|amp)\.(?=.+\.)/, '')}`;
+  } catch {
+    return 'Lire l’article chez l’éditeur';
+  }
+}
 /** Checkout started from this page comes back here; the query is read once, as a share is. */
 const PAYMENT_NOTICES: Record<string, string> = {
   ok: 'Merci ! Votre abonnement s’active : vous pouvez lancer votre analyse.',
@@ -99,8 +128,9 @@ export function Analyser() {
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: 'edit' });
   const [failure, setFailure] = useState<AnalysisFailure | null>(null);
+  // A link shared alone is looked up first: someone may already have analysed it with the extension.
   const [notice, setNotice] = useState<string | null>(() =>
-    shared && !shared.text ? ADDRESS_ONLY : paymentNotice(),
+    shared && !shared.text ? (shared.source ? LOOKING_UP : ADDRESS_ONLY) : paymentNotice(),
   );
   const [showProblem, setShowProblem] = useState(false);
   const controller = useRef<AbortController | null>(null);
@@ -113,6 +143,12 @@ export function Analyser() {
   }, []);
 
   useEffect(() => saveDraft(article), [article]);
+
+  // Once, for the link a share brought without its text.
+  useEffect(() => {
+    if (shared && !shared.text && shared.source) void findByLink(shared.source);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // An account that cannot be checked leaves the visitor's analysis, which
   // needs none: the page never ends on a retry with nothing else to do.
@@ -150,6 +186,26 @@ export function Analyser() {
   const running = phase.kind === 'running';
   const chars = pastedChars(article.text);
   const transcript = useMemo(() => readTranscript(article.text), [article.text]);
+
+  /**
+   * The report a reader using the extension already made for this link. Only
+   * the link is sent, and nothing fetches the page: a miss says, in one
+   * sentence, how to have it analysed.
+   */
+  async function findByLink(link: string) {
+    setNotice(LOOKING_UP);
+    const found = await reportByLink(link);
+    if (!found) {
+      setNotice((current) => (current === LOOKING_UP ? noReportFor(link) : current));
+      return;
+    }
+    setNotice(null);
+    setPhase((current) =>
+      current.kind === 'edit'
+        ? { kind: 'done', report: found.report, blocks: [], times: null, visitor: false, link }
+        : current,
+    );
+  }
 
   function edit<K extends keyof PastedArticle>(key: K, value: PastedArticle[K]) {
     setArticle((current) => ({ ...current, [key]: value }));
@@ -192,8 +248,8 @@ export function Analyser() {
     const address = /^https?:\/\/\S+$/i.test(text) ? webAddress(text) : null;
     if (address) {
       setArticle({ ...article, source: address });
-      setNotice(ADDRESS_ONLY);
       textArea.current?.focus();
+      await findByLink(address);
       return;
     }
     // The button only shows on an empty text, so a title or a shared address already there stays.
@@ -253,6 +309,33 @@ export function Analyser() {
     setArticle(EMPTY_ARTICLE);
     setPhase({ kind: 'edit' });
     setShowProblem(false);
+  }
+
+  if (phase.kind === 'done' && phase.link) {
+    return (
+      <div className={`${PAGE} py-8 sm:py-14`}>
+        <h1 ref={reportTop} tabIndex={-1} className={`${TITLE} outline-hidden focus-visible:ring-0`}>
+          {article.title.trim() || 'Rapport d’analyse'}
+        </h1>
+        {/* The publisher first: this report points to the page, it never stands in for reading it. */}
+        <div className="mt-5 mb-10 grid max-w-2xl gap-3 rounded-card border border-border bg-surface p-5 sm:p-6">
+          <a href={phase.link} target="_blank" rel="noopener noreferrer" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+            {publisherAction(phase.link)}
+          </a>
+          <p className="m-0 text-sm text-muted">
+            {youtubeVideoId(phase.link)
+              ? 'Un lecteur l’a analysée avec l’extension Squiggle, à partir de ses sous-titres. Le rapport n’en garde que de courtes citations : la vidéo est sur YouTube.'
+              : 'Un lecteur l’a analysé avec l’extension Squiggle, sur la page même. Le rapport n’en garde que de courtes citations : l’article complet est chez l’éditeur.'}
+          </p>
+        </div>
+        <Rapport report={phase.report} blocks={[]} byLink />
+        <p className="mt-10 mb-0">
+          <button type="button" onClick={startOver} className={QUIET_LINK}>
+            Analyser un autre article
+          </button>
+        </p>
+      </div>
+    );
   }
 
   if (phase.kind === 'done') {

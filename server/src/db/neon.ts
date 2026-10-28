@@ -94,6 +94,7 @@ function mapReport(r: RawRow): ReportRow {
     sizeBytes: num(r.size_bytes),
     createdAt: num(r.created_at),
     expiresAt: num(r.expires_at),
+    readByExtension: r.read_by_extension === true,
   };
 }
 
@@ -587,6 +588,18 @@ export class NeonDb implements Db {
     return rows[0] ? mapReport(rows[0]) : null;
   }
 
+  async findLinkReport(urlHash: string, model: string, promptVersion: string, now: number): Promise<ReportRow | null> {
+    const rows = await this.q`
+      SELECT * FROM reports
+      WHERE url_hash = ${urlHash} AND read_by_extension
+        AND model = ${model} AND prompt_version = ${promptVersion}
+        AND expires_at > ${now}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    return rows[0] ? mapReport(rows[0]) : null;
+  }
+
   async createReport(args: CreateReportArgs): Promise<ReportRow> {
     if (args.sizeBytes > REPORT_MAX_BYTES) throw new Error('report exceeds the size cap');
     const id = randomToken(16);
@@ -595,9 +608,10 @@ export class NeonDb implements Db {
     // insert a hard error: callers must findReport first (and a cache hit
     // must never overwrite an existing report).
     await this.q`
-      INSERT INTO reports (id, url_hash, text_hash, model, prompt_version, report, size_bytes, created_at, expires_at)
+      INSERT INTO reports (id, url_hash, text_hash, model, prompt_version, report, size_bytes, created_at, expires_at,
+                           read_by_extension)
       VALUES (${id}, ${args.urlHash}, ${args.textHash}, ${args.model}, ${args.promptVersion},
-              ${args.report}::jsonb, ${args.sizeBytes}, ${args.now}, ${expiresAt})
+              ${args.report}::jsonb, ${args.sizeBytes}, ${args.now}, ${expiresAt}, ${args.readByExtension ?? false})
     `;
     return {
       id,
@@ -609,6 +623,7 @@ export class NeonDb implements Db {
       sizeBytes: args.sizeBytes,
       createdAt: args.now,
       expiresAt,
+      readByExtension: args.readByExtension ?? false,
     };
   }
 

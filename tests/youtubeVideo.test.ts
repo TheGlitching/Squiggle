@@ -39,8 +39,10 @@ function cues(): CaptionCue[] {
 }
 
 describe('YouTube addresses', () => {
-  it('recognises a watch page, a Short and a live page, and nothing else', () => {
+  it('recognises a watch page, a Short, a live page and a shared short link, and nothing else', () => {
     expect(youtubeVideoId(`https://www.youtube.com/watch?v=${VIDEO}&t=42s`)).toBe(VIDEO);
+    expect(youtubeVideoId(`https://youtu.be/${VIDEO}?si=AbCdEf123`)).toBe(VIDEO);
+    expect(youtubeVideoId('https://youtu.be/')).toBeNull();
     expect(youtubeVideoId(`https://m.youtube.com/watch?v=${VIDEO}`)).toBe(VIDEO);
     expect(youtubeVideoId(`https://www.youtube.com/shorts/${VIDEO}`)).toBe(VIDEO);
     expect(youtubeVideoId(`https://www.youtube.com/live/${VIDEO}`)).toBe(VIDEO);

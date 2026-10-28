@@ -70,7 +70,7 @@ interface Seen {
 /** The server as the page sees it: an account, then the five stages. */
 function serve(
   who: Account | null,
-  stages: { account?: () => Response; audit?: () => Response; hit?: boolean } = {},
+  stages: { account?: () => Response; audit?: () => Response; hit?: boolean; link?: boolean } = {},
 ) {
   const seen: Seen[] = [];
   vi.stubGlobal('localStorage', memoryStorage());
@@ -91,6 +91,8 @@ function serve(
       if (path === '/web/account' && stages.account) return stages.account();
       if (path === '/web/account') return who ? jsonResponse({ ok: true, ...who }) : jsonResponse({ ok: false, error: 'invalid_session' }, 401);
       const stage = path.replace(/^\/web\/(analyze|anon)\//, '');
+      if (stage === 'link')
+        return jsonResponse(stages.link ? { ok: true, hit: true, report: REPORT, cachedAt: 1 } : { ok: true, hit: false });
       if (stage === 'check') return jsonResponse(stages.hit ? { ok: true, hit: true, report: REPORT } : { ok: true, hit: false });
       if (stage === 'audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
       if (stage === 'finalize') return jsonResponse({ ok: true, report: REPORT, cached: true });
@@ -214,7 +216,51 @@ describe('Analyser, from a share', () => {
     render(<Analyser />);
     expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue('');
-    expect(screen.getByRole('status')).toHaveTextContent(/Collez maintenant le texte de l’article/);
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(/pas encore de rapport. Collez maintenant le texte de l’article/),
+    );
+  });
+
+  it('serves the report a reader made with the extension from a shared video link, sending only the link', async () => {
+    const seen = serve(null, { link: true });
+    const link = 'https://youtu.be/dQw4w9WgXcQ?si=AbCdEf123';
+    at(`/analyser?${new URLSearchParams({ text: link })}`);
+    render(<Analyser />);
+
+    const watch = await screen.findByRole('link', { name: 'Regarder la vidéo sur YouTube' });
+    expect(watch).toHaveAttribute('href', link);
+    expect(screen.getByText(/courtes citations/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Chiffre sans source' })).toBeInTheDocument();
+    // No text to annotate, and no claim that a passage is missing from one.
+    expect(screen.queryByRole('heading', { name: 'Le texte, annoté' })).toBeNull();
+    expect(screen.queryByText(/n’a pas été retrouvé/)).toBeNull();
+
+    const lookup = seen.find((s) => s.url.startsWith('/web/anon/link'))!;
+    expect(new URL(lookup.url, 'https://squiggle.example').searchParams.get('url')).toBe(link);
+    expect(lookup.credentials).toBe('omit');
+    expect(seen.some((s) => /\/(check|audit|finalize)/.test(s.url))).toBe(false);
+  });
+
+  it('points to the publisher above an article’s report found by its link', async () => {
+    serve(account(), { link: true });
+    at(`/analyser?${new URLSearchParams({ title: 'Cantines', url: 'https://m.presse.example/cantines' })}`);
+    render(<Analyser />);
+    expect(await screen.findByRole('link', { name: 'Lire l’article sur presse.example' })).toHaveAttribute(
+      'href',
+      'https://m.presse.example/cantines',
+    );
+  });
+
+  it('says in one sentence how to analyse a video nobody has analysed yet', async () => {
+    serve(null);
+    at(`/analyser?${new URLSearchParams({ text: 'https://youtu.be/dQw4w9WgXcQ' })}`);
+    render(<Analyser />);
+    expect(screen.getByRole('status')).toHaveTextContent(/Recherche d’un rapport/);
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /Cette vidéo n’a pas encore de rapport : collez ici sa transcription .* avec l’extension Squiggle\./,
+      ),
+    );
   });
 });
 
@@ -479,7 +525,7 @@ describe('Analyser, from the clipboard', () => {
     render(<Analyser />);
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
     await waitFor(() => expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines'));
-    expect(screen.getByRole('status')).toHaveTextContent(/Collez maintenant le texte de l’article/);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Collez maintenant le texte de l’article/));
   });
 
   it('falls back to a long press when the clipboard is refused or missing', async () => {

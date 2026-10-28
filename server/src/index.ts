@@ -46,6 +46,8 @@
  *   POST   /web/anon/research                    from the web app's own origin only
  *   POST   /web/anon/source-check
  *   POST   /web/anon/finalize
+ *   GET    /web/anon/link              (no account) a link's report, if the extension already filed one
+ *                                                from the page itself; 0 credits, nothing fetched
  *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
  *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
@@ -67,6 +69,7 @@ import {
   analyzeFinalize,
   analyzeResearch,
   analyzeSourceCheck,
+  analyzeLink,
   type AnalyzeServices,
   type Reader,
 } from './analyze/stages';
@@ -77,6 +80,7 @@ import {
   PastedAuditRequestSchema,
   ResearchRequestSchema,
   SourceCheckRequestSchema,
+  LinkQuerySchema,
 } from './analyze/schemas';
 
 import {
@@ -875,6 +879,12 @@ async function analyzeRoute(
     const query = CheckQuerySchema.safeParse({ text: url.searchParams.get('text') ?? '' });
     if (!query.success) return finish(invalidPayload(query.error, requestId, userId));
     return finish(await analyzeCheck(analyze, target, query.data.text));
+  }
+
+  if (stage === '/link' && method === 'GET') {
+    const query = LinkQuerySchema.safeParse({ url: url.searchParams.get('url') ?? '' });
+    if (!query.success) return finish(invalidPayload(query.error, requestId, userId));
+    return finish(await analyzeLink(analyze, query.data.url));
   }
 
   if (stage === '/audit' && method === 'POST') {
