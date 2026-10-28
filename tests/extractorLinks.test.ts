@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ArticleExtractor } from '../src/content/extractor';
+import { ArticleExtractor } from '../shared/src/extract/extractor';
 
 describe('Article Extractor - hyperlink capture', () => {
   let mockDoc: Document;

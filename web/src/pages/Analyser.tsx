@@ -11,7 +11,13 @@
  * lands here with the shared text or address in the query string, which is
  * read once and wiped from the address bar. Where the share menu does not
  * list the app, "Coller le texte copié" reads the clipboard and starts the
- * analysis in the same tap. A video's transcript pasted here is analysed
+ * analysis in the same tap, and "Ajouter la suite" adds a further passage to
+ * it, for an app that only lets a reader copy one screen at a time. A link
+ * received alone opens in the phone's browser rather than the publisher's app,
+ * where the bookmark "Analyser avec Squiggle" (`/favori`) reads the article
+ * and brings it back here in the address's fragment, which is read once and
+ * wiped like a share; it is then analysed at once, as a copied text is. A
+ * video's transcript pasted here is analysed
  * without its timestamps, which come back beside each passage in the report
  * (`transcript.ts`).
  */
@@ -36,6 +42,7 @@ import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
 import { FREE_ANALYSES, OFFER_LINE } from '../offer';
 import {
+  appendPaste,
   articleFromShare,
   EMPTY_ARTICLE,
   loadDraft,
@@ -49,6 +56,8 @@ import {
   type PastedArticle,
   webAddress,
 } from '../paste';
+import { FAVORI_PARAM, FAVORI_VALUE } from '../favori/payload';
+import { browserLink, currentPhoneOs, type PhoneOs } from '../phone';
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
 import { readTranscript, type Start } from '../transcript';
@@ -109,21 +118,30 @@ function paymentNotice(): string | null {
 }
 
 const MANUAL_PASTE = 'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement dans le champ, puis Coller.';
+const MANUAL_APPEND =
+  'Ce navigateur ne laisse pas lire le presse-papiers : appuyez longuement à la fin du texte, puis Coller.';
 
-/** The draft, with whatever a share just brought on top of it. */
-function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null } {
+/** The draft, with whatever a share or the bookmark just brought on top of it. */
+function initialArticle(): { article: PastedArticle; shared: Partial<PastedArticle> | null; favori: boolean } {
   const draft = loadDraft();
-  const shared = typeof window === 'undefined' ? null : articleFromShare(sharedParams(window.location));
-  if (!shared) return { article: draft, shared: null };
-  // A shared text replaces the draft; a shared address alone keeps the draft's text.
-  const article = shared.text
-    ? { ...EMPTY_ARTICLE, ...shared }
-    : { ...draft, title: shared.title || draft.title, source: shared.source || draft.source };
-  return { article: article as PastedArticle, shared };
+  if (typeof window === 'undefined') return { article: draft, shared: null, favori: false };
+  const params = sharedParams(window.location);
+  const shared = articleFromShare(params);
+  if (!shared) return { article: draft, shared: null, favori: false };
+  // A shared text replaces the draft; a shared address alone keeps the draft's text,
+  // unless that text is another article's, as it is after a report.
+  const otherArticle = Boolean(shared.source && draft.source && shared.source !== draft.source);
+  const article =
+    shared.text || otherArticle
+      ? { ...EMPTY_ARTICLE, ...shared }
+      : { ...draft, title: shared.title || draft.title, source: shared.source || draft.source };
+  return { article: article as PastedArticle, shared, favori: Boolean(shared.text) && params.get(FAVORI_PARAM) === FAVORI_VALUE };
 }
 
 export function Analyser() {
-  const [{ article: start, shared }] = useState(initialArticle);
+  const [{ article: start, shared, favori }] = useState(initialArticle);
+  /** The bookmark's article is analysed as soon as the account says it can be. */
+  const [autoRun, setAutoRun] = useState(favori);
   const [returning] = useState(backFromVisit);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
@@ -141,6 +159,9 @@ export function Analyser() {
   // The shared text is in the form now; it does not stay in the address bar or the history.
   useEffect(() => {
     if (window.location.search || window.location.hash) window.history.replaceState(window.history.state, '', '/analyser');
+    if (favori) count('entry_bookmarklet');
+    // Once, as the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => saveDraft(article), [article]);
@@ -177,6 +198,15 @@ export function Analyser() {
     // Once, with the paste the reader came back with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returning, signedIn]);
+
+  useEffect(() => {
+    if (!autoRun || account === undefined) return;
+    setAutoRun(false);
+    if (pasteProblem(article)) setShowProblem(true);
+    else if (account === null || describeAccount(account).canAnalyse) void run(article);
+    // Once, when the account is known, with the article the bookmark brought.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, account]);
 
   useEffect(() => {
     if (phase.kind === 'done') reportTop.current?.focus();
@@ -262,6 +292,31 @@ export function Analyser() {
       return;
     }
     if (account === null || view?.canAnalyse) await run(next);
+  }
+
+  /** "Ajouter la suite": the next passage copied in the article goes after the text, without what it repeats. */
+  async function appendCopied() {
+    let copied: string;
+    try {
+      copied = await navigator.clipboard.readText();
+    } catch {
+      setNotice(MANUAL_APPEND);
+      textArea.current?.focus();
+      return;
+    }
+    if (!copied.trim()) {
+      setNotice('Rien à ajouter : copiez d’abord le passage suivant de l’article.');
+      return;
+    }
+    const text = appendPaste(article.text, copied);
+    const added = text.length - article.text.length;
+    setFailure(null);
+    setArticle({ ...article, text });
+    setNotice(
+      text === article.text || added <= 0
+        ? 'Ce passage est déjà dans le texte : copiez le suivant.'
+        : `Suite ajoutée : ${added.toLocaleString('fr-FR')} caractères de plus.`,
+    );
   }
 
   async function run(article: PastedArticle) {
@@ -397,13 +452,16 @@ export function Analyser() {
                   Texte de l’article
                 </label>
                 {!running && (article.text || article.title || article.source) ? (
-                  <button
-                    type="button"
-                    onClick={startOver}
-                    className="-my-2 -mr-2 px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground"
-                  >
-                    Effacer
-                  </button>
+                  <div className="-my-2 -mr-2 flex gap-2">
+                    {article.text ? (
+                      <button type="button" onClick={appendCopied} className={TEXT_BUTTON}>
+                        Ajouter la suite
+                      </button>
+                    ) : null}
+                    <button type="button" onClick={startOver} className={TEXT_BUTTON}>
+                      Effacer
+                    </button>
+                  </div>
                 ) : null}
               </div>
               {!running && !article.text ? (
@@ -424,6 +482,9 @@ export function Analyser() {
                 >
                   {notice}
                 </p>
+              ) : null}
+              {!running && !article.text && webAddress(article.source) ? (
+                <OpenInBrowser address={webAddress(article.source)!} />
               ) : null}
               <textarea
                 id="texte"
@@ -529,14 +590,85 @@ export function Analyser() {
   );
 }
 
+const TEXT_BUTTON = 'px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground';
+
+/**
+ * A link received alone: Squiggle does not fetch it, so the reader opens it in
+ * the browser, where the bookmark reads it, rather than in the publisher's app.
+ */
+function OpenInBrowser({ address }: { address: string }) {
+  const [os] = useState(currentPhoneOs);
+  const href = browserLink(address, os, typeof navigator === 'undefined' ? '' : navigator.userAgent);
+  return (
+    <div className="mt-3">
+      <a
+        href={href}
+        {...(os ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+        onClick={() => count('open_in_browser')}
+        className={`${SECONDARY_BUTTON} w-full sm:w-auto`}
+      >
+        {os ? 'Ouvrir dans le navigateur' : 'Ouvrir l’article'}
+      </a>
+      {os ? (
+        <p className="mt-2 mb-0 text-sm text-muted">
+          L’article s’ouvre dans {os === 'ios' ? 'Safari' : 'Chrome'}, où votre abonnement marche aussi. Touchez-y le
+          favori « Analyser avec Squiggle » : il revient ici avec le texte.{' '}
+          <Link to="/favori" className="underline underline-offset-4 hover:text-foreground">
+            Installer le favori
+          </Link>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The three gestures from a news app to a report, on this phone. */
+const PHONE_STEPS: Record<PhoneOs, string[]> = {
+  android: [
+    'Dans l’appli, touchez Partager, puis Squiggle (ou Copier le lien, puis « Coller le texte copié » ici).',
+    'Touchez « Ouvrir dans le navigateur » : l’article s’ouvre dans Chrome, pas dans l’appli.',
+    'Touchez la barre d’adresse, tapez « Analyser », puis le favori « Analyser avec Squiggle ».',
+  ],
+  ios: [
+    'Dans l’appli, touchez Partager, puis Copier le lien ; ici, touchez « Coller le texte copié ».',
+    'Touchez « Ouvrir dans le navigateur » : l’article s’ouvre dans Safari, pas dans l’appli.',
+    'Touchez Signets, puis le favori « Analyser avec Squiggle ».',
+  ],
+};
+
+function PhoneGuide({ os }: { os: PhoneOs }) {
+  return (
+    <div>
+      <h2 className="m-0 font-display text-lg font-semibold text-foreground">Depuis une appli de presse</h2>
+      <ol className="mt-1 mb-0 grid list-decimal gap-1 pl-5">
+        {PHONE_STEPS[os].map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      <p className="mt-2 mb-0">
+        Le favori lit tout l’article dans la page : rien à sélectionner.{' '}
+        <Link to="/favori" className={QUIET_LINK}>
+          Installer le favori
+        </Link>
+      </p>
+      <p className="mt-2 mb-0">
+        Sans favori, copiez un passage, collez-le, puis « Ajouter la suite » pour chacun des suivants : les répétitions
+        sont retirées.
+      </p>
+    </div>
+  );
+}
+
 /** The questions a first paste raises: what it costs, where the text goes, how to have it on a phone. */
 function Aside() {
   const install = useInstall();
+  const [os] = useState(currentPhoneOs);
   return (
     <aside
       aria-label="Bon à savoir"
       className="grid max-w-[55ch] content-start gap-6 text-base leading-relaxed text-muted lg:pt-9"
     >
+      {os ? <PhoneGuide os={os} /> : null}
       <div>
         <h2 className="m-0 font-display text-lg font-semibold text-foreground">Un seul compte</h2>
         <p className="mt-1 mb-0">

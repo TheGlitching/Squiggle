@@ -21,6 +21,9 @@ export const AUDIENCE_METRIC_NAMES = [
   'click_teacher_access',
   'click_subscribe',
   'click_example',
+  'open_in_browser',
+  // An article brought to /analyser by the bookmark "Analyser avec Squiggle".
+  'entry_bookmarklet',
   // A kind of text pasted on /analyser, counted when it is analysed.
   'paste_transcript',
   // A finding reported as wrong, by its category (`flagCounters`).

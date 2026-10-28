@@ -11,3 +11,10 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** The bookmark "Analyser avec Squiggle", built by `vite.config.ts`. */
+declare module 'virtual:favori' {
+  /** A `javascript:` address, with `FAVORI_ORIGIN` where the site's origin goes. */
+  export const BOOKMARKLET: string;
+  export const FAVORI_ORIGIN: string;
+}

@@ -8,7 +8,7 @@
  * `build.mjs` bundles this file into the shortcut. Shortcuts gives it the
  * global `completion`, and stops it if that is not called within its time limit.
  */
-import { ArticleExtractor } from '../../src/content/extractor';
+import { ArticleExtractor } from '../../shared/src/extract/extractor';
 
 declare const completion: (result: string) => void;
 

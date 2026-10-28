@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
+import { build as esbuild } from 'esbuild';
 import { createServer } from 'vite';
 import { defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
@@ -52,6 +54,39 @@ function serviceWorker(): Plugin {
   };
 }
 
+/** Written into the bookmark by /favori: the origin of the site that gave it. */
+const FAVORI_ORIGIN = '__SQUIGGLE_ORIGIN__';
+
+/**
+ * `virtual:favori`: the bookmark "Analyser avec Squiggle" (`src/favori/favori.ts`)
+ * as one `javascript:` address, bundled with the extractor it reads the page with.
+ * Every character is percent-encoded, so the address survives a bookmark editor.
+ */
+function favori(): Plugin {
+  const id = 'virtual:favori';
+  return {
+    name: 'squiggle-favori',
+    resolveId: (source) => (source === id ? `\0${id}` : null),
+    async load(resolved) {
+      if (resolved !== `\0${id}`) return null;
+      const result = await esbuild({
+        entryPoints: [new URL('./src/favori/favori.ts', import.meta.url).pathname],
+        bundle: true,
+        minify: true,
+        format: 'iife',
+        target: ['chrome100', 'safari15'],
+        define: { SQUIGGLE_ORIGIN: JSON.stringify(FAVORI_ORIGIN) },
+        legalComments: 'none',
+        metafile: true,
+        write: false,
+      });
+      for (const input of Object.keys(result.metafile.inputs)) this.addWatchFile(resolve(input));
+      const code = result.outputFiles[0].text.trim();
+      return `export const BOOKMARKLET = ${JSON.stringify(`javascript:${encodeURIComponent(code)}`)};\nexport const FAVORI_ORIGIN = ${JSON.stringify(FAVORI_ORIGIN)};`;
+    },
+  };
+}
+
 /** Where the built page lives: `/enseignants` is `enseignants.html`, which Cloudflare serves without a redirect. */
 const pageFile = (path: string) => (path === '/' ? 'index.html' : `${path.slice(1)}.html`);
 
@@ -94,6 +129,7 @@ function prerender(): Plugin {
       const server = await createServer({
         configFile: false,
         root: new URL('.', import.meta.url).pathname,
+        plugins: [favori()],
         logLevel: 'error',
         server: { middlewareMode: true, hmr: false, ws: false },
         appType: 'custom',
@@ -131,7 +167,7 @@ function prerender(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), serviceWorker(), prerender()],
+  plugins: [react(), favori(), serviceWorker(), prerender()],
   // The API origin is same-origin in production. A local dev build points at
   // a local server with VITE_API_BASE_URL; it is never a secret.
   server: { port: 5174, strictPort: true },

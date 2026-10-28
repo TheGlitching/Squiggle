@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ArticleExtractor } from '../src/content/extractor';
+import { ArticleExtractor } from '../shared/src/extract/extractor';
 import { RangeTracker } from '../src/content/rangeTracker';
 import { ContentScriptController } from '../src/content/contentScript';
 
@@ -45,6 +45,32 @@ describe('Article Detection & Extraction Unit Tests', () => {
     expect(result.blocks[0].text).toContain('Premier paragraphe');
     expect(result.blocks[1].text).toContain('Second paragraphe');
     expect(result.blocks[0].nodeCoordinates.xpath).toBeDefined();
+  });
+});
+
+describe('Article container', () => {
+  const post = (n: number) =>
+    `<div class="post"><p>Mise à jour ${n} : le ministère a publié de nouveaux chiffres sur la situation, avec le détail de chaque région.</p></div>`;
+
+  it('reads a live page whose only <article> is its credits box, not that box', () => {
+    const doc = new DOMParser().parseFromString(
+      `<body><main><article class="context"><p>Ce live a été animé par deux journalistes du service International.</p></article>
+        ${Array.from({ length: 12 }, (_, i) => post(i + 1)).join('')}</main></body>`,
+      'text/html',
+    );
+    const blocks = new ArticleExtractor(doc).extract().blocks.map((b) => b.cleanText);
+    expect(blocks).toHaveLength(13);
+    expect(blocks.filter((b) => b.startsWith('Mise à jour'))).toHaveLength(12);
+  });
+
+  it('keeps the <article> when it is the main text, beside the page around it', () => {
+    const doc = new DOMParser().parseFromString(
+      `<body><main><article>${Array.from({ length: 8 }, (_, i) => post(i + 1)).join('')}</article>
+        <section><p>Les plus lus : une autre histoire, résumée en une phrase pour donner envie de cliquer dessus.</p></section></main></body>`,
+      'text/html',
+    );
+    const blocks = new ArticleExtractor(doc).extract().blocks.map((b) => b.cleanText);
+    expect(blocks).toHaveLength(8);
   });
 });
 

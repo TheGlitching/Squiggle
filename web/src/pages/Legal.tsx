@@ -371,6 +371,11 @@ export function Confidentialite() {
           l’analyse, le texte attend dans votre navigateur, jamais sur nos serveurs, jusqu’à ce que vous l’effaciez.
         </p>
         <p>
+          Le favori « Analyser avec Squiggle » lit l’article dans la page que vous avez ouverte, sur votre téléphone, et
+          l’apporte à la page « Analyser » dans la partie de l’adresse qui suit « # », que le navigateur n’envoie à aucun
+          serveur. Le texte est ensuite traité exactement comme un texte collé.
+        </p>
+        <p>
           Une vidéo YouTube est analysée à partir de ses sous-titres, que l’extension lit dans votre onglet, là où le
           lecteur de YouTube les charge pour vous : ce texte est ensuite traité exactement comme un article. Notre serveur
           ne va jamais chercher la vidéo ni ses sous-titres, et aucune API de YouTube n’est appelée.

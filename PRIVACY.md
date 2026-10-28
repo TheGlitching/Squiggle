@@ -156,7 +156,10 @@ pages que notre serveur va chercher sont **les sources citées par l'article**. 
 site, l'adresse que vous indiquez à côté d'un texte collé reste une simple mention :
 elle accompagne le rapport et sert de clé au cache, mais **elle n'est jamais visitée**,
 et un texte collé ne cite aucun lien, si bien qu'une analyse lancée depuis le site ne
-fait lire aucune page à notre serveur.
+fait lire aucune page à notre serveur. Le favori « Analyser avec Squiggle », sur
+téléphone, lit l'article dans la page que vous avez ouverte et l'apporte au site dans
+la partie de l'adresse qui suit `#`, que le navigateur n'envoie à aucun serveur : il
+est ensuite traité exactement comme un texte collé.
 
 **Le rapport est mis en cache et partagé.** Deux lecteurs du même article obtiennent le
 même rapport, et c'est ce qui rend le service abordable : le second ne consomme aucun

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { Readability } from '@mozilla/readability';
-import { ArticleExtractor } from '../src/content/extractor';
+import { ArticleExtractor } from '../shared/src/extract/extractor';
 
 // One reconstruction per French title (national, regional, pure players) in
 // tests/fixtures/articles, each with its own furniture: noscript image fallbacks,
