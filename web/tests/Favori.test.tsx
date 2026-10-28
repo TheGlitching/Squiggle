@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
 import { readPage } from '../src/favori/lecture';
-import { favoriFragment } from '../src/favori/payload';
+import { pageFragment } from '../src/favori/payload';
 import { Favori, FavoriEssai, bookmarkletFor, favoriTried } from '../src/pages/Favori';
 import { memoryStorage } from './helpers';
 
@@ -95,16 +95,16 @@ describe('Favori', () => {
     onAndroid();
     window.history.replaceState({}, '', '/favori/essai');
     const { unmount } = render(<FavoriEssai />);
-    const read = await readPage(document, {
+    const html = await readPage(document, {
       document,
       innerHeight: 800,
       scrollY: 0,
-      location: { href: 'https://squiggle.example/favori/essai' },
       scrollBy: vi.fn(),
       scrollTo: vi.fn(),
+      getComputedStyle: () => ({}),
     } as unknown as Window);
     unmount();
-    const hash = favoriFragment(read);
+    const hash = await pageFragment(html, 'https://squiggle.example/favori/essai');
     expect(favoriTried({ search: '', hash })).toBe(true);
 
     window.history.replaceState({}, '', `/analyser${hash}`);
@@ -114,9 +114,19 @@ describe('Favori', () => {
     expect(window.location.pathname + window.location.search + window.location.hash).toBe('/favori');
   });
 
-  it('an article that is not the example is analysed as usual', () => {
-    const hash = favoriFragment({ title: 'Budget', url: 'https://presse.example/budget', text: 'Le budget est voté.' });
+  it('an article that is not the example is analysed as usual', async () => {
+    const hash = await pageFragment('<p>Le budget est voté.</p>', 'https://presse.example/budget');
     expect(favoriTried({ search: '', hash })).toBe(false);
+  });
+
+  it('a bookmark saved before, which brings the example’s text, is recognised too', () => {
+    const params = new URLSearchParams({
+      title: 'Le favori à l’essai',
+      url: 'https://squiggle.example/autre',
+      text: 'Ce court article sert d’essai au favori « Analyser avec Squiggle ».',
+      via: 'favori',
+    });
+    expect(favoriTried({ search: '', hash: `#${params}` })).toBe(true);
   });
 
   it('a bookmark that still opens this page, touched on the example, is sent back to the paste', () => {

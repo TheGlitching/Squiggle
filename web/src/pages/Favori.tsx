@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { BOOKMARKLET, FAVORI_ORIGIN } from 'virtual:favori';
 
-import { FAVORI_PARAM, FAVORI_VALUE } from '../favori/payload';
+import { FAVORI_PARAM, FAVORI_VALUE, URL_PARAM } from '../favori/payload';
 
 import { PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON } from '../components/Landing';
 import { Page } from '../components/Layout';
@@ -164,10 +164,19 @@ function savedProgress(os: PhoneOs | null): Progress | null {
   }
 }
 
-/** /analyser opened by the bookmark from the example article: the bookmark works, and nothing is analysed. */
+/**
+ * /analyser opened by the bookmark from the example article: the bookmark works, and nothing is analysed.
+ * The bookmark names the page it was touched on; one saved before brings the example's text instead.
+ */
 export function favoriTried(location: Pick<Location, 'search' | 'hash'>): boolean {
   const params = sharedParams(location);
-  return params.get(FAVORI_PARAM) === FAVORI_VALUE && (params.get('text') ?? '').includes(ESSAI_MARK);
+  if (params.get(FAVORI_PARAM) !== FAVORI_VALUE) return false;
+  if ((params.get('text') ?? '').includes(ESSAI_MARK)) return true;
+  try {
+    return new URL(params.get(URL_PARAM) ?? '').pathname === ESSAI_PATH;
+  } catch {
+    return false;
+  }
 }
 
 type Outcome = 'works' | 'unchanged' | null;
@@ -580,7 +589,7 @@ export function FavoriEssai() {
         </p>
         <p className="mt-4 mb-0 text-lg leading-relaxed">
           Il ouvre ensuite Squiggle avec ce texte, et l’analyse commence d’elle-même. Ici, rien n’est analysé : Squiggle
-          vérifie seulement que le texte est bien arrivé.
+          vérifie seulement que la page est bien arrivée.
         </p>
       </article>
     </Page>
