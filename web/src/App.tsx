@@ -22,9 +22,10 @@ import { Raccourci } from './pages/Raccourci';
 import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
 import { notion } from './glossaire';
+import { SHORTCUT_PUBLISHED } from './shortcut';
 import { titleFor } from './seo';
 
-/** An old address that must keep working: emailed /magic-link links, the first /legal. */
+/** An old address that must keep working: emailed /magic-link links, the first /legal, /raccourci without its file. */
 function Redirect({ to }: { to: string }) {
   useEffect(() => {
     navigate(to, { replace: true });
@@ -79,7 +80,7 @@ export function App({ path: at }: { path?: string }) {
       page = <Analyser />;
       break;
     case '/raccourci':
-      page = <Raccourci />;
+      page = SHORTCUT_PUBLISHED ? <Raccourci /> : <Redirect to="/favori" />;
       break;
     case '/favori':
       page = <Favori />;

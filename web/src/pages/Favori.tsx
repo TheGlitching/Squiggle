@@ -21,6 +21,7 @@ import { Label, Lines, Phone, Tap, W } from '../components/PhoneDrawing';
 import { currentPhoneOs, type PhoneOs } from '../phone';
 import { Link } from '../router';
 import { ORIGIN } from '../seo';
+import { SHORTCUT_PUBLISHED } from '../shortcut';
 
 /** The bookmark's name, and this page's title, so that a new bookmark is named already. */
 export const NAME = 'Analyser avec Squiggle';
@@ -265,7 +266,7 @@ function Guide({
               />
             </>
           ) : null}
-          {os === 'ios' ? (
+          {os === 'ios' && SHORTCUT_PUBLISHED ? (
             <p className="mt-6 mb-0 text-base leading-relaxed text-muted">
               Sur iPhone, le raccourci s’utilise depuis Partager, et lit aussi des captures :{' '}
               <Link to="/raccourci" className={QUIET_LINK}>

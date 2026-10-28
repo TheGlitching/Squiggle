@@ -10,6 +10,7 @@ import { CONTACT_EMAIL } from './components/Layout';
 import { GITHUB_URL, PRICE_MONTHLY, TAGLINE } from './offer';
 import { NOTIONS, famille, glossaryPath } from './glossaire';
 import { CHROME_URL, FIREFOX_URL } from './install';
+import { SHORTCUT_PUBLISHED } from './shortcut';
 
 export const ORIGIN = 'https://squiggle.fr';
 
@@ -108,12 +109,16 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
       figure: 'rapport',
     },
   },
-  {
-    path: '/raccourci',
-    title: 'Analyser avec Squiggle sur iPhone : le raccourci - Squiggle',
-    description:
-      'Un article dans Safari ou des captures d’une appli de presse : partagez-les vers Squiggle, l’analyse s’ouvre avec le texte. Rien à copier.',
-  },
+  ...(SHORTCUT_PUBLISHED
+    ? [
+        {
+          path: '/raccourci',
+          title: 'Analyser avec Squiggle sur iPhone : le raccourci - Squiggle',
+          description:
+            'Un article dans Safari ou des captures d’une appli de presse : partagez-les vers Squiggle, l’analyse s’ouvre avec le texte. Rien à copier.',
+        },
+      ]
+    : []),
   {
     path: '/favori',
     // The page's title is the bookmark's name: the browser fills it in when the page is saved.
@@ -241,6 +246,8 @@ export const APP_PATHS: readonly string[] = [
   '/account',
   '/pont',
   '/legal',
+  // Without its signed file, /raccourci only sends the reader on to /favori.
+  ...(SHORTCUT_PUBLISHED ? [] : ['/raccourci']),
 ];
 
 export const NOT_FOUND_TITLE = 'Page introuvable - Squiggle';
