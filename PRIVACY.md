@@ -219,8 +219,8 @@ journalisée par le **nom** du champ fautif, jamais par sa valeur.
 ## Mesure d'audience du site
 
 La fréquentation du site est mesurée par **Cloudflare Web Analytics**, l'outil de
-Cloudflare, qui héberge déjà le site : Cloudflare ajoute lui-même son script de mesure
-aux pages qu'il sert. Il ne dépose aucun cookie, ne calcule aucune empreinte de votre
+Cloudflare, qui héberge déjà le site : chaque page charge son script de mesure une fois
+affichée. Il ne dépose aucun cookie, ne calcule aucune empreinte de votre
 navigateur, n'y enregistre rien, et ne nous montre que des données agrégées : combien
 de pages sont vues, d'où viennent les visites, depuis quel pays et quel type
 d'appareil. Rien ne permet de vous reconnaître d'une visite à l'autre.

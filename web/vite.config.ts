@@ -162,8 +162,17 @@ const serifInFirstScreen = (path: string) =>
  * painted, so its two files do not take a slow connection's bandwidth from the first
  * screen; until then its text is set in a face of the same size (`index.css`). The
  * app's script, too, is only fetched once the page has painted: the page is already
- * there in the HTML. The stylesheet file is still emitted, and the service worker keeps
- * it in the installed app's shell.
+ * there in the HTML. So is Cloudflare Web Analytics' script, when the build is given
+ * the site's token (`SQUIGGLE_WEB_ANALYTICS_TOKEN`, see docs/DEPLOYING.md). The
+ * stylesheet file is still emitted, and the service worker keeps it in the installed
+ * app's shell.
+ *
+ * "Painted" is the browser's first-contentful-paint entry, which is stamped when the
+ * frame reaches the screen. An animation frame is not enough: on a slow phone it runs
+ * a second before that frame is shown, and whatever it fetches then is counted by
+ * PageSpeed as holding the first paint back. A page with nothing to paint (an emptied
+ * stale copy, see `STALE_PAGE_GUARD`) starts at once, and a page whose paint is never
+ * reported starts after four seconds anyway.
  */
 function firstPaintReady(
   html: string,
@@ -186,11 +195,19 @@ function firstPaintReady(
   const preload = (rules: string[]) =>
     rules.map((rule) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="${fileOf(rule)}">`).join('\n    ');
   const [script, src] = scripts[0];
+  const token = process.env.SQUIGGLE_WEB_ANALYTICS_TOKEN;
+  const beacon = token
+    ? `const beacon = document.createElement('script'); beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js'; beacon.dataset.cfBeacon = ${JSON.stringify(JSON.stringify({ token }))}; document.body.append(beacon); `
+    : '';
   const after = (serifFirst: boolean) => {
     const declare = serifFirst
       ? ''
       : `const faces = document.createElement('style'); faces.textContent = ${JSON.stringify(serif.join(''))}; document.head.append(faces); `;
-    return `<script>requestAnimationFrame(() => setTimeout(() => { ${declare}import('${src}'); }));</script>`;
+    const start = `let started = false; const start = () => { if (started) return; started = true; ${declare}${beacon}import('${src}'); };`;
+    const onPaint =
+      "new PerformanceObserver((list) => { if (list.getEntriesByName('first-contentful-paint').length) setTimeout(start); }).observe({ type: 'paint', buffered: true }); " +
+      "addEventListener('DOMContentLoaded', () => { if (!document.getElementById('root').textContent.trim()) start(); }); setTimeout(start, 4000);";
+    return `<script>{ ${start} if (window.PerformanceObserver?.supportedEntryTypes?.includes('paint')) { ${onPaint} } else requestAnimationFrame(() => setTimeout(start)); }</script>`;
   };
   return (serifFirst) =>
     html
