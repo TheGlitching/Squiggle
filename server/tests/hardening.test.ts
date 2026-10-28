@@ -327,17 +327,41 @@ describe('abuse ceilings', () => {
     const first = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
     expect(first.status).toBe(200);
 
-    const second = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    // Another article while the first is still in flight is refused.
+    const other = [{ id: 'b1', type: 'paragraph' as const, text: 'Un autre article, sur un autre sujet entièrement.', charStart: 0 }];
+    const second = await call(env, who, '/v1/analyze/audit', { url: `${ARTICLE_URL}-bis`, title: 'T', blocks: other });
     expect(second.status).toBe(429);
     expect(second.json.error).toBe('rate_limited');
 
     // An abandoned run stops blocking once its activity window lapses, so a
     // reader who closed the tab is not locked out for the run's whole TTL.
     env.clock.advance(6 * 60 * 1000);
-    const later = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    const later = await call(env, who, '/v1/analyze/audit', { url: `${ARTICLE_URL}-bis`, title: 'T', blocks: other });
     expect(later.status).toBe(200);
   });
 
+  it('hands the run in flight back to a second request on the same article', async () => {
+    const env = makeTestEnv();
+    const who = await signedIn(env, 'marie@example.org');
+
+    const first = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    const research = await call(env, who, '/v1/analyze/research', { runId: first.json.runId, findingId: 'f1' });
+    expect(research.status).toBe(200);
+    const calls = { ...env.llm.calls };
+
+    // The page reloaded, or « Analyser » was tapped again: the same article.
+    const again = await call(env, who, '/v1/analyze/audit', { url: ARTICLE_URL, title: 'T', blocks: BLOCKS });
+    expect(again.status).toBe(200);
+    expect(again.json.runId).toBe(first.json.runId);
+    expect(again.json.researchable).toEqual(first.json.researchable);
+    expect(again.json.report).toMatchObject({ schemaVersion: 1 });
+
+    // It carries on from the run: nothing is audited or researched twice.
+    await call(env, who, '/v1/analyze/research', { runId: first.json.runId, findingId: 'f1' });
+    expect(env.llm.calls).toEqual(calls);
+    const done = await call(env, who, '/v1/analyze/finalize', { runId: first.json.runId });
+    expect(done.status).toBe(200);
+  });
 });
 
 describe('logs and correlation', () => {

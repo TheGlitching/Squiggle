@@ -26,6 +26,7 @@ export interface LogFields {
     | 'auth_failed'
     | 'payload_rejected'
     | 'analysis_started'
+    | 'analysis_joined'
     | 'analysis_finalized'
     | 'cache_hit'
     | 'provider_failed'
