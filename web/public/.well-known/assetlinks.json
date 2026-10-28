@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fr.squiggle.app",
+      "sha256_cert_fingerprints": [
+        "0B:EF:7A:0E:3E:B2:B2:E5:72:EC:5C:B4:43:07:BD:54:32:24:DD:91:AD:25:79:15:00:B0:4B:F8:E7:33:28:F5"
+      ]
+    }
+  }
+]
