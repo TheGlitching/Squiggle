@@ -477,15 +477,7 @@ function Aside() {
               ? 'Installez l’appli : un article partagé vers Squiggle arrive directement ici.'
               : 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil ».'}
           </p>
-          {install.kind === 'ios' ? (
-            <p className="mt-3 mb-0">
-              Un article dans Safari ou des captures :{' '}
-              <Link to="/raccourci" className={QUIET_LINK}>
-                le raccourci Analyser avec Squiggle
-              </Link>{' '}
-              les envoie ici sans copier-coller.
-            </p>
-          ) : null}
+
           {install.kind === 'prompt' ? (
             <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} mt-3 max-sm:w-full`}>
               Installer l’appli
