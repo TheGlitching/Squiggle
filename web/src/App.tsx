@@ -11,7 +11,7 @@ import { Classe } from './pages/Classe';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
-import { Favori } from './pages/Favori';
+import { Favori, FavoriEssai, favoriTried } from './pages/Favori';
 import { Corrige, Fiche } from './pages/Feuilles';
 import { Glossaire, NotionPage } from './pages/Glossaire';
 import { FicheActivite, GrilleLecture } from './pages/Kit';
@@ -77,13 +77,17 @@ export function App({ path: at }: { path?: string }) {
       page = <Accueil />;
       break;
     case '/analyser':
-      page = <Analyser />;
+      // The bookmark tried on /favori/essai: the guide says it works, and nothing is analysed.
+      page = typeof window !== 'undefined' && favoriTried(window.location) ? <Redirect to="/favori?essai=ok" /> : <Analyser />;
       break;
     case '/raccourci':
       page = SHORTCUT_PUBLISHED ? <Raccourci /> : <Redirect to="/favori" />;
       break;
     case '/favori':
       page = <Favori />;
+      break;
+    case '/favori/essai':
+      page = <FavoriEssai />;
       break;
     case '/enseignants':
       page = <Enseignants />;
