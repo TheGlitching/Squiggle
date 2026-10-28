@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Squiggle</string>
+    <string name="share_label">Squiggle</string>
+    <string name="check">Vérifier cet article</string>
+    <string name="reading">Squiggle lit l’article…</string>
+    <string name="loading">Ouverture de l’article…</string>
+    <string name="ready">Connecté à votre journal ? Touchez Vérifier pour relire l’article.</string>
+    <string name="no_link">Ce partage ne contient pas de lien. Partagez un article ou une vidéo vers Squiggle.</string>
+    <!-- The site this app may show in full screen, as Digital Asset Links states it (web/public/.well-known/assetlinks.json). -->
+    <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://squiggle.fr\"}}]</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The site's dark palette (the @theme block of web/src/index.css). -->
+<resources>
+    <color name="background">#0a0a0b</color>
+    <color name="surface">#0f0f11</color>
+    <color name="foreground">#ece9e3</color>
+    <color name="muted">#948f88</color>
+    <color name="accent">#9061f0</color>
+    <color name="accentForeground">#0a0a0b</color>
+</resources>

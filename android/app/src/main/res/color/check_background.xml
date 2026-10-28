@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The button waits, dimmed, while the article loads or is being read. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.35" android:color="@color/accent" android:state_enabled="false" />
+    <item android:color="@color/accent" />
+</selector>
