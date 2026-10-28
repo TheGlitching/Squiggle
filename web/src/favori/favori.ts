@@ -4,12 +4,14 @@
  *
  * `vite.config.ts` bundles this file into a single `javascript:` address
  * (`virtual:favori`), which /favori gives the reader to save as a bookmark.
- * It reads the article (`lecture.ts`), then opens /analyser with it in the
- * fragment (`payload.ts`): no request leaves the page, and nothing is loaded
- * into it, so a site's content policy has nothing to refuse.
+ * It takes the page (`lecture.ts`), then opens /analyser with it in the
+ * fragment (`payload.ts`), where the article is read out of it: no request
+ * leaves the page, and nothing is loaded into it, so a site's content policy
+ * has nothing to refuse. It must stay small: Chrome on Android keeps only the
+ * first 5,000 characters of a bookmark's address (`favori.test.ts` holds it to that).
  */
 import { readPage } from './lecture';
-import { favoriFragment } from './payload';
+import { pageFragment } from './payload';
 
 /** The site that gave the bookmark: /favori writes its own origin in here. */
 declare const SQUIGGLE_ORIGIN: string;
@@ -21,12 +23,14 @@ banner.style.cssText =
   'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:12px 18px;border-radius:10px;background:#0a0a0b;color:#f4f4f5;font:600 16px/1.3 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35)';
 document.body.append(banner);
 
-readPage().then(
-  (article) => {
-    location.href = `${SQUIGGLE_ORIGIN}/analyser${favoriFragment(article)}`;
-  },
-  () => {
-    banner.textContent = 'Squiggle n’a pas pu lire cette page. Copiez le texte, puis collez-le sur squiggle.fr.';
-    setTimeout(() => banner.remove(), 6000);
-  },
-);
+readPage()
+  .then((html) => pageFragment(html, location.href))
+  .then(
+    (fragment) => {
+      location.href = `${SQUIGGLE_ORIGIN}/analyser${fragment}`;
+    },
+    () => {
+      banner.textContent = 'Squiggle n’a pas pu lire cette page. Copiez le texte, puis collez-le sur squiggle.fr.';
+      setTimeout(() => banner.remove(), 6000);
+    },
+  );

@@ -1,19 +1,23 @@
 /**
- * The article as the bookmark reads it, in the reader's own page.
+ * The page as the bookmark takes it, in the reader's own tab.
  *
- * The extension's extractor (`shared/src/extract/extractor.ts`) decides what
- * the article is, so a page read by the bookmark on a phone and by the
- * extension on a computer gives the same blocks. Some sites render the end of
- * a long article only as the reader scrolls to it, so the page is scrolled
- * through the article first, then read, then put back where the reader was.
+ * Some sites render the end of a long article only as the reader scrolls to
+ * it, so the page is scrolled through the article first, then copied, then put
+ * back where the reader was. The copy keeps what the extractor reads (the
+ * text, the links, the head's metadata) and drops what it never reads, and
+ * what the reader cannot see: the extractor that reads it on /analyser has no
+ * styles to tell a hidden paragraph by.
  */
-import { ArticleExtractor } from '../../../shared/src/extract/extractor';
-import type { FavoriPayload } from './payload';
 
 /** Long enough for a lazy site to render what scrolled into view. */
 const STEP_MS = 150;
 /** A long article on a slow phone, and never longer: a page that keeps growing is cut here. */
 const MAX_SCROLL_MS = 15_000;
+
+/** Marks, for the length of the copy, what the reader cannot see. */
+const HIDDEN = 'data-squiggle-hidden';
+/** What the extractor never reads: code, media, embedded pages. JSON-LD and the canonical link are metadata. */
+const DROPPED = `[${HIDDEN}],script:not([type="application/ld+json"]),style,link:not([rel=canonical]),svg,iframe,noscript,template,img,picture,video,audio,canvas`;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -40,18 +44,24 @@ export async function scrollThrough(article: Element, win: Window = window): Pro
   }
 }
 
-/** The article in this page, once every part of it has been rendered. */
-export async function readPage(doc: Document = document, win: Window = window): Promise<FavoriPayload> {
-  const first = new ArticleExtractor(doc).extract();
-  const container = first.rootContainerSelector ? doc.querySelector(first.rootContainerSelector) : null;
+/** The page's HTML, once every part of the article has been rendered. */
+export async function readPage(doc: Document = document, win: Window = window): Promise<string> {
+  // ponytail: the first <article> stands in for the extractor's container, which is too big to ship in the bookmark.
+  const article = doc.querySelector('[itemprop="articleBody"], article') ?? doc.documentElement;
   const top = win.scrollY;
-  await scrollThrough(container ?? doc.documentElement, win);
+  await scrollThrough(article, win);
   win.scrollTo(0, top);
 
-  const article = new ArticleExtractor(doc).extract();
-  const title = article.metadata.title.replace(/\s+/g, ' ').trim();
-  const lines = article.blocks.map((block) => block.cleanText);
-  // The headline is the title; it is not also the first paragraph.
-  if (lines[0] === title) lines.shift();
-  return { title, url: article.metadata.canonicalUrl || win.location.href, text: lines.join('\n') };
+  const hidden: Element[] = [];
+  for (const el of doc.body.querySelectorAll('*')) {
+    const style = win.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      el.setAttribute(HIDDEN, '');
+      hidden.push(el);
+    }
+  }
+  const copy = doc.documentElement.cloneNode(true) as Element;
+  for (const el of hidden) el.removeAttribute(HIDDEN);
+  for (const el of copy.querySelectorAll(DROPPED)) el.remove();
+  return copy.outerHTML;
 }
