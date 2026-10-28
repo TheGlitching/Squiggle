@@ -231,6 +231,7 @@ const APP_TITLES: Record<string, string> = {
   '/classe/tableau': 'Tableau - Squiggle',
   '/classe/fiche': 'Fiche élève - Squiggle',
   '/classe/corrige': 'Corrigé - Squiggle',
+  '/favori/essai': 'Testez votre favori - Squiggle',
 };
 
 /**
