@@ -144,12 +144,42 @@ const STALE_PAGE_GUARD =
   "<script>if (document.getElementById('root').dataset.path !== location.pathname) document.getElementById('root').replaceChildren();</script>";
 
 /**
+ * Lets a page paint from its HTML alone. The stylesheet is written into the page
+ * rather than linked: on a slow phone connection its own request held the first paint
+ * back by seconds. The heading face is preloaded, since every page's largest text is
+ * set in it. And the app's script is only fetched once the page has painted: the page
+ * is already there in the HTML, so the script must not hold its first paint back, nor
+ * take a slow connection's bandwidth from its text and faces. The stylesheet file is
+ * still emitted, and the service worker keeps it in the installed app's shell.
+ */
+function firstPaintReady(html: string, read: (file: string) => string): string | { error: string } {
+  const link = /<link rel="stylesheet" crossorigin href="\/(assets\/[^"]+\.css)">/.exec(html);
+  if (!link) return { error: 'index.html no longer links the one stylesheet this plugin inlines' };
+  const scripts = [...html.matchAll(/<script type="module" crossorigin src="(\/assets\/[^"]+\.js)"><\/script>/g)];
+  if (scripts.length !== 1 || html.includes('modulepreload')) {
+    return { error: 'index.html no longer has the one module script, and no other, that this plugin loads after the first paint' };
+  }
+  const css = read(link[1]);
+  const face = /url\((\/assets\/bricolage-grotesque-[^)]+\.woff2)\)/.exec(css);
+  if (!face) return { error: 'the stylesheet no longer has the Bricolage Grotesque face this plugin preloads' };
+  const [script, src] = scripts[0];
+  return html
+    .replace(script, () => `<script>requestAnimationFrame(() => setTimeout(() => import('${src}')));</script>`)
+    .replace(
+      link[0],
+      () =>
+        `<link rel="preload" as="font" type="font/woff2" crossorigin href="${face[1]}">\n    <style>${css}</style>`,
+    );
+}
+
+/**
  * Writes every public page (`src/seo.ts`) as its own HTML file, with its own head and
  * its content rendered in, and `sitemap.xml` beside them. A crawler or a link preview
- * reads only the HTML and never runs the app. The browser then renders the app over
- * it with `createRoot`, not `hydrateRoot`: a page that reads the reader's device on
- * first render (a draft, the install hint) differs from the build's copy, and that
- * must not be an error.
+ * reads only the HTML and never runs the app. The browser then hydrates it
+ * (`src/main.tsx`), so a page's first render must match the build's: what depends on
+ * the reader's device (the user agent) is read after it, never during it. The pages
+ * whose first render is the reader's own (`READER_STATE_PAGES` in `src/App.tsx`) are
+ * rendered afresh instead.
  */
 function prerender(): Plugin {
   type Entry = typeof import('./src/prerender');
@@ -167,10 +197,12 @@ function prerender(): Plugin {
     async closeBundle() {
       if (this.environment?.config.command !== 'build') return;
       const dist = (file: string) => new URL(`./dist/${file}`, import.meta.url);
-      const template = readFileSync(dist('index.html'), 'utf8');
-      if (!template.includes('<!--page-head-->') || !template.includes('<div id="root"></div>')) {
+      const built = readFileSync(dist('index.html'), 'utf8');
+      if (!built.includes('<!--page-head-->') || !built.includes('<div id="root"></div>')) {
         this.error('index.html no longer has the <!--page-head--> and empty #root this plugin fills in');
       }
+      const template = firstPaintReady(built, (file) => readFileSync(dist(file), 'utf8'));
+      if (typeof template !== 'string') this.error(template.error);
       const server = await createServer({
         configFile: false,
         root: new URL('.', import.meta.url).pathname,

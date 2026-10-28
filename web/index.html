@@ -16,6 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Squiggle" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- The app's script runs after the first paint: a browser install prompt fired before it is kept for src/install.ts. -->
+    <script>
+      addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); window.earlyInstallPrompt = event; }, { once: true });
+    </script>
   </head>
   <body>
     <div id="root"></div>

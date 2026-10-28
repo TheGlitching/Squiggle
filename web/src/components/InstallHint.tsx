@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { isMobile, useInstall } from '../install';
+import { isMobile, useInstall, useUserAgent } from '../install';
 import { PAGE, PRIMARY_BUTTON } from './Landing';
 
 const DISMISSED_KEY = 'squiggle_install_hint_dismissed';
@@ -51,7 +51,7 @@ function ShareGlyph() {
 export function InstallHint() {
   const install = useInstall();
   const [dismissed, setDismissed] = useState(wasDismissed);
-  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const ua = useUserAgent();
 
   if (!install || dismissed || !(isMobile(ua) || install.kind === 'ios')) return null;
 

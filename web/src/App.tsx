@@ -54,6 +54,13 @@ function NotFound() {
   );
 }
 
+/**
+ * The public pages whose first render reads the reader's browser: the draft on
+ * `/analyser`, the class session on `/classe`. The build cannot know either, so these
+ * are rendered afresh rather than hydrated (`src/main.tsx`).
+ */
+export const READER_STATE_PAGES: readonly string[] = ['/analyser', '/classe'];
+
 /** `path` is given only by the build, which renders each public page outside a browser (`src/prerender.tsx`). */
 export function App({ path: at }: { path?: string }) {
   const path = usePath(at);
