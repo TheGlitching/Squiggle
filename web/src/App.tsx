@@ -17,6 +17,7 @@ import { FicheActivite, GrilleLecture } from './pages/Kit';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pilotage } from './pages/Pilotage';
 import { Pont } from './pages/Pont';
+import { Raccourci } from './pages/Raccourci';
 import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
 import { notion } from './glossaire';
@@ -75,6 +76,9 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/analyser':
       page = <Analyser />;
+      break;
+    case '/raccourci':
+      page = <Raccourci />;
       break;
     case '/enseignants':
       page = <Enseignants />;
