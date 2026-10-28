@@ -109,6 +109,12 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     },
   },
   {
+    path: '/raccourci',
+    title: 'Analyser avec Squiggle sur iPhone : le raccourci - Squiggle',
+    description:
+      'Un article dans Safari ou des captures d’une appli de presse : partagez-les vers Squiggle, l’analyse s’ouvre avec le texte. Rien à copier.',
+  },
+  {
     path: '/enseignants',
     title: 'Squiggle pour les enseignants',
     description:

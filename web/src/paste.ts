@@ -171,6 +171,16 @@ export function articleFromShare(params: URLSearchParams): Partial<PastedArticle
   };
 }
 
+/**
+ * Where a share's fields are: in the query string from "Partager vers Squiggle",
+ * or after the `#` from the iPhone shortcut (`web/shortcut/`), as
+ * `#title=…&text=…&url=…`. A fragment never reaches a server, so the
+ * shortcut's article goes from the reader's phone to this page and nowhere else.
+ */
+export function sharedParams(location: Pick<Location, 'search' | 'hash'>): URLSearchParams {
+  return new URLSearchParams(location.hash.length > 1 ? location.hash.slice(1) : location.search);
+}
+
 const DRAFT_KEY = 'squiggle:texte-a-analyser';
 
 /**
