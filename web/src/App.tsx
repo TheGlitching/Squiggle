@@ -160,5 +160,11 @@ export function App({ path: at }: { path?: string }) {
 
   // Inside the app, the header leads to the reader's account rather than to sign-in.
   const inApp = route === '/analyser' || route === '/compte' || route === '/account' || route === '/pont';
-  return <Layout account={inApp ? 'Mon compte' : 'Se connecter'}>{page}</Layout>;
+  // The home offers the app and the bookmark where each applies: no second invitation over it.
+  const home = route === '/' || route === '/tarifs';
+  return (
+    <Layout account={inApp ? 'Mon compte' : 'Se connecter'} installHint={!home}>
+      {page}
+    </Layout>
+  );
 }
