@@ -41,14 +41,14 @@ export const ANALYSES_GLOBAL_PER_HOUR = 300;
 export const CONCURRENT_RUN_WINDOW_MS = 5 * 60 * 1000;
 
 /**
- * The site's analysis without an account: one per visitor and per UTC day,
- * the visitor known only by the fingerprint of their address, and at most
- * this many for every visitor together. The global figure is the cost bound:
- * at about 5 cents an analysis, 40 a day is 60 dollars a month at most. It is
- * a product limit as much as an abuse one, so it sits low on purpose; a
- * visitor who meets either is asked to create an account.
+ * The site's analysis without an account: one per visitor in all (the
+ * visitor known only by the fingerprint of their address, kept for
+ * `VISITOR_USE_RETENTION_MS`), and at most this many a UTC day for every
+ * visitor together. The global figure is the cost bound: at about 5 cents an
+ * analysis, 40 a day is 60 dollars a month at most. It is a product limit as
+ * much as an abuse one, so it sits low on purpose; a visitor who meets either
+ * is asked to create an account.
  */
-export const ANON_ANALYSES_PER_IP_PER_DAY = 1;
 export const ANON_ANALYSES_PER_DAY = 40;
 
 /**

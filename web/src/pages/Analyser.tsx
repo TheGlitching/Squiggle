@@ -4,9 +4,10 @@
  * It runs in hosted mode on the reader's account, so it spends the same trial
  * and subscription as the extension, and nothing here judges the text: the
  * stages, the prompts and the score are the server's (`shared/`). A visitor
- * without an account runs one analysis a day the same way, then is offered an
- * account to keep the report: back from that sign-in, the report is served
- * again from the shared cache, at no cost. The paste is kept in this browser
+ * without an account runs one analysis in all the same way, and is shown its
+ * first finding with the others kept back by the server; an account opens the
+ * whole report: back from that sign-in, it is served from the shared cache, at
+ * no cost. The paste is kept in this browser
  * until the reader clears it, so signing in halfway loses nothing. "Partager vers Squiggle" (the installed app's share target)
  * lands here with the shared text or address in the query string, which is
  * read once and wiped from the address bar. Where the share menu does not
@@ -75,6 +76,8 @@ import { describeAccount, type AccountView } from '../usage';
 const SIGN_IN = '/connexion?next=/analyser';
 /** The sign-in a visitor's report offers; the server counts an account opened through it. */
 const SIGN_UP_AFTER_VISIT = `/connexion?next=${encodeURIComponent('/analyser?apres=essai')}`;
+/** The same, from a report with findings kept back, counted apart. */
+const SIGN_UP_AFTER_WITHHELD = `/connexion?next=${encodeURIComponent('/analyser?apres=flou')}`;
 
 type Phase =
   | { kind: 'edit' }
@@ -92,7 +95,9 @@ type Phase =
 
 /** Back from the sign-in a visitor's report offered. Read before the address bar is wiped. */
 function backFromVisit(): boolean {
-  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('apres') === 'essai';
+  if (typeof window === 'undefined') return false;
+  const after = new URLSearchParams(window.location.search).get('apres');
+  return after === 'essai' || after === 'flou';
 }
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
@@ -275,7 +280,7 @@ export function Analyser() {
   }, []);
 
   // Back from the sign-in a visitor's report offered: the report is in the
-  // shared cache, so it is shown again without a model call or a credit.
+  // shared cache, so it is shown again, whole, without a model call or a credit.
   const signedIn = Boolean(account);
   useEffect(() => {
     if (!returning || !signedIn || pasteProblem(article)) return;
@@ -551,20 +556,23 @@ export function Analyser() {
           <button type="button" onClick={startOver} className={QUIET_LINK}>
             Analyser un autre article
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              const { report, blocks } = phase;
-              saveSeance(newSeance({ title: article.title, source: article.source, blocks, report }));
-              navigate('/classe');
-            }}
-            className={QUIET_LINK}
-          >
-            Préparer pour la classe
-          </button>
+          {/* A session is prepared from the whole report, which a visitor's is not. */}
+          {phase.report.withheld?.length ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                const { report, blocks } = phase;
+                saveSeance(newSeance({ title: article.title, source: article.source, blocks, report }));
+                navigate('/classe');
+              }}
+              className={QUIET_LINK}
+            >
+              Préparer pour la classe
+            </button>
+          )}
         </div>
-        <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} />
-        {phase.visitor ? <KeepReport /> : null}
+        <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} signUp={SIGN_UP_AFTER_WITHHELD} />
+        {phase.visitor ? <KeepReport withheld={Boolean(phase.report.withheld?.length)} /> : null}
         {account && view ? (
           view.needsSubscription ? (
             <div className="mt-12">
@@ -917,7 +925,7 @@ function Stages({ stage }: { stage: Progress['stage'] }) {
  * After a visitor's report: the account is what keeps it, and what comes with
  * it. The same card as the offer a signed-in reader meets when the trial runs out.
  */
-function KeepReport() {
+function KeepReport({ withheld }: { withheld: boolean }) {
   return (
     <div className="mt-12">
       <section
@@ -931,7 +939,7 @@ function KeepReport() {
           Créez un compte gratuit, sans carte bancaire : ce rapport vous attend au retour, et {FREE_ANALYSES} analyses
           vous sont offertes, ici, dans l’appli et dans l’extension.
         </p>
-        <Link to={SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+        <Link to={withheld ? SIGN_UP_AFTER_WITHHELD : SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
           Créer un compte gratuit
         </Link>
       </section>
@@ -970,7 +978,7 @@ function Action({
           Analyser le texte
         </button>
         <p className="mt-3 mb-0 text-sm text-muted">
-          Une analyse offerte sans compte, chaque jour.{' '}
+          Une analyse offerte sans compte.{' '}
           <Link to={SIGN_IN} className="underline underline-offset-4 hover:text-foreground">
             Se connecter
           </Link>

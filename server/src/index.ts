@@ -42,7 +42,7 @@
  *   POST   /web/analyze/source-check
  *   POST   /web/analyze/finalize
  *   GET    /web/anon/check             (no account) the same five stages for a visitor's pasted
- *   POST   /web/anon/audit                       text: one a day per IP, 40 a day for the site,
+ *   POST   /web/anon/audit                       text: one in all per IP, 40 a day for the site,
  *   POST   /web/anon/research                    from the web app's own origin only
  *   POST   /web/anon/source-check
  *   POST   /web/anon/finalize
@@ -93,7 +93,7 @@ import {
 import { claimExtensionToken } from './auth/claim';
 import { issueBridgeCode, redeemBridgeCode } from './auth/bridge';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
-import { AFTER_ANON_NEXT, DEFAULT_NEXT } from './auth/next';
+import { AFTER_ANON_NEXT, AFTER_WITHHELD_NEXT, DEFAULT_NEXT } from './auth/next';
 import { requestMagicLink, verifyMagicLink } from './auth/magicLink';
 import { verifySignedRequest } from './auth/requestSigning';
 import {
@@ -387,7 +387,9 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   // carries where it lands; nothing ties it to the visitor's run.
   const countSignin = async (outcome: { created: boolean; next: string | null }) => {
     await count('signin_completed');
-    if (outcome.created && outcome.next === AFTER_ANON_NEXT) await count('signin_after_anon');
+    if (!outcome.created) return;
+    if (outcome.next === AFTER_ANON_NEXT || outcome.next === AFTER_WITHHELD_NEXT) await count('signin_after_anon');
+    if (outcome.next === AFTER_WITHHELD_NEXT) await count('signin_after_withheld');
   };
 
   if (path === '/health' && method === 'GET') {
@@ -820,7 +822,8 @@ async function accountForUser(
  * the same account, so a pasted text spends the same trial and subscription.
  * `anon` is the web app for a visitor without an account: the same pasted-text
  * stages, from the web app's own origin only, on the visitor's one analysis
- * of the day rather than on an account.
+ * rather than on an account, and served with all its findings but the first
+ * kept back (`analyze/withhold.ts`).
  *
  * Every body is parsed by its zod schema before a handler sees it, so a
  * handler only ever receives a value of the shape it declares, and an
@@ -867,7 +870,7 @@ async function analyzeRoute(
     if (origin !== null && origin !== s.webAppOrigin) {
       return finish(apiError('origin_not_allowed', 'This origin is not allowed to call this API.'));
     }
-    // Cloudflare always sets it; a request without one shares a single day's analysis with every other.
+    // Cloudflare always sets it; a request without one shares a single analysis with every other.
     reader = { visitor: true, ipHash: await sha256Hex(req.headers.get('cf-connecting-ip') ?? 'unknown') };
   }
   const userId = 'visitor' in reader ? undefined : reader.id;

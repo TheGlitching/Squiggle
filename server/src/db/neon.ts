@@ -16,7 +16,15 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { ANON_RATE_SCOPE_PREFIX, DAY_MS, RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import {
+  ANON_RATE_SCOPE_PREFIX,
+  DAY_MS,
+  RATE_WINDOW_MS,
+  REPORT_MAX_BYTES,
+  VISITOR_USE_RETENTION_MS,
+  WEEK_MS,
+  utcDayOf,
+} from '../usage/limits';
 import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
@@ -510,6 +518,21 @@ export class NeonDb implements Db {
     `;
   }
 
+  async claimVisitorUse(ipHash: string, now: number, retentionMs: number): Promise<boolean> {
+    // One upsert: two requests from the same address cannot both claim it.
+    const rows = await this.q`
+      INSERT INTO visitor_uses (ip_hash, used_at) VALUES (${ipHash}, ${now})
+      ON CONFLICT (ip_hash) DO UPDATE SET used_at = EXCLUDED.used_at
+      WHERE visitor_uses.used_at <= ${now - retentionMs}
+      RETURNING 1
+    `;
+    return rows.length === 1;
+  }
+
+  async releaseVisitorUse(ipHash: string, usedAt: number): Promise<void> {
+    await this.q`DELETE FROM visitor_uses WHERE ip_hash = ${ipHash} AND used_at = ${usedAt}`;
+  }
+
   // ---- usage (ledger + daily counter) -------------------------------------
 
   async recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow> {
@@ -788,6 +811,7 @@ export class NeonDb implements Db {
         WHERE window_start <= CASE WHEN scope LIKE ${`${ANON_RATE_SCOPE_PREFIX}%`} THEN ${now - DAY_MS}::bigint ELSE ${now - RATE_WINDOW_MS}::bigint END
         RETURNING 1
       `,
+      this.q`DELETE FROM visitor_uses WHERE used_at <= ${now - VISITOR_USE_RETENTION_MS} RETURNING 1`,
     ]);
     return swept.reduce((n, rows) => n + rows.length, 0);
   }

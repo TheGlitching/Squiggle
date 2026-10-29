@@ -194,7 +194,15 @@ export interface OwnerMetrics {
   cache: { checks: number; hits: number; hitRate: number | null };
   stages: { audit: Stage & { truncated: number }; research: Stage; sourceCheck: Stage };
   audience: { campaigns: Counts; clicks: Counts; pastes?: Counts; flags?: { categories: Counts; reasons: Counts } };
-  funnel: { signin: Counts; checkout: Counts; runsStarted: Counts; finalized: Counts; refused: Counts };
+  funnel: {
+    signin: Counts;
+    checkout: Counts;
+    runsStarted: Counts;
+    finalized: Counts;
+    refused: Counts;
+    /** Absent from a server older than the withheld report. */
+    reportsWithheld?: number;
+  };
   headline: {
     newAccounts: { count: number };
     activationWithinWeek: { cohort: number; activated: number; share: number | null };

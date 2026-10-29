@@ -24,6 +24,8 @@ import { count } from '../count';
 import { frenchDate } from '../format';
 import { glossaryLink } from '../glossaire';
 import { locateFindings, passageTone, type Segment } from '../report';
+import { Link } from '../router';
+import { PRIMARY_BUTTON } from './Landing';
 import { timeAt, videoTime, type Start } from '../transcript';
 
 const VERIFICATION = Object.fromEntries(VERIFICATION_STATES.map((v) => [v.state, v]));
@@ -301,11 +303,54 @@ function Block({
   );
 }
 
+/**
+ * The findings a visitor's report kept back, as cards with nothing written on
+ * them: the server sent only the tone of each, so the page draws blurred bars
+ * in that tone, never words, and says plainly what an account opens.
+ */
+function Withheld({ withheld, signUp }: { withheld: NonNullable<AnalysisReport['withheld']>; signUp: string }) {
+  const others = withheld.length === 1 ? 'l’autre constat' : `les ${withheld.length} autres constats`;
+  return (
+    <div className="relative mt-3">
+      <div aria-hidden="true" className="grid gap-3 select-none">
+        {withheld.map((finding, index) => (
+          <div
+            key={index}
+            style={toneStyle(findingTone(finding.severity, finding.category))}
+            className="rounded-card border border-border bg-surface p-5"
+          >
+            <p className="m-0 flex items-center gap-2 text-sm font-medium text-[var(--sev-text)]">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--sev-color)]" />
+              {CATEGORY_LABELS[finding.category] ?? finding.category}
+            </p>
+            <div className="mt-3 grid gap-2.5 blur-[3px]">
+              <span className="block h-3.5 w-3/4 rounded-full bg-[var(--sev-tint)]" />
+              <span className="block h-2.5 w-full rounded-full bg-border" />
+              <span className="block h-2.5 w-5/6 rounded-full bg-border" />
+              <span className="block h-2.5 w-2/3 rounded-full bg-border" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-card border border-accent/50 bg-surface p-5">
+        <p className="m-0 text-base font-semibold">Créez un compte gratuit pour voir {others}.</p>
+        <p className="mt-1 mb-4 text-sm text-muted">
+          Sans carte bancaire. Le rapport complet s’affiche dès votre retour, sans nouvelle analyse.
+        </p>
+        <Link to={signUp} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+          Créer un compte gratuit
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function Rapport({
   report,
   blocks,
   times = null,
   byLink = false,
+  signUp = '/connexion',
 }: {
   report: AnalysisReport;
   blocks: TextBlock[];
@@ -313,6 +358,8 @@ export function Rapport({
   times?: Record<string, Start[]> | null;
   /** Found by its link alone: there is no text here to annotate, only the report and its short quotes. */
   byLink?: boolean;
+  /** Where a visitor's report with findings kept back sends them to open an account. */
+  signUp?: string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { segments, located } = useMemo(() => locateFindings(blocks, report.findings), [blocks, report.findings]);
@@ -346,6 +393,8 @@ export function Rapport({
   const withdrawn = report.research.withdrawn ?? [];
   const analysedAt = Date.parse(report.meta.analyzedAt);
   const analysedOn = frenchDate(Number.isNaN(analysedAt) ? null : analysedAt);
+  const withheld = report.withheld ?? [];
+  const total = findings.length + withheld.length;
 
   return (
     <div className="grid gap-10">
@@ -439,9 +488,9 @@ export function Rapport({
           }
         >
           <h2 id="constats-titre" className="m-0 text-base font-semibold">
-            {findings.length === 0 ? 'Constats' : `${findings.length} constat${findings.length > 1 ? 's' : ''}`}
+            {total === 0 ? 'Constats' : `${total} constat${total > 1 ? 's' : ''}`}
           </h2>
-          {findings.length === 0 ? (
+          {total === 0 ? (
             <p className="mt-3 mb-0 rounded-card border border-dashed border-border px-5 py-4 text-base text-muted">
               Aucun passage relevé : selon la grille, ce texte n’appelle pas de remarque particulière.
             </p>
@@ -460,6 +509,7 @@ export function Rapport({
               ))}
             </div>
           )}
+          {withheld.length > 0 ? <Withheld withheld={withheld} signUp={signUp} /> : null}
 
           {withdrawn.length > 0 ? (
             <div className="mt-8">

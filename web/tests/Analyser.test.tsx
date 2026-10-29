@@ -2,6 +2,8 @@
  * The analysis page, driven through `fetch` the way the browser drives it.
  * Pinned: a signed-out visitor runs one analysis without an account, then is
  * offered an account that keeps the report, without losing the paste; a
+ * report with findings kept back draws them blurred, with no word of them,
+ * and shows them whole once the reader is back signed in; a
  * share lands in the form and leaves the address bar; a run walks the
  * session stages on the reader's cookie and never asks for the source page;
  * the report highlights the passages it discusses; a refusal says what to do.
@@ -79,7 +81,13 @@ interface Seen {
 /** The server as the page sees it: an account, then the five stages. */
 function serve(
   who: Account | null,
-  stages: { account?: () => Response; audit?: () => Response; hit?: boolean; link?: boolean } = {},
+  stages: {
+    account?: () => Response;
+    audit?: () => Response;
+    hit?: boolean;
+    link?: boolean;
+    finalize?: AnalysisReport;
+  } = {},
 ) {
   const seen: Seen[] = [];
   vi.stubGlobal('localStorage', memoryStorage());
@@ -104,7 +112,7 @@ function serve(
         return jsonResponse(stages.link ? { ok: true, hit: true, report: REPORT, cachedAt: 1 } : { ok: true, hit: false });
       if (stage === 'check') return jsonResponse(stages.hit ? { ok: true, hit: true, report: REPORT } : { ok: true, hit: false });
       if (stage === 'audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
-      if (stage === 'finalize') return jsonResponse({ ok: true, report: REPORT, cached: true });
+      if (stage === 'finalize') return jsonResponse({ ok: true, report: stages.finalize ?? REPORT, cached: true });
       if (path === '/web/account/checkout') return jsonResponse({ ok: true, url: 'https://checkout.stripe.example/cs_1' });
       return jsonResponse({ ok: false, error: 'not_found' }, 404);
     }),
@@ -142,7 +150,7 @@ describe('Analyser, signed out', () => {
     const seen = serve(null);
     const first = render(<Analyser />);
     paste(TEXT);
-    expect(await screen.findByText(/Une analyse offerte sans compte, chaque jour/)).toBeInTheDocument();
+    expect(await screen.findByText(/Une analyse offerte sans compte\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion?next=/analyser');
     fireEvent.click(await analyseButton());
 
@@ -170,6 +178,39 @@ describe('Analyser, signed out', () => {
     expect(back.map((s) => s.url.split('?')[0])).toEqual(['/web/account', '/web/analyze/check']);
     expect(screen.queryByRole('region', { name: /Gardez ce rapport/ })).toBeNull();
     await waitFor(() => expect(window.location.search).toBe(''));
+  });
+
+  it('draws the findings a visitor’s report kept back blurred, then shows them whole once signed in', async () => {
+    const withheld: AnalysisReport = {
+      ...REPORT,
+      findings: [REPORT.findings[0]],
+      withheld: [{ category: 'cadrage', severity: 1 }],
+    };
+    serve(null, { finalize: withheld });
+    const first = render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+
+    expect(await screen.findByText('Chiffre sans source')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '2 constats' })).toBeInTheDocument();
+    // Nothing of the second finding is on the page: the server never sent it.
+    expect(screen.queryByText('Formule appuyée')).toBeNull();
+    expect(screen.getByText('Créez un compte gratuit pour voir l’autre constat.')).toBeInTheDocument();
+    for (const link of screen.getAllByRole('link', { name: 'Créer un compte gratuit' })) {
+      expect(link).toHaveAttribute('href', '/connexion?next=%2Fanalyser%3Fapres%3Dflou');
+    }
+    // A class session is prepared from a whole report only.
+    expect(screen.queryByRole('button', { name: 'Préparer pour la classe' })).toBeNull();
+    first.unmount();
+
+    const draft = loadDraft();
+    const back = serve(account(), { hit: true });
+    saveDraft(draft);
+    at('/analyser?apres=flou');
+    render(<Analyser />);
+    expect(await screen.findByText('Formule appuyée')).toBeInTheDocument();
+    expect(back.map((s) => s.url.split('?')[0])).toEqual(['/web/account', '/web/analyze/check']);
+    expect(screen.queryByText(/Créez un compte gratuit pour voir/)).toBeNull();
   });
 
   it('leaves a returning reader on their text when the cache has no report for it', async () => {
@@ -202,7 +243,9 @@ describe('Analyser, signed out', () => {
     render(<Analyser />);
     paste(TEXT);
     fireEvent.click(await analyseButton());
-    expect(await screen.findByRole('alert')).toHaveTextContent(/analyse sans compte du jour est faite/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Votre analyse offerte sans compte est déjà faite. Créez un compte gratuit : 3 analyses de plus vous sont offertes.',
+    );
     expect(screen.getByRole('link', { name: 'Créer un compte gratuit' })).toHaveAttribute('href', '/connexion?next=/analyser');
     expect(screen.queryByRole('button', { name: 'Analyser le texte' })).toBeNull();
     expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);

@@ -74,6 +74,8 @@ export interface Metrics {
     runsStarted: Record<string, number>;
     finalized: Record<string, number>;
     refused: Record<string, number>;
+    /** Visitors' reports served with findings kept back until they have an account. */
+    reportsWithheld: number;
   };
   headline: {
     /** New accounts, beside the campaign links visits came through: the two are never linked. */
@@ -152,6 +154,7 @@ export async function collectLaunchMetrics(
       runsStarted: family(c, 'run_started_'),
       finalized: family(c, 'finalize_'),
       refused: family(c, 'refused_'),
+      reportsWithheld: c.report_withheld,
     },
     headline: {
       newAccounts: { count: raw.accountsPerWeek.reduce((a, b) => a + b, 0), campaigns },

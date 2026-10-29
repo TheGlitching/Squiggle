@@ -25,12 +25,22 @@ L'analyse sur le site (la page « Analyser un texte ») est le mode hébergé, s
 extension : elle tourne sur le même compte, avec les mêmes analyses offertes et le même
 abonnement, et tout ce que la section 2 dit du mode hébergé s'y applique.
 
-Le site permet aussi **une analyse par jour sans compte**, et 40 par jour au plus pour
+Le site permet aussi **une seule analyse sans compte**, et 40 par jour au plus pour
 tous les visiteurs ensemble. Elle suit le même trajet, le même cache partagé et les
-mêmes limites de taille. Pour la compter, et pour rien d'autre, le serveur garde
-l'empreinte SHA-256 de votre adresse IP, jamais l'adresse elle-même, et l'efface à
-minuit (UTC), soit 24 heures au plus. Aucun cookie n'est envoyé ni déposé : rien ne
-relie cette analyse au compte que vous créeriez ensuite.
+mêmes limites de taille. Pour s'en tenir à une, et pour rien d'autre, le serveur garde
+l'empreinte SHA-256 de votre adresse IP, jamais l'adresse elle-même, avec l'heure de
+l'analyse, et l'efface **90 jours** après elle. Une tentative refusée ne prolonge pas
+ce délai. C'est le plus court qui tienne la règle : à 30 jours, une analyse offerte
+reviendrait chaque mois ; au-delà de quelques mois, une adresse IP change trop souvent
+de main pour désigner encore la même personne. Aucun cookie n'est envoyé ni déposé :
+rien ne relie cette analyse au compte que vous créeriez ensuite.
+
+Le rapport de cette analyse montre la note, la synthèse, les cinq domaines et le
+premier constat en entier ; des autres, le serveur n'envoie que leur nombre et leur
+catégorie, jamais leur texte. Une fois le compte créé, dans le même navigateur, le
+rapport complet est servi depuis le cache partagé, sans nouvelle analyse et sans
+consommer d'analyse offerte. Un rapport retrouvé par son seul lien reste servi en
+entier, avec ou sans compte.
 
 **Une vidéo YouTube** est analysée à partir de ses sous-titres, et ce texte suit
 exactement le trajet du texte d'un article, dans l'un et l'autre mode. Quand vous lancez
@@ -204,7 +214,7 @@ raconte.
 | Session web | base de données, **en empreinte SHA-256** | 30 jours |
 | Lien de connexion par e-mail, avec l'adresse IP de la demande | base de données, le code **en empreinte SHA-256** | 10 minutes |
 | Limites de fréquence : une adresse IP ou e-mail et un nombre de demandes dans l'heure | base de données | 2 heures au plus |
-| Analyse sans compte sur le site : l'**empreinte SHA-256** de votre adresse IP et le nombre d'analyses lancées dans la journée, pour s'en tenir à une par jour | base de données | **24 heures au plus**, effacée à minuit (UTC) |
+| Analyse sans compte sur le site : l'**empreinte SHA-256** de votre adresse IP et l'heure de l'analyse, pour s'en tenir à une seule | base de données | **90 jours** après l'analyse |
 | Identifiants client et abonnement Stripe | base de données | tant que le compte existe |
 | Compteurs de fonctionnement et d'audience : combien de fois le cache a répondu, une étape d'analyse a échoué, une visite est arrivée par un lien de campagne, un bouton a été utilisé, un constat a été signalé comme erroné (sa catégorie, et le motif choisi), par jour | base de données | tant que le serveur existe ; **un nombre par jour et par nom d'événement, sans compte et sans article** |
 | Journaux techniques | Cloudflare | **aucun texte d'article, aucune adresse d'article en clair** |

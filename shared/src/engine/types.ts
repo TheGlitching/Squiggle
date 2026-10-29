@@ -296,6 +296,13 @@ export interface AnalysisReport {
   claims: FactualClaim[];
   /** What research ran. Never optional: silence here would read as "checked". */
   research: ResearchRecord;
+  /**
+   * Set only on a report served to a visitor without an account: the findings
+   * past the first, which the server kept back. Only the tone each would be
+   * drawn in travels, never a word of them; signed in, the reader is served
+   * the whole report from the shared cache.
+   */
+  withheld?: Array<Pick<Finding, 'category' | 'severity'>>;
   meta: {
     model: string;
     promptVersion: string;
