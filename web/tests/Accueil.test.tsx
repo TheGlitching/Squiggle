@@ -1,9 +1,9 @@
 /**
- * The launch landing. What the funnel rests on is pinned: the tagline, the
- * sections a first-time reader looks for, the monthly price, the free analyses
- * and the education offer, with the domains and verification states checked
- * against the extension's own definitions so the page cannot describe a grid the
- * product no longer uses.
+ * The home page. What the funnel rests on is pinned: the tagline, the sections a
+ * first-time reader looks for, the way in of each device, the monthly price, the
+ * free trial and the education offer, with the domains and verification states
+ * checked against the extension's own definitions so the page cannot describe a
+ * grid the product no longer uses.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -20,6 +20,7 @@ import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, FIREFOX_URL } from '../src/install';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
 import { TAGLINE } from '../src/offer';
+import { CRITERIA, FAQ } from '../src/pages/Accueil';
 import { PUBLIC_PAGES, headFor } from '../src/seo';
 import { MOBILE } from './helpers';
 
@@ -46,33 +47,59 @@ describe('Accueil', () => {
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
   });
 
-  it('sends everyone to the analysis on the site first, whatever the device', () => {
+  // A phone has the site first; a computer whose browser has a store, the extension,
+  // with the site one link away; a computer without one (Safari), the site.
+  it('leads with the way in this device has', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
-    for (const ua of ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', ...MOBILE]) {
+    const hero = () => within(screen.getByRole('heading', { level: 1 }).parentElement!);
+    for (const ua of MOBILE) {
       agent.mockReturnValue(ua);
       home();
-      const hero = screen.getByRole('heading', { level: 1 }).parentElement!;
-      expect(within(hero).getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
-      expect(within(hero).queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
+      expect(hero().getAllByRole('link', { name: 'Analyser un article' })[0]).toHaveAttribute('href', '/analyser');
+      expect(hero().queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
       cleanup();
     }
+    agent.mockReturnValue('Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36');
+    home();
+    expect(hero().getByRole('link', { name: 'Ajouter à Chrome' })).toHaveAttribute('href', CHROME_URL);
+    expect(hero().getByRole('link', { name: 'collez le texte sur le site' })).toHaveAttribute('href', '/analyser');
+    cleanup();
+    agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
+    home();
+    expect(hero().queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
     agent.mockRestore();
+  });
+
+  // Each phone is told its own way besides the site, and never a gesture it lacks:
+  // an iPhone does not list a web app in its Share menu.
+  it('names the Share menu on Android and the bookmark on an iPhone', () => {
+    home();
+    const hero = within(screen.getByRole('heading', { level: 1 }).parentElement!);
+    expect(hero.getByRole('link', { name: 'l’appli Squiggle' })).toHaveAttribute('href', '#partout');
+    expect(hero.getByRole('link', { name: 'le favori Squiggle' })).toHaveAttribute('href', '/favori');
+    const ways = region('Où que vous lisiez');
+    expect(ways.getByText('Le favori Squiggle lit l’article ouvert dans Safari.')).toBeInTheDocument();
+    expect(ways.getByText(/menu ⋮, puis « Installer l’application » ou « Ajouter à l’écran d’accueil »/)).toBeInTheDocument();
   });
 
   // The research stage only looks up the facts the audit itself questioned, so the
   // page must not promise a source check for every verifiable fact.
   it('promises a source check only for the facts it questions', () => {
     home();
-    expect(
-      region('Comment ça marche').getByText(/^S’il met un fait en question, il consulte d’abord les sources\./),
-    ).toBeInTheDocument();
+    const steps = region('Comment ça marche');
+    expect(steps.getByText('Les doutes sont vérifiés')).toBeInTheDocument();
+    expect(steps.getByText(/^Dans les sources\. Si elles donnent raison à l’article, le doute est retiré\./)).toBeInTheDocument();
     expect(screen.queryByText(/faits vérifiables/)).toBeNull();
   });
 
-  it('keeps the model and the plumbing off the home page', () => {
+  // The model is named where it runs, from the disclosure the transparency page uses,
+  // so a reader who wonders which AI and where reads both together.
+  it('names the model only with where it runs, and keeps the plumbing off the page', () => {
     const { container } = home();
     const text = container.textContent ?? '';
-    expect(text).not.toContain(HOSTED_ANALYSIS.modelLabel);
+    const where = `${HOSTED_ANALYSIS.modelLabel}, servie aux Pays-Bas d’abord, sinon aux États-Unis.`;
+    expect(text).toContain(where);
+    expect(text.replaceAll(where, '')).not.toContain(HOSTED_ANALYSIS.modelLabel);
     // The own-key option names the providers a reader can bring a key from; outside
     // that list, the gateway hosted analyses go through stays off the page.
     expect(text.replaceAll('OpenAI, Anthropic, Google Gemini ou OpenRouter', '')).not.toMatch(
@@ -131,12 +158,13 @@ describe('Accueil', () => {
   it('has every section a first-time reader looks for', () => {
     home();
     for (const name of [
-      'Touchez un passage surligné',
+      /un passage surligné/,
       'Comment ça marche',
       'La même grille pour tous',
       'Où que vous lisiez',
-      'Vos données',
       'Tarifs',
+      'Gratuit pour la classe',
+      'Vos données',
       'Questions fréquentes',
     ]) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument();
@@ -147,7 +175,7 @@ describe('Accueil', () => {
     home();
     const steps = within(region('Comment ça marche').getByRole('list'));
     expect(steps.getAllByRole('listitem')).toHaveLength(4);
-    for (const label of ['le texte', 'les faits mis en doute', 'les constats retenus']) {
+    for (const label of ['le texte', 'les doutes', 'les constats']) {
       expect(steps.getByText(label)).toBeInTheDocument();
     }
   });
@@ -156,18 +184,14 @@ describe('Accueil', () => {
     expect(DOMAINS.map(([label, weight]) => [label, weight])).toEqual(
       Object.values(SCORE_DOMAINS).map((domain) => [domain.label, domain.weight]),
     );
+    // Every domain is drawn and named in a word, with the reason Squiggle gives; its full
+    // name is read beside the word.
     home();
-    const table = within(screen.getByRole('table', { name: 'Les cinq critères de la grille' }));
-    expect(table.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
-      'Critère',
-      'Ce qui est vérifié',
-      'Exemple de passage relevé',
-    ]);
-    // One row per domain, each naming the criterion, its question and a flagged passage.
-    const rows = table.getAllByRole('row').slice(1);
-    expect(rows.map((row) => within(row).getByRole('rowheader').textContent)).toEqual(DOMAINS.map(([label]) => label));
-    for (const [index, [, , question, example]] of DOMAINS.entries()) {
-      for (const part of [question, example.mark, example.note]) expect(rows[index].textContent).toContain(part);
+    const criteria = region('La même grille pour tous').getAllByRole('heading', { level: 3 }).slice(0, DOMAINS.length);
+    for (const [index, [label, , , example]] of DOMAINS.entries()) {
+      expect(CRITERIA[label], label).toBeDefined();
+      expect(criteria[index]).toHaveTextContent(`${CRITERIA[label][1]} : ${label}`);
+      expect(criteria[index].parentElement!.textContent).toContain(example.note);
     }
   });
 
@@ -194,10 +218,10 @@ describe('Accueil', () => {
 
   it('says how it stays neutral: one grid, no verdict on people, a public method', () => {
     home();
-    const section = region('La même grille pour tous');
+    const section = region('Vos données');
     expect(section.getByText('Les mêmes critères pour chaque article.')).toBeInTheDocument();
     expect(section.getByText('Le texte est jugé, jamais son auteur.')).toBeInTheDocument();
-    expect(section.getByRole('link', { name: /Lire la méthode sur GitHub/ })).toHaveAttribute(
+    expect(section.getByRole('link', { name: /Lire la méthode et le code sur GitHub/ })).toHaveAttribute(
       'href',
       'https://github.com/TheGlitching/Squiggle',
     );
@@ -218,15 +242,13 @@ describe('Accueil', () => {
     expect(screen.queryByText(/^sécurisé$/i)).toBeNull();
   });
 
-  it('states both ways to pay under the hero, the sign-up staying the one primary', () => {
-    home();
-    const ways = within(screen.getByRole('list', { name: 'Deux façons de l’utiliser' }));
-    expect(ways.getAllByRole('listitem')).toHaveLength(2);
-    expect(ways.getByText('Avec un compte, rien à installer :')).toBeInTheDocument();
-    expect(ways.getByText(/sur le site et l’appli, aucune clé à créer\. 3 analyses offertes, puis 4,99 € par mois/)).toBeInTheDocument();
-    expect(ways.getByText('Gratuit avec votre propre clé d’IA :')).toBeInTheDocument();
-    expect(ways.getByText(/vous facture directement chaque analyse, au tarif du modèle choisi/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Comparer les deux' })).toHaveAttribute('href', '#tarifs');
+  // One analysis without an account in all, then the account's free ones: the page
+  // promises a trial, never an analysis a day.
+  it('states the offer in one line under the buttons, and no daily analysis', () => {
+    const { container } = home();
+    const hero = within(screen.getByRole('heading', { level: 1 }).parentElement!);
+    expect(hero.getByText('Essai gratuit, sans carte. Puis 4,99 € par mois.')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/par jour/);
   });
 
   // The two ways in are compared row for row, so a reader sees what the account adds.
@@ -250,14 +272,20 @@ describe('Accueil', () => {
     expect(row('Ce que vous payez')).toHaveTextContent(
       /qui dépend du modèle choisi\. Avec un modèle haut de gamme, par exemple Claude Opus : environ 25 à 30 € par mois pour 60 analyses\./,
     );
-    expect(pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })).toHaveLength(1);
-    expect(pricing.getByRole('link', { name: 'Essayer gratuitement' })).toHaveAttribute('href', '/connexion');
-    expect(pricing.getByText(/3 analyses offertes, sans carte bancaire/)).toBeInTheDocument();
+    // One way to start, the analysis, where the trial without an account comes first.
+    for (const link of pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })) {
+      expect(link).toHaveTextContent('Essayer gratuitement');
+      expect(link).toHaveAttribute('href', '/analyser');
+    }
+    expect(pricing.getAllByText(/3 analyses offertes.*sans carte bancaire/).length).toBeGreaterThan(0);
     expect(pricing.getByText(/Une clé d’API, c’est le code d’accès personnel/)).toHaveTextContent(
       /La clé reste dans votre navigateur, rien ne passe par nos serveurs/,
     );
-    expect(pricing.getByText(/Enseignants : gratuit avec une adresse académique/)).toBeInTheDocument();
-    expect(pricing.getByRole('link', { name: 'L’offre enseignants' })).toHaveAttribute('href', '/enseignants');
+    expect(pricing.getByText('Ce que paie votre abonnement')).toBeInTheDocument();
+    const teachers = region('Gratuit pour la classe');
+    expect(teachers.getByText('L’abonnement complet, avec une adresse académique.')).toBeInTheDocument();
+    expect(teachers.getByText('Les élèves n’utilisent pas d’IA : vous montrez, ils lisent.')).toBeInTheDocument();
+    expect(teachers.getByRole('link', { name: 'L’offre enseignants' })).toHaveAttribute('href', '/enseignants');
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });
 
@@ -292,7 +320,9 @@ describe('Accueil', () => {
     ]) {
       expect(faq.getByText(question)).toBeInTheDocument();
     }
-    expect(container.querySelectorAll('details').length).toBeGreaterThanOrEqual(5);
+    // Every question of the first landing, and the one the named model raises.
+    expect(faq.getByText(/^Quelle IA, et où/)).toBeInTheDocument();
+    expect(container.querySelectorAll('#faq details')).toHaveLength(FAQ.length + 1);
   });
 
   it('links the transparency page, the legal pages and a contact route', () => {
@@ -330,7 +360,7 @@ describe('Accueil', () => {
     home();
     expect(screen.queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
     expect(
-      region('Où que vous lisiez').getByText(/Disponible pour Chrome, Edge, Opera, Brave et Firefox/),
+      region('Où que vous lisiez').getByText(/Un bouton sur ordinateur, dans Chrome, Edge, Opera, Brave ou Firefox/),
     ).toBeInTheDocument();
     cleanup();
     for (const ua of MOBILE) {
@@ -356,23 +386,32 @@ describe('Accueil', () => {
     agent.mockRestore();
   });
 
-  it('tells iOS Safari where its install lives, and not Chrome on iOS', () => {
+  // The page offers the app and the bookmark in its own words: the site-wide install
+  // banner, with its home-screen gesture, would be a second invitation over them.
+  it('shows no install banner on the home page, where the page offers each way itself', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(MOBILE[3]);
     home();
-    expect(screen.getByText(/Partager, puis « Sur l’écran d’accueil »/)).toBeInTheDocument();
-    cleanup();
-    agent.mockReturnValue(MOBILE[4]);
-    home();
-    expect(screen.queryByText(/Partager, puis/)).toBeNull();
+    expect(screen.queryByRole('complementary', { name: 'L’appli Squiggle' })).toBeNull();
+    expect(screen.queryByText(/Partager, puis « Sur l’écran d’accueil »/)).toBeNull();
     agent.mockRestore();
+  });
+
+  it('pauses the hero loop on demand, and lets it play again', async () => {
+    home();
+    const svg = document.querySelector('svg.hero-loop')!;
+    await userEvent.click(screen.getByRole('button', { name: 'Mettre l’animation en pause' }));
+    expect(svg.hasAttribute('data-paused')).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Relancer l’animation' }));
+    expect(svg.hasAttribute('data-paused')).toBe(false);
   });
 
   it('keeps the example one tap away, and the analysis the hero’s one primary action', () => {
     home();
     expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#exemple');
     const hero = screen.getByRole('heading', { level: 1 }).parentElement!;
+    // One primary a device: the computer's (here without a store) and the phone's, shown one at a time.
     const primaries = [...hero.querySelectorAll('a, button')].filter((el) => el.className.includes('bg-accent '));
-    expect(primaries.map((el) => el.textContent)).toEqual(['Analyser un article']);
+    expect(primaries.map((el) => el.textContent)).toEqual(['Analyser un article', 'Analyser un article']);
   });
 
   it('walks through the passages while left alone, and stops under the pointer', () => {
@@ -445,7 +484,7 @@ describe('Accueil', () => {
       if (p.closest('[data-ui]')) continue;
       expect(p.className, p.textContent ?? '').not.toMatch(/\btext-(xs|sm)\b|text-\[[\d.]+px\]/);
     }
-    const lead = region('Tarifs').getByText(/^Le compte vous ouvre le site et l’appli/);
+    const lead = region('Tarifs').getByText('4,99 € par mois, sans engagement.');
     expect(lead.className).toContain(MEASURE);
   });
 

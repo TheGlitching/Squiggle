@@ -42,7 +42,7 @@ export function Section({
   children,
 }: {
   id: string;
-  title: string;
+  title: ReactNode;
   intro?: ReactNode;
   children: ReactNode;
 }) {

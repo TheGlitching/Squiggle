@@ -9,8 +9,10 @@ import { MOBILE } from './helpers';
 const DESKTOP_CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36';
 const [ANDROID, , , IPHONE] = MOBILE;
 
+/** A page that carries the banner: the home page offers the app in its own words instead. */
 function at(userAgent: string) {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
+  window.history.pushState({}, '', '/transparence');
   return render(<App />);
 }
 

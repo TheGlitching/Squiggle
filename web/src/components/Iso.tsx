@@ -238,9 +238,10 @@ const articleLines = (top: number, step: number, count: number, left: number, wi
 /**
  * The hero: the article you read, and Squiggle's reading laid over it, with the
  * three things it adds pinned and explained in the legend. Without a legend
- * beside it (the store's promotional tiles), the pins are left out.
+ * beside it (the store's promotional tiles), the pins are left out. `loop` plays
+ * the reading again and again (`.hero-loop` in `index.css`) rather than once.
  */
-export function HeroFigure({ pins = true }: { pins?: boolean }) {
+export function HeroFigure({ pins = true, loop = false }: { pins?: boolean; loop?: boolean }) {
   const v = iso(250, 92);
   const W = 210;
   const D = 272;
@@ -250,15 +251,27 @@ export function HeroFigure({ pins = true }: { pins?: boolean }) {
   // The passages, on the article's own lines: [line, from, to, severity].
   const passages: Array<[number, number, number, HighlightSeverity]> = [
     [1, 72, 150, 'warning'],
-    [4, 20, 96, 'info'],
+    // The loop shows what holds as well as what is fragile, as the report does.
+    [4, 20, 96, loop ? 'positive' : 'info'],
     [9, 70, 168, 'warning'],
   ];
   const notes = passages.map(([line], index) => ({ y: body[line][0], index }));
   const at = (line: number, x: number, z: number) => v.P(x, body[line][0] + 2.5, z);
   const ring: [number, number] = [258, 44];
+  const pinMarks = (
+    <>
+      <Pin at={[at(1, 72, Z)[0] - 22, at(1, 72, Z)[1] - 4]} label="1" i={0} />
+      <Pin at={[v.P(286, notes[2].y, Z)[0] + 20, v.P(286, notes[2].y, Z)[1] + 2]} label="2" i={1} />
+      <Pin at={[v.P(ring[0] + 26, ring[1], Z)[0] + 16, v.P(ring[0] + 26, ring[1], Z)[1] - 6]} label="3" i={2} />
+    </>
+  );
 
   return (
-    <svg viewBox="0 0 540 340" className="block h-auto w-full overflow-visible" aria-hidden="true">
+    <svg
+      viewBox="0 0 540 340"
+      className={`block h-auto w-full overflow-visible ${loop ? 'hero-loop' : ''}`}
+      aria-hidden="true"
+    >
       {/* The article: a sheet of paper, as you read it. */}
       <Box v={v} at={[0, 0, 0]} size={[W, D, 3]} r={4} face="iso-paper" edge="iso-paper-edge" />
       <g transform={v.top(0, 0, 3)}>
@@ -309,17 +322,90 @@ export function HeroFigure({ pins = true }: { pins?: boolean }) {
             <ScoreRing cx={ring[0]} cy={ring[1]} r={20} score={61} severity="warning" label="61" />
           </g>
         </g>
+        {/* The pins belong to the reading: they arrive with it and, in the loop, leave with it. */}
+        {pins ? pinMarks : null}
       </g>
 
-      {pins ? (
-        <>
-          <Pin at={[at(1, 72, Z)[0] - 22, at(1, 72, Z)[1] - 4]} label="1" i={0} />
-          <Pin at={[v.P(286, notes[2].y, Z)[0] + 20, v.P(286, notes[2].y, Z)[1] + 2]} label="2" i={1} />
-          <Pin at={[v.P(ring[0] + 26, ring[1], Z)[0] + 16, v.P(ring[0] + 26, ring[1], Z)[1] - 6]} label="3" i={2} />
-        </>
-      ) : null}
     </svg>
   );
+}
+
+export type Criterion = 'sources' | 'logique' | 'cadrage' | 'transparence' | 'langue';
+
+/**
+ * One criterion of the grid, as a small scene on a dark slab, in the hero's materials:
+ * paper for the article, violet for what Squiggle checks.
+ */
+export function CriterionFigure({ kind }: { kind: Criterion }) {
+  const v = iso(60, 28);
+  const sheet = (x: number, y: number, z: number, w: number, d: number, lines: number) => (
+    <>
+      <Box v={v} at={[x, y, z]} size={[w, d, 2]} r={2} face="iso-paper" edge="iso-paper-edge" />
+      <g transform={v.top(x, y, z + 2)}>
+        <Lines lines={Array.from({ length: lines }, (_, i) => [5 + i * 6, 4, w - 4 - (i % 2) * 6] as const)} h={2.5} />
+      </g>
+    </>
+  );
+  return (
+    <svg viewBox="0 0 120 100" className="block h-auto w-full overflow-visible" aria-hidden="true">
+      <Box v={v} at={[0, 0, 0]} size={[56, 56, 4]} r={4} />
+      {kind === 'sources' ? (
+        // The article, and the source it cites, tied by a checked link.
+        <>
+          {sheet(6, 8, 4, 24, 30, 4)}
+          {sheet(28, 20, 14, 22, 28, 4)}
+          <line {...pt(v.P(20, 22, 7), v.P(36, 30, 17))} className="iso-line" stroke="var(--color-accent)" strokeDasharray="3 2" />
+        </>
+      ) : kind === 'logique' ? (
+        // A chain of reasons with its middle link missing.
+        <>
+          <Box v={v} at={[8, 22, 4]} size={[12, 12, 12]} r={2} />
+          <g transform={v.top(26, 22, 4)}>
+            <rect className="iso-face iso-glass" width={12} height={12} rx={2} strokeDasharray="3 2" />
+          </g>
+          <Box v={v} at={[44, 22, 4]} size={[12, 12, 12]} r={2} />
+          <line {...pt(v.P(20, 28, 10), v.P(44, 28, 10))} className="iso-line" stroke="var(--color-accent)" />
+        </>
+      ) : kind === 'cadrage' ? (
+        // The article, and a frame held over it that decides what is seen.
+        <>
+          {sheet(10, 10, 4, 36, 36, 5)}
+          <g transform={v.top(4, 4, 22)}>
+            <rect width={48} height={48} rx={3} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
+          </g>
+        </>
+      ) : kind === 'transparence' ? (
+        // Who speaks: a name badge standing on the slab, its face and its title.
+        <>
+          <Box v={v} at={[14, 26, 4]} size={[30, 4, 34]} r={2} face="iso-paper" edge="iso-paper-edge" />
+          <g transform={v.front(14, 26, 38)}>
+            <circle cx={15} cy={10} r={5} fill="#8c8a90" />
+            <path d="M 7 21 Q 15 13 23 21" fill="none" stroke="#8c8a90" strokeWidth={3} />
+            <rect x={5} y={25} width={20} height={3} rx={1.5} fill="var(--color-paperInk)" />
+          </g>
+          <g transform={v.top(10, 10, 4)}>
+            <circle cx={36} cy={36} r={8} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
+            <path d="M 42 42 L 48 48" stroke="var(--color-accent)" strokeWidth={2.5} strokeLinecap="round" />
+          </g>
+        </>
+      ) : (
+        // The words themselves: a letter set on the slab, one of them underlined.
+        <>
+          <g transform={v.top(6, 6, 4)}>
+            <text x={6} y={34} fontSize={30} fontFamily="var(--font-serif)" fill="var(--color-foreground)">
+              Aa
+            </text>
+            <path d={squiggle(6, 40, 34, 2, 5)} className="iso-line" stroke="var(--color-accent)" strokeWidth={2} />
+          </g>
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** A line's two ends, as `<line>` attributes. */
+function pt([x1, y1]: [number, number], [x2, y2]: [number, number]) {
+  return { x1, y1, x2, y2 };
 }
 
 export type Step = 'article' | 'lecture' | 'sources' | 'rapport';
@@ -595,7 +681,11 @@ export function RunScene({ step }: { step: RunStep }) {
   );
 }
 
-export type Device = 'site' | 'appli' | 'navigateur';
+/**
+ * `partage` and `favori` are the phone's two ways in, drawn for the device that has
+ * them: Squiggle in an Android Share menu, the bookmark in Safari's address bar.
+ */
+export type Device = 'site' | 'navigateur' | 'partage' | 'favori';
 
 /** The badge's own mark, flat on a face: the button that opens Squiggle. */
 function BadgeMark({ x, y, s }: { x: number; y: number; s: number }) {
@@ -653,8 +743,8 @@ export function DeviceFigure({ device }: { device: Device }) {
     );
   }
 
-  if (device === 'appli') {
-    // A phone on the table: an article, and Squiggle among the apps it shares to.
+  if (device === 'partage') {
+    // An Android phone: the article, and its Share menu with Squiggle large and ringed.
     const v = iso(140, 100);
     return frame(
       <>
@@ -662,24 +752,37 @@ export function DeviceFigure({ device }: { device: Device }) {
         <g transform={v.top(0, 0, 8)}>
           <rect x={6} y={10} width={68} height={130} rx={7} fill="var(--color-paper)" />
           <rect x={13} y={20} width={44} height={7} rx={2} fill="var(--color-paperInk)" />
-          <Lines
-            lines={[
-              [33, 13, 66],
-              [41, 13, 62],
-              [49, 13, 66],
-              [57, 13, 46],
-            ]}
-            h={3.5}
-          />
-          <rect x={6} y={78} width={68} height={62} rx={7} fill="#17171a" />
-          <rect x={30} y={83} width={20} height={3} rx={1.5} fill="#3a3a42" />
-          {[0, 1, 2].map((i) => (
-            <rect key={i} x={13 + i * 20} y={95} width={14} height={14} rx={4} fill="#2c2c33" />
-          ))}
-          <BadgeMark x={13} y={117} s={14} />
-          {[1, 2].map((i) => (
-            <rect key={i} x={13 + i * 20} y={117} width={14} height={14} rx={4} fill="#2c2c33" />
-          ))}
+          <Lines lines={[[33, 13, 66], [41, 13, 62], [49, 13, 50]]} h={3.5} />
+          <rect x={6} y={62} width={68} height={78} rx={7} fill="#17171a" />
+          <rect x={30} y={67} width={20} height={3} rx={1.5} fill="#3a3a42" />
+          <rect x={10} y={88} width={14} height={14} rx={4} fill="#2c2c33" />
+          <rect x={56} y={88} width={14} height={14} rx={4} fill="#2c2c33" />
+          <rect x={26.5} y={78.5} width={27} height={27} rx={8} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
+          <BadgeMark x={29} y={81} s={22} />
+          <rect x={22} y={112} width={36} height={4} rx={2} fill="var(--color-accentInk)" />
+          <rect x={14} y={124} width={52} height={4} rx={2} fill="#2c2c33" />
+        </g>
+      </>,
+    );
+  }
+
+  if (device === 'favori') {
+    // An iPhone in Safari: "Analyser" typed in the address bar, the bookmark offered, ringed.
+    const v = iso(140, 100);
+    return frame(
+      <>
+        <Box v={v} at={[0, 0, 0]} size={[80, 150, 8]} r={12} />
+        <g transform={v.top(0, 0, 8)}>
+          <rect x={6} y={10} width={68} height={130} rx={7} fill="var(--color-paper)" />
+          <rect x={13} y={56} width={44} height={7} rx={2} fill="var(--color-paperInk)" />
+          <Lines lines={[[69, 13, 66], [77, 13, 62], [85, 13, 66], [93, 13, 46]]} h={3.5} />
+          <rect x={6} y={10} width={68} height={40} rx={7} fill="#17171a" />
+          <rect x={11} y={15} width={58} height={10} rx={5} fill="#2c2c33" />
+          <rect x={15} y={18.5} width={22} height={3} rx={1.5} fill="var(--color-foreground)" />
+          <rect x={9} y={29} width={62} height={17} rx={4} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} />
+          <BadgeMark x={12} y={31.5} s={12} />
+          <rect x={28} y={34} width={36} height={3} rx={1.5} fill="var(--color-accentInk)" />
+          <rect x={28} y={40} width={24} height={2.5} rx={1.25} fill="#3a3a42" />
         </g>
       </>,
     );

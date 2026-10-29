@@ -22,7 +22,16 @@ const NAV_LINK = 'inline-block py-2 text-base text-muted transition-colors durat
  * Every page's chrome: one header, one footer. `account` is the reader's way in:
  * "Se connecter" where a newcomer lands, "Mon compte" inside the app.
  */
-export function Layout({ children, account = 'Se connecter' }: { children: ReactNode; account?: string }) {
+export function Layout({
+  children,
+  account = 'Se connecter',
+  installHint = true,
+}: {
+  children: ReactNode;
+  account?: string;
+  /** False on a page that offers the app in its own words, so two invitations never compete. */
+  installHint?: boolean;
+}) {
   return (
     <div className="flex min-h-screen flex-col bg-background pb-[var(--install-hint-height,0px)] text-base text-foreground print:bg-white print:pb-0">
       <header className="border-b border-lineSoft print:hidden">
@@ -53,7 +62,7 @@ export function Layout({ children, account = 'Se connecter' }: { children: React
           </nav>
         </div>
       </header>
-      <InstallHint />
+      {installHint ? <InstallHint /> : null}
 
       <main className="flex-1">{children}</main>
 
