@@ -39,6 +39,9 @@ describe('campaignOf', () => {
   it('knows the campaigns on the list and nothing else', () => {
     expect(campaignOf('?ref=clemi')).toBe('ref_clemi');
     expect(campaignOf('?ref=linuxfr&x=1')).toBe('ref_linuxfr');
+    for (const network of ['bluesky', 'mastodon', 'facebook', 'instagram', 'threads', 'x', 'linkedin']) {
+      expect(campaignOf(`?ref=${network}`)).toBe(`ref_${network}`);
+    }
     expect(campaignOf('?ref=inconnu')).toBeNull();
     expect(campaignOf('?ref=')).toBeNull();
     expect(campaignOf('')).toBeNull();

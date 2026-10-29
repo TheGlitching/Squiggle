@@ -15,6 +15,14 @@ export const AUDIENCE_METRIC_NAMES = [
   'ref_clemi',
   'ref_linuxfr',
   'ref_createur1',
+  // ...and through the link on each of Squiggle's own social accounts.
+  'ref_bluesky',
+  'ref_mastodon',
+  'ref_facebook',
+  'ref_instagram',
+  'ref_threads',
+  'ref_x',
+  'ref_linkedin',
   // A button used.
   'click_install_chrome',
   'click_install_firefox',
