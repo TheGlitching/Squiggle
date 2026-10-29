@@ -213,6 +213,25 @@ describe('Analyser, signed out', () => {
     expect(screen.queryByText(/Créez un compte gratuit pour voir/)).toBeNull();
   });
 
+  it('follows the stages the server runs, one at a time, and draws none ahead of it', async () => {
+    let answer: (res: Response) => void = () => {};
+    serve(null, {
+      audit: () => new Promise<Response>((resolve) => (answer = resolve)) as unknown as Response,
+    });
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+
+    const current = () => document.querySelector('[aria-current="step"]')?.textContent ?? '';
+    await waitFor(() => expect(current()).toContain('Lecture : en cours'));
+    expect(screen.getByText('Recherche des sources')).toBeInTheDocument();
+    expect(screen.queryByText(/: fait$/)).toBeNull();
+
+    // The audit answered with nothing to look up: the run goes straight to the report.
+    answer(jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] }));
+    expect(await screen.findByText('58')).toBeInTheDocument();
+  });
+
   it('leaves a returning reader on their text when the cache has no report for it', async () => {
     const seen = serve(account());
     saveDraft({ text: TEXT, title: '', source: '' });

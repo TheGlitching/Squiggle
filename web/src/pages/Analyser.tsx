@@ -43,7 +43,7 @@ import { getAccount, type Account } from '../api';
 import { MAX_CAPTURES, readCaptures, takeSharedCaptures } from '../captures';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
-import { StepFigure, type Step } from '../components/Iso';
+import { RunScene, type RunStep } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
@@ -886,38 +886,61 @@ function Aside() {
   );
 }
 
-/** Where the analysis stands, drawn as the home page explains it. */
-const STAGES: Array<[Step, string]> = [
-  ['article', 'L’article'],
-  ['lecture', 'La relecture'],
-  ['sources', 'Les sources'],
-  ['rapport', 'Le rapport'],
+/**
+ * The stages the server really runs, in order, each with what it does. A
+ * stage the text does not need (no fact to look up) passes as quickly as it
+ * runs: the page follows the server, it never paces itself.
+ */
+const STAGES: Array<[RunStep, string, string]> = [
+  ['lecture', 'Lecture', 'Le texte est relu en entier, contre les cinq domaines de la grille.'],
+  ['recherche', 'Recherche des sources', 'Chaque fait vérifiable est cherché sur le web.'],
+  ['verification', 'Vérification', 'Les objections sont confrontées à ce qui a été trouvé, la note recalculée.'],
+  ['rapport', 'Rapport', 'Le rapport est mis en forme.'],
 ];
 
+/** The server's stage, as one of the four. The cache lookup before the reading counts as the reading's start. */
 function stepOf(stage: Progress['stage']): number {
-  if (stage === 'calling_provider') return 1;
-  if (stage === 'parsing_response' || stage === 'researching') return 2;
-  if (stage === 'scoring' || stage === 'storing' || stage === 'success') return 3;
+  if (stage === 'parsing_response' || stage === 'researching') return 1;
+  if (stage === 'scoring') return 2;
+  if (stage === 'storing' || stage === 'success') return 3;
   return 0;
 }
 
 function Stages({ stage }: { stage: Progress['stage'] }) {
   const current = stepOf(stage);
   return (
-    <ol aria-hidden="true" className="mt-8 grid max-w-3xl list-none grid-cols-4 gap-3 p-0 sm:gap-6">
-      {STAGES.map(([step, label], index) => (
-        <li
-          key={step}
-          className={`grid content-start gap-2 text-center text-sm sm:text-base ${index === current ? 'font-medium text-accentInk' : 'text-muted'}`}
-        >
-          {/* Only the drawing of a step still to come fades; its name stays readable. */}
-          <div className={`transition-opacity duration-300 ${index > current ? 'opacity-35' : ''}`}>
-            <StepFigure step={step} live={index === current} />
-          </div>
-          {label}
-        </li>
-      ))}
-    </ol>
+    <div className="mt-8 grid max-w-3xl items-center gap-6 rounded-card border border-border bg-surface p-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-8 sm:p-7">
+      {/* Remounted on each stage, so the new loop starts from its beginning. */}
+      <div key={STAGES[current][0]} className="run-scene mx-auto w-full max-w-80">
+        <RunScene step={STAGES[current][0]} />
+      </div>
+      <ol className="m-0 grid list-none gap-3 p-0">
+        {STAGES.map(([step, label, detail], index) => (
+          <li key={step} aria-current={index === current ? 'step' : undefined} className="flex gap-3">
+            <span
+              aria-hidden="true"
+              className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-semibold tabular-nums ${
+                index < current
+                  ? 'border-accent bg-accent text-accentForeground'
+                  : index === current
+                    ? 'border-accent text-accentInk'
+                    : 'border-border text-muted'
+              }`}
+            >
+              {index < current ? '✓' : index + 1}
+            </span>
+            <span className="grid gap-0.5">
+              <span className={`text-base ${index === current ? 'font-semibold text-foreground' : index < current ? 'text-foreground' : 'text-muted'}`}>
+                {label}
+                {index < current ? <span className="sr-only"> : fait</span> : null}
+                {index === current ? <span className="sr-only"> : en cours</span> : null}
+              </span>
+              {index === current ? <span className="text-sm text-muted">{detail}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 

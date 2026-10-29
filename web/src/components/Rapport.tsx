@@ -312,7 +312,8 @@ function Withheld({ withheld, signUp }: { withheld: NonNullable<AnalysisReport['
   const others = withheld.length === 1 ? 'l’autre constat' : `les ${withheld.length} autres constats`;
   return (
     <div className="relative mt-3">
-      <div aria-hidden="true" className="grid gap-3 select-none">
+      {/* Blocks, not grids: bars sized in percent would widen an auto grid track to fit them. */}
+      <div aria-hidden="true" className="space-y-3 select-none">
         {withheld.map((finding, index) => (
           <div
             key={index}
@@ -323,11 +324,14 @@ function Withheld({ withheld, signUp }: { withheld: NonNullable<AnalysisReport['
               <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--sev-color)]" />
               {CATEGORY_LABELS[finding.category] ?? finding.category}
             </p>
-            <div className="mt-3 grid gap-2.5 blur-[3px]">
-              <span className="block h-3.5 w-3/4 rounded-full bg-[var(--sev-tint)]" />
-              <span className="block h-2.5 w-full rounded-full bg-border" />
-              <span className="block h-2.5 w-5/6 rounded-full bg-border" />
-              <span className="block h-2.5 w-2/3 rounded-full bg-border" />
+            <div className="mt-3 space-y-2.5 blur-[3px]">
+              {['75%', '100%', '84%', '66%'].map((width, line) => (
+                <span
+                  key={width}
+                  style={{ width }}
+                  className={`block rounded-full ${line === 0 ? 'h-3.5 bg-[var(--sev-tint)]' : 'h-2.5 bg-border'}`}
+                />
+              ))}
             </div>
           </div>
         ))}
