@@ -2,13 +2,14 @@
  * The web app's hosted analysis: the shared client in its session mode, so a
  * pasted text walks exactly the stages, payloads and order the extension does,
  * on the reader's session cookie and the same quota, or, for a visitor without
- * an account, on the site's one analysis a day. Nothing about the analysis is
+ * an account, on the site's one analysis without one. Nothing about the analysis is
  * decided here.
  */
 import { HostedAnalysisClient, HostedApiError } from '../../shared/src/hosted/client';
 import type { PipelineProgressEvent } from '../../shared/src/engine/pipeline';
 import type { AnalysisReport, TextBlock } from '../../shared/src/engine/types';
 import { API_BASE } from './api';
+import { FREE_ANALYSES } from './offer';
 import { readPaste, webAddress, type PastedArticle } from './paste';
 import type { Start } from './transcript';
 
@@ -27,7 +28,7 @@ function sourceOf(article: PastedArticle): string | undefined {
 /**
  * The report, with the blocks it was made from: the page highlights in exactly
  * those. A transcript's times stay here: the server reads only the speech.
- * `visitor` runs it without an account, on the site's one analysis a day.
+ * `visitor` runs it without an account, on the site's one analysis without one.
  */
 export async function analyzePasted(
   article: PastedArticle,
@@ -102,7 +103,7 @@ export type AnalysisFailure =
   | { kind: 'error'; message: string };
 
 const VISITOR_REFUSALS: Record<string, string> = {
-  anon_used: 'Votre analyse sans compte du jour est faite. Créez un compte gratuit pour analyser ce texte.',
+  anon_used: `Votre analyse offerte sans compte est déjà faite. Créez un compte gratuit : ${FREE_ANALYSES} analyses de plus vous sont offertes.`,
   anon_closed: 'Les analyses sans compte de la journée sont toutes faites. Créez un compte gratuit pour analyser ce texte.',
 };
 

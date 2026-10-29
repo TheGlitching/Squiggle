@@ -25,11 +25,12 @@ const METRICS: OwnerMetrics = {
     flags: { categories: { sophisme: 2, cadrage: 0 }, reasons: { misread: 1, too_harsh: 1 } },
   },
   funnel: {
-    signin: { completed: 8, after_anon: 1 },
+    signin: { completed: 8, after_anon: 1, after_withheld: 1 },
     checkout: {},
     runsStarted: { session: 12, anon: 6 },
     finalized: { session: 11, anon: 5 },
     refused: { anon_closed: 2 },
+    reportsWithheld: 4,
   },
   headline: {
     newAccounts: { count: 7 },
@@ -80,9 +81,11 @@ describe('/tableau', () => {
     const anon = screen.getByRole('heading', { name: 'Analyse sans compte' }).nextElementSibling as HTMLElement;
     expect(anon).toHaveTextContent('Lancées6');
     expect(anon).toHaveTextContent('Réussies5');
-    expect(anon).toHaveTextContent('Refusées : déjà faite ce jour-');
+    expect(anon).toHaveTextContent('Refusées : déjà faite-');
     expect(anon).toHaveTextContent('Refusées : plafond du jour atteint2');
+    expect(anon).toHaveTextContent('Rapports floutés affichés4');
     expect(anon).toHaveTextContent('Comptes créés ensuite1');
+    expect(anon).toHaveTextContent('dont depuis un rapport flouté1');
     expect(document.title).toBe('Tableau de bord - Squiggle');
 
     await userEvent.click(screen.getByRole('button', { name: '4 sem.' }));

@@ -4,9 +4,10 @@
  * It runs in hosted mode on the reader's account, so it spends the same trial
  * and subscription as the extension, and nothing here judges the text: the
  * stages, the prompts and the score are the server's (`shared/`). A visitor
- * without an account runs one analysis a day the same way, then is offered an
- * account to keep the report: back from that sign-in, the report is served
- * again from the shared cache, at no cost. The paste is kept in this browser
+ * without an account runs one analysis in all the same way, and is shown its
+ * first finding with the others kept back by the server; an account opens the
+ * whole report: back from that sign-in, it is served from the shared cache, at
+ * no cost. The paste is kept in this browser
  * until the reader clears it, so signing in halfway loses nothing. "Partager vers Squiggle" (the installed app's share target)
  * lands here with the shared text or address in the query string, which is
  * read once and wiped from the address bar. Where the share menu does not
@@ -42,7 +43,7 @@ import { getAccount, type Account } from '../api';
 import { MAX_CAPTURES, readCaptures, takeSharedCaptures } from '../captures';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
-import { StepFigure, type Step } from '../components/Iso';
+import { RunScene, type RunStep } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
@@ -75,6 +76,8 @@ import { describeAccount, type AccountView } from '../usage';
 const SIGN_IN = '/connexion?next=/analyser';
 /** The sign-in a visitor's report offers; the server counts an account opened through it. */
 const SIGN_UP_AFTER_VISIT = `/connexion?next=${encodeURIComponent('/analyser?apres=essai')}`;
+/** The same, from a report with findings kept back, counted apart. */
+const SIGN_UP_AFTER_WITHHELD = `/connexion?next=${encodeURIComponent('/analyser?apres=flou')}`;
 
 type Phase =
   | { kind: 'edit' }
@@ -92,7 +95,9 @@ type Phase =
 
 /** Back from the sign-in a visitor's report offered. Read before the address bar is wiped. */
 function backFromVisit(): boolean {
-  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('apres') === 'essai';
+  if (typeof window === 'undefined') return false;
+  const after = new URLSearchParams(window.location.search).get('apres');
+  return after === 'essai' || after === 'flou';
 }
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
@@ -275,7 +280,7 @@ export function Analyser() {
   }, []);
 
   // Back from the sign-in a visitor's report offered: the report is in the
-  // shared cache, so it is shown again without a model call or a credit.
+  // shared cache, so it is shown again, whole, without a model call or a credit.
   const signedIn = Boolean(account);
   useEffect(() => {
     if (!returning || !signedIn || pasteProblem(article)) return;
@@ -551,20 +556,23 @@ export function Analyser() {
           <button type="button" onClick={startOver} className={QUIET_LINK}>
             Analyser un autre article
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              const { report, blocks } = phase;
-              saveSeance(newSeance({ title: article.title, source: article.source, blocks, report }));
-              navigate('/classe');
-            }}
-            className={QUIET_LINK}
-          >
-            Préparer pour la classe
-          </button>
+          {/* A session is prepared from the whole report, which a visitor's is not. */}
+          {phase.report.withheld?.length ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                const { report, blocks } = phase;
+                saveSeance(newSeance({ title: article.title, source: article.source, blocks, report }));
+                navigate('/classe');
+              }}
+              className={QUIET_LINK}
+            >
+              Préparer pour la classe
+            </button>
+          )}
         </div>
-        <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} />
-        {phase.visitor ? <KeepReport /> : null}
+        <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} signUp={SIGN_UP_AFTER_WITHHELD} />
+        {phase.visitor ? <KeepReport withheld={Boolean(phase.report.withheld?.length)} /> : null}
         {account && view ? (
           view.needsSubscription ? (
             <div className="mt-12">
@@ -878,38 +886,61 @@ function Aside() {
   );
 }
 
-/** Where the analysis stands, drawn as the home page explains it. */
-const STAGES: Array<[Step, string]> = [
-  ['article', 'L’article'],
-  ['lecture', 'La relecture'],
-  ['sources', 'Les sources'],
-  ['rapport', 'Le rapport'],
+/**
+ * The stages the server really runs, in order, each with what it does. A
+ * stage the text does not need (no fact to look up) passes as quickly as it
+ * runs: the page follows the server, it never paces itself.
+ */
+const STAGES: Array<[RunStep, string, string]> = [
+  ['lecture', 'Lecture', 'Le texte est relu en entier, contre les cinq domaines de la grille.'],
+  ['recherche', 'Recherche des sources', 'Chaque fait vérifiable est cherché sur le web.'],
+  ['verification', 'Vérification', 'Les objections sont confrontées à ce qui a été trouvé, la note recalculée.'],
+  ['rapport', 'Rapport', 'Le rapport est mis en forme.'],
 ];
 
+/** The server's stage, as one of the four. The cache lookup before the reading counts as the reading's start. */
 function stepOf(stage: Progress['stage']): number {
-  if (stage === 'calling_provider') return 1;
-  if (stage === 'parsing_response' || stage === 'researching') return 2;
-  if (stage === 'scoring' || stage === 'storing' || stage === 'success') return 3;
+  if (stage === 'parsing_response' || stage === 'researching') return 1;
+  if (stage === 'scoring') return 2;
+  if (stage === 'storing' || stage === 'success') return 3;
   return 0;
 }
 
 function Stages({ stage }: { stage: Progress['stage'] }) {
   const current = stepOf(stage);
   return (
-    <ol aria-hidden="true" className="mt-8 grid max-w-3xl list-none grid-cols-4 gap-3 p-0 sm:gap-6">
-      {STAGES.map(([step, label], index) => (
-        <li
-          key={step}
-          className={`grid content-start gap-2 text-center text-sm sm:text-base ${index === current ? 'font-medium text-accentInk' : 'text-muted'}`}
-        >
-          {/* Only the drawing of a step still to come fades; its name stays readable. */}
-          <div className={`transition-opacity duration-300 ${index > current ? 'opacity-35' : ''}`}>
-            <StepFigure step={step} live={index === current} />
-          </div>
-          {label}
-        </li>
-      ))}
-    </ol>
+    <div className="mt-8 grid max-w-3xl items-center gap-6 rounded-card border border-border bg-surface p-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-8 sm:p-7">
+      {/* Remounted on each stage, so the new loop starts from its beginning. */}
+      <div key={STAGES[current][0]} className="run-scene mx-auto w-full max-w-80">
+        <RunScene step={STAGES[current][0]} />
+      </div>
+      <ol className="m-0 grid list-none gap-3 p-0">
+        {STAGES.map(([step, label, detail], index) => (
+          <li key={step} aria-current={index === current ? 'step' : undefined} className="flex gap-3">
+            <span
+              aria-hidden="true"
+              className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-semibold tabular-nums ${
+                index < current
+                  ? 'border-accent bg-accent text-accentForeground'
+                  : index === current
+                    ? 'border-accent text-accentInk'
+                    : 'border-border text-muted'
+              }`}
+            >
+              {index < current ? '✓' : index + 1}
+            </span>
+            <span className="grid gap-0.5">
+              <span className={`text-base ${index === current ? 'font-semibold text-foreground' : index < current ? 'text-foreground' : 'text-muted'}`}>
+                {label}
+                {index < current ? <span className="sr-only"> : fait</span> : null}
+                {index === current ? <span className="sr-only"> : en cours</span> : null}
+              </span>
+              {index === current ? <span className="text-sm text-muted">{detail}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -917,7 +948,7 @@ function Stages({ stage }: { stage: Progress['stage'] }) {
  * After a visitor's report: the account is what keeps it, and what comes with
  * it. The same card as the offer a signed-in reader meets when the trial runs out.
  */
-function KeepReport() {
+function KeepReport({ withheld }: { withheld: boolean }) {
   return (
     <div className="mt-12">
       <section
@@ -931,7 +962,7 @@ function KeepReport() {
           Créez un compte gratuit, sans carte bancaire : ce rapport vous attend au retour, et {FREE_ANALYSES} analyses
           vous sont offertes, ici, dans l’appli et dans l’extension.
         </p>
-        <Link to={SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+        <Link to={withheld ? SIGN_UP_AFTER_WITHHELD : SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
           Créer un compte gratuit
         </Link>
       </section>
@@ -970,7 +1001,7 @@ function Action({
           Analyser le texte
         </button>
         <p className="mt-3 mb-0 text-sm text-muted">
-          Une analyse offerte sans compte, chaque jour.{' '}
+          Une analyse offerte sans compte.{' '}
           <Link to={SIGN_IN} className="underline underline-offset-4 hover:text-foreground">
             Se connecter
           </Link>

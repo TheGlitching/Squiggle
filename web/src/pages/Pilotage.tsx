@@ -45,6 +45,7 @@ const LABELS: Record<string, string> = {
   google: 'Google',
   completed: 'Connexions réussies',
   after_anon: 'Comptes créés après une analyse sans compte',
+  after_withheld: 'dont depuis un rapport flouté',
   // checkout
   started: 'Commencés',
   paid: 'Payés',
@@ -60,7 +61,7 @@ const LABELS: Record<string, string> = {
   starts_exhausted: 'Trop de lancements',
   article_too_long: 'Article trop long',
   subscription_required: 'Abonnement requis',
-  anon_used: 'Sans compte : déjà faite ce jour',
+  anon_used: 'Sans compte : déjà faite',
   anon_closed: 'Sans compte : plafond du jour atteint',
 };
 
@@ -178,9 +179,11 @@ function Figures({ m }: { m: OwnerMetrics }) {
           rows={[
             ['Lancées', number(m.funnel.runsStarted.anon)],
             ['Réussies', number(m.funnel.finalized.anon)],
-            ['Refusées : déjà faite ce jour', number(m.funnel.refused.anon_used)],
+            ['Refusées : déjà faite', number(m.funnel.refused.anon_used)],
             ['Refusées : plafond du jour atteint', number(m.funnel.refused.anon_closed)],
+            ['Rapports floutés affichés', number(m.funnel.reportsWithheld)],
             ['Comptes créés ensuite', number(m.funnel.signin.after_anon)],
+            ['dont depuis un rapport flouté', number(m.funnel.signin.after_withheld)],
           ]}
         />
       </Band>

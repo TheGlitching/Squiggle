@@ -39,6 +39,7 @@
  */
 import {
   AnalysisReport,
+  FactualClaim,
   articleLength,
   articleTextHash,
   articleTooLongMessage,
@@ -70,11 +71,10 @@ import { logEvent } from '../lib/log';
 import { countMetric } from '../metrics';
 import { sanitizeReport } from '../lib/sanitize';
 import { REPORT_MAX_BYTES, REPORT_TTL_MS } from '../usage/limits';
-import { ANON_RATE_SCOPE_PREFIX, DAY_MS } from '../usage/limits';
+import { ANON_RATE_SCOPE_PREFIX, DAY_MS, VISITOR_USE_RETENTION_MS } from '../usage/limits';
 import {
   ANALYSES_GLOBAL_PER_HOUR,
   ANON_ANALYSES_PER_DAY,
-  ANON_ANALYSES_PER_IP_PER_DAY,
   CONCURRENT_RUN_WINDOW_MS,
   HOUR_MS,
   JOIN_POLL_MS,
@@ -82,6 +82,7 @@ import {
 } from '../usage/abuse';
 import { articleUrlHash, canonicalAddress, PASTED_TEXT_KEY } from './canonicalUrl';
 import { shortQuotes } from './citations';
+import { withholdForVisitor } from './withhold';
 import type { AuditRequest } from './schemas';
 import { parseRunState, serializeRunState, type AnalysisRunState } from './runState';
 
@@ -155,9 +156,9 @@ export interface AnalyzeServices {
 }
 
 /**
- * A visitor without an account, on the site's one free analysis a day. They
- * are known only by the SHA-256 of their IP, which keys the day's count and
- * nothing else.
+ * A visitor without an account, on the site's one free analysis. They are
+ * known only by the SHA-256 of their IP, which marks that analysis as used
+ * and nothing else.
  */
 export interface Visitor {
   visitor: true;
@@ -181,6 +182,7 @@ function logIdOf(reader: Reader): string | undefined {
   return ownerOf(reader) ?? undefined;
 }
 
+/** The log line's name for a visitor's own analysis; it is kept in `visitor_uses`, not in a rate window. */
 const ANON_IP_SCOPE = `${ANON_RATE_SCOPE_PREFIX}ip`;
 const ANON_ALL_SCOPE = `${ANON_RATE_SCOPE_PREFIX}all`;
 
@@ -245,12 +247,19 @@ export async function analyzeCheck(
   // this is redundant for anything this build wrote — and it is what makes
   // "no reader is ever served unsanitized text" true of rows an older build
   // wrote, without a migration.
-  return {
-    ok: true,
-    hit: true,
-    report: sanitizeReport(JSON.parse(cached.report) as AnalysisReport),
-    cachedAt: cached.createdAt,
-  };
+  const report = sanitizeReport(JSON.parse(cached.report) as AnalysisReport);
+  return { ok: true, hit: true, report: await forVisitorIf(s, s.surface === 'anon', report), cachedAt: cached.createdAt };
+}
+
+/**
+ * A report as a visitor without an account may see it (`withhold.ts`), and
+ * counted when it does keep findings back; an account's, unchanged.
+ */
+async function forVisitorIf(s: AnalyzeServices, visitor: boolean, report: AnalysisReport): Promise<AnalysisReport> {
+  if (!visitor) return report;
+  const shown = withholdForVisitor(report);
+  if (shown.withheld?.length) await count(s, 'report_withheld');
+  return shown;
 }
 
 /**
@@ -469,7 +478,9 @@ export async function analyzeAudit(
   return {
     ok: true,
     runId: run.id,
-    report: sanitizeReport(audited),
+    // The client reads only the run and the findings to research; a visitor's
+    // audit is the report before research, so it is held back as the final one is.
+    report: isVisitor(reader) ? withholdForVisitor(sanitizeReport(audited)) : sanitizeReport(audited),
     researchable: researchableFindingIds(state),
   };
 }
@@ -577,29 +588,23 @@ async function enforceHourlyCeiling(s: AnalyzeServices, now: number): Promise<Ou
 }
 
 /**
- * What a visitor's run has to clear: their one analysis of the day, the
- * site's daily allowance for every visitor together, and the hourly ceiling
- * accounts meet too. A use is counted when the run starts, since that is when
- * it costs; a ceiling met further down gives back the ones counted above it,
- * so a visitor turned away by the site's allowance keeps their own for later.
+ * What a visitor's run has to clear: their one analysis without an account,
+ * the site's daily allowance for every visitor together, and the hourly
+ * ceiling accounts meet too. A use is counted when the run starts, since that
+ * is when it costs; a ceiling met further down gives back the ones counted
+ * above it, so a visitor turned away by the site's allowance keeps their own
+ * for later.
  */
 async function enforceVisitorCeilings(
   s: AnalyzeServices,
   visitor: Visitor,
   now: number,
 ): Promise<Outcome<Record<never, never>>> {
-  const own = await s.db.recordAndCheckRate({
-    scope: ANON_IP_SCOPE,
-    key: visitor.ipHash,
-    limit: ANON_ANALYSES_PER_IP_PER_DAY,
-    windowMs: DAY_MS,
-    now,
-  });
-  if (!own.allowed) {
-    logEvent({ event: 'rate_limited', requestId: s.requestId, scope: ANON_IP_SCOPE, count: own.count });
+  if (!(await s.db.claimVisitorUse(visitor.ipHash, now, VISITOR_USE_RETENTION_MS))) {
+    logEvent({ event: 'rate_limited', requestId: s.requestId, scope: ANON_IP_SCOPE });
     return apiError(
       'anon_used',
-      'Votre analyse sans compte du jour est faite. Créez un compte gratuit pour analyser ce texte : 3 analyses offertes.',
+      'Votre analyse sans compte est déjà faite. Créez un compte gratuit pour analyser ce texte : 3 analyses de plus vous sont offertes.',
     );
   }
 
@@ -611,7 +616,7 @@ async function enforceVisitorCeilings(
     now,
   });
   if (!all.allowed) {
-    await s.db.releaseRate({ scope: ANON_IP_SCOPE, key: visitor.ipHash, windowMs: DAY_MS, now });
+    await s.db.releaseVisitorUse(visitor.ipHash, now);
     logEvent({ event: 'rate_limited', requestId: s.requestId, scope: ANON_ALL_SCOPE, count: all.count });
     return apiError(
       'anon_closed',
@@ -626,7 +631,7 @@ async function enforceVisitorCeilings(
 
 /**
  * Give back a start the provider never served: an account's start, or the
- * visitor's analysis of the day and its place in the site's allowance.
+ * visitor's one analysis and its place in the site's allowance for the day.
  */
 async function releaseStart(s: AnalyzeServices, reader: Reader, now: number): Promise<void> {
   if (isVisitor(reader)) await releaseVisitorStart(s, reader, now);
@@ -634,7 +639,7 @@ async function releaseStart(s: AnalyzeServices, reader: Reader, now: number): Pr
 }
 
 async function releaseVisitorStart(s: AnalyzeServices, visitor: Visitor, now: number): Promise<void> {
-  await s.db.releaseRate({ scope: ANON_IP_SCOPE, key: visitor.ipHash, windowMs: DAY_MS, now });
+  await s.db.releaseVisitorUse(visitor.ipHash, now);
   await s.db.releaseRate({ scope: ANON_ALL_SCOPE, key: 'all', windowMs: DAY_MS, now });
 }
 
@@ -698,7 +703,7 @@ export async function analyzeResearch(
 
   // Already researched: return what we have rather than paying twice.
   const existing = state.claims.find((claim) => claim.findingId === finding.id);
-  if (existing) return { ok: true, claim: existing };
+  if (existing) return { ok: true, claim: claimFor(reader, existing) };
 
   const client = s.llm();
   let result;
@@ -731,7 +736,17 @@ export async function analyzeResearch(
   if (claim) state.claims.push(claim);
 
   await s.db.updateAnalysisRunState(payload.runId, serializeRunState(state), s.clock.now());
-  return { ok: true, claim };
+  return { ok: true, claim: claim && claimFor(reader, claim) };
+}
+
+/**
+ * A claim as its reader may see it. A visitor's client only needs to know one
+ * was made, by its id and its block: what it says would be a withheld
+ * finding's content. A visitor's text never cites a link, so no source-check
+ * follows it either.
+ */
+function claimFor(reader: Reader, claim: FactualClaim): FactualClaim {
+  return isVisitor(reader) ? { ...claim, quote: '', claim: '', sources: [], rationale: undefined } : claim;
 }
 
 // ---------------------------------------------------------------------------
@@ -863,12 +878,12 @@ export async function analyzeFinalize(
   }
 
   // The ledger records that an analysis happened, not which article it was.
-  // A visitor has no ledger: their day's analysis was counted at its start.
+  // A visitor has no ledger: their one analysis was counted at its start.
   if (!isVisitor(reader)) await s.db.recordAnalysis({ userId: reader.id, now });
   await count(s, `finalize_${s.surface}`);
   logEvent({ event: 'analysis_finalized', requestId: s.requestId, userId: logIdOf(reader), urlHash });
 
-  return { ok: true, report, cached };
+  return { ok: true, report: await forVisitorIf(s, isVisitor(reader), report), cached };
 }
 
 /**

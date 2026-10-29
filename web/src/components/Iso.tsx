@@ -325,14 +325,14 @@ export function HeroFigure({ pins = true }: { pins?: boolean }) {
 export type Step = 'article' | 'lecture' | 'sources' | 'rapport';
 
 /** One stage of an analysis, in the hero's materials and at one shared scale. */
-export function StepFigure({ step, live = false }: { step: Step; live?: boolean }) {
+export function StepFigure({ step }: { step: Step }) {
   const v = iso(step === 'sources' ? 116 : 130, 34);
   const W = 92;
   const D = 118;
   const Z = 26;
   const body = articleLines(30, 9, 9, 12, 66, [4, 8]);
   const glass = (children?: ReactNode) => (
-    <g transform={v.top(0, 0, Z)} className={live ? 'step-live' : undefined}>
+    <g transform={v.top(0, 0, Z)}>
       <rect className="iso-face iso-glass" width={step === 'rapport' ? 128 : W} height={D} rx={4} />
       {children}
     </g>
@@ -459,6 +459,137 @@ export function StepFigure({ step, live = false }: { step: Step; live?: boolean 
               <ScoreRing cx={110} cy={24} r={11} score={61} severity="warning" />
             </>,
           )
+        : null}
+    </svg>
+  );
+}
+
+/** The four stages an analysis really goes through, as the analysis page names them. */
+export type RunStep = 'lecture' | 'recherche' | 'verification' | 'rapport';
+
+/**
+ * The analysis running: one scene, in the hero's materials, whose loop is the
+ * stage under way. The article and Squiggle's sheet stay put from one stage to
+ * the next; only what the stage does moves. Nothing in it is a result: the
+ * marks and the ring are the drawings the home page explains, not this text's.
+ * Without motion, each stage is a still.
+ */
+export function RunScene({ step }: { step: RunStep }) {
+  const v = iso(140, 40);
+  const W = 120;
+  const D = 150;
+  const Z = 30;
+  const body = articleLines(36, 11, 10, 14, 90, [4, 8]);
+  const cards = [10, 86];
+  const marks: Array<[number, number, number, HighlightSeverity]> = [
+    [34, 1, 54, 'warning'],
+    [14, 5, 44, 'info'],
+    [24, 7, 62, 'critical'],
+  ];
+  // The mark the sources are read for: the second line of the article.
+  const [fx, fy] = v.P(76, body[1][0] + 2, Z);
+
+  return (
+    <svg viewBox="0 0 320 222" className="block h-auto w-full overflow-visible" aria-hidden="true">
+      <Box v={v} at={[0, 0, 0]} size={[W, D, 2]} r={3} face="iso-paper" edge="iso-paper-edge" />
+      <g transform={v.top(0, 0, 2)}>
+        <rect x={14} y={14} width={70} height={9} rx={2} fill="var(--color-paperInk)" />
+        <Lines lines={body} h={4} />
+      </g>
+
+      {step === 'recherche' || step === 'verification'
+        ? cards.map((y, index) => (
+            <g key={y} className={step === 'recherche' ? 'run-card' : undefined} style={{ '--i': index } as CSSProperties}>
+              <Box v={v} at={[156, y, 0]} size={[50, 62, 3]} r={2} />
+              <g transform={v.top(156, y, 3)}>
+                <Lines
+                  lines={[
+                    [12, 9, 40],
+                    [21, 9, 34],
+                    [30, 9, 38],
+                    [39, 9, 30],
+                  ]}
+                  fill="#55555d"
+                  h={3.5}
+                />
+                {step === 'verification' ? (
+                  <path
+                    d="M 17 50 L 23 55 L 34 44"
+                    className="iso-line run-tick"
+                    stroke="var(--color-accentInk)"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    pathLength={1}
+                    style={{ '--i': index } as CSSProperties}
+                  />
+                ) : null}
+              </g>
+            </g>
+          ))
+        : null}
+
+
+      <g transform={v.top(0, 0, Z)}>
+        <rect className="iso-face iso-glass" width={W} height={D} rx={4} />
+        {step === 'lecture' ? (
+          <>
+            {/* The text read against the five domains of one grid, line by line. */}
+            {[0, 1, 2, 3, 4].map((row) => (
+              <path
+                key={row}
+                d={`M 10 ${26 + row * 24} H ${W - 10}`}
+                className="iso-line"
+                stroke="var(--color-accentInk)"
+                strokeOpacity={0.35}
+              />
+            ))}
+            <rect className="run-scan" x={6} y={4} width={W - 12} height={5} rx={2.5} fill="var(--color-accentInk)" />
+          </>
+        ) : null}
+        {step === 'recherche' ? <Mark x={body[1][1]} y={body[1][0]} w={62} severity="warning" h={9} /> : null}
+        {step === 'verification' || step === 'rapport'
+          ? marks.map(([x, line, w, severity], index) => (
+              <g key={line} className={step === 'verification' ? 'run-mark' : undefined} style={{ '--i': index } as CSSProperties}>
+                <Mark x={x} y={body[line][0]} w={w} severity={severity} h={9} />
+              </g>
+            ))
+          : null}
+        {step === 'rapport' ? (
+          <g>
+            <circle cx={96} cy={22} r={13} fill="#0f0f11" stroke="#3a3a42" strokeWidth={4} />
+            <circle
+              className="run-ring"
+              cx={96}
+              cy={22}
+              r={13}
+              fill="none"
+              stroke={SEVERITY_COLORS.warning.color}
+              strokeWidth={4}
+              strokeLinecap="round"
+              pathLength={100}
+              strokeDasharray="61 100"
+              transform="rotate(-90 96 22)"
+            />
+          </g>
+        ) : null}
+      </g>
+
+      {/* Drawn over the sheet, so each line leaves from the mark. */}
+      {step === 'recherche'
+        ? cards.map((y, index) => {
+            const [bx, by] = v.P(156, y + 31, 3);
+            return (
+              <path
+                key={y}
+                d={`M ${fx} ${fy} L ${bx} ${by}`}
+                className="iso-line run-flow"
+                stroke="var(--color-accentInk)"
+                strokeDasharray="3 4"
+                style={{ '--i': index } as CSSProperties}
+              />
+            );
+          })
         : null}
     </svg>
   );

@@ -93,15 +93,18 @@ with a request. What that means concretely:
   there. The website's analysis stages (`/web/analyze/*`) are among the
   Origin-required ones, the GET preflight included: each stage spends model calls
   or a credit on the reader's cookie, and nothing but our own page may start one.
-  The visitor stages (`/web/anon/*`, one analysis a day without an account) are
+  The visitor stages (`/web/anon/*`, one analysis in all without an account) are
   Origin-required too, and accept the web app's own origin only, never an
   extension's.
-- **The analysis without an account is bounded twice.** One run start per IP and
-  per UTC day, keyed by the SHA-256 of the IP, and 40 a day for every visitor
-  together (`server/src/usage/abuse.ts`), both counted before the provider is
-  called; the hourly service ceiling applies on top. A visitor's run has no
-  account (`user_id` is NULL) and is reached by its random 128-bit id alone; an
-  account's stages never load it, nor a visitor's stages an account's run.
+- **The analysis without an account is bounded twice.** One run start per IP in
+  all, keyed by the SHA-256 of the IP and kept 90 days (`visitor_uses`), and 40 a
+  day for every visitor together (`server/src/usage/abuse.ts`), both counted
+  before the provider is called; the hourly service ceiling applies on top. A
+  visitor's run has no account (`user_id` is NULL) and is reached by its random
+  128-bit id alone; an account's stages never load it, nor a visitor's stages an
+  account's run. Every report a visitor's stages return, the cache preflight's
+  included, keeps all findings but the first on the server
+  (`server/src/analyze/withhold.ts`): the client gets their tone, never their text.
 - **Ceilings, not just quotas.** One analysis in flight per account, an hourly
   per-account ceiling, and an hourly ceiling for the whole service. The last one
   is what bounds the worst case: every account compromised at once still cannot

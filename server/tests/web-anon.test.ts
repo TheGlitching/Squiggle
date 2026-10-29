@@ -2,11 +2,13 @@
  * The site's analysis without an account (`/web/anon/*`).
  *
  * The same five stages as a signed-in paste, with no cookie at all. What is
- * pinned here is what bounds it: one analysis per IP and per UTC day, 40 a day
- * for every visitor together, the hourly ceiling accounts meet too, a start
- * given back when the provider served nothing, the web app's own origin only,
- * and a visitor's run and an account's run kept apart. Also the one figure that
- * says whether it leads anywhere: an account opened from a visitor's report.
+ * pinned here is what bounds it: one analysis per IP in all, 40 a day for
+ * every visitor together, the hourly ceiling accounts meet too, a start given
+ * back when the provider served nothing, the web app's own origin only, and a
+ * visitor's run and an account's run kept apart. Then what a visitor is
+ * served: the first finding, and of the others not a word until they have an
+ * account. Also the figures that say whether it leads anywhere: an account
+ * opened from a visitor's report.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -14,7 +16,7 @@ import { HostedAnalysisClient, sha256Hex } from '@squiggle/shared';
 
 import { CHROME_ORIGIN, magicLogin, makeTestEnv, type TestEnv } from './helpers';
 import { ANON_ANALYSES_PER_DAY } from '../src/usage/abuse';
-import { DAY_MS, USAGE_LOG_RETENTION_MS } from '../src/usage/limits';
+import { DAY_MS, USAGE_LOG_RETENTION_MS, VISITOR_USE_RETENTION_MS } from '../src/usage/limits';
 
 const BLOCKS = [
   { id: 'b1', type: 'paragraph' as const, text: 'Le chômage a baissé de 12 % en un an.', charStart: 0 },
@@ -51,16 +53,16 @@ describe('an analysis without an account', () => {
     const report = await visitor(env, '203.0.113.7').analyze({ title: 'Emploi', blocks: BLOCKS });
 
     expect(report.schemaVersion).toBe(1);
-    expect(report.research.withdrawn).toHaveLength(1);
     const c = await counters(env);
     expect(c.run_started_anon).toBe(1);
     expect(c.finalize_anon).toBe(1);
     expect(c.run_started_session).toBe(0);
 
-    // A reader who signs in afterwards and pastes the same words is served it: no model call, no credit.
+    // A reader who signs in afterwards and pastes the same words is served it
+    // whole: no model call, no credit.
     const { sessionCookie, user } = await magicLogin(env, 'marie@example.org');
     const callsBefore = { ...env.llm.calls };
-    await new HostedAnalysisClient({
+    const full = await new HostedAnalysisClient({
       baseUrl: env.webAppOrigin,
       session: 'cookie',
       fetchImpl: ((url: RequestInfo | URL, init?: RequestInit) => {
@@ -72,9 +74,11 @@ describe('an analysis without an account', () => {
     }).analyze({ blocks: BLOCKS });
     expect(env.llm.calls).toEqual(callsBefore);
     expect(await env.db.countUsageLog(user.id)).toBe(0);
+    expect(full.withheld).toBeUndefined();
+    expect(full.research.withdrawn).toHaveLength(1);
   });
 
-  it('allows one a day per IP, the next one asked of an account before any model call', async () => {
+  it('allows one per IP in all, the next one asked of an account before any model call', async () => {
     const env = makeTestEnv();
     await visitor(env, '203.0.113.7').analyze({ blocks: text(1) });
     const calls = env.llm.calls.complete;
@@ -86,10 +90,24 @@ describe('an analysis without an account', () => {
     expect(env.llm.calls.complete).toBe(calls);
     expect((await counters(env)).refused_anon_used).toBe(1);
 
-    // Another address is another visitor; the next UTC day is another day.
+    // Another address is another visitor; another day is not another analysis.
     await visitor(env, '198.51.100.4').analyze({ blocks: text(3) });
     env.clock.advance(DAY_MS);
-    await visitor(env, '203.0.113.7').analyze({ blocks: text(4) });
+    await expect(visitor(env, '203.0.113.7').analyze({ blocks: text(4) })).rejects.toMatchObject({ code: 'anon_used' });
+
+    // A refused attempt does not extend the retention: the fingerprint goes when it lapses, counted from the analysis.
+    env.clock.advance(VISITOR_USE_RETENTION_MS - DAY_MS);
+    await env.db.purgeExpired(env.clock.now(), USAGE_LOG_RETENTION_MS);
+    await visitor(env, '203.0.113.7').analyze({ blocks: text(5) });
+  });
+
+  it('refuses two analyses started together from one address', async () => {
+    const env = makeTestEnv();
+    const results = await Promise.allSettled([
+      visitor(env, '203.0.113.7').analyze({ blocks: text(1) }),
+      visitor(env, '203.0.113.7').analyze({ blocks: text(2) }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
   });
 
   it('allows the site 40 a day in all, and a visitor turned away by that keeps their own', async () => {
@@ -110,7 +128,7 @@ describe('an analysis without an account', () => {
     await late.analyze({ blocks: text(102) });
   });
 
-  it('gives the day’s analysis back when the provider served nothing', async () => {
+  it('gives the analysis back when the provider served nothing', async () => {
     const env = makeTestEnv();
     env.llm.failNextComplete = true;
     await expect(visitor(env, '203.0.113.7').analyze({ blocks: text(1) })).rejects.toMatchObject({
@@ -119,21 +137,86 @@ describe('an analysis without an account', () => {
     await visitor(env, '203.0.113.7').analyze({ blocks: text(1) });
   });
 
-  it('keeps the count under the SHA-256 of the IP, never the IP, and drops it once the day has closed', async () => {
+  it('keeps the SHA-256 of the IP, never the IP, and drops it once its retention has passed', async () => {
     const env = makeTestEnv();
     await visitor(env, '203.0.113.7').analyze({ blocks: text(1) });
-    const keys = () => [...(env.db as unknown as { rates: Map<string, unknown> }).rates.keys()].join('\n');
+    const db = env.db as unknown as { rates: Map<string, unknown>; visitorUses: Map<string, unknown> };
+    const keys = () => [...db.rates.keys(), ...db.visitorUses.keys()].join('\n');
     expect(keys()).not.toContain('203.0.113.7');
     expect(keys()).toContain(await sha256Hex('203.0.113.7'));
 
-    // Still there an hour on: the hourly windows go, the day's does not.
-    env.clock.advance(60 * 60 * 1000);
+    // Still there the next day: only the site's daily allowance, which names no one, has gone.
+    env.clock.advance(DAY_MS + 60 * 60 * 1000);
     await env.db.purgeExpired(env.clock.now(), USAGE_LOG_RETENTION_MS);
     expect(keys()).toContain(await sha256Hex('203.0.113.7'));
+    expect(keys()).not.toContain('anon:all');
 
-    env.clock.advance(DAY_MS);
+    env.clock.advance(VISITOR_USE_RETENTION_MS);
     await env.db.purgeExpired(env.clock.now(), USAGE_LOG_RETENTION_MS);
-    expect(keys()).not.toContain(await sha256Hex('203.0.113.7'));
+    expect(keys()).toBe('');
+  });
+});
+
+describe('the report a visitor is served', () => {
+  /** The stub's audit with its first finding made one research does not test: both survive to the report. */
+  function twoFindings(): TestEnv {
+    const env = makeTestEnv();
+    const audit = JSON.parse(env.llm.auditJson) as { findings: Array<Record<string, unknown>> };
+    const [first, second] = audit.findings;
+    const editorial = { ...first, category: 'surinterpretation', checkableClaim: undefined };
+    env.llm.auditJson = JSON.stringify({ ...audit, findings: [second, editorial] });
+    return env;
+  }
+
+  /** Every response body of one visitor's analysis, as the browser receives them. */
+  async function bodies(env: TestEnv, ip: string, blocks = BLOCKS): Promise<string> {
+    const seen: string[] = [];
+    await new HostedAnalysisClient({
+      baseUrl: env.webAppOrigin,
+      session: 'none',
+      fetchImpl: (async (url: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        headers.set('origin', env.webAppOrigin);
+        headers.set('cf-connecting-ip', ip);
+        const res = await env.handler(new Request(url as string, { ...init, headers }));
+        seen.push(await res.clone().text());
+        return res;
+      }) as typeof fetch,
+    }).analyze({ blocks });
+    return seen.join('\n');
+  }
+
+  it('shows the note and the first finding in reading order, and of the others only their tone', async () => {
+    const env = twoFindings();
+    const report = await visitor(env, '203.0.113.7').analyze({ blocks: BLOCKS });
+
+    expect(report.score).toBeGreaterThan(0);
+    expect(report.findings.map((f) => f.id)).toEqual(['f1']);
+    expect(report.findings[0].explanation).toBe("Aucune source n'est citée pour ce chiffre.");
+    expect(report.withheld).toEqual([{ category: 'cadrage', severity: 1 }]);
+  });
+
+  it('never sends a word of a withheld finding, at any stage, nor from the cache', async () => {
+    const env = twoFindings();
+    const withheld = ['Tout le monde', 'Appel au sens commun', 'Le texte substitue', 'chiffre non sourcé'];
+    const run = await bodies(env, '203.0.113.7');
+    // Served again from the shared cache, to another visitor who pasted the same words.
+    const cached = await bodies(env, '198.51.100.4');
+    for (const words of withheld) {
+      expect(run).not.toContain(words);
+      expect(cached).not.toContain(words);
+    }
+    expect(env.llm.calls.complete).toBe(1);
+    expect((await counters(env)).report_withheld).toBe(2);
+  });
+
+  it('keeps nothing back when there is nothing past the first finding', async () => {
+    const env = makeTestEnv();
+    // The stub's first finding is withdrawn by research: one survives.
+    const report = await visitor(env, '203.0.113.7').analyze({ blocks: BLOCKS });
+    expect(report.findings).toHaveLength(1);
+    expect(report.withheld).toEqual([]);
+    expect((await counters(env)).report_withheld).toBe(0);
   });
 });
 
@@ -222,6 +305,15 @@ describe('an account opened from a visitor’s report', () => {
     await signIn(env, 'paul@example.org', '/analyser');
     const c = await counters(env);
     expect(c.signin_after_anon).toBe(1);
+    expect(c.signin_after_withheld).toBe(0);
     expect(c.signin_completed).toBe(3);
+  });
+
+  it('is counted apart when the report had findings kept back', async () => {
+    const env = makeTestEnv();
+    await signIn(env, 'marie@example.org', '/analyser?apres=flou');
+    const c = await counters(env);
+    expect(c.signin_after_anon).toBe(1);
+    expect(c.signin_after_withheld).toBe(1);
   });
 });

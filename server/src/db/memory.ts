@@ -10,7 +10,15 @@
 import { randomToken } from '@squiggle/shared';
 
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
-import { ANON_RATE_SCOPE_PREFIX, DAY_MS, RATE_WINDOW_MS, REPORT_MAX_BYTES, WEEK_MS, utcDayOf } from '../usage/limits';
+import {
+  ANON_RATE_SCOPE_PREFIX,
+  DAY_MS,
+  RATE_WINDOW_MS,
+  REPORT_MAX_BYTES,
+  VISITOR_USE_RETENTION_MS,
+  WEEK_MS,
+  utcDayOf,
+} from '../usage/limits';
 import { METRIC_NAMES } from './types';
 import type {
   AnalysisRunRow,
@@ -57,6 +65,7 @@ export class MemoryDb implements Db {
   private readonly nonces = new Map<string, NonceRow>();
   private readonly oauth = new Map<string, OAuthPendingRow>();
   private readonly rates = new Map<string, { scope: string; count: number; windowStart: number }>();
+  private readonly visitorUses = new Map<string, { usedAt: number }>();
   private readonly usageDaily = new Map<string, UsageDailyRow>();
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
@@ -424,6 +433,17 @@ export class MemoryDb implements Db {
     if (entry && entry.count > 0) entry.count -= 1;
   }
 
+  async claimVisitorUse(ipHash: string, now: number, retentionMs: number): Promise<boolean> {
+    const used = this.visitorUses.get(ipHash);
+    if (used && used.usedAt > now - retentionMs) return false;
+    this.visitorUses.set(ipHash, { usedAt: now });
+    return true;
+  }
+
+  async releaseVisitorUse(ipHash: string, usedAt: number): Promise<void> {
+    if (this.visitorUses.get(ipHash)?.usedAt === usedAt) this.visitorUses.delete(ipHash);
+  }
+
   // ---- usage (ledger + daily counter) -------------------------------------
 
   async recordAnalysis(args: CreateUsageLogArgs): Promise<UsageLogRow> {
@@ -702,6 +722,7 @@ export class MemoryDb implements Db {
     const cutoff = now - usageLogRetentionMs;
     sweep(this.usageLog, (r) => r.createdAt <= cutoff);
     sweep(this.rates, (r) => r.windowStart <= now - (r.scope.startsWith(ANON_RATE_SCOPE_PREFIX) ? DAY_MS : RATE_WINDOW_MS));
+    sweep(this.visitorUses, (r) => r.usedAt <= now - VISITOR_USE_RETENTION_MS);
     return removed;
   }
 }

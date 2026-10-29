@@ -341,6 +341,10 @@ export const METRIC_NAMES = [
   'checkout_free',
   // An account created by a sign-in that began under a visitor's report.
   'signin_after_anon',
+  // Of those, the ones that began under a report with findings kept back.
+  'signin_after_withheld',
+  // A visitor's report served with findings kept back until they have an account.
+  'report_withheld',
   'run_started_install',
   'run_started_session',
   'run_started_anon',
@@ -532,6 +536,16 @@ export interface Db {
   releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void>;
 
   /**
+   * Record a visitor's one analysis without an account, atomically: true when
+   * the fingerprint had none within `retentionMs`, and it is now marked used
+   * at `now`; false, with nothing changed, when it already had one.
+   */
+  claimVisitorUse(ipHash: string, now: number, retentionMs: number): Promise<boolean>;
+
+  /** Give back the use claimed at `usedAt`, for an analysis that ended up costing nothing. */
+  releaseVisitorUse(ipHash: string, usedAt: number): Promise<void>;
+
+  /**
    * Record one finished analysis: appends a ledger row and bumps that UTC
    * day's counter. The two moves must land together (a transaction in
    * Neon), so the daily quota and the ledger can never diverge.
@@ -616,7 +630,7 @@ export interface Db {
   /**
    * Remove short-lived rows whose TTL has lapsed (nonces, web sessions,
    * magic links, OAuth handshakes, analysis runs, rate-limit windows that have
-   * closed) plus ledger rows older than `usageLogRetentionMs`. Called by the scheduled handler, not per request.
+   * closed, visitors' uses past their retention) plus ledger rows older than `usageLogRetentionMs`. Called by the scheduled handler, not per request.
    * Resolves to how many rows were removed.
    */
   purgeExpired(now: number, usageLogRetentionMs: number): Promise<number>;
