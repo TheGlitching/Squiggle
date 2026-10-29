@@ -9,11 +9,14 @@ export function Trajet({
   label,
   nodes,
   links,
+  bare = false,
 }: {
   label: string;
   nodes: Array<{ name: string; note?: string }>;
   /** What travels into each node after the first. */
   links: string[];
+  /** Each step as plain text, without its box: for a page that already has boxes enough. */
+  bare?: boolean;
 }) {
   return (
     <ol aria-label={label} className="m-0 flex list-none flex-col p-0 lg:flex-row lg:items-stretch">
@@ -44,7 +47,9 @@ export function Trajet({
               </svg>
             </p>
           ) : null}
-          <div className="rounded-card border border-border bg-surface px-5 py-4 lg:min-w-0 lg:flex-1 lg:self-stretch">
+          <div
+            className={`lg:min-w-0 lg:flex-1 lg:self-stretch ${bare ? 'py-2 lg:text-center' : 'rounded-card border border-border bg-surface px-5 py-4'}`}
+          >
             <p className="m-0 font-display text-lg font-semibold">{name}</p>
             {note ? <p className="mt-1 mb-0 text-base text-muted">{note}</p> : null}
           </div>

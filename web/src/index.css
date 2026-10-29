@@ -213,6 +213,37 @@
     }
   }
 
+  /* The same reading, played as a loop of 12 s: the sheet settles, the passages are
+     marked one after the other, the note and the pins arrive, the whole holds long
+     enough to be read, then lifts away and comes back. Transform and opacity only.
+     The reader's pause (`data-paused`) shows the whole reading, still; off screen
+     (`data-offscreen`) the loop waits where it is, and costs nothing. */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-loop .iso-settle {
+      animation: hero-loop-settle 12s var(--ease-glide) infinite both;
+    }
+
+    .hero-loop .iso-mark {
+      animation: hero-loop-mark 12s var(--ease-out-expo) calc(var(--i, 0) * 450ms) infinite both;
+    }
+
+    .hero-loop .iso-late {
+      animation: hero-loop-late 12s var(--ease-out) calc(var(--i, 0) * 250ms) infinite both;
+    }
+
+    .hero-loop[data-paused] .iso-settle,
+    .hero-loop[data-paused] .iso-mark,
+    .hero-loop[data-paused] .iso-late {
+      animation: none;
+    }
+
+    .hero-loop[data-offscreen] .iso-settle,
+    .hero-loop[data-offscreen] .iso-mark,
+    .hero-loop[data-offscreen] .iso-late {
+      animation-play-state: paused;
+    }
+  }
+
   /* One decorative bar per line box, drawn behind the text: tint + 2px severity
      border, radius 3px, matching the extension's `.fc-highlight-rect`. */
   .hl-bar {
@@ -243,6 +274,17 @@
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
     transition: background-color 160ms var(--ease-out);
+  }
+
+  /* A passage is 20 px tall on a phone: an invisible band grows what a finger can touch, the line stays put. */
+  .hero-hl {
+    position: relative;
+  }
+
+  .hero-hl::after {
+    content: '';
+    position: absolute;
+    inset: -8px 0;
   }
 
   /* A sentence of the classroom exercise. Marked, it takes the student's own pencil
@@ -751,6 +793,56 @@
   from {
     opacity: 0;
     transform: scaleX(0);
+  }
+}
+
+@keyframes hero-loop-settle {
+  0% {
+    opacity: 0;
+    transform: translateY(-56px);
+  }
+  10%,
+  86% {
+    opacity: 1;
+    transform: none;
+  }
+  95%,
+  100% {
+    opacity: 0;
+    transform: translateY(-56px);
+  }
+}
+
+@keyframes hero-loop-mark {
+  0%,
+  12% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  19%,
+  86% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  92%,
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes hero-loop-late {
+  0%,
+  34% {
+    opacity: 0;
+  }
+  40%,
+  86% {
+    opacity: 1;
+  }
+  92%,
+  100% {
+    opacity: 0;
   }
 }
 

@@ -1,80 +1,56 @@
-import type { ReactNode } from 'react';
+/**
+ * The home page, also at `/tarifs`. Its first screen keeps the first landing's
+ * proportions and its isometric drawing, the reading played in a loop the reader can
+ * pause; the rest is said with drawings rather than paragraphs: how a report is made,
+ * the same grid for every article, the three ways in, the price and what it pays for,
+ * teachers, the data and the open code, every question.
+ *
+ * The way in it puts first follows the reader's device, and it only draws or names
+ * gestures that exist there: the extension on a computer, the site and the app's place
+ * in the Share menu on Android, the site and the bookmark on an iPhone. The device is
+ * read from `<html data-device>` (set before the first paint, `index.html`), so the
+ * page the build renders is right from its first paint; only the browser's own install
+ * prompt, which arrives later, changes a button.
+ */
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { HOSTED_ANALYSIS } from '../../../shared/src/hosted/disclosure';
 import { Exemple } from '../components/Exemple';
 import { Trajet } from '../components/Trajet';
 import {
+  ClassFigure,
+  CriterionFigure,
   DeviceFigure,
   ExternalMark,
   HeroFigure,
   SquiggleMark,
   StepFigure,
-  type Device,
+  type Criterion,
   type Step,
 } from '../components/Iso';
-import {
-  H1,
-  H3,
-  LEAD,
-  MEASURE,
-  PAGE,
-  PRIMARY_BUTTON,
-  QUIET_LINK,
-  SECONDARY_BUTTON,
-  Section,
-} from '../components/Landing';
+import { H1, H3, LEAD, MEASURE, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, Section } from '../components/Landing';
 import { CONTACT_URL } from '../components/Layout';
 import { count, installClick } from '../count';
 import { DOMAINS, VERIFICATION_STATES } from '../demo';
-import { installLabelFor, installUrlFor, isMobile, useInstall, useUserAgent } from '../install';
+import { installLabelFor, installUrlFor, isStandalone, useInstall, useUserAgent } from '../install';
+import { useBrowserValue } from '../client';
 import {
-  MONTHLY_ANALYSES,
   FREE_ANALYSES,
   GITHUB_URL,
+  MONTHLY_ANALYSES,
   OWN_KEY_TOP_MODEL_MONTHLY,
   PRICE_MONTHLY,
   TAGLINE,
 } from '../offer';
 import { Link } from '../router';
 
-/** The path of an analysis, and what passes from one stage to the next. */
-const STEPS: Array<{ step: Step; title: string; text: string; then?: string }> = [
-  {
-    step: 'article',
-    title: 'Vous donnez l’article',
-    text: 'Collé sur le site, partagé depuis l’appli, ou d’un clic dans votre navigateur.',
-    then: 'le texte',
-  },
-  {
-    step: 'lecture',
-    title: 'Il est relu en entier',
-    text: 'Faits, logique, cadrage, sources et langue.',
-    then: 'les faits mis en doute',
-  },
-  {
-    step: 'sources',
-    title: 'Les doutes sont vérifiés',
-    text: 'S’il met un fait en question, il consulte d’abord les sources. Si elles donnent raison à l’article, le doute est retiré.',
-    then: 'les constats retenus',
-  },
-  {
-    step: 'rapport',
-    title: 'Vous lisez le rapport',
-    text: 'Passages surlignés, raisons, points forts et une note sur 100.',
-  },
-];
-
 /** Who bills an own-key analysis, named so a reader knows which key to bring. */
 const OWN_KEY_PROVIDERS = 'OpenAI, Anthropic, Google Gemini ou OpenRouter';
 const API_KEY_MEANS =
   'Une clé d’API, c’est le code d’accès personnel que ce fournisseur vous donne sur son site : vous le collez une fois dans l’extension.';
 
-const COMMITMENTS = [
-  'Les mêmes critères pour chaque article.',
-  'Le texte est jugé, jamais son auteur.',
-  'La méthode et le code sont publics.',
-] as const;
 
-const FAQ: Array<[string, ReactNode]> = [
+export const FAQ: Array<[string, ReactNode]> = [
   [
     'Une analyse peut-elle se tromper ?',
     'Oui. Chaque constat cite la phrase exacte et sa raison : vous vérifiez par vous-même.',
@@ -109,16 +85,6 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
 ];
 
-const WAYS_TO_PAY = [
-  [
-    'Avec un compte, rien à installer :',
-    `sur le site et l’appli, aucune clé à créer. ${FREE_ANALYSES} analyses offertes, puis ${PRICE_MONTHLY} par mois.`,
-  ],
-  [
-    'Gratuit avec votre propre clé d’IA :',
-    'dans l’extension. Votre fournisseur d’IA vous facture directement chaque analyse, au tarif du modèle choisi.',
-  ],
-] as const;
 
 /**
  * The two ways in, side by side on the same rows, so a reader compares like with like:
@@ -169,23 +135,6 @@ const OWN_KEY_CELL =
 /** The way in each answer belongs to, on a phone only: on a wide screen the column head says it. */
 const TAG = 'mb-1 block text-sm font-medium text-foreground md:hidden';
 
-/** A row of actions: buttons of one height, stacked full width on a phone. */
-const ACTIONS = 'flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch';
-const WAY_ACTION = `${SECONDARY_BUTTON} w-fit max-sm:w-full`;
-
-/** One way in: its drawing, what it is, and its action pinned to the bottom of the column. */
-function Way({ device, title, text, children }: { device: Device; title: string; text: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex flex-col gap-4">
-      <div className="max-w-56">
-        <DeviceFigure device={device} />
-      </div>
-      <h3 className={H3}>{title}</h3>
-      <p className="m-0 text-base leading-relaxed text-muted">{text}</p>
-      <div className="mt-auto pt-2">{children}</div>
-    </li>
-  );
-}
 
 /** What passes from one stage to the next: down the page on a phone, across it on a wide screen. */
 function Then({ label }: { label: string }) {
@@ -203,78 +152,386 @@ function Then({ label }: { label: string }) {
   );
 }
 
-export function Accueil() {
+/**
+ * The two ways to pay, row for row: the account's column outlined in the accent, each
+ * column ending on its own action, the store this browser installs from or none.
+ */
+function Comparison() {
   const userAgent = useUserAgent();
   const storeUrl = installUrlFor(userAgent);
-  const mobile = isMobile(userAgent);
+  return (
+    <table className="w-full border-separate border-spacing-0 text-left max-md:block">
+      <caption className="sr-only">Le compte Squiggle et votre propre clé, comparés</caption>
+      <thead className="max-md:block">
+        <tr className="max-md:grid max-md:grid-cols-2 max-md:gap-3">
+          <td className="max-md:hidden" />
+          <th
+            scope="col"
+            className="rounded-t-card border-x border-t border-accent/50 bg-surface p-4 align-top font-normal md:w-[39%] md:px-8 md:pt-8 md:pb-6 max-md:rounded-card max-md:border"
+          >
+            <span className={`block ${H3}`}>Avec un compte Squiggle</span>
+            <span className="mt-4 flex flex-wrap items-baseline gap-x-2">
+              <span className="font-display text-4xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
+                {PRICE_MONTHLY}
+              </span>
+              <span className="text-base text-muted md:text-lg">par mois</span>
+            </span>
+            <span className="mt-4 block text-base text-muted">Sans engagement, résiliable à tout moment.</span>
+          </th>
+          <th
+            id="propre-cle"
+            scope="col"
+            className="p-4 align-top font-normal md:w-[39%] md:px-8 md:pt-8 md:pb-6 max-md:rounded-card max-md:border max-md:border-border"
+          >
+            <span className={`block ${H3}`}>Gratuit avec votre propre clé</span>
+            <span className="mt-4 flex flex-wrap items-baseline gap-x-2">
+              <span className="font-display text-4xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
+                0 €
+              </span>
+              <span className="text-base text-muted md:text-lg">chez Squiggle</span>
+            </span>
+            <span className="mt-4 block text-base text-muted">
+              Squiggle ne vous facture rien : la partie IA tourne sur votre propre compte chez un fournisseur d’IA,
+              qui vous facture directement.
+            </span>
+          </th>
+        </tr>
+      </thead>
+      <tbody className="max-md:block">
+        {COMPARISON.map(([label, account, ownKey]) => (
+          <tr key={label} className="max-md:mt-3 max-md:grid max-md:gap-2">
+            <th scope="row" className={LABEL_CELL}>
+              {label}
+            </th>
+            <td className={ACCOUNT_CELL}>
+              <span aria-hidden="true" className={TAG}>
+                Avec un compte
+              </span>
+              {account}
+            </td>
+            <td className={OWN_KEY_CELL}>
+              <span aria-hidden="true" className={TAG}>
+                Avec votre propre clé
+              </span>
+              {ownKey}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot className="max-md:block">
+        <tr className="max-md:mt-6 max-md:grid max-md:gap-6">
+          <td className="max-md:hidden" />
+          <td className="rounded-b-card border-x border-b border-accent/50 bg-surface px-4 pt-6 pb-6 align-top md:border-t md:border-t-lineSoft md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:p-5">
+            <Link to="/analyser" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+              Essayer gratuitement
+            </Link>
+            <p className="mt-3 mb-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
+          </td>
+          <td className="border-lineSoft px-4 pt-6 pb-6 align-top md:border-t md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:border-border max-md:p-5">
+            {storeUrl ? (
+              <a
+                href={storeUrl}
+                onClick={() => count(installClick(storeUrl))}
+                className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}
+              >
+                {installLabelFor(storeUrl, userAgent)}
+              </a>
+            ) : (
+              <p className="m-0 text-base text-muted">Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.</p>
+            )}
+            <p className="mt-3 mb-0 text-base">Vous ne payez que votre fournisseur d’IA.</p>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+/** What `<html data-device>` shows: one block per device, before the app has run. */
+const ON_COMPUTER = '[html[data-device=android]_&]:hidden [html[data-device=ios]_&]:hidden';
+const ON_PHONE = 'hidden [html[data-device=android]_&]:block [html[data-device=ios]_&]:block';
+const ON_ANDROID = 'hidden [html[data-device=android]_&]:block';
+const ON_IOS = 'hidden [html[data-device=ios]_&]:block';
+/** A phone-only part of a row of buttons: it takes its place in the row, as `contents` does on a computer. */
+const ON_PHONE_INLINE = 'hidden [html[data-device=android]_&]:contents [html[data-device=ios]_&]:contents';
+
+const BODY = 'm-0 text-lg leading-relaxed text-foreground';
+const ACTIONS = 'flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch';
+const PLAIN_LIST = 'm-0 grid list-none gap-2 p-0 text-lg leading-snug';
+/** A link inside a sentence: its touch target grows to 44 px without moving the line. */
+const INLINE_LINK =
+  "relative underline decoration-accent underline-offset-4 hover:text-accentInk after:absolute after:inset-x-0 after:-inset-y-3 after:content-['']";
+
+/** The brand's squiggle as a bullet: kept for the teachers, where it signs the offer. */
+function Marks({ items, label }: { items: ReactNode[]; label: string }) {
+  return (
+    <ul aria-label={label} className="m-0 grid list-none gap-3 p-0 text-lg leading-snug">
+      {items.map((item, index) => (
+        <li key={index} className="flex gap-3">
+          <SquiggleMark />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The extension from this browser's store; where there is none (Safari), `fallback`. */
+function StoreAction({ className, fallback }: { className: string; fallback: ReactNode }) {
+  const userAgent = useUserAgent();
+  const storeUrl = installUrlFor(userAgent);
+  return storeUrl ? (
+    <a href={storeUrl} onClick={() => count(installClick(storeUrl))} className={className}>
+      {installLabelFor(storeUrl, userAgent)}
+    </a>
+  ) : (
+    <>{fallback}</>
+  );
+}
+
+/**
+ * Installing the app on Android, whatever the browser offers: its own prompt when it
+ * has one, a word for the reader inside the installed app, and otherwise the gesture
+ * in Chrome's menu, with the bookmark as the other way in.
+ */
+function AndroidInstall() {
   const install = useInstall();
+  const standalone = useBrowserValue(isStandalone, false);
+  if (install?.kind === 'prompt') {
+    return (
+      <button type="button" onClick={install.prompt} className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+        Installer l’appli
+      </button>
+    );
+  }
+  if (standalone) return <p className={BODY}>L’appli est installée : partagez un article vers Squiggle.</p>;
+  return (
+    <div className="grid gap-2">
+      {/* Chrome names the entry either way, depending on its version. */}
+      <p className={BODY}>
+        Dans Chrome : menu ⋮, puis «&nbsp;Installer l’application&nbsp;» ou «&nbsp;Ajouter à l’écran d’accueil&nbsp;».
+      </p>
+      <p className="m-0">
+        <Link to="/favori" className={QUIET_LINK}>
+          Ou le favori Squiggle
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The hero's reading, in a loop, with its own pause: a pause shows the whole reading,
+ * still. Off screen the loop waits where it is. Without motion there is no loop to
+ * pause, and no button.
+ */
+/** A moment of the 12 s loop where everything is on the sheet (`.hero-loop` in `index.css`). */
+const RESUME_AT = 6000;
+
+function LoopingHero() {
+  const box = useRef<HTMLDivElement>(null);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    const svg = box.current?.querySelector('svg');
+    if (!svg) return;
+    const wasPaused = svg.hasAttribute('data-paused');
+    svg.toggleAttribute('data-paused', paused);
+    // Played again, the loop goes on from the whole reading the reader was looking at, not from a bare article.
+    if (wasPaused && !paused) for (const animation of svg.getAnimations({ subtree: true })) animation.currentTime = RESUME_AT;
+  }, [paused]);
+
+  useEffect(() => {
+    const svg = box.current?.querySelector('svg');
+    if (!svg || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => svg.toggleAttribute('data-offscreen', !entry.isIntersecting));
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, []);
 
   return (
+    <figure className="m-0 lg:-mt-36">
+      <div ref={box} className="relative">
+        <HeroFigure loop />
+        {/* A quiet control on the drawing itself: 44 px to touch, named for assistive technology. */}
+        <button
+          type="button"
+          onClick={() => setPaused((value) => !value)}
+          aria-label={paused ? 'Relancer l’animation' : 'Mettre l’animation en pause'}
+          title={paused ? 'Relancer l’animation' : 'Mettre l’animation en pause'}
+          className="absolute right-0 bottom-0 inline-flex h-11 w-11 items-center justify-center rounded-full border border-borderControl bg-background/80 text-foreground transition-colors duration-160 ease-out hover:border-accent hover:text-accentInk motion-reduce:hidden"
+        >
+          <svg viewBox="0 0 16 16" className="h-5 w-5" aria-hidden="true">
+            {paused ? (
+              <path d="M5 3.5v9l7.5-4.5z" fill="currentColor" />
+            ) : (
+              <path d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z" fill="currentColor" />
+            )}
+          </svg>
+        </button>
+      </div>
+      <figcaption className="mt-4">
+        <ol className="m-0 grid list-none gap-x-6 gap-y-2 p-0 text-lg text-foreground sm:grid-cols-3">
+          {['Le passage fragile, surligné.', 'La raison, en une phrase.', 'Une note sur 100.'].map((text, index) => (
+            <li key={text} className="flex items-baseline gap-3">
+              <span
+                aria-hidden="true"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accentForeground"
+              >
+                {index + 1}
+              </span>
+              {text}
+            </li>
+          ))}
+        </ol>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** "aux Pays-Bas", "en France": where a host country is, in a sentence. */
+function inCountry(country: string): string {
+  return /^(Pays-Bas|États-Unis)$/.test(country) ? `aux ${country}` : `en ${country}`;
+}
+
+/** Where the account's analyses run, from `shared/`, so the page cannot name a host the server no longer uses. */
+const HOST_COUNTRIES = [...new Set(HOSTED_ANALYSIS.inferenceHosts.map((host) => host.country))];
+const WHERE = `${HOSTED_ANALYSIS.modelLabel}, servie ${inCountry(HOST_COUNTRIES[0])} d’abord${
+  HOST_COUNTRIES.length > 1 ? `, sinon ${HOST_COUNTRIES.slice(1).map(inCountry).join(' ou ')}` : ''
+}.`;
+
+/** How a report is made, one drawing a stage, a line each. */
+const STAGES: Array<{ step: Step; title: string; text: string; detail?: string; then?: string }> = [
+  { step: 'article', title: 'Vous donnez l’article', text: 'Collé, partagé ou d’un clic.', then: 'le texte' },
+  {
+    step: 'lecture',
+    title: 'Une IA le relit en entier',
+    text: 'Faits, logique, cadrage, sources et langue.',
+    detail: `Avec un compte : ${WHERE}`,
+    then: 'les doutes',
+  },
+  {
+    step: 'sources',
+    title: 'Les doutes sont vérifiés',
+    text: 'Dans les sources. Si elles donnent raison à l’article, le doute est retiré.',
+    then: 'les constats',
+  },
+  { step: 'rapport', title: 'Vous lisez le rapport', text: 'Passages surlignés, raisons, note sur 100.' },
+];
+
+/** The question the named model raises, answered from the same constant. */
+const WHICH_AI: [string, ReactNode] = [
+  'Quelle IA, et où ?',
+  <>
+    Avec un compte : {WHERE} Elle reçoit l’article sans votre identité. Avec votre propre clé, c’est le modèle que vous
+    choisissez.{' '}
+    <Link to="/transparence" className={QUIET_LINK}>
+      Le trajet des données
+    </Link>
+  </>,
+];
+/** The landing's questions, with the model's after the one about where the article goes. */
+const QUESTIONS: Array<[string, ReactNode]> = [...FAQ.slice(0, 2), WHICH_AI, ...FAQ.slice(2)];
+
+const CARD = 'rounded-card border border-border bg-surface p-6';
+
+/** Each criterion of the grid (`DOMAINS`, by its full name), as its drawing and one word. */
+export const CRITERIA: Record<string, [Criterion, string]> = {
+  'Robustesse factuelle et sourcing': ['sources', 'Sources'],
+  'Solidité logique et argumentative': ['logique', 'Logique'],
+  'Cadrage et procédés rhétoriques': ['cadrage', 'Cadrage'],
+  'Déontologie et transparence': ['transparence', 'Transparence'],
+  'Soin de la langue': ['langue', 'Langue'],
+};
+/** The trial without an account is becoming a single one: the page promises a trial, not a daily analysis. */
+const OFFER = `Essai gratuit, sans carte. Puis ${PRICE_MONTHLY} par mois.`;
+
+/** What the subscription pays for, shown with the stages it pays for. */
+const PAID_FOR: Array<[Step | null, string]> = [
+  ['lecture', 'L’IA qui relit chaque article'],
+  ['sources', 'Les sources consultées'],
+  [null, 'Un outil financé par ses lecteurs : ni publicité, ni revente de données'],
+];
+
+export function Accueil() {
+  return (
     <>
+      {/* The landing's first screen, at its proportions; the drawing reads the article again and again. */}
       <div className={`${PAGE} pt-10 pb-16 md:pt-20 md:pb-24`}>
         <h1 className={`${H1} max-w-[14ch]`}>{TAGLINE}</h1>
-        <div className="mt-6 grid items-start gap-10 md:mt-10 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-16">
+        <div className="mt-6 grid items-start gap-6 md:mt-10 md:gap-10 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-16">
           <div>
-            <p className={LEAD}>
+            {/* The one sentence that says what Squiggle is: in full ink, not grey. */}
+            <p className={LEAD.replace('text-muted', 'text-foreground')}>
               Squiggle relit l’article que vous lisez. Il surligne ce qui est fragile, dit pourquoi, et montre aussi ce
               qui tient.
             </p>
             <div className={`mt-8 ${ACTIONS}`}>
-              <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-                Analyser un article
-              </Link>
+              <span className={`contents ${ON_COMPUTER}`}>
+                <StoreAction
+                  className={`${PRIMARY_BUTTON} max-sm:w-full`}
+                  fallback={
+                    <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+                      Analyser un article
+                    </Link>
+                  }
+                />
+              </span>
+              <span className={ON_PHONE_INLINE}>
+                <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+                  Analyser un article
+                </Link>
+              </span>
               <a href="#exemple" onClick={() => count('click_example')} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
                 Voir un exemple
               </a>
             </div>
-            {/* The two ways to pay, stated where the reader decides; the sign-up stays the one button. */}
-            <ul aria-label="Deux façons de l’utiliser" className="mt-8 grid list-none gap-3 p-0 text-base leading-snug">
-              {WAYS_TO_PAY.map(([way, terms]) => (
-                <li key={way} className="flex gap-3">
-                  <SquiggleMark />
-                  <span>
-                    <span className="font-semibold">{way}</span> <span className="text-muted">{terms}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 mb-0">
-              <a href="#tarifs" className={QUIET_LINK}>
-                Comparer les deux
-              </a>
+            {/* The way in that this device has besides the button, in one line, then the offer. */}
+            <p className={`mt-5 mb-0 text-lg text-foreground ${ON_COMPUTER}`}>
+              Sans extension :{' '}
+              <Link to="/analyser" className={INLINE_LINK}>
+                collez le texte sur le site
+              </Link>
+              .
             </p>
+            <p className={`mt-5 mb-0 text-lg text-foreground ${ON_ANDROID}`}>
+              Ou partagez l’article vers{' '}
+              <a href="#partout" className={INLINE_LINK}>
+                l’appli Squiggle
+              </a>
+              .
+            </p>
+            <p className={`mt-5 mb-0 text-lg text-foreground ${ON_IOS}`}>
+              Ou{' '}
+              <Link to="/favori" className={INLINE_LINK}>
+                le favori Squiggle
+              </Link>
+              , sur l’article ouvert dans Safari.
+            </p>
+            <p className="mt-2 mb-0 text-lg text-foreground">{OFFER}</p>
           </div>
 
-          <figure className="m-0 lg:-mt-36">
-            <HeroFigure />
-            <figcaption className="mt-4">
-              <ol className="m-0 grid list-none gap-x-6 gap-y-2 p-0 text-base text-muted sm:grid-cols-3">
-                {['Le passage fragile, surligné.', 'La raison, en une phrase.', 'Une note sur 100.'].map(
-                  (text, index) => (
-                    <li key={text} className="flex items-baseline gap-3">
-                      <span
-                        aria-hidden="true"
-                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accentForeground"
-                      >
-                        {index + 1}
-                      </span>
-                      {text}
-                    </li>
-                  ),
-                )}
-              </ol>
-            </figcaption>
-          </figure>
+          <LoopingHero />
         </div>
       </div>
 
-      <Section id="exemple" title="Touchez un passage surligné" intro="Le rapport donne sa raison, à côté.">
+      <Section
+        id="exemple"
+        title={
+          <>
+            <span className={ON_COMPUTER}>Cliquez sur un passage surligné</span>
+            <span className={ON_PHONE}>Touchez un passage surligné</span>
+          </>
+        }
+        intro="Le rapport donne sa raison, à côté."
+      >
         <Exemple />
       </Section>
 
+      {/* How a report is made: the four drawings carry it, a line each. */}
       <Section id="comment" title="Comment ça marche" intro="Une à deux minutes, de l’article au rapport.">
         <ol className="m-0 grid list-none gap-0 p-0 lg:grid-cols-4 lg:gap-8">
-          {STEPS.map(({ step, title, text, then }, index) => (
+          {STAGES.map(({ step, title, text, detail, then }, index) => (
             <li
               key={step}
               className="relative grid content-start grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 lg:grid-cols-1 lg:gap-y-6"
@@ -283,297 +540,262 @@ export function Accueil() {
                 <StepFigure step={step} />
               </div>
               <div>
-                <p className="m-0 font-display text-base font-semibold text-muted tabular-nums">{index + 1}</p>
+                <p className="m-0 font-display text-base font-semibold text-foreground tabular-nums">{index + 1}</p>
                 <h3 className={`${H3} mt-1`}>{title}</h3>
-                <p className="mt-2 mb-0 text-base leading-relaxed text-muted">{text}</p>
+                <p className={`mt-2 ${BODY}`}>{text}</p>
+                {detail ? <p className="mt-2 mb-0 text-base text-muted">{detail}</p> : null}
               </div>
               {then ? <Then label={then} /> : null}
             </li>
           ))}
         </ol>
+        <p className={`mt-10 ${BODY} ${MEASURE}`}>
+          Une IA peut se tromper : chaque constat cite la phrase exacte, vous vérifiez par vous-même.
+        </p>
       </Section>
 
-      <Section
-        id="grille"
-        title="La même grille pour tous"
-        intro="Cinq critères, appliqués à chaque article, quel qu’en soit l’auteur."
-      >
-        {/* The weights are the engine's and will move; the page names what is read, not the points.
-            A real table on a wide screen; on a phone each row stacks into its criterion, its
-            question and its example, and the header stays for assistive technology only. */}
-        <table className="w-full border-collapse text-left">
-          <caption className="sr-only">Les cinq critères de la grille</caption>
-          <thead className="max-md:sr-only">
-            <tr className="text-base text-muted">
-              <th scope="col" className="w-[32%] pb-4 font-medium">
-                Critère
-              </th>
-              <th scope="col" className="w-[28%] pb-4 font-medium">
-                Ce qui est vérifié
-              </th>
-              <th scope="col" className="pb-4 font-medium">
-                Exemple de passage relevé
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {DOMAINS.map(([label, , question, { before, mark, after, note }]) => (
-              <tr
-                key={label}
-                className="grid gap-2 border-t border-lineSoft py-6 max-md:pl-8.5 md:table-row md:py-0"
-              >
-                <th scope="row" className="font-medium md:py-6 md:pr-8 md:align-top">
-                  <span className="flex gap-3 text-lg leading-snug max-md:-ml-8.5">
-                    <SquiggleMark />
-                    {label}
-                  </span>
-                </th>
-                <td className="text-base leading-snug text-foreground md:py-6 md:pr-8 md:align-top md:text-lg">
-                  {question}
-                </td>
-                <td className="max-md:mt-2 md:py-6 md:align-top">
-                  <p className="m-0 font-serif text-lg leading-snug text-foreground italic">
-                    «&nbsp;{before}
-                    <span className="underline decoration-accent decoration-wavy decoration-[1.5px] underline-offset-[5px] [text-decoration-skip-ink:none]">
-                      {mark}
-                    </span>
-                    {after}&nbsp;»
-                  </p>
-                  <p className="mt-1 mb-0 text-base text-muted">{note}</p>
-                </td>
-              </tr>
+      {/* The grid, shown: one drawing, one word and the reason Squiggle gives, a criterion. */}
+      {/* The campaign's way in lands on the section's promise, its title and "chaque camp". */}
+      <span id="presidentielle" aria-hidden="true" />
+      <Section id="grille" title="La même grille pour tous" intro="Cinq critères, pour chaque article et chaque camp.">
+        <ul className="m-0 grid list-none gap-6 p-0 sm:grid-cols-2 lg:grid-cols-5 lg:gap-8">
+          {DOMAINS.map(([label, , , { note }]) => {
+            const [kind, word] = CRITERIA[label];
+            return (
+              <li key={label} className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-4 lg:grid-cols-1 lg:items-start lg:gap-y-3">
+                <CriterionFigure kind={kind} />
+                <div className="grid gap-1">
+                  <h3 className="m-0 font-display text-xl font-semibold">
+                    {word}
+                    <span className="sr-only"> : {label}</span>
+                  </h3>
+                  <p className="m-0 text-lg leading-snug text-foreground">{note}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-14">
+          <h3 className={H3}>Un fait n’est jamais déclaré «&nbsp;faux&nbsp;»</h3>
+          <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+            {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (
+              <div key={state} className="grid content-start justify-items-start gap-2">
+                <dt>
+                  <span className={`inline-block rounded-md border px-3 py-1 text-sm font-medium ${chip}`}>{label}</span>
+                </dt>
+                <dd className="m-0 text-base text-foreground">{hint}</dd>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </dl>
+        </div>
         <p className="mt-8 mb-0">
           <Link to="/glossaire" className={QUIET_LINK}>
-            Glossaire de l’esprit critique : sophismes, biais et procédés, expliqués simplement
-          </Link>
-        </p>
-
-        <div className="mt-16 grid gap-14 md:mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-20">
-          <div>
-            <h3 className={H3}>Un fait n’est jamais déclaré «&nbsp;faux&nbsp;»</h3>
-            <p className={`mt-2 mb-0 text-base text-muted ${MEASURE}`}>
-              Quand l’article avance un fait, Squiggle dit ce que les sources permettent d’en dire, en quatre états.
-            </p>
-            <dl className="mt-6 grid gap-x-10 gap-y-6 sm:grid-cols-2">
-              {VERIFICATION_STATES.map(({ state, label, hint, chip }) => (
-                <div key={state} className="grid content-start justify-items-start gap-2">
-                  <dt>
-                    <span className={`inline-block rounded-md border px-3 py-1 text-sm font-medium ${chip}`}>
-                      {label}
-                    </span>
-                  </dt>
-                  <dd className="m-0 text-base text-muted">{hint}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-          <div>
-            <h3 className={H3}>Trois engagements</h3>
-            <ul className="mt-6 mb-0 grid list-none gap-4 p-0">
-              {COMMITMENTS.map((text) => (
-                <li key={text} className="flex gap-3 text-lg leading-snug">
-                  <SquiggleMark />
-                  {text}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-8 mb-0">
-              <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
-                Lire la méthode sur GitHub
-                <ExternalMark />
-              </a>
-            </p>
-          </div>
-        </div>
-      </Section>
-
-      <Section
-        id="partout"
-        title="Où que vous lisiez"
-        intro="Un seul compte, partout. Dans le navigateur, aussi gratuit avec votre propre clé d’IA."
-      >
-        {/* Three columns of the same shape: the action sits on one line across them, whatever the text above. */}
-        <ul className="m-0 grid list-none gap-12 p-0 md:grid-cols-3 md:gap-10">
-          <Way device="site" title="Sur le site" text="Collez le texte. Rien à installer.">
-            <Link to="/analyser" className={WAY_ACTION}>
-              Analyser un article
-            </Link>
-          </Way>
-          <Way
-            device="appli"
-            title="Sur votre téléphone"
-            text="Installez l’appli. Sur Android, partagez-lui un article."
-          >
-            {install?.kind === 'prompt' ? (
-              <button type="button" onClick={install.prompt} className={WAY_ACTION}>
-                Installer l’appli
-              </button>
-            ) : install?.kind === 'ios' ? (
-              <p className="m-0 text-base text-muted">Dans Safari : Partager, puis « Sur l’écran d’accueil ».</p>
-            ) : (
-              <p className="m-0 text-base text-muted">Ouvrez squiggle.fr sur votre téléphone pour l’installer.</p>
-            )}
-          </Way>
-          <Way
-            device="navigateur"
-            title="Dans votre navigateur"
-            text={
-              <>
-                Un bouton dans votre navigateur, sur ordinateur : un clic sur l’article ouvert. Avec votre compte, ou{' '}
-                <a href="#tarifs" className="font-semibold text-foreground underline decoration-accent underline-offset-4 hover:text-accentInk">
-                  gratuit avec votre propre clé d’IA
-                </a>
-                .
-              </>
-            }
-          >
-            {/* Only the store this browser installs from; none where no store exists (Safari, phones). */}
-            {storeUrl ? (
-              <a href={storeUrl} onClick={() => count(installClick(storeUrl))} className={WAY_ACTION}>
-                {installLabelFor(storeUrl, userAgent)}
-              </a>
-            ) : (
-              <p className="m-0 text-base text-muted">
-                {mobile
-                  ? 'Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.'
-                  : 'Disponible pour Chrome, Edge, Opera, Brave et Firefox.'}
-              </p>
-            )}
-          </Way>
-        </ul>
-      </Section>
-
-      <Section
-        id="donnees"
-        title="Vos données"
-        intro="Aucune publicité, aucun traceur. Ce que vous lisez ne sert qu’à votre analyse."
-      >
-        <Trajet
-          label="Le trajet d’un article"
-          nodes={[
-            { name: 'Votre article', note: 'la page ou le texte collé' },
-            { name: 'L’analyse', note: 'une à deux minutes' },
-            { name: 'Votre rapport', note: 'passages surlignés et raisons' },
-          ]}
-          links={['sans votre identité', 'les constats']}
-        />
-        <p className="mt-8 mb-0">
-          <Link to="/transparence" className={QUIET_LINK}>
-            Voir le trajet des données
+            Glossaire de l’esprit critique
           </Link>
         </p>
       </Section>
 
-      {/* The two ways side by side, row for row. The account leads with the one sign-up action;
-          the reader's own key keeps its "0 €" and who bills what said together in its heading. */}
-      <Section
-        id="tarifs"
-        title="Tarifs"
-        intro="Le compte vous ouvre le site et l’appli : rien à installer, aucune clé à créer. Avec votre propre clé d’IA, l’extension est gratuite, et votre fournisseur vous facture chaque analyse."
-      >
-        <table className="w-full border-separate border-spacing-0 text-left max-md:block">
-          <caption className="sr-only">Le compte Squiggle et votre propre clé, comparés</caption>
-          <thead className="max-md:block">
-            <tr className="max-md:grid max-md:grid-cols-2 max-md:gap-3">
-              <td className="max-md:hidden" />
-              <th
-                scope="col"
-                className="rounded-t-card border-x border-t border-accent/50 bg-surface p-4 align-top font-normal md:w-[39%] md:px-8 md:pt-8 md:pb-6 max-md:rounded-card max-md:border"
-              >
-                <span className={`block ${H3}`}>Avec un compte Squiggle</span>
-                <span className="mt-4 flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-display text-4xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
-                    {PRICE_MONTHLY}
-                  </span>
-                  <span className="text-base text-muted md:text-lg">par mois</span>
-                </span>
-                <span className="mt-4 block text-base text-muted">Sans engagement, résiliable à tout moment.</span>
-              </th>
-              <th
-                id="propre-cle"
-                scope="col"
-                className="p-4 align-top font-normal md:w-[39%] md:px-8 md:pt-8 md:pb-6 max-md:rounded-card max-md:border max-md:border-border"
-              >
-                <span className={`block ${H3}`}>Gratuit avec votre propre clé</span>
-                <span className="mt-4 flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-display text-4xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
-                    0 €
-                  </span>
-                  <span className="text-base text-muted md:text-lg">chez Squiggle</span>
-                </span>
-                <span className="mt-4 block text-base text-muted">
-                  Squiggle ne vous facture rien : la partie IA tourne sur votre propre compte chez un fournisseur d’IA,
-                  qui vous facture directement.
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="max-md:block">
-            {COMPARISON.map(([label, account, ownKey]) => (
-              <tr key={label} className="max-md:mt-3 max-md:grid max-md:gap-2">
-                <th scope="row" className={LABEL_CELL}>
-                  {label}
-                </th>
-                <td className={ACCOUNT_CELL}>
-                  <span aria-hidden="true" className={TAG}>
-                    Avec un compte
-                  </span>
-                  {account}
-                </td>
-                <td className={OWN_KEY_CELL}>
-                  <span aria-hidden="true" className={TAG}>
-                    Avec votre propre clé
-                  </span>
-                  {ownKey}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="max-md:block">
-            <tr className="max-md:mt-6 max-md:grid max-md:gap-6">
-              <td className="max-md:hidden" />
-              <td className="rounded-b-card border-x border-b border-accent/50 bg-surface px-4 pt-6 pb-6 align-top md:border-t md:border-t-lineSoft md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:p-5">
-                <Link to="/connexion" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
-                  Essayer gratuitement
+      {/* The three ways in, the reader's own device first, each drawn as it is on that device. */}
+      <Section id="partout" title="Où que vous lisiez" intro="Un seul compte, partout. Aucune extension obligatoire.">
+        <ul className="m-0 grid list-none gap-10 p-0 md:grid-cols-3">
+          <li className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 md:flex md:flex-col md:gap-4 [html[data-device=android]_&]:order-2 [html[data-device=ios]_&]:order-2">
+            <div className="md:flex md:h-48 md:items-end md:justify-center">
+              <div className="w-full md:max-w-56">
+                <DeviceFigure device="site" />
+              </div>
+            </div>
+            <div className="grid content-start gap-3 md:flex md:flex-1 md:flex-col">
+              <h3 className={H3}>Sur le site</h3>
+              <p className={BODY}>Collez le texte. Rien à installer.</p>
+              <div className="md:mt-auto md:pt-2">
+                <Link to="/analyser" className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+                  Analyser un article
                 </Link>
-                <p className="mt-3 mb-0 text-base">{FREE_ANALYSES} analyses offertes, sans carte bancaire.</p>
-              </td>
-              <td className="border-lineSoft px-4 pt-6 pb-6 align-top md:border-t md:px-8 md:pb-8 max-md:rounded-card max-md:border max-md:border-border max-md:p-5">
-                {storeUrl ? (
-                  <a
-                    href={storeUrl}
-                    onClick={() => count(installClick(storeUrl))}
-                    className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}
-                  >
-                    {installLabelFor(storeUrl, userAgent)}
-                  </a>
-                ) : (
-                  <p className="m-0 text-base text-muted">Sur ordinateur, avec Chrome, Edge, Opera, Brave ou Firefox.</p>
-                )}
-                <p className="mt-3 mb-0 text-base">Vous ne payez que votre fournisseur d’IA.</p>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-        <p className={`mt-8 mb-0 text-base leading-relaxed text-muted ${MEASURE}`}>
-          {API_KEY_MEANS} La clé reste dans votre navigateur, rien ne passe par nos serveurs.
-        </p>
-        <ul className="mt-4 grid list-none gap-2 p-0 text-base text-muted sm:flex sm:flex-wrap sm:items-baseline sm:gap-x-8">
-          <li>
-            Enseignants : gratuit avec une adresse académique.{' '}
-            <Link to="/enseignants" className={QUIET_LINK}>
-              L’offre enseignants
-            </Link>
+              </div>
+            </div>
+          </li>
+          {/* On a phone this card is the reader's own way in: first, full width, its drawing large enough to read. */}
+          <li className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 md:flex md:flex-col md:gap-4 [html[data-device=android]_&]:order-1 [html[data-device=android]_&]:max-md:grid-cols-1 [html[data-device=android]_&]:max-md:gap-y-4 [html[data-device=ios]_&]:order-1 [html[data-device=ios]_&]:max-md:grid-cols-1 [html[data-device=ios]_&]:max-md:gap-y-4">
+            <div className="md:flex md:h-48 md:items-end md:justify-center">
+              <div className={`w-full max-md:max-w-64 md:max-w-56 ${ON_ANDROID}`}>
+                <DeviceFigure device="partage" />
+              </div>
+              <div className={`w-full max-md:max-w-64 md:max-w-56 ${ON_IOS}`}>
+                <DeviceFigure device="favori" />
+              </div>
+              <div className={`grid w-full grid-cols-2 gap-2 md:max-w-80 ${ON_COMPUTER}`}>
+                <DeviceFigure device="partage" />
+                <DeviceFigure device="favori" />
+              </div>
+            </div>
+            <div className="grid content-start gap-3 md:flex md:flex-1 md:flex-col">
+              <h3 className={H3}>Sur votre téléphone</h3>
+              <div className={ON_ANDROID}>
+                <p className={BODY}>Installez l’appli : elle apparaît dans le menu Partager de votre journal.</p>
+                <div className="mt-3">
+                  <AndroidInstall />
+                </div>
+              </div>
+              <div className={ON_IOS}>
+                <p className={BODY}>Le favori Squiggle lit l’article ouvert dans Safari.</p>
+                <div className="mt-3">
+                  <Link to="/favori" className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+                    Le favori Squiggle
+                  </Link>
+                </div>
+              </div>
+              <div className={ON_COMPUTER}>
+                <p className={BODY}>Sur Android, l’appli et son menu Partager. Sur iPhone, le favori dans Safari.</p>
+                <p className="mt-3 mb-0">
+                  <Link to="/favori" className={QUIET_LINK}>
+                    Le guide pour votre téléphone
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </li>
+          <li className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 md:flex md:flex-col md:gap-4 [html[data-device=android]_&]:order-3 [html[data-device=ios]_&]:order-3">
+            <div className="md:flex md:h-48 md:items-end md:justify-center">
+              <div className="w-full md:max-w-56">
+                <DeviceFigure device="navigateur" />
+              </div>
+            </div>
+            <div className="grid content-start gap-3 md:flex md:flex-1 md:flex-col">
+              <h3 className={H3}>Dans votre navigateur</h3>
+              {/* The Firefox for Android build is not published yet: the page names the computer only. */}
+              <p className={BODY}>Un bouton sur ordinateur, dans Chrome, Edge, Opera, Brave ou Firefox.</p>
+              <div className={`md:mt-auto md:pt-2 ${ON_COMPUTER}`}>
+                <StoreAction className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`} fallback={null} />
+              </div>
+            </div>
           </li>
         </ul>
       </Section>
 
+      {/* The subscription first and what it pays for; the free way for those who have a key; every row one tap away. */}
+      <Section id="tarifs" title="Tarifs" intro={`${PRICE_MONTHLY} par mois, sans engagement.`}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className={`${CARD} grid content-start gap-6 border-accent/50 md:col-span-2`}>
+            <div className="grid gap-3">
+              <h3 className={H3}>Avec un compte Squiggle</h3>
+              <p className="m-0 flex flex-wrap items-baseline gap-x-2">
+                <span className="font-display text-5xl leading-none font-semibold tracking-[-0.03em] md:text-6xl">
+                  {PRICE_MONTHLY}
+                </span>
+                <span className="text-lg text-muted">par mois</span>
+              </p>
+            </div>
+            <ul className={PLAIN_LIST}>
+              <li>Un essai sans compte, pour voir</li>
+              <li>{FREE_ANALYSES} analyses offertes avec un compte, sans carte bancaire</li>
+              <li>{MONTHLY_ANALYSES} analyses par mois, rien à installer</li>
+            </ul>
+            <div>
+              <h4 className="m-0 text-lg font-semibold">Ce que paie votre abonnement</h4>
+              <ul className="mt-3 mb-0 grid list-none gap-3 p-0">
+                {PAID_FOR.map(([step, text]) => (
+                  <li key={text} className="flex items-center gap-4 text-lg leading-snug">
+                    <span className="w-16 shrink-0" aria-hidden="true">
+                      {step ? <StepFigure step={step} /> : null}
+                    </span>
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Link to="/analyser" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+              Essayer gratuitement
+            </Link>
+          </div>
+          <div className={`${CARD} grid content-start gap-4 ${ON_COMPUTER}`}>
+            <h3 className={H3}>Vous avez déjà une clé d’IA ?</h3>
+            <p className={BODY}>
+              L’extension est gratuite chez Squiggle : votre fournisseur d’IA facture chaque analyse, {OWN_KEY_TOP_MODEL_MONTHLY}{' '}
+              pour {MONTHLY_ANALYSES} analyses avec un modèle haut de gamme. La clé reste dans votre navigateur.
+            </p>
+            <StoreAction className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`} fallback={null} />
+          </div>
+        </div>
+        <p className={`mt-6 ${BODY} ${MEASURE} ${ON_PHONE}`}>
+          Sur ordinateur, l’extension marche aussi avec votre propre clé d’IA : votre fournisseur facture chaque analyse.
+        </p>
+
+        <details className="group mt-8">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 font-display text-xl font-medium [&::-webkit-details-marker]:hidden">
+            <span
+              aria-hidden="true"
+              className="text-2xl leading-none text-accentInk transition-transform duration-160 ease-out group-open:rotate-45 motion-reduce:transition-none"
+            >
+              +
+            </span>
+            Comparer ligne à ligne
+          </summary>
+          <div className="mt-6">
+            <Comparison />
+          </div>
+          <p className={`mt-8 ${BODY} ${MEASURE}`}>
+            {API_KEY_MEANS} La clé reste dans votre navigateur, rien ne passe par nos serveurs.
+          </p>
+        </details>
+      </Section>
+
+      {/* Teachers: the class at work, and the offer in a few lines. */}
+      <Section id="enseignants" title="Gratuit pour la classe">
+        <div className="grid items-start gap-10 md:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] md:gap-16">
+          <div className="max-w-72 md:max-w-none">
+            <ClassFigure />
+          </div>
+          <div>
+            <Marks
+              label="L’offre enseignants"
+              items={[
+                'Les élèves n’utilisent pas d’IA : vous montrez, ils lisent.',
+                'L’abonnement complet, avec une adresse académique.',
+                'Le mode classe : l’article au tableau, analysé ensemble.',
+                'Une fiche d’activité et une grille de lecture à imprimer.',
+              ]}
+            />
+            <div className="mt-8">
+              <Link to="/enseignants" className={`${SECONDARY_BUTTON} w-fit max-sm:w-full`}>
+                L’offre enseignants
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* Trust: what happens to the article, as a path, and the rules the reading keeps. */}
+      <Section id="donnees" title="Vos données" intro="Ce que vous lisez ne sert qu’à votre analyse.">
+        <Trajet
+          bare
+          label="Le trajet d’un article"
+          nodes={[
+            { name: 'Votre article', note: 'la page ou le texte collé' },
+            { name: 'L’analyse', note: 'une à deux minutes' },
+            { name: 'Votre rapport', note: 'puis l’article est oublié' },
+          ]}
+          links={['sans votre identité', 'les constats']}
+        />
+        <ul className={`mt-10 ${PLAIN_LIST}`}>
+          <li>Aucune publicité, aucun traceur.</li>
+          <li>Les mêmes critères pour chaque article.</li>
+          <li>Le texte est jugé, jamais son auteur.</li>
+          <li>La méthode et le code sont publics.</li>
+        </ul>
+        <p className="mt-6 mb-0 flex flex-wrap gap-x-8 gap-y-2">
+          <Link to="/transparence" className={QUIET_LINK}>
+            Voir le trajet des données
+          </Link>
+          <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={QUIET_LINK}>
+            Lire la méthode et le code sur GitHub
+            <ExternalMark />
+          </a>
+        </p>
+      </Section>
+
       <Section id="faq" title="Questions fréquentes">
         <div className={`grid ${MEASURE}`}>
-          {FAQ.map(([question, answer]) => (
+          {QUESTIONS.map(([question, answer]) => (
             <details key={question} className="group border-t border-lineSoft last:border-b">
               <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-4 font-display text-xl font-medium [&::-webkit-details-marker]:hidden">
                 {question}
@@ -584,7 +806,7 @@ export function Accueil() {
                   +
                 </span>
               </summary>
-              <p className="m-0 pb-5 text-base leading-relaxed text-muted">{answer}</p>
+              <p className={`pb-5 ${BODY}`}>{answer}</p>
             </details>
           ))}
         </div>
