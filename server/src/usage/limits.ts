@@ -33,13 +33,26 @@ export const USAGE_LOG_RETENTION_MS = 365 * DAY_MS;
 export const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 /**
- * The scopes of the analysis without an account count per UTC day, under
- * this prefix. Their key is the SHA-256 of the visitor's IP, never the IP,
- * and the sweep drops a row once its day has closed. The hourly sweep runs on
- * the hour (`wrangler.jsonc`), so the one at midnight UTC takes it: a row is
- * kept 24 hours at most, as `PRIVACY.md` says.
+ * The site's allowance for every visitor together counts per UTC day, under
+ * this prefix. It names no one (its key is `all`), and the sweep drops a
+ * row once its day has closed.
  */
 export const ANON_RATE_SCOPE_PREFIX = 'anon:';
+
+/**
+ * How long the fingerprint of a visitor's address is kept after their one
+ * analysis without an account: the SHA-256 of the IP, never the IP, and the
+ * time of the analysis, nothing else. A refused attempt does not extend it.
+ *
+ * The rule is one analysis in all, and only a fingerprint kept forever would
+ * hold it to the letter. Ninety days is the shortest that still holds it in
+ * practice: at thirty, a monthly reader would have a free analysis at every
+ * visit and never need an account, which is the hole this closes. Past a few
+ * months an address is a poor witness anyway (a box restarts, a phone changes
+ * network, a carrier hands the address to someone else), so keeping it longer
+ * would mostly refuse someone who never had one. `PRIVACY.md` quotes it.
+ */
+export const VISITOR_USE_RETENTION_MS = 90 * DAY_MS;
 
 /**
  * The cron trigger (`wrangler.jsonc`) that runs the daily report sweep; any

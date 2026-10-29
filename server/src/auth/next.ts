@@ -18,6 +18,12 @@ export const DEFAULT_NEXT = '/compte';
  */
 export const AFTER_ANON_NEXT = '/analyser?apres=essai';
 
+/**
+ * The same, from a report whose findings past the first were kept back: an
+ * account created on it is counted as one opened from such a report too.
+ */
+export const AFTER_WITHHELD_NEXT = '/analyser?apres=flou';
+
 /** A bridge URL carries a JWK, so it is long; this is a bound, not a target. */
 const MAX_NEXT_LENGTH = 2048;
 /** Never resolved against, only compared with: a parsed internal path keeps this origin. */
@@ -41,7 +47,10 @@ export function sanitizeNext(raw: unknown): string | null {
 
   if (url.pathname === '/compte') return DEFAULT_NEXT;
   // Nothing of the pasted text travels: it waits in the reader's own browser.
-  if (url.pathname === '/analyser') return url.searchParams.get('apres') === 'essai' ? AFTER_ANON_NEXT : '/analyser';
+  if (url.pathname === '/analyser') {
+    const after = url.searchParams.get('apres');
+    return after === 'essai' ? AFTER_ANON_NEXT : after === 'flou' ? AFTER_WITHHELD_NEXT : '/analyser';
+  }
   if (url.pathname === '/pont') {
     const ext = url.searchParams.get('ext')?.trim();
     const pub = url.searchParams.get('pub')?.trim();

@@ -60,9 +60,9 @@ export const RETENTION = [
     '2 heures au plus',
   ],
   [
-    'Analyse sans compte : l’empreinte SHA-256 de votre adresse IP et le nombre d’analyses du jour, pour s’en tenir à une par jour',
+    'Analyse sans compte : l’empreinte SHA-256 de votre adresse IP et l’heure de l’analyse, pour s’en tenir à une seule',
     'Base de données',
-    '24 heures au plus, effacée à minuit (UTC)',
+    '90 jours après l’analyse',
   ],
   ['Identifiants Stripe (client, abonnement)', 'Base de données', 'Tant que le compte existe'],
   [

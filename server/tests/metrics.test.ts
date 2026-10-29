@@ -313,7 +313,7 @@ describe('the counters the server bumps itself', () => {
     expect((await call(env, marie, '/v1/analyze/audit', { url: URL_, title: 'T', blocks: page, citedSources: [] })).status).toBe(413);
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
-    expect(m.funnel.signin).toEqual({ link_sent: 1, google: 0, completed: 1, after_anon: 0 });
+    expect(m.funnel.signin).toEqual({ link_sent: 1, google: 0, completed: 1, after_anon: 0, after_withheld: 0 });
     expect(m.funnel.runsStarted).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0, video: 0 });
     expect(m.funnel.finalized).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0 });
     expect(m.funnel.refused).toMatchObject({ trial_exhausted: 1, article_too_long: 1, quota_exhausted: 0 });

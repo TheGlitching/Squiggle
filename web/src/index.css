@@ -673,9 +673,42 @@
     animation: caret 1.1s steps(1) infinite;
   }
 
-  /* The step of the analysis that is running now, in the progress diagram. */
-  .step-live {
-    animation: step-live 1.6s ease-in-out infinite;
+  /* The analysis running (`RunScene`): each stage loops what it does, and
+     only a browser that allows motion sees it move. Transforms and opacity
+     only, so the loop never lays the page out again. */
+  @media (prefers-reduced-motion: no-preference) {
+    .run-scene {
+      animation: hero-fade 320ms var(--ease-out);
+    }
+
+    /* Reading: a line passes down Squiggle's sheet, over the grid. */
+    .run-scan {
+      animation: run-scan 2.4s ease-in-out infinite;
+    }
+
+    /* Research: the question travels to each page, which rises to answer. */
+    .run-flow {
+      animation: run-flow 900ms linear infinite;
+    }
+
+    .run-card {
+      animation: run-card 2.4s ease-in-out calc(var(--i, 0) * 1.2s) infinite;
+    }
+
+    /* Verification: each page is checked, each mark set down, in turn. */
+    .run-tick {
+      stroke-dasharray: 1;
+      animation: run-draw 2.4s var(--ease-out) calc(var(--i, 0) * 600ms) infinite;
+    }
+
+    .run-mark {
+      animation: run-mark 2.4s var(--ease-out) calc(var(--i, 0) * 400ms) infinite;
+    }
+
+    /* The report: the ring is drawn round to its note. */
+    .run-ring {
+      animation: run-ring 2.4s var(--ease-out-expo) infinite;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -690,8 +723,7 @@
     }
 
     .hero-line,
-    .hero-card,
-    .step-live {
+    .hero-card {
       animation: none;
     }
 
@@ -779,9 +811,73 @@
   }
 }
 
-@keyframes step-live {
-  50% {
-    opacity: 0.45;
+@keyframes run-scan {
+  from {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12%,
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(138px);
+    opacity: 0;
+  }
+}
+
+@keyframes run-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+@keyframes run-card {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes run-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  35%,
+  80% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes run-mark {
+  from {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes run-ring {
+  from {
+    stroke-dashoffset: 61;
+  }
+  55%,
+  to {
+    stroke-dashoffset: 0;
   }
 }
 

@@ -67,7 +67,7 @@ export interface InstallClientConfig {
  * The web app: it holds no key, so every call rides the reader's session
  * cookie on `/web/analyze/*`, where the server requires an allowed Origin
  * instead of a signature. A visitor without an account (`session: 'none'`)
- * walks `/web/anon/*` with no cookie at all, on the site's one analysis a day.
+ * walks `/web/anon/*` with no cookie at all, on the site's one analysis without one.
  * The stages, their order and their payloads are the extension's, so the
  * entry points cannot drift into separate protocols.
  */
