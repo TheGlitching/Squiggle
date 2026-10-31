@@ -216,14 +216,26 @@ function initialArticle(): {
  */
 export function Analyser() {
   const [visit, setVisit] = useState(0);
+  // The fragment a new page is about to read: a second event for it, before
+  // that page has opened and wiped it, would start over once more and find the
+  // address bare, losing the share.
+  const opening = useRef<string | null>(null);
   useEffect(() => {
     const reread = () => {
       const params = sharedParams(window.location);
-      if (carriesPage(params) || articleFromShare(params)) setVisit((n) => n + 1);
+      if (window.location.hash === opening.current) return;
+      if (carriesPage(params) || articleFromShare(params)) {
+        opening.current = window.location.hash;
+        setVisit((n) => n + 1);
+      }
     };
     window.addEventListener('hashchange', reread);
     return () => window.removeEventListener('hashchange', reread);
   }, []);
+  // The new page has read its fragment: the same share sent again is a new one.
+  useEffect(() => {
+    opening.current = null;
+  }, [visit]);
   return <AnalyserPage key={visit} />;
 }
 

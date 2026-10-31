@@ -390,9 +390,9 @@ describe('Analyser, a whole text from the iPhone shortcut or the Android app', (
     expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_app_text' }]);
   });
 
-  it('keeps a message too short for an article in the text, and says why it is not analysed', async () => {
+  it('keeps a text too short to claim anything in the field, and says why it is not analysed', async () => {
     const seen = serve(account());
-    const message = 'URGENT ⚠️ la CAF supprime les APL des retraités propriétaires. Transférez à tous vos contacts !';
+    const message = 'Vu, merci !';
     at(`/analyser#${new URLSearchParams({ text: message, via: 'appli' })}`);
     render(<Analyser />);
     expect(screen.getByRole('status')).toHaveTextContent(/Ce message est trop court pour être analysé/);
@@ -426,7 +426,7 @@ describe('Analyser, from the bookmark', () => {
     expect(window.location.hash).toBe('');
     const audit = seen.find((s) => s.url === '/web/analyze/audit');
     expect(audit?.body).toMatchObject({ title: '', blocks: [{ text: rumour }] });
-    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_android_share' }]);
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_app_text' }]);
   });
 
   it('shows the analysis as started from the first frame, with nothing to tap', async () => {
