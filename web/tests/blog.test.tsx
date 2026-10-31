@@ -10,7 +10,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { App } from '../src/App';
-import { ALL_ARTICLES, BLOG_OPEN, PUBLISHED, blogCounter, blogPath, type Article, type Texte } from '../src/blog';
+import { ALL_ARTICLES, BLOG_OPEN, PUBLISHED, ancre, blogCounter, blogPath, type Article, type Bloc, type Texte } from '../src/blog';
 import { notion, typo } from '../src/glossaire';
 import { ArticlePage } from '../src/pages/Blog';
 import { ORIGIN, PUBLIC_PAGES, blogPages, feed, headFor, sitemap } from '../src/seo';
@@ -20,9 +20,19 @@ afterEach(() => {
   window.history.pushState({}, '', '/');
 });
 
+const textes = (bloc: Bloc): readonly Texte[] => {
+  if ('paragraphe' in bloc) return [bloc.paragraphe];
+  if ('liste' in bloc) return bloc.liste;
+  if ('etapes' in bloc) return bloc.etapes;
+  if ('encadre' in bloc) return bloc.encadre.points;
+  if ('tableau' in bloc) return bloc.tableau.lignes.flat();
+  if ('questions' in bloc) return bloc.questions.map((item) => item.reponse);
+  return [];
+};
+
 const links = (item: Article) =>
   item.corps
-    .flatMap((bloc): Texte[] => ('paragraphe' in bloc ? [bloc.paragraphe] : 'liste' in bloc ? [...bloc.liste] : []))
+    .flatMap(textes)
     .flatMap((texte) => (typeof texte === 'string' ? [] : texte.filter((part) => typeof part !== 'string')));
 
 describe('the articles', () => {
@@ -49,6 +59,42 @@ describe('the articles', () => {
 
   it('gives every published article its counter, which the server accepts', () => {
     for (const item of PUBLISHED) expect(blogCounter(item.slug), item.slug).not.toBeNull();
+  });
+});
+
+describe('the formatting of an article', () => {
+  const item: Article = {
+    ...ALL_ARTICLES[0],
+    corps: [
+      { encadre: { titre: 'L’essentiel', points: ['Un point.', 'Un autre.'] } },
+      { sommaire: true },
+      { intertitre: 'La méthode' },
+      { etapes: ['Lire.', 'Comparer.'] },
+      { sousTitre: 'Un cas' },
+      { tableau: { legende: 'Les sauts', colonnes: ['Le saut', 'La notion'], lignes: [['Plus de monde', 'Généralisation']] } },
+      { intertitre: 'Questions fréquentes' },
+      { questions: [{ question: 'Est-ce faux ?', reponse: 'Pas forcément.' }] },
+    ],
+  };
+
+  it('renders a box, a table of contents to every section, numbered steps, a table and plain questions', () => {
+    render(<ArticlePage item={item} />);
+    expect(screen.getByRole('complementary', { name: 'L’essentiel' })).toHaveTextContent('Un autre.');
+    const sommaire = screen.getByRole('navigation', { name: 'Sommaire' });
+    for (const titre of ['La méthode', 'Questions fréquentes']) {
+      expect(screen.getByRole('link', { name: titre })).toHaveAttribute('href', `#${ancre(titre)}`);
+      expect(screen.getByRole('heading', { level: 2, name: titre })).toHaveAttribute('id', ancre(titre));
+    }
+    expect(sommaire.querySelectorAll('a')).toHaveLength(2);
+    expect(screen.getByText('Comparer.').closest('ol')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 3, name: 'Un cas' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Les sauts' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Plus de monde' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: /Est-ce faux/ })).toBeInTheDocument();
+  });
+
+  it('anchors a heading without accents or punctuation', () => {
+    expect(ancre('Trois façons d’aller trop loin')).toBe('trois-facons-d-aller-trop-loin');
   });
 });
 
