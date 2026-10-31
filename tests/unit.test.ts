@@ -72,6 +72,29 @@ describe('Article container', () => {
     const blocks = new ArticleExtractor(doc).extract().blocks.map((b) => b.cleanText);
     expect(blocks).toHaveLength(8);
   });
+
+  // A WordPress page whose body is a plain div in <main>, with an embedded map, and whose
+  // only <article> elements are the related-article cards below the main column.
+  const cards = (teaser: string) =>
+    `<section>${Array.from(
+      { length: 4 },
+      (_, i) => `<article class="item"><a href="/autre-${i}"><h3>Autre article ${i}</h3></a>${teaser}</article>`,
+    ).join('')}</section>`;
+  const page = (wrapper: string, teaser: string) =>
+    `<body>${wrapper.replace(
+      '%',
+      `<div class="entry-content">${post(1)}<iframe src="about:blank" title="Carte interactive"></iframe>${Array.from({ length: 7 }, (_, i) => post(i + 2)).join('')}</div>`,
+    )}${cards(teaser)}</body>`;
+
+  it.each([
+    ['link-only cards beside <main>', '<main>%</main>', ''],
+    ['cards with a teaser beside <main>', '<main>%</main>', '<p>Un résumé court.</p>'],
+    ['link-only cards and no <main>', '<div>%</div>', ''],
+  ])('reads the article body, not a related-article card (%s)', (_name, wrapper, teaser) => {
+    const doc = new DOMParser().parseFromString(page(wrapper, teaser), 'text/html');
+    const blocks = new ArticleExtractor(doc).extract().blocks.map((b) => b.cleanText);
+    expect(blocks.filter((b) => b.startsWith('Mise à jour'))).toHaveLength(8);
+  });
 });
 
 describe('Range Tracking & Anchoring Unit Tests', () => {
