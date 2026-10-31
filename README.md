@@ -220,4 +220,15 @@ Releases are documented in [docs/RELEASING.md](docs/RELEASING.md). Deploying the
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE).
+Copyright (C) 2026 TheGlitching.
+
+Squiggle is free software, licensed under the GNU Affero General Public License,
+version 3 only (`AGPL-3.0-only`); the full text is in [LICENSE](LICENSE). In short:
+you may use, study, modify and redistribute it, and anyone who runs a modified version
+as a network service must offer its users the corresponding source code.
+
+Squiggle was first published under the MIT licence. As its sole author, I now offer
+the whole codebase, earlier versions included, under `AGPL-3.0-only`. A licence once
+granted cannot be withdrawn, so a copy of an earlier version that someone already
+obtained under MIT keeps the MIT terms for that version. Everything published from
+this change onward is available under `AGPL-3.0-only` only.

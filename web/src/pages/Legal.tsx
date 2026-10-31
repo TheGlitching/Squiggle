@@ -122,7 +122,7 @@ export function MentionsLegales() {
 
       <Article title="Propriété intellectuelle">
         <p>
-          Le code source de Squiggle est publié sous licence MIT. Le nom, le logo et les textes de ce site restent la
+          Le code source de Squiggle est publié sous licence GNU AGPL v3 (AGPL-3.0-only). Le nom, le logo et les textes de ce site restent la
           propriété de l’éditeur. Les articles analysés appartiennent à leurs auteurs et éditeurs.
         </p>
       </Article>
