@@ -73,7 +73,7 @@ export function buildReport(input: ReportInput): { subject: string; text: string
   out.push('1. En une phrase', `   ${input.strategy?.note?.une_phrase || 'Pas de note de stratégie cette semaine.'}`, '');
 
   out.push('2. Les chiffres (semaine, et écart avec la moyenne des 4 précédentes)');
-  if (f?.google) out.push(`   Google      impressions ${f.google.impressions} (${signed(f.google.impressionsVs4)}), clics ${f.google.clicks} (${signed(f.google.clicksVs4)}), position moyenne ${f.google.position ?? '-'}`);
+  if (f?.google) out.push(`   Google      impressions ${f.google.impressions} (${signed(f.google.impressionsVs4)}), clics ${f.google.clicks} (${signed(f.google.clicksVs4)}), position moyenne ${f.google.position === null ? '-' : String(f.google.position).replace('.', ',')}`);
   else out.push('   Google      non collecté');
   if (f) {
     out.push(`   Réseaux     visites ?ref= : ${NETWORKS.map((n) => `${n} ${f.networks[n].visits}`).join(', ')}`);

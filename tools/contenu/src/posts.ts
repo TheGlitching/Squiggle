@@ -220,7 +220,7 @@ async function review(ctx: Ctx, network: Network, text: string, source: Source, 
       'Réponds {"conforme": true} ou {"conforme": false, "raison": "..."}.',
     ].join('\n\n'),
     images: images.slice(0, 2).map((i) => i.url),
-    maxTokens: 1500,
+    maxTokens: 4000,
   });
   return { conforme: answer.conforme === true, raison: String(answer.raison ?? '') };
 }
