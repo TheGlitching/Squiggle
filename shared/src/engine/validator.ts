@@ -62,38 +62,60 @@ export function repairJsonString(jsonStr: string): string {
   return res;
 }
 
+// Characters a model retypes when it copies a quote: the typographic
+// apostrophe becomes a straight one, « » become " ", a dash changes width.
+// A quotation mark is optional: the model wraps a partial quote of someone's
+// words in « » the article only closes further on.
+const QUOTE_EQUIVALENTS: Array<[RegExp, string]> = [
+  [/['’‘ʼ`´]/, "['’‘ʼ`´]"],
+  [/["«»“”„]/, '["«»“”„]?\\s*'],
+  [/[-–—]/, '[-–—]']
+];
+
 /**
- * Normalizes and validates findings against article blocks (calculating character offsets)
+ * A pattern that finds `quote` in the article whatever the case, the spacing,
+ * or the apostrophe, quotation mark and dash the model typed in place of the
+ * article's own.
+ */
+export function quotePattern(quote: string): RegExp {
+  let src = '';
+  for (const ch of quote.trim()) {
+    if (/\s/.test(ch)) {
+      src += '\\s*';
+      continue;
+    }
+    const equivalent = QUOTE_EQUIVALENTS.find(([re]) => re.test(ch));
+    src += equivalent ? equivalent[1] : ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(src.replace(/(\\s\*)+/g, '\\s*'), 'iu');
+}
+
+/**
+ * Anchors each finding's quote in the article (calculating character offsets).
+ * The quote is looked for in its own block first, then in the others, and
+ * replaced by the article's exact characters, so the highlight and the quote
+ * shown to the reader are both literal even when the model retyped a character.
  */
 export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]): Finding[] {
-  const blockMap: Record<string, TextBlock> = {};
-  for (const block of blocks) {
-    blockMap[block.id] = block;
-  }
-
   return findings.map((finding) => {
-    let targetBlock = blockMap[finding.blockId];
     const quote = (finding.quote || '').trim();
+    if (quote.length === 0) return finding;
 
-    // If blockId not found, try to locate quote in other blocks
-    if (!targetBlock && quote.length > 5) {
-      for (const b of blocks) {
-        if (b.text.toLowerCase().includes(quote.toLowerCase())) {
-          targetBlock = b;
-          finding.blockId = b.id;
-          break;
-        }
-      }
-    }
-
-    if (targetBlock && quote.length > 0) {
-      const normalizedBlockText = targetBlock.text.toLowerCase();
-      const normalizedQuote = quote.toLowerCase();
-      const idx = normalizedBlockText.indexOf(normalizedQuote);
-
-      if (idx !== -1) {
-        finding.charStart = targetBlock.charStart + idx;
-        finding.charEnd = finding.charStart + quote.length;
+    const re = quotePattern(quote);
+    const ordered = [
+      ...blocks.filter((b) => b.id === finding.blockId),
+      ...blocks.filter((b) => b.id !== finding.blockId)
+    ];
+    for (const b of ordered) {
+      const m = re.exec(b.text);
+      if (m) {
+        // An optional quotation mark leaves its spacing behind at either end.
+        const lead = m[0].length - m[0].trimStart().length;
+        finding.quote = m[0].trim();
+        finding.blockId = b.id;
+        finding.charStart = b.charStart + m.index + lead;
+        finding.charEnd = finding.charStart + finding.quote.length;
+        break;
       }
     }
 

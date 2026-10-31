@@ -48,6 +48,9 @@ describe('a short message', () => {
     // The language of a message typed on a phone is not judged.
     expect(prompt).toMatch(/"orthographe_grammaire"[^\n]*donne toujours 5/);
     expect(prompt).not.toMatch(/fourches|caudines/i);
+    // The article's relevance rules stay with the article.
+    expect(prompt).not.toContain('PERTINENCE DES CONSTATS');
+    expect(buildFourchesCaudinesUserPrompt(input('Une phrase. '.repeat(200)))).toContain('PERTINENCE DES CONSTATS');
   });
 
   it('is named a message in its band, from the length the report records', () => {
