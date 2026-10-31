@@ -47,6 +47,7 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | `OPENROUTER_API_KEY` | the key hosted analyses run on |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
    | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate` and `GET /admin/metrics`; any long random string |
+   | `METRICS_TOKEN` | optional: read-only bearer token accepted by `GET /admin/metrics` only, for a machine that reads the figures; any long random string, distinct from `ADMIN_TOKEN` |
    | `OWNER_EMAILS` | optional: comma-separated addresses whose web session can open `/tableau` (see Launch metrics) |
    | `EXTENSION_CHROME_ORIGIN` | `chrome-extension://<id>`, the id of the Chrome Web Store listing |
    | `EXTENSION_EDGE_ORIGIN` | optional: `chrome-extension://<id>`, the id of the Edge Add-ons listing |
@@ -201,6 +202,10 @@ subscribed through a free code.
 ```bash
 curl -H "authorization: Bearer $ADMIN_TOKEN" "https://<origin>/admin/metrics?weeks=4&costUsd=12.40"
 ```
+
+A machine that only reads the figures, such as a scheduled report, uses `METRICS_TOKEN`
+instead: it opens `GET /admin/metrics` and nothing else, so `ADMIN_TOKEN`, which can
+migrate the database, never has to leave the owner's hands.
 
 `weeks` (1 to 52, default 4) sets the window of the event figures; account figures
 (activation, trial completion, trial to paid) cover every account. `costUsd` is what the
