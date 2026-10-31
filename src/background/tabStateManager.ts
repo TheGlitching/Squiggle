@@ -15,7 +15,7 @@
  * declared, and Firefox has it from 115, which is the manifest's floor.
  */
 
-import { AnalysisResult, Finding, PipelineStatus } from '@squiggle/shared';
+import { AnalysisResult, Finding, PipelineStage, PipelineStatus } from '@squiggle/shared';
 import type { ExtractedArticle } from '../content/types';
 import type { VideoReport } from '../video/youtube';
 
@@ -26,6 +26,8 @@ export interface TabAnalysisState {
   status: PipelineStatus | 'idle';
   progress: number;
   currentStep?: string;
+  /** The engine's stage, so a panel opened mid-run draws the right one. */
+  stage?: PipelineStage;
   article?: ExtractedArticle;
   findings?: Finding[];
   result?: AnalysisResult;

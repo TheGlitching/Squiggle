@@ -89,6 +89,13 @@
     --sev-info: #2563eb;
     --sev-positive: #059669;
 
+    /* The loading scene's two materials, as the site draws them: paper for the
+       article, violet glass for Squiggle's reading (`RunScene`). */
+    --paper: #f2f1ee;
+    --paper-ink: #1c1b1f;
+    --paper-edge: #c9c6bf;
+    --accent-ink: #cdbdfb;
+
     color-scheme: dark;
   }
 
@@ -99,5 +106,147 @@
   body {
     background-color: var(--bg);
     color: var(--fg);
+  }
+}
+
+/*
+  The analysis running (`ui/components/RunScene.tsx`), in the site's isometric
+  drawings: opaque hairline faces, painter's order for occlusion. Each stage
+  loops what it does, and only a browser that allows motion sees it move.
+  Transforms, opacity and stroke offsets only, mirroring `web/src/index.css`.
+*/
+@layer components {
+  .iso-face {
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+  }
+
+  .iso-paper {
+    fill: var(--paper);
+    stroke: var(--paper-edge);
+  }
+
+  .iso-paper-edge {
+    fill: var(--paper-edge);
+    stroke: var(--paper-edge);
+  }
+
+  .iso-solid {
+    fill: #17171a;
+    stroke: #55555d;
+  }
+
+  .iso-solid-side {
+    fill: #0f0f11;
+    stroke: #55555d;
+  }
+
+  .iso-glass {
+    fill: var(--accent);
+    fill-opacity: 0.1;
+    stroke: var(--accent);
+  }
+
+  .iso-line {
+    fill: none;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .run-scene {
+      animation: run-fade 320ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    /* Reading: a line passes down Squiggle's sheet, over the grid. */
+    .run-scan {
+      animation: run-scan 2.4s ease-in-out infinite;
+    }
+
+    /* Research: the question travels to each page, which rises to answer. */
+    .run-flow {
+      animation: run-flow 900ms linear infinite;
+    }
+
+    .run-card {
+      animation: run-card 2.4s ease-in-out calc(var(--i, 0) * 1.2s) infinite;
+    }
+
+    /* Verification: each page is checked, each mark set down, in turn. */
+    .run-tick {
+      stroke-dasharray: 1;
+      animation: run-draw 2.4s cubic-bezier(0.23, 1, 0.32, 1) calc(var(--i, 0) * 600ms) infinite;
+    }
+
+    .run-mark {
+      animation: run-mark 2.4s cubic-bezier(0.23, 1, 0.32, 1) calc(var(--i, 0) * 400ms) infinite;
+    }
+  }
+}
+
+@keyframes run-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes run-scan {
+  from {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12%,
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(138px);
+    opacity: 0;
+  }
+}
+
+@keyframes run-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+@keyframes run-card {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes run-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  35%,
+  80% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes run-mark {
+  from {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }

@@ -746,11 +746,6 @@
     .run-mark {
       animation: run-mark 2.4s var(--ease-out) calc(var(--i, 0) * 400ms) infinite;
     }
-
-    /* The report: the ring is drawn round to its note. */
-    .run-ring {
-      animation: run-ring 2.4s var(--ease-out-expo) infinite;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -960,16 +955,6 @@
   }
   to {
     opacity: 0;
-  }
-}
-
-@keyframes run-ring {
-  from {
-    stroke-dashoffset: 61;
-  }
-  55%,
-  to {
-    stroke-dashoffset: 0;
   }
 }
 

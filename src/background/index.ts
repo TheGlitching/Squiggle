@@ -420,7 +420,7 @@ export class BackgroundServiceWorker {
    */
   private async readVideo(tabId: number, videoId: string): Promise<VideoRead> {
     const say = (message: string) => {
-      this.stateManager.updateTabState(tabId, { status: 'extracting', progress: 5, currentStep: message });
+      this.stateManager.updateTabState(tabId, { status: 'extracting', stage: 'extracting', progress: 5, currentStep: message });
       this.safeDispatch('ANALYSIS_PROGRESS', { tabId, status: 'extracting', stage: 'extract', message, progress: 5 });
     };
     say('Lecture des sous-titres de la vidéo…');
@@ -665,6 +665,7 @@ export class BackgroundServiceWorker {
         status: evt.status === 'completed' ? 'complete' : evt.status,
         progress: evt.progress,
         currentStep: evt.message,
+        stage: evt.stage,
       });
 
       this.safeDispatch('ANALYSIS_PROGRESS', { tabId, ...evt });
@@ -719,6 +720,7 @@ export class BackgroundServiceWorker {
     this.activePipelines.set(tabId, runner);
     this.stateManager.updateTabState(tabId, {
       status: 'analyzing',
+      stage: undefined,
       progress: 0,
       error: undefined,
     });

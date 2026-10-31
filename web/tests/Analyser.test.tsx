@@ -243,6 +243,7 @@ describe('Analyser, signed out', () => {
     await waitFor(() => expect(current()).toContain('Lecture : en cours'));
     expect(screen.getByText('Recherche des sources')).toBeInTheDocument();
     expect(screen.queryByText(/: fait$/)).toBeNull();
+    expect(screen.queryByLabelText('Texte de l’article')).not.toBeInTheDocument();
 
     // The step shows from the cache lookup on, which comes before the audit is asked:
     // answering before then would answer nothing, and the run would hang.
@@ -250,6 +251,8 @@ describe('Analyser, signed out', () => {
     // The audit answered with nothing to look up: the run goes straight to the report.
     answer!(jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] }));
     expect(await screen.findByText('58')).toBeInTheDocument();
+    // Nor does it come back around the report.
+    expect(screen.queryByLabelText('Texte de l’article')).not.toBeInTheDocument();
   });
 
   it('leaves a returning reader on their text when the cache has no report for it', async () => {
@@ -455,9 +458,10 @@ describe('Analyser, from the bookmark', () => {
     render(<Analyser />);
     // The account is still being checked, and the page already says the analysis is running.
     expect(screen.getByRole('status')).toHaveTextContent('Analyse lancée automatiquement');
-    expect(screen.getByRole('progressbar', { name: 'Avancement de l’analyse' })).toBeInTheDocument();
-    expect(screen.getByText(/Le favori a lancé l’analyse, rien à toucher/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Analyser le texte' })).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-current="step"]')?.textContent).toContain('Lecture : en cours');
+    // The run is all the page shows: no form under it, and one thing to tap, to stop it.
+    expect(screen.queryByLabelText('Texte de l’article')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Annuler']);
     expect(await screen.findByText('58')).toBeInTheDocument();
     expect(seen.filter((s) => s.url === '/web/analyze/audit')).toHaveLength(1);
   });
