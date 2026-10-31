@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScoreBand, ScoreDomainKey, SCORE_DOMAINS } from '@squiggle/shared';
-import { determineScoreBand, getScoreBandLabel } from '@squiggle/shared';
+import { determineScoreBand, getScoreBandLabel, type ReportSubject } from '@squiggle/shared';
 
 export interface ScoreGaugeProps {
   score: number; // 0 to 100
@@ -9,7 +9,7 @@ export interface ScoreGaugeProps {
   showBandLabel?: boolean;
   scoreBand?: ScoreBand;
   /** What the score is about, for the band's title. */
-  subject?: 'article' | 'video';
+  subject?: ReportSubject;
   className?: string;
 }
 

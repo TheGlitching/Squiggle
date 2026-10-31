@@ -155,17 +155,16 @@ describe('a link shared on its own', () => {
     expect((await lookUp(env, SHARED_VIDEO)).body.hit).toBe(false);
   });
 
-  it('cuts the quotes of a short text down to a small share of it', async () => {
+  it('never serves a short message the extension read: a post on the page is not its article', async () => {
     const env = makeTestEnv({ now: Date.now() });
-    const made = await (await extension(env)).analyze({ url: ARTICLE_URL, blocks: TEXT.slice(0, 2) });
-    const served = (await lookUp(env, ARTICLE_URL)).body.report!;
-    expect(served.findings.map((f) => f.id)).toEqual(made.findings.map((f) => f.id));
-    const quotes = [...served.findings, ...served.claims, ...served.research.withdrawn].map((q) => q.quote);
-    // About ten words of text: every quote falls to the floor, and the longest is cut.
-    for (const quote of quotes) expect(quote.trim().split(/\s+/).length).toBeLessThanOrEqual(MIN_QUOTE_WORDS);
-    expect(quotes.some((quote) => quote.endsWith('…'))).toBe(true);
-    expect(quotes).toContain('Tout le monde le sait.');
-    expect(served.summary).toBe(made.summary);
+    const client = await extension(env);
+    // A reader selected one post on the page: it is analysed as a message, under the page's address.
+    await client.analyze({ url: ARTICLE_URL, blocks: TEXT.slice(0, 2) });
+
+    expect((await lookUp(env, ARTICLE_URL)).body.hit).toBe(false);
+    // It is still filed under its words, for a reader who sends the same message.
+    expect(await client.cached({ url: ARTICLE_URL, blocks: TEXT.slice(0, 2) })).not.toBeNull();
+    expect((await counters(env)).run_started_message).toBe(1);
   });
 
   it('refuses an address that is not a web page, and any origin but the site', async () => {

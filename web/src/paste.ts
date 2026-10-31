@@ -12,11 +12,16 @@
  * cap is the server's own constant, from the shared workspace.
  */
 import type { TextBlock } from '../../shared/src/engine/types';
+import { MAX_MESSAGE_CHARS, MIN_MESSAGE_CHARS } from '../../shared/src/engine/message';
 import { articleLength, MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 import { readTranscript, timeAt, type Start } from './transcript';
 
-/** Below this, the paste is a link or a title, not an article. */
-export const MIN_TEXT_CHARS = 200;
+/**
+ * Below this, the paste claims nothing. A short text is analysed as a message
+ * (a chain, a post, a rumour) by the server, which reads the mode from its length.
+ */
+export const MIN_TEXT_CHARS = MIN_MESSAGE_CHARS;
+export { MAX_MESSAGE_CHARS };
 const MAX_BLOCK_CHARS = 20_000;
 const MAX_BLOCKS = 2_000;
 export const MAX_TITLE_CHARS = 500;
@@ -102,11 +107,19 @@ export function pastedChars(text: string): number {
   return transcript ? transcript.reduce((sum, p) => sum + p.text.length, 0) : text.trim().length;
 }
 
-export type PasteProblem = 'too_short' | 'too_long' | 'too_many_lines' | 'title_too_long' | 'bad_source';
+export type PasteProblem =
+  | 'too_short'
+  | 'only_address'
+  | 'too_long'
+  | 'too_many_lines'
+  | 'title_too_long'
+  | 'bad_source';
 
 /** What stops this paste from being analysed, if anything. */
 export function pasteProblem(article: PastedArticle): PasteProblem | null {
   if (pastedChars(article.text) < MIN_TEXT_CHARS) return 'too_short';
+  // Long enough for a message, but it says nothing: Squiggle never fetches it.
+  if (LONE_URL.test(article.text)) return 'only_address';
   const blocks = blocksFromPaste(article);
   // Counted as the server counts it, on the blocks it will receive.
   if (articleLength(blocks) > MAX_ARTICLE_CHARS) return 'too_long';
@@ -117,7 +130,8 @@ export function pasteProblem(article: PastedArticle): PasteProblem | null {
 }
 
 export const PASTE_PROBLEMS: Record<PasteProblem, string> = {
-  too_short: `Collez le texte complet de l’article : au moins ${MIN_TEXT_CHARS} caractères.`,
+  too_short: `Collez l’article entier, ou le message reçu : au moins ${MIN_TEXT_CHARS} caractères.`,
+  only_address: 'Ce texte n’est qu’une adresse, et Squiggle ne va pas chercher la page : collez le texte de l’article ou du message.',
   too_long: `Ce texte dépasse ${MAX_ARTICLE_CHARS.toLocaleString('fr-FR')} caractères. Collez l’article seul, sans les commentaires ni le reste de la page.`,
   too_many_lines: 'Ce texte compte trop de lignes. Collez l’article seul, sans le reste de la page.',
   title_too_long: `Le titre dépasse ${MAX_TITLE_CHARS} caractères.`,
@@ -209,6 +223,9 @@ export async function readCopied(clipboard: Clipboard | undefined): Promise<Copi
   }
 }
 
+/** Longest line a paper's app sends before its link: a headline, not a message. */
+const HEADLINE_MAX_CHARS = 200;
+
 /** A share that is only an address: Android often puts the link in `text`. */
 const LONE_URL = /^\s*(https?:\/\/\S+)\s*$/i;
 /** An address at the end of shared text, as news apps send "headline https://…". */
@@ -237,10 +254,11 @@ export function articleFromShare(params: URLSearchParams): Partial<PastedArticle
     }
   }
 
-  // A short one-line share beside a link is the link's headline: it is the title.
-  // Without a link it is the message itself (a WhatsApp chain, a post), kept as text.
+  // A short line shared with a link is the article's headline, as a paper's app
+  // sends it: it is the title. Without a link it is the message itself (a chain,
+  // a post), and it is what is analysed.
   const address = webAddress(source) ?? '';
-  const headline = Boolean(address) && !sharedTitle && !text.includes('\n') && text.length < MIN_TEXT_CHARS;
+  const headline = Boolean(address) && !sharedTitle && !text.includes('\n') && text.length < HEADLINE_MAX_CHARS;
   return {
     title: headline ? text : sharedTitle,
     source: address,

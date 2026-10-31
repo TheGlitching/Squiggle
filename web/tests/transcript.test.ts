@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { pastedChars, pasteProblem, readPaste } from '../src/paste';
+import { MIN_TEXT_CHARS, pastedChars, pasteProblem, readPaste } from '../src/paste';
 import { readTranscript, timeAt, videoTime } from '../src/transcript';
 
 const fixture = (name: string) => readFileSync(join(__dirname, 'transcripts', name), 'utf8');
@@ -136,10 +136,10 @@ describe('a transcript pasted on /analyser', () => {
   });
 
   it('counts the speech, not the timestamps, toward the minimum length', () => {
-    // Over 200 characters as pasted, under 200 once the times are gone.
-    const short = Array.from({ length: 12 }, (_, i) => `0:${String(i).padStart(2, '0')}\n${i} secondes\noui`).join('\n');
-    expect(short.length).toBeGreaterThan(200);
-    expect(pastedChars(short)).toBeLessThan(200);
+    // Over the minimum as pasted, under it once the times are gone.
+    const short = Array.from({ length: 4 }, (_, i) => `0:${String(i).padStart(2, '0')}\noui`).join('\n');
+    expect(short.length).toBeGreaterThan(MIN_TEXT_CHARS);
+    expect(pastedChars(short)).toBeLessThan(MIN_TEXT_CHARS);
     expect(pasteProblem({ title: '', source: '', text: short })).toBe('too_short');
     expect(pasteProblem({ title: '', source: '', text: fixture('youtube-panel.txt') })).toBeNull();
   });

@@ -53,6 +53,7 @@ import {
   articleFromShare,
   EMPTY_ARTICLE,
   loadDraft,
+  MAX_MESSAGE_CHARS,
   MAX_TITLE_CHARS,
   MIN_TEXT_CHARS,
   PASTE_PROBLEMS,
@@ -163,8 +164,8 @@ const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un arti
 /** Where a reading of screenshots stands: `done` is null while the reader itself loads. */
 type Reading = { done: number | null; total: number };
 
-/** A text shared without a link and too short for an article: a forwarded message, which Squiggle does not analyse yet. */
-const SHORT_MESSAGE = `Ce message est trop court pour être analysé : Squiggle analyse des articles, de ${MIN_TEXT_CHARS} caractères au moins. S’il cite un article, partagez plutôt l’article vers Squiggle.`;
+/** A text shared without a link and too short to claim anything ("ok", "Merci !"). */
+const SHORT_MESSAGE = `Ce message est trop court pour être analysé : il faut au moins ${MIN_TEXT_CHARS} caractères. S’il accompagnait un article ou un autre message, partagez plutôt celui-ci vers Squiggle.`;
 
 /** The entries that bring a whole text and start its analysis without a tap, by their `via`, with their counter. */
 const AUTO_ENTRIES = new Map<string | null, AudienceMetricName>([
@@ -215,14 +216,26 @@ function initialArticle(): {
  */
 export function Analyser() {
   const [visit, setVisit] = useState(0);
+  // The fragment a new page is about to read: a second event for it, before
+  // that page has opened and wiped it, would start over once more and find the
+  // address bare, losing the share.
+  const opening = useRef<string | null>(null);
   useEffect(() => {
     const reread = () => {
       const params = sharedParams(window.location);
-      if (carriesPage(params) || articleFromShare(params)) setVisit((n) => n + 1);
+      if (window.location.hash === opening.current) return;
+      if (carriesPage(params) || articleFromShare(params)) {
+        opening.current = window.location.hash;
+        setVisit((n) => n + 1);
+      }
     };
     window.addEventListener('hashchange', reread);
     return () => window.removeEventListener('hashchange', reread);
   }, []);
+  // The new page has read its fragment: the same share sent again is a new one.
+  useEffect(() => {
+    opening.current = null;
+  }, [visit]);
   return <AnalyserPage key={visit} />;
 }
 
@@ -631,7 +644,7 @@ function AnalyserPage() {
 
   return (
     <div className={`${PAGE} pt-8 sm:py-14`}>
-      <h1 className={TITLE}>Analyser un article</h1>
+      <h1 className={TITLE}>Analyser un article ou un message</h1>
       <p className="mt-3 mb-0 max-w-[55ch] text-lg leading-relaxed text-muted">
         Collez le texte. Le rapport arrive en une à deux minutes.
       </p>
@@ -645,7 +658,7 @@ function AnalyserPage() {
             <div>
               <div className="flex items-baseline justify-between gap-4">
                 <label htmlFor="texte" className="text-base font-medium">
-                  Texte de l’article
+                  Texte de l’article ou du message
                 </label>
                 {!running && !reading && (article.text || article.title || article.source) ? (
                   <div className="-my-2 -mr-2 flex gap-2">
@@ -716,7 +729,7 @@ function AnalyserPage() {
                 aria-invalid={
                   showProblem && problem !== null && problem !== 'bad_source' && problem !== 'title_too_long'
                 }
-                placeholder="Le texte de l’article, du chapô à la dernière phrase."
+                placeholder="Le texte de l’article, du chapô à la dernière phrase, ou le message reçu."
                 className={`${FIELD} min-h-64 resize-y leading-relaxed`}
               />
               <p
@@ -727,11 +740,19 @@ function AnalyserPage() {
                   ? 'Sélectionnez le texte dans la page de l’article, copiez-le, puis collez-le ici.'
                   : chars < MIN_TEXT_CHARS
                     ? `${chars} caractères : il en faut au moins ${MIN_TEXT_CHARS}.`
-                    : `${chars.toLocaleString('fr-FR')} caractères.`}
+                    : chars <= MAX_MESSAGE_CHARS && !transcript
+                      ? `${chars.toLocaleString('fr-FR')} caractères : analysé comme un message (de quoi il parle, qui l’affirme, ce qu’on en sait, ce qui manque).`
+                      : `${chars.toLocaleString('fr-FR')} caractères.`}
                 {transcript
                   ? ' Transcription reconnue : les horodatages sont retirés du texte analysé, et chaque passage garde le sien dans le rapport.'
                   : null}
               </p>
+              {chars === 0 ? (
+                <p className="mt-1 mb-0 text-sm text-muted">
+                  Un message reçu sur WhatsApp, une publication Facebook, une rumeur ? Collez-le tel quel : un texte
+                  court est analysé comme un message.
+                </p>
+              ) : null}
               {chars === 0 ? (
                 <p className="mt-1 mb-0 text-sm text-muted">
                   Une vidéo YouTube ? Copiez sa transcription (« Afficher la transcription », sous la description)
@@ -809,7 +830,7 @@ function AnalyserPage() {
   );
 }
 
-const TEXT_BUTTON = 'px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground';
+const TEXT_BUTTON = 'whitespace-nowrap px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground';
 
 /**
  * A link received alone: Squiggle does not fetch it, so the reader opens it in

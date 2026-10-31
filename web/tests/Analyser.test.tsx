@@ -133,7 +133,7 @@ function at(path: string) {
 }
 
 function paste(text: string) {
-  fireEvent.change(screen.getByLabelText('Texte de l’article'), { target: { value: text } });
+  fireEvent.change(screen.getByLabelText('Texte de l’article ou du message'), { target: { value: text } });
 }
 
 beforeEach(() => {
@@ -267,7 +267,7 @@ describe('Analyser, signed out', () => {
     );
     expect(screen.getByRole('link', { name: 'Créer un compte gratuit' })).toHaveAttribute('href', '/connexion?next=/analyser');
     expect(screen.queryByRole('button', { name: 'Analyser le texte' })).toBeNull();
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
   });
 });
 
@@ -276,7 +276,7 @@ describe('Analyser, from a share', () => {
     serve(account());
     at(`/analyser?${new URLSearchParams({ title: 'Cantines', text: TEXT })}`);
     render(<Analyser />);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
     expect(screen.getByLabelText(/Titre/)).toHaveValue('Cantines');
     await waitFor(() => expect(window.location.search).toBe(''));
   });
@@ -287,7 +287,7 @@ describe('Analyser, from a share', () => {
     const fields = { title: 'Cantines', text: `${TEXT}\n1 + 1 = 2 & c’est tout`, url: 'https://presse.example/cantines' };
     at(`/analyser#${Object.entries(fields).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`);
     render(<Analyser />);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(fields.text);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(fields.text);
     expect(screen.getByLabelText(/Titre/)).toHaveValue('Cantines');
     expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
     await waitFor(() => expect(window.location.hash).toBe(''));
@@ -298,7 +298,7 @@ describe('Analyser, from a share', () => {
     at(`/analyser?${new URLSearchParams({ title: 'Cantines', text: 'https://presse.example/cantines' })}`);
     render(<Analyser />);
     expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue('');
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent(/pas encore de rapport. Collez maintenant le texte de l’article/),
     );
@@ -390,9 +390,9 @@ describe('Analyser, a whole text from the iPhone shortcut or the Android app', (
     expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_app_text' }]);
   });
 
-  it('keeps a message too short for an article in the text, and says why it is not analysed', async () => {
+  it('keeps a text too short to claim anything in the field, and says why it is not analysed', async () => {
     const seen = serve(account());
-    const message = 'URGENT ⚠️ la CAF supprime les APL des retraités propriétaires. Transférez à tous vos contacts !';
+    const message = 'Vu, merci !';
     at(`/analyser#${new URLSearchParams({ text: message, via: 'appli' })}`);
     render(<Analyser />);
     expect(screen.getByRole('status')).toHaveTextContent(/Ce message est trop court pour être analysé/);
@@ -415,6 +415,18 @@ describe('Analyser, from the bookmark', () => {
     const audit = seen.find((s) => s.url === '/web/analyze/audit');
     expect(audit?.body).toMatchObject({ url: 'https://presse.example/cantines', title: 'Cantines' });
     expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_bookmarklet' }]);
+  });
+
+  it('analyses at once a message shared to the Android app, as the message itself and not a title', async () => {
+    const seen = serve(account());
+    const rumour = 'URGENT ⚠️ à partir du 1er novembre la CAF supprime les APL pour les retraités propriétaires. Transférez à tous vos contacts !';
+    at(`/analyser#${new URLSearchParams({ text: rumour, via: 'appli' })}`);
+    render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    const audit = seen.find((s) => s.url === '/web/analyze/audit');
+    expect(audit?.body).toMatchObject({ title: '', blocks: [{ text: rumour }] });
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_app_text' }]);
   });
 
   it('shows the analysis as started from the first frame, with nothing to tap', async () => {
@@ -445,7 +457,7 @@ describe('Analyser, from the bookmark', () => {
     at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
     render(<Analyser />);
     await screen.findByText('Essai épuisé');
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 });
@@ -525,14 +537,14 @@ describe('Analyser, a link received alone', () => {
     saveDraft({ title: 'Budget', source: 'https://presse.example/budget', text: TEXT });
     at(`/analyser?${new URLSearchParams({ text: 'https://presse.example/cantines' })}`);
     render(<Analyser />);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue('');
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
     expect(screen.getByRole('link', { name: 'Ouvrir l’article' })).toBeInTheDocument();
     cleanup();
 
     saveDraft({ title: '', source: '', text: TEXT });
     at(`/analyser?${new URLSearchParams({ text: 'https://presse.example/cantines' })}`);
     render(<Analyser />);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
     expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
   });
 
@@ -694,12 +706,12 @@ describe('Analyser, signed in', () => {
     expect(card).toHaveTextContent('À 1:02 dans la vidéo');
   });
 
-  it('stops a paste too short to be an article, before any request', async () => {
+  it('stops a paste that is only an address, before any request', async () => {
     const seen = serve(account());
     render(<Analyser />);
     paste('https://presse.example/cantines');
     fireEvent.click(await analyseButton());
-    expect(screen.getByRole('alert')).toHaveTextContent(/au moins 200 caractères/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/n’est qu’une adresse/);
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 
@@ -711,7 +723,7 @@ describe('Analyser, signed in', () => {
     paste(TEXT);
     fireEvent.click(await analyseButton());
     expect(await screen.findByRole('alert')).toHaveTextContent(/momentanément indisponible.*quelques minutes/);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
   });
 
   it('offers the subscription, payable here, not the button, once the trial is used', async () => {
@@ -798,7 +810,7 @@ describe('Analyser, from the clipboard', () => {
     render(<Analyser />);
     await screen.findByText('Essai épuisé');
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
-    await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT));
+    await waitFor(() => expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT));
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 
@@ -808,7 +820,7 @@ describe('Analyser, from the clipboard', () => {
     render(<Analyser />);
     await analyseButton();
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/au moins 200 caractères/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/au moins 20 caractères/);
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 
@@ -828,7 +840,7 @@ describe('Analyser, from the clipboard', () => {
     paste(`${first}\n${second}`);
     clipboard(async () => `${second}\n\n${third}`);
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
-    await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(`${first}\n${second}\n${third}`));
+    await waitFor(() => expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(`${first}\n${second}\n${third}`));
     expect(screen.getByRole('status')).toHaveTextContent(/Suite ajoutée/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
@@ -846,12 +858,12 @@ describe('Analyser, from the clipboard', () => {
       configurable: true,
     });
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
-    await waitFor(() => expect(screen.getByLabelText('Texte de l’article')).toHaveValue(`${first}\n${second}\n${third}`));
+    await waitFor(() => expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(`${first}\n${second}\n${third}`));
 
     clipboard(async () => '');
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
     expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement à la fin du texte, puis Coller/);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveFocus();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveFocus();
   });
 
   it('analyses a copy the page only put on the clipboard as markup', async () => {
@@ -876,13 +888,13 @@ describe('Analyser, from the clipboard', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       /ne trouve pas de texte copié\. Si vous venez de copier l’article, appuyez longuement dans le champ, puis Coller/,
     );
-    expect(screen.getByLabelText('Texte de l’article')).toHaveFocus();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveFocus();
   });
 
   it('pastes the text of a markup-only copy into the field, where the cursor is', async () => {
     serve(account());
     render(<Analyser />);
-    const field = screen.getByLabelText('Texte de l’article') as HTMLTextAreaElement;
+    const field = screen.getByLabelText('Texte de l’article ou du message') as HTMLTextAreaElement;
     paste('Début. ');
     field.setSelectionRange(7, 7);
     const data = { getData: (type: string) => (type === 'text/html' ? '<p>Un.</p><p>Deux.</p>' : '') };
@@ -901,7 +913,7 @@ describe('Analyser, from the clipboard', () => {
     render(<Analyser />);
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
     expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement dans le champ, puis Coller/);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveFocus();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveFocus();
     cleanup();
 
     Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
@@ -931,7 +943,7 @@ describe('Analyser, from screenshots', () => {
     await userEvent.upload(screen.getByTestId('captures'), [image('capture-1.png'), image('capture-2.png')]);
 
     expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu sur 2 captures, sur cet appareil : aucune image n’a été envoyée/);
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
     expect(vi.mocked(readCaptures).mock.calls[0][0].map((file) => (file as File).name)).toEqual(['capture-1.png', 'capture-2.png']);
     // Nothing is analysed, and no image goes anywhere: only the counters, by kind and by bucket.
     expect(seen.some((s) => s.url.startsWith('/web/analyze/'))).toBe(false);
@@ -969,7 +981,7 @@ describe('Analyser, from screenshots', () => {
     expect(await screen.findByText(/Aucun texte n’a été lu sur ces images/)).toBeInTheDocument();
     await userEvent.upload(screen.getByTestId('captures'), [image('hors-ligne.png')]);
     expect(await screen.findByText(/le lecteur de texte se télécharge la première fois/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue('');
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
   });
 
   it('reads the screenshots shared to the installed app, and wipes the share from the address bar', async () => {
@@ -982,7 +994,7 @@ describe('Analyser, from screenshots', () => {
     expect(screen.queryByText(/Adresse reçue/)).not.toBeInTheDocument();
 
     expect(await screen.findByText(/Texte lu sur 5 captures/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Texte de l’article')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
     expect(screen.getByLabelText(/Titre/)).toHaveValue('Un article');
     expect(window.location.search).toBe('');
     expect(counted(seen)).toEqual(['share_screenshots', 'screenshots_5_9']);

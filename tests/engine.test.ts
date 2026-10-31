@@ -29,6 +29,13 @@ describe('Fourches Caudines Engine', () => {
         type: 'paragraph',
         text: 'Selon une étude récente, cette technologie va remplacer tous les serveurs existants d’ici deux ans.',
         charStart: 87
+      },
+      {
+        id: 'b3',
+        type: 'paragraph',
+        // Past a short message's length, so it is read as the article it is.
+        text: 'Le reste de l’article développe ces promesses sans les chiffrer. '.repeat(20),
+        charStart: 188
       }
     ]
   };
@@ -50,7 +57,7 @@ describe('Fourches Caudines Engine', () => {
 
   it('keeps the borrowed method name out of reader-facing text', () => {
     // The prompt version is shown to readers and is part of the cache key.
-    expect(PROMPT_VERSION).toBe('1.1.0');
+    expect(PROMPT_VERSION).toBe('1.2.0');
     expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).not.toMatch(/fourches|caudines/i);
     expect(buildFourchesCaudinesUserPrompt(sampleInput)).not.toMatch(/fourches|caudines/i);
   });

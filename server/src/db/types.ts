@@ -350,6 +350,8 @@ export const METRIC_NAMES = [
   'run_started_anon',
   // Of those, the runs on a video's transcript (a YouTube address), whichever surface.
   'run_started_video',
+  // ...and those on a short message (`isShortMessage`): a chain, a post, a rumour.
+  'run_started_message',
   // A link shared without its text, looked up among the extension's reports; and those that found one.
   'link_check',
   'link_hit',

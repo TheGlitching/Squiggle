@@ -555,7 +555,9 @@ export class BackgroundServiceWorker {
     // A paywalled article yields only its teaser. Scoring those few sentences
     // would produce a confident verdict on something that is not the article,
     // which is worse than declining, so say what happened instead.
-    if (extracted && extracted.wordCount > 0 && extracted.wordCount < MIN_ANALYSABLE_WORDS) {
+    // A selected message or a social post is short by nature, not cut short.
+    const whole = extracted?.detectionMethod === 'selection' || extracted?.detectionMethod === 'social-thread';
+    if (extracted && !whole && extracted.wordCount > 0 && extracted.wordCount < MIN_ANALYSABLE_WORDS) {
       const err =
         `Seuls ${extracted.wordCount} mots ont pu être lus sur cette page : ` +
         'l’article est probablement réservé aux abonnés. ' +

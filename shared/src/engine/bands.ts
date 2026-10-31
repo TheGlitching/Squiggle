@@ -3,7 +3,22 @@
  * and with no runtime import, so the web app can name a band without pulling
  * the engine's validation schemas into its bundle. `scoring.ts` re-exports it.
  */
+import { MAX_MESSAGE_CHARS } from './message';
 import type { ScoreBand } from './types';
+
+/** What a report judged, as its band's title names it. */
+export type ReportSubject = 'article' | 'video' | 'message';
+
+/**
+ * The subject of a report: a video's transcript is known from where it was
+ * read, a short message from the length of the text the analysis read, the
+ * same length that chose its instructions (`isShortMessage`).
+ */
+export function reportSubject(report: { meta: { textLengthChars?: number } }, video = false): ReportSubject {
+  if (video) return 'video';
+  const chars = report.meta.textLengthChars;
+  return chars != null && chars > 0 && chars <= MAX_MESSAGE_CHARS ? 'message' : 'article';
+}
 
 /**
  * Maps 0-100 score to Fourches Caudines score band
@@ -17,14 +32,14 @@ export function determineScoreBand(score: number): ScoreBand {
 
 /**
  * Explains a score band in reader-friendly French. The title names what was
- * judged: a video's transcript is not an article. Every band's adjective is
- * the same in either gender, so only the noun changes.
+ * judged: a video's transcript, or a short message, is not an article. Every
+ * band's adjective is the same in either gender, so only the noun changes.
  */
 export function getScoreBandLabel(
   band: ScoreBand,
-  subject: 'article' | 'video' = 'article'
+  subject: ReportSubject = 'article'
 ): { title: string; description: string } {
-  const noun = subject === 'video' ? 'Vidéo' : 'Article';
+  const noun = subject === 'video' ? 'Vidéo' : subject === 'message' ? 'Message' : 'Article';
   switch (band) {
     case 'solide':
       return {

@@ -10,7 +10,7 @@ import {
 } from './types';
 import { determineScoreBand } from './bands';
 
-export { determineScoreBand, getScoreBandLabel } from './bands';
+export { determineScoreBand, getScoreBandLabel, reportSubject, type ReportSubject } from './bands';
 
 export interface ScoreComputationResult {
   totalScore: number;

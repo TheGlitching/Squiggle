@@ -31,7 +31,7 @@ import { reportFinding } from '../hosted/flag';
 import type { AnalysisMode } from '../crypto/storage';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
-import { SCORE_DOMAINS, youtubeVideoId } from '@squiggle/shared';
+import { reportSubject, SCORE_DOMAINS, youtubeVideoId } from '@squiggle/shared';
 import type { VideoReport } from '../video/youtube';
 import type { AnalysisResult, Finding, ScoreDomainKey } from '@squiggle/shared';
 
@@ -585,6 +585,14 @@ function SidepanelApp() {
             : 'Lancer l’analyse critique'}
         </button>
 
+        {/* A post or a forwarded message is not the page's article: the reader points at it. */}
+        {!isVideoPage && !report && !busy && !error && canRun && (
+          <p className="-mt-3 text-xs leading-relaxed text-muted">
+            Un message ou une publication plutôt que l’article ? Sélectionnez son texte dans la page,
+            puis lancez l’analyse : Squiggle lira ce passage seul.
+          </p>
+        )}
+
         {/* Most readers have already watched the video and do not want to again:
             say up front that they will not have to. */}
         {isVideoPage && !report && !busy && !error && canRun && (
@@ -660,11 +668,11 @@ function SidepanelApp() {
                   size={110}
                   strokeWidth={8}
                   showBandLabel
-                  subject={videoReport ? 'video' : 'article'}
+                  subject={reportSubject(report, Boolean(videoReport))}
                 />
               </div>
               {report.summary && (
-                <p className="mt-3 text-xs leading-relaxed text-ink/80">
+                <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-ink/80">
                   {report.summary}
                 </p>
               )}

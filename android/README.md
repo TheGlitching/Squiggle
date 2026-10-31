@@ -21,10 +21,10 @@ in the same package (`fr.squiggle.app`). Not published on any store yet.
   article** to read it again.
 - **A YouTube link** has no page to read here: it opens `/analyser?url=…`,
   which shows the report already made for that link, or says what to do.
-- **A text without a link** opens `/analyser#text=…&via=appli` in the TWA,
-  where the analysis starts on its own. A text too short to be an article (a
-  forwarded message) stays in the field with a sentence that says why it is
-  not analysed.
+- **A text without a link**, or with more around its link than a headline (a
+  WhatsApp chain, a post), opens `/analyser#text=…&via=appli` in the TWA, where
+  the analysis starts on its own; a short text is analysed as a message. A text
+  too short to claim anything stays in the field with a sentence that says why.
 - **Screenshots**, one or several, go to the site's share target
   (`share_target` in `web/public/manifest.webmanifest`): the browser posts them
   to the site's service worker, which keeps them on the phone for the page to
