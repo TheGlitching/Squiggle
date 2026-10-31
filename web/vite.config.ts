@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import { build as esbuild } from 'esbuild';
 import { createServer } from 'vite';
@@ -90,37 +90,70 @@ function favori(): Plugin {
 }
 
 /**
- * The OCR that reads imported screenshots (`src/captures.ts`), served from our
- * own origin under `/ocr/`: Tesseract's worker, its WebAssembly core in the
- * three builds a browser may pick (LSTM only, with SIMD, with relaxed SIMD),
- * and the French model. Left to its defaults it would fetch them from a CDN.
- * They are copied beside the build, not bundled, so the service worker's
- * shell never carries their dozen megabytes: they load on a first import only.
+ * The readers that work on the device, served from our own origin rather than
+ * a CDN, and copied beside the build rather than bundled, so the service
+ * worker's shell never carries their megabytes: they load on a first use only.
+ *
+ * Under `/ocr/`, the OCR that reads imported screenshots (`src/captures.ts`):
+ * Tesseract's worker, its WebAssembly core in the three builds a browser may
+ * pick (LSTM only, with SIMD, with relaxed SIMD), and the French model. Under
+ * `/pdf/`, pdf.js, which reads an imported PDF (`src/pdf.ts`), its worker, and
+ * the decoders of the images a scanned PDF is made of: its legacy build, which
+ * an older phone's browser runs too (the modern one needs a Chrome from 2024),
+ * with our own `pdf/compat.mjs` for what even that build takes for granted.
  */
-const OCR_FILES: Record<string, string> = {
-  'worker.min.js': 'tesseract.js/dist/worker.min.js',
-  'tesseract-core-lstm.wasm.js': 'tesseract.js-core/tesseract-core-lstm.wasm.js',
-  'tesseract-core-simd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js',
-  'tesseract-core-relaxedsimd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js',
-  'fra.traineddata.gz': '@tesseract.js-data/fra/4.0.0_best_int/fra.traineddata.gz',
+const ON_DEVICE_FILES: Record<string, Record<string, string>> = {
+  ocr: {
+    'worker.min.js': 'tesseract.js/dist/worker.min.js',
+    'tesseract-core-lstm.wasm.js': 'tesseract.js-core/tesseract-core-lstm.wasm.js',
+    'tesseract-core-simd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js',
+    'tesseract-core-relaxedsimd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js',
+    'fra.traineddata.gz': '@tesseract.js-data/fra/4.0.0_best_int/fra.traineddata.gz',
+  },
+  pdf: {
+    'pdf.min.mjs': 'pdfjs-dist/legacy/build/pdf.min.mjs',
+    'pdf.worker.min.mjs': 'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+    'compat.mjs': './pdf/compat.mjs',
+    'worker.mjs': './pdf/worker.mjs',
+    'wasm/openjpeg.wasm': 'pdfjs-dist/wasm/openjpeg.wasm',
+    'wasm/jbig2.wasm': 'pdfjs-dist/wasm/jbig2.wasm',
+    'wasm/qcms_bg.wasm': 'pdfjs-dist/wasm/qcms_bg.wasm',
+  },
 };
 
-function ocr(): Plugin {
-  const source = (name: string) => createRequire(import.meta.url).resolve(OCR_FILES[name]);
+const CONTENT_TYPES: Record<string, string> = {
+  js: 'text/javascript',
+  mjs: 'text/javascript',
+  wasm: 'application/wasm',
+  gz: 'application/gzip',
+};
+
+function onDevice(): Plugin {
+  // A package's file, or one of ours (`./`, beside this config).
+  const source = (dir: string, name: string) => {
+    const file = ON_DEVICE_FILES[dir][name];
+    return file.startsWith('./') ? new URL(file, import.meta.url).pathname : createRequire(import.meta.url).resolve(file);
+  };
   return {
-    name: 'squiggle-ocr',
+    name: 'squiggle-on-device',
     configureServer(server) {
-      server.middlewares.use('/ocr', (request, response, next) => {
-        const name = request.url?.split('?')[0].slice(1) ?? '';
-        if (!Object.hasOwn(OCR_FILES, name)) return next();
-        response.setHeader('content-type', name.endsWith('.js') ? 'text/javascript' : 'application/gzip');
-        response.end(readFileSync(source(name)));
-      });
+      for (const dir of Object.keys(ON_DEVICE_FILES)) {
+        server.middlewares.use(`/${dir}`, (request, response, next) => {
+          const name = request.url?.split('?')[0].slice(1) ?? '';
+          if (!Object.hasOwn(ON_DEVICE_FILES[dir], name)) return next();
+          response.setHeader('content-type', CONTENT_TYPES[name.split('.').pop()!]);
+          response.end(readFileSync(source(dir, name)));
+        });
+      }
     },
     writeBundle(options) {
-      const dir = `${options.dir}/ocr`;
-      mkdirSync(dir, { recursive: true });
-      for (const name of Object.keys(OCR_FILES)) copyFileSync(source(name), `${dir}/${name}`);
+      for (const [dir, files] of Object.entries(ON_DEVICE_FILES)) {
+        for (const name of Object.keys(files)) {
+          const target = `${options.dir}/${dir}/${name}`;
+          mkdirSync(dirname(target), { recursive: true });
+          copyFileSync(source(dir, name), target);
+        }
+      }
     },
   };
 }
@@ -324,7 +357,7 @@ function prerender(): Plugin {
 }
 
 export default defineConfig(({ command, mode }) => ({
-  plugins: [react(), favori(), serviceWorker(), prerender(), ocr()],
+  plugins: [react(), favori(), serviceWorker(), prerender(), onDevice()],
   define: { ...BUILD_DEFINE, __BLOG_DRAFTS__: JSON.stringify(command === 'serve' && mode === 'development') },
   // The API origin is same-origin in production. A local dev build points at
   // a local server with VITE_API_BASE_URL; it is never a secret.

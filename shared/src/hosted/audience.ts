@@ -49,6 +49,11 @@ export const AUDIENCE_METRIC_NAMES = [
   'screenshots_2_4',
   'screenshots_5_9',
   'screenshots_10_plus',
+  // A PDF read on the device on /analyser: imported or shared, and whether it
+  // was a scan, read by the OCR.
+  'import_pdf',
+  'share_pdf',
+  'pdf_scanned',
   // A finding reported as wrong, by its category (`flagCounters`).
   'flag_finding_sophisme',
   'flag_finding_affirmation_non_etayee',

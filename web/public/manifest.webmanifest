@@ -23,7 +23,7 @@
       "title": "title",
       "text": "text",
       "url": "url",
-      "files": [{ "name": "captures", "accept": ["image/*"] }]
+      "files": [{ "name": "captures", "accept": ["image/*", "application/pdf", ".pdf"] }]
     }
   }
 }

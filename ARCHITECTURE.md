@@ -169,6 +169,20 @@ app header, tab bar) are dropped, an overlap between two screenshots is kept onc
 text lands in the form for the reader to check. What reaches the server is that text, as
 for a paste; no image ever does.
 
+A PDF is read the same way, on the device, by pdf.js. `shared/src/extract/pdf.ts` puts its
+runs of text back into headings and paragraphs (running headers, page numbers, footnotes and
+figure labels dropped, a sentence carried over a column or a page) for both clients. The site
+(`web/src/pdf.ts`) loads pdf.js's legacy build from `/pdf/` on a first PDF, with
+`web/pdf/compat.mjs` for what an older phone's browser lacks, and reads a scanned PDF's pages
+with the screenshots' OCR. A PDF shared to the Android app takes the screenshots' way through
+the share target. The browsers let no extension into their PDF viewer, so the panel's
+« Analyser ce PDF » sends the tab to the extension's own page (`src/pdf/`): it fetches the
+file from the address the tab showed, with the reader's browser and the access to that one
+site asked for in the click, lays it out as an article, loads the content script into itself
+and starts the analysis, so the panel and the highlights work there as on a news page. The
+content script answers only its own `FC_*` messages, since in an extension page it also hears
+the panel's calls to the background.
+
 `SECURITY.md` has the controls and the residual risks; `PRIVACY.md` has the retention
 table and the subprocessors.
 

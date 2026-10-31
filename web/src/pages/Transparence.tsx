@@ -27,8 +27,8 @@ export const RETENTION = [
     'Jusqu’à ce que vous l’effaciez',
   ],
   [
-    'Captures d’écran importées sur le site, ou partagées vers l’appli',
-    'Votre appareil, qui en lit le texte ; aucune image n’est envoyée',
+    'Captures d’écran et PDF importés sur le site, partagés vers l’appli, ou lus par l’extension',
+    'Votre appareil, qui en lit le texte ; aucune image, aucun fichier n’est envoyé',
     'Le temps de la lecture',
   ],
   [

@@ -127,7 +127,7 @@ describe('the service worker', () => {
     expect(await worker.request(url, { mode })).toBeUndefined();
   });
 
-  it('keeps a share on the device: screenshots wait in its cache, the text goes to the page’s address', async () => {
+  it('keeps a share on the device: screenshots and a PDF wait in its cache, the text goes to the page’s address', async () => {
     const worker = loadWorker();
     await worker.lifecycle('install');
     const before = worker.network.length;
@@ -136,14 +136,16 @@ describe('the service worker', () => {
     form.set('text', '');
     form.append('captures', new File(['première'], 'capture-1.png', { type: 'image/png' }));
     form.append('captures', new File(['seconde'], 'capture-2.jpg', { type: 'image/jpeg' }));
-    form.append('captures', new File(['%PDF'], 'document.pdf', { type: 'application/pdf' }));
+    form.append('captures', new File(['%PDF'], 'rapport.pdf', { type: 'application/pdf' }));
+    form.append('captures', new File(['notes'], 'notes.txt', { type: 'text/plain' }));
 
     const answer = (await worker.request('/analyser', { method: 'POST', mode: 'navigate', form })) as Response;
     expect(answer.status).toBe(303);
-    expect(answer.headers.get('location')).toBe('https://squiggle.fr/analyser?title=Un+article&captures=2');
+    expect(answer.headers.get('location')).toBe('https://squiggle.fr/analyser?title=Un+article&captures=3');
     expect([...(worker.stores.get('squiggle-partage') ?? new Map()).entries()]).toEqual([
       ['/partage/0', 'image/png première'],
       ['/partage/1', 'image/jpeg seconde'],
+      ['/partage/2', 'application/pdf %PDF'],
     ]);
     expect(worker.network.slice(before)).toEqual([]);
   });
@@ -209,12 +211,12 @@ describe('the manifest', () => {
     expect(pngSize('/icons/apple-touch-icon.png')).toEqual([180, 180]);
   });
 
-  it('receives a share on the analysis page, screenshots included, by a POST the worker keeps on the device', () => {
+  it('receives a share on the analysis page, screenshots and PDF included, by a POST the worker keeps on the device', () => {
     expect(manifest.share_target).toEqual({
       action: '/analyser',
       method: 'POST',
       enctype: 'multipart/form-data',
-      params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'captures', accept: ['image/*'] }] },
+      params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'captures', accept: ['image/*', 'application/pdf', '.pdf'] }] },
     });
   });
 

@@ -23,11 +23,13 @@
  * (`transcript.ts`). Where nothing can be copied, the reader imports
  * screenshots, or shares them to the installed app: their text is read on the
  * device and lands in the form to be checked before anything is analysed
- * (`captures.ts`).
+ * (`captures.ts`). A PDF, imported or shared, is read the same way, on the
+ * device (`pdf.ts`); one too long for an analysis is read a range of pages at a time.
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react';
 
 import { screenshotsCounter, type AudienceMetricName } from '@squiggle/shared/src/hosted/audience';
+import { pagesThatFit, pdfText, type PdfBlock } from '@squiggle/shared/src/extract/pdf';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { youtubeVideoId } from '../../../shared/src/engine/video';
@@ -47,6 +49,7 @@ import { RunScene, type RunStep } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
+import { readPdfFile } from '../pdf';
 import { FREE_ANALYSES, OFFER_LINE } from '../offer';
 import {
   appendPaste,
@@ -158,11 +161,29 @@ const CAPTURES_EMPTY = 'Aucun texte n’a été lu sur ces images. Importez des 
 const CAPTURES_FAILED =
   'La lecture des captures n’a pas pu démarrer. Vérifiez la connexion : le lecteur de texte se télécharge la première fois.';
 const FAVORI_UNREAD = 'Squiggle n’a pas trouvé d’article dans la page que le favori a apportée. Copiez le texte, puis collez-le ici.';
-const CAPTURES_LOST = 'Les captures partagées n’ont pas été retrouvées. Importez-les ici.';
+const CAPTURES_LOST = 'Les fichiers partagés n’ont pas été retrouvés. Importez-les ici.';
 const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un article tient d’ordinaire en moins de dix.`;
 
-/** Where a reading of screenshots stands: `done` is null while the reader itself loads. */
-type Reading = { done: number | null; total: number };
+const PDF_READ = (pages: number) =>
+  `Texte lu dans le PDF (${plural(pages, 'page')}), sur cet appareil : le fichier n’a pas été envoyé. Relisez-le avant de lancer l’analyse : une légende de figure ou un reste de tableau s’efface ici.`;
+const PDF_PART_READ = (from: number, to: number, pages: number) =>
+  `Ce PDF de ${pages} pages est trop long pour une seule analyse : le champ en garde les pages ${from} à ${to}. Pour en analyser une autre partie, choisissez ses pages ci-dessous. Le fichier n’a pas été envoyé.`;
+const PDF_SCAN_READ = (read: number, pages: number) =>
+  `Ce PDF est un document scanné : ${read < pages ? `ses ${read} premières pages ont été lues` : pages === 1 ? 'sa page a été lue' : `ses ${pages} pages ont été lues`} comme des captures, sur cet appareil. Relisez le texte avant de lancer l’analyse : une ligne peut être mal lue.`;
+const PDF_EMPTY = 'Aucun texte n’a été trouvé dans ce PDF, même en lisant ses pages comme des images.';
+const PDF_LOCKED = 'Ce PDF est protégé par un mot de passe. Ouvrez-le, copiez son texte, puis collez-le ici.';
+const PDF_INVALID = 'Ce fichier n’est pas un PDF lisible. Importez le PDF de l’article ou du rapport lui-même.';
+const PDF_FAILED =
+  'La lecture du PDF n’a pas pu démarrer. Vérifiez la connexion : le lecteur de PDF se télécharge la première fois.';
+
+/** Some systems name a shared or picked PDF by its extension only. */
+const isPdf = (file: Blob) => file.type === 'application/pdf' || (file instanceof File && /\.pdf$/i.test(file.name));
+
+/** What the reader is reading: screenshots, a PDF's text, or a scanned PDF's pages. */
+type Reading = { done: number | null; total: number; what: 'captures' | 'pdf' | 'scan' };
+
+/** A PDF too long for one analysis, whose pages the reader picks. */
+type LongPdf = { blocks: PdfBlock[]; pages: number; from: number; to: number };
 
 /** A text shared without a link and too short to claim anything ("ok", "Merci !"). */
 const SHORT_MESSAGE = `Ce message est trop court pour être analysé : il faut au moins ${MIN_TEXT_CHARS} caractères. S’il accompagnait un article ou un autre message, partagez plutôt celui-ci vers Squiggle.`;
@@ -270,9 +291,11 @@ function AnalyserPage() {
   );
   const [showProblem, setShowProblem] = useState(false);
   const [reading, setReading] = useState<Reading | null>(null);
+  const [longPdf, setLongPdf] = useState<LongPdf | null>(null);
   const controller = useRef<AbortController | null>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const pdfInput = useRef<HTMLInputElement>(null);
   const reportTop = useRef<HTMLHeadingElement>(null);
 
   // The shared text is in the form now; it does not stay in the address bar or the history.
@@ -316,11 +339,13 @@ function AnalyserPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Screenshots shared to the installed app: read at once, as imported ones are.
+  // Screenshots or a PDF shared to the installed app: read at once, as imported ones are.
   useEffect(() => {
     if (!sharedCount) return;
-    takeSharedCaptures().then((images) => {
-      if (images.length) void importCaptures(images, 'share_screenshots');
+    takeSharedCaptures().then((files) => {
+      const pdf = files.find(isPdf);
+      if (pdf) void importPdf(pdf, 'share_pdf');
+      else if (files.length) void importCaptures(files, 'share_screenshots');
       else setNotice(CAPTURES_LOST);
     });
     // Once, for the share the page opened with.
@@ -486,11 +511,12 @@ function AnalyserPage() {
     if (!images.length) return setNotice(CAPTURES_EMPTY);
     if (images.length > MAX_CAPTURES) return setNotice(TOO_MANY_CAPTURES);
     setNotice(null);
+    setLongPdf(null);
     const abort = new AbortController();
     controller.current = abort;
-    setReading({ done: null, total: images.length });
+    setReading({ done: null, total: images.length, what: 'captures' });
     try {
-      const text = await readCaptures(images, (done, total) => setReading({ done, total }), abort.signal);
+      const text = await readCaptures(images, (done, total) => setReading({ done, total, what: 'captures' }), abort.signal);
       count(via);
       count(screenshotsCounter(images.length));
       if (!text.trim()) return setNotice(CAPTURES_EMPTY);
@@ -503,6 +529,73 @@ function AnalyserPage() {
       controller.current = null;
       setReading(null);
     }
+  }
+
+  /**
+   * A PDF, read on this device, into the text field, as screenshots are: its
+   * text, or for a scan the OCR's reading of its pages. One too long for an
+   * analysis lands as the first pages that fit, with the choice of others.
+   */
+  async function importPdf(file: Blob, via: 'import_pdf' | 'share_pdf') {
+    setFailure(null);
+    setShowProblem(false);
+    setNotice(null);
+    setLongPdf(null);
+    const abort = new AbortController();
+    controller.current = abort;
+    setReading({ done: null, total: 1, what: 'pdf' });
+    try {
+      const read = await readPdfFile(file, MAX_CAPTURES, abort.signal);
+      count(via);
+      let text: string;
+      let said: string;
+      if (read.scanned) {
+        count('pdf_scanned');
+        const scans = read.scans;
+        setReading({ done: null, total: scans.length, what: 'scan' });
+        text = await readCaptures(scans, (done, total) => setReading({ done, total, what: 'scan' }), abort.signal);
+        said = PDF_SCAN_READ(scans.length, read.pages);
+      } else {
+        const to = pagesThatFit(read.blocks, 1, read.pages);
+        text = pdfText(read.blocks, 1, to);
+        if (to < read.pages) setLongPdf({ blocks: read.blocks, pages: read.pages, from: 1, to });
+        said = to < read.pages ? PDF_PART_READ(1, to, read.pages) : PDF_READ(read.pages);
+      }
+      if (!text.trim()) return setNotice(PDF_EMPTY);
+      setArticle((current) => ({ ...current, title: current.title.trim() || read.title.slice(0, MAX_TITLE_CHARS), text }));
+      setNotice(said);
+      textArea.current?.focus();
+    } catch (error) {
+      const name = error instanceof Error ? error.name : '';
+      setNotice(
+        abort.signal.aborted
+          ? 'Lecture annulée.'
+          : name === 'PasswordException'
+            ? PDF_LOCKED
+            : name === 'InvalidPDFException'
+              ? PDF_INVALID
+              : PDF_FAILED,
+      );
+    } finally {
+      controller.current = null;
+      setReading(null);
+    }
+  }
+
+  /** Another range of a long PDF's pages, in place of the text. */
+  function keepPages(from: number, to: number) {
+    if (!longPdf) return;
+    const text = pdfText(longPdf.blocks, from, to);
+    setLongPdf({ ...longPdf, from, to });
+    setArticle((current) => ({ ...current, text }));
+    setFailure(null);
+    setNotice(`Pages ${from} à ${to} du PDF : ${pastedChars(text).toLocaleString('fr-FR')} caractères.`);
+  }
+
+  function pickPdf(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) void importPdf(file, 'import_pdf');
   }
 
   function pickCaptures(event: ChangeEvent<HTMLInputElement>) {
@@ -568,6 +661,7 @@ function AnalyserPage() {
 
   function startOver() {
     setArticle(EMPTY_ARTICLE);
+    setLongPdf(null);
     setPhase({ kind: 'edit' });
     setShowProblem(false);
   }
@@ -682,26 +776,42 @@ function AnalyserPage() {
                 onChange={pickCaptures}
                 data-testid="captures"
               />
+              <input
+                ref={pdfInput}
+                type="file"
+                accept="application/pdf,.pdf"
+                hidden
+                onChange={pickPdf}
+                data-testid="pdf"
+              />
               {reading ? (
                 <ReadingPanel reading={reading} onCancel={() => controller.current?.abort()} />
               ) : !running && !article.text ? (
                 <div className="mt-3">
                   <div className="flex flex-wrap gap-3">
-                    <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto`}>
+                    <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}>
                       Coller le texte copié
                     </button>
                     <button
                       type="button"
                       onClick={() => fileInput.current?.click()}
-                      className={`${SECONDARY_BUTTON} w-full sm:w-auto`}
+                      className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
                     >
                       Importer des captures
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => pdfInput.current?.click()}
+                      className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
+                    >
+                      Importer un PDF
                     </button>
                   </div>
                   <p className="mt-2 mb-0 text-sm text-muted">
                     Une appli qui empêche de copier ? Faites des captures d’écran en descendant dans l’article, en
-                    gardant quelques lignes d’une capture à l’autre, puis importez-les : leur texte est lu sur cet
-                    appareil, aucune image n’est envoyée.
+                    gardant quelques lignes d’une capture à l’autre, puis importez-les. Un rapport ou un tract en
+                    PDF ? Importez le fichier. Le texte est lu sur cet appareil : aucune image, aucun fichier n’est
+                    envoyé.
                   </p>
                 </div>
               ) : null}
@@ -713,6 +823,7 @@ function AnalyserPage() {
                   {notice}
                 </p>
               ) : null}
+              {longPdf && !reading && !running ? <PdfPages pdf={longPdf} onKeep={keepPages} /> : null}
               {!running && !article.text && webAddress(article.source) ? (
                 <OpenInBrowser address={webAddress(article.source)!} />
               ) : null}
@@ -1122,18 +1233,23 @@ function Offre({ account, view }: { account: Account; view: AccountView }) {
   );
 }
 
-/** Screenshots being read, one after the other, on the device. */
+/** Screenshots, or a PDF, being read on the device. */
 function ReadingPanel({ reading, onCancel }: { reading: Reading; onCancel: () => void }) {
-  const { done, total } = reading;
+  const { done, total, what } = reading;
+  const item = what === 'captures' ? 'la capture' : 'la page';
   // The reader loads first, then each screenshot counts for an equal part.
   const percent = done === null ? 4 : Math.max(4, Math.round((done / total) * 100));
   return (
     <div className="mt-3 grid gap-3 rounded-control border border-border bg-surface px-4 py-4">
       <div className="flex items-baseline justify-between gap-4">
         <p role="status" aria-live="polite" className="m-0 text-base font-medium">
-          {done === null
-            ? 'Préparation de la lecture…'
-            : `Lecture de la capture ${Math.min(done + 1, total)} sur ${total}…`}
+          {what === 'pdf'
+            ? 'Lecture du PDF…'
+            : done === null
+              ? what === 'scan'
+                ? 'Document scanné : préparation de la lecture de ses pages…'
+                : 'Préparation de la lecture…'
+              : `Lecture de ${item} ${Math.min(done + 1, total)} sur ${total}…`}
         </p>
         <button
           type="button"
@@ -1145,7 +1261,7 @@ function ReadingPanel({ reading, onCancel }: { reading: Reading; onCancel: () =>
       </div>
       <div
         role="progressbar"
-        aria-label="Lecture des captures"
+        aria-label={what === 'captures' ? 'Lecture des captures' : 'Lecture du PDF'}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
@@ -1159,6 +1275,51 @@ function ReadingPanel({ reading, onCancel }: { reading: Reading; onCancel: () =>
       <p className="m-0 text-sm text-muted">
         Le texte est lu sur cet appareil, sans rien envoyer. La première fois, le lecteur se télécharge (quelques Mo).
       </p>
+    </div>
+  );
+}
+
+const PAGE_FIELD = FIELD.replace('mt-2 block w-full', 'block w-24');
+
+/** The range of a long PDF's pages to analyse: changing the first page suggests the last that fits. */
+function PdfPages({ pdf, onKeep }: { pdf: LongPdf; onKeep: (from: number, to: number) => void }) {
+  const [from, setFrom] = useState(pdf.from);
+  const [to, setTo] = useState(pdf.to);
+  const page = (value: string) => Math.min(pdf.pages, Math.max(1, Math.round(Number(value)) || 1));
+  const changed = from !== pdf.from || to !== pdf.to;
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-3 rounded-control border border-border bg-surface px-4 py-3">
+      <label className="grid gap-1 text-sm">
+        De la page
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={pdf.pages}
+          value={from}
+          onChange={(event) => {
+            const first = page(event.target.value);
+            setFrom(first);
+            setTo(pagesThatFit(pdf.blocks, first, pdf.pages));
+          }}
+          className={PAGE_FIELD}
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        à la page
+        <input
+          type="number"
+          inputMode="numeric"
+          min={from}
+          max={pdf.pages}
+          value={to}
+          onChange={(event) => setTo(Math.max(from, page(event.target.value)))}
+          className={PAGE_FIELD}
+        />
+      </label>
+      <button type="button" onClick={() => onKeep(from, to)} disabled={!changed} className={SECONDARY_BUTTON}>
+        Garder ces pages
+      </button>
     </div>
   );
 }
