@@ -19,6 +19,8 @@ import android.widget.TextView
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.browser.trusted.TrustedWebActivityIntentBuilder
+import androidx.browser.trusted.sharing.ShareData
+import androidx.browser.trusted.sharing.ShareTarget
 import com.google.androidbrowserhelper.trusted.TwaLauncher
 
 /**
@@ -35,6 +37,13 @@ import com.google.androidbrowserhelper.trusted.TwaLauncher
  *
  * A YouTube link has no page to read here: the report already made for it, if
  * any, is looked up by the link on /analyser, which says what to do otherwise.
+ *
+ * A share without a link goes straight to the site in the Trusted Web
+ * Activity: a text in the address's fragment, which /analyser analyses at once
+ * (or says why it cannot, for a message too short to be an article), and
+ * screenshots through the site's share target (`share_target` in
+ * `web/public/manifest.webmanifest`), whose service worker keeps them on the
+ * phone for the page to read. A PDF is not read yet: the screen says what to do.
  */
 class LectureActivity : Activity() {
     private lateinit var page: WebView
@@ -44,6 +53,8 @@ class LectureActivity : Activity() {
     private var launcher: TwaLauncher? = null
     /** Whether the next page to finish loading is the shared article, read without a tap. */
     private var readOnLoad = false
+
+    private val prefs by lazy { getSharedPreferences("lecture", MODE_PRIVATE) }
 
     private val favori by lazy { assets.open("favori.js").bufferedReader().use { it.readText() } }
 
@@ -104,10 +115,32 @@ class LectureActivity : Activity() {
 
     private fun open(intent: Intent) {
         handler.removeCallbacksAndMessages(null)
-        val link = sharedLink(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
+        val type = intent.type.orEmpty()
+        if (type.startsWith("image/")) {
+            val images = sharedStreams(intent)
+            if (images.isEmpty()) return say(R.string.empty_share)
+            // The share target is the site's service worker, which the browser only has once
+            // the site has been opened: before that, the POST would carry the images to our
+            // server and end on an error. The page then offers to import them, and the next
+            // share goes through.
+            // ponytail: a flag, not a check of the worker itself; a browser whose data was
+            // cleared since still gets the server's error, until the site is opened again.
+            if (prefs.getBoolean(SITE_OPENED, false)) {
+                openReport(Uri.parse("$ORIGIN/analyser"), ShareData(null, null, images))
+            } else {
+                openReport(Uri.parse("$ORIGIN/analyser?captures=${images.size}"))
+            }
+            finish()
+            return
+        }
+        if (type == "application/pdf") return say(R.string.no_pdf)
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().trim()
+        val link = sharedLink(text)
         if (link == null) {
-            check.visibility = View.GONE
-            status.text = getString(R.string.no_link)
+            if (text.isEmpty()) return say(R.string.empty_share)
+            // In the fragment, which never reaches a server, as the iPhone shortcut sends an article.
+            openReport(Uri.parse("$ORIGIN/analyser#text=${Uri.encode(text)}&via=appli"))
+            finish()
             return
         }
         if (isYoutube(link)) {
@@ -129,13 +162,20 @@ class LectureActivity : Activity() {
         handler.postDelayed(giveUp, GIVE_UP_MS)
     }
 
+    /** A share this screen cannot hand on: the reason, without the article's button. */
+    private fun say(message: Int) {
+        check.visibility = View.GONE
+        status.text = getString(message)
+    }
+
     private fun idle(message: String) {
         handler.removeCallbacks(giveUp)
         check.isEnabled = true
         status.text = message
     }
 
-    private fun openReport(url: Uri) {
+    /** `images`: screenshots for the site's share target, which the browser posts to it with read access. */
+    private fun openReport(url: Uri, images: ShareData? = null) {
         idle(getString(R.string.ready))
         // In a browser the bookmark's banner leaves with the page; here the page stays, behind the report.
         page.evaluateJavascript(REMOVE_BANNER, null)
@@ -147,8 +187,10 @@ class LectureActivity : Activity() {
             .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
             .setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_DARK, colors)
             .setDefaultColorSchemeParams(colors)
+        if (images != null) twa.setShareParams(SHARE_TARGET, images)
         launcher?.destroy()
         launcher = TwaLauncher(this).also { it.launch(twa, null, null, null) }
+        prefs.edit().putBoolean(SITE_OPENED, true).apply()
     }
 
     @Deprecated("The web view's history first, then the app before it.")
@@ -171,17 +213,35 @@ class LectureActivity : Activity() {
 
     companion object {
         const val ORIGIN = "https://squiggle.fr"
+        /** Whether this app has opened the site in the browser, which installs its service worker. */
+        private const val SITE_OPENED = "site_opened"
         private const val SETTLE_MS = 1_500L
         /** lecture.ts scrolls for 15 seconds at most, then the page is gzipped and handed over. */
         private const val GIVE_UP_MS = 25_000L
         /** The banner `favori.ts` puts at the end of the page's body. */
         private const val REMOVE_BANNER =
             "for (const el of document.querySelectorAll('body > div[role=status]')) if (el.textContent.startsWith('Squiggle')) el.remove();"
-        private val LINK =Regex("""https?://\S+""")
+        /** The site's `share_target`, as `web/public/manifest.webmanifest` declares it. */
+        private val SHARE_TARGET = ShareTarget(
+            "$ORIGIN/analyser",
+            ShareTarget.METHOD_POST,
+            ShareTarget.ENCODING_TYPE_MULTIPART,
+            ShareTarget.Params("title", "text", listOf(ShareTarget.FileFormField("captures", listOf("image/*")))),
+        )
+        private val LINK = Regex("""https?://\S+""")
         private val YOUTUBE = Regex("""(^|\.)(youtube\.com|youtu\.be)$""")
 
         /** The link in a share: papers' apps send "headline link", YouTube a lone link. */
         fun sharedLink(text: String): Uri? = LINK.findAll(text).lastOrNull()?.let { Uri.parse(it.value) }
+
+        /** The files of a share: one with SEND, several with SEND_MULTIPLE. */
+        @Suppress("DEPRECATION")
+        fun sharedStreams(intent: Intent): List<Uri> =
+            if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+                intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+            } else {
+                listOfNotNull(intent.getParcelableExtra(Intent.EXTRA_STREAM))
+            }
 
         fun isYoutube(link: Uri): Boolean = YOUTUBE.containsMatchIn(link.host.orEmpty())
 

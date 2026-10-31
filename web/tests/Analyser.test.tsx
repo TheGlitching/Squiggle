@@ -345,6 +345,62 @@ describe('Analyser, from a share', () => {
       ),
     );
   });
+
+  it('gives a phone a next step it can take, since its YouTube app does not let a transcript be copied', async () => {
+    const original = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36',
+      configurable: true,
+    });
+    try {
+      serve(null);
+      at(`/analyser?${new URLSearchParams({ text: 'https://youtu.be/dQw4w9WgXcQ' })}`);
+      render(<Analyser />);
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(
+          /ne lit pas encore les vidéos sur téléphone\. Envoyez-vous ce lien par e-mail, puis ouvrez-le sur un ordinateur/,
+        ),
+      );
+      expect(screen.getByRole('status')).not.toHaveTextContent(/transcription/);
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: original, configurable: true });
+    }
+  });
+});
+
+describe('Analyser, a whole text from the iPhone shortcut or the Android app', () => {
+  it.each([
+    ['raccourci', 'entry_shortcut'],
+    ['appli', 'entry_app_text'],
+  ])('analyses it at once for via=%s, and counts %s', async (via, counter) => {
+    const seen = serve(account());
+    at(`/analyser#${new URLSearchParams({ text: TEXT, via })}`);
+    render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: counter }]);
+  });
+
+  it('reads a share that arrives while the page is already open, as the app’s tab only changes the fragment', async () => {
+    const seen = serve(account());
+    at('/analyser');
+    render(<Analyser />);
+    window.location.hash = new URLSearchParams({ text: TEXT, via: 'appli' }).toString();
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_app_text' }]);
+  });
+
+  it('keeps a message too short for an article in the text, and says why it is not analysed', async () => {
+    const seen = serve(account());
+    const message = 'URGENT ⚠️ la CAF supprime les APL des retraités propriétaires. Transférez à tous vos contacts !';
+    at(`/analyser#${new URLSearchParams({ text: message, via: 'appli' })}`);
+    render(<Analyser />);
+    expect(screen.getByRole('status')).toHaveTextContent(/Ce message est trop court pour être analysé/);
+    expect(screen.getByLabelText(/Texte/)).toHaveValue(message);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_short_message' }]);
+  });
 });
 
 describe('Analyser, from the bookmark', () => {

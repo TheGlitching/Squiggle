@@ -53,6 +53,16 @@ async function receiveShare(request) {
   return Response.redirect(new URL(query ? `${SHARE_PATH}?${query}` : SHARE_PATH, self.location.origin).href, 303);
 }
 
+/**
+ * A file the site serves as it is (sitemap.xml, robots.txt, /.well-known/…,
+ * an image): opened as a page, it is still that file, never the app, which
+ * has no route for it and would show its 404. The app's own addresses have no
+ * extension.
+ */
+function isFile(pathname) {
+  return pathname.startsWith('/.well-known/') || /\.[^/]+$/.test(pathname);
+}
+
 function toServer(pathname) {
   return SERVER_PATHS.some((p) => (p.endsWith('/*') ? pathname.startsWith(p.slice(0, -1)) : pathname === p));
 }
@@ -91,7 +101,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (url.origin !== self.location.origin || toServer(url.pathname)) return;
 
-  if (request.mode === 'navigate') {
+  if (request.mode === 'navigate' && !isFile(url.pathname)) {
     // Always `/`, never the page's own address: a shared article arrives in
     // the query string ("Partager vers Squiggle"), and this way the shared
     // text never leaves the device. Fresh first, so a deploy shows at once.

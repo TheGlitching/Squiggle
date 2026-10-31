@@ -6,7 +6,8 @@
     <string name="reading">Squiggle lit l’article…</string>
     <string name="loading">Ouverture de l’article…</string>
     <string name="ready">Connecté à votre journal ? Touchez Vérifier pour relire l’article.</string>
-    <string name="no_link">Ce partage ne contient pas de lien. Partagez un article ou une vidéo vers Squiggle.</string>
+    <string name="empty_share">Ce partage est vide. Partagez vers Squiggle un article, un texte ou des captures d’écran.</string>
+    <string name="no_pdf">Squiggle ne lit pas encore les PDF. Ouvrez le PDF, sélectionnez son texte, puis Partager vers Squiggle.</string>
     <!-- The site this app may show in full screen, as Digital Asset Links states it (web/public/.well-known/assetlinks.json). -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://squiggle.fr\"}}]</string>
 </resources>

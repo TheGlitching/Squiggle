@@ -237,11 +237,13 @@ export function articleFromShare(params: URLSearchParams): Partial<PastedArticle
     }
   }
 
-  // A short one-line share is a headline, not an article: it is the title.
-  const headline = !sharedTitle && !text.includes('\n') && text.length < MIN_TEXT_CHARS;
+  // A short one-line share beside a link is the link's headline: it is the title.
+  // Without a link it is the message itself (a WhatsApp chain, a post), kept as text.
+  const address = webAddress(source) ?? '';
+  const headline = Boolean(address) && !sharedTitle && !text.includes('\n') && text.length < MIN_TEXT_CHARS;
   return {
     title: headline ? text : sharedTitle,
-    source: webAddress(source) ?? '',
+    source: address,
     text: headline ? '' : text,
   };
 }
