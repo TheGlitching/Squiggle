@@ -7,7 +7,7 @@ const article: Article = {
     'Comment repérer une conclusion hâtive dans un article ? Séparez ce qui a été observé de ce qui est conclu, et mesurez l’écart. Une méthode, un exemple.',
   chapo:
     'Une conclusion hâtive va plus loin que ce que l’article a observé. Pour la repérer, séparez deux phrases : celle qui dit ce qui a été vu, celle qui dit ce qui en est conclu. L’écart entre les deux est ce que l’article vous demande de croire en plus.',
-  publie: '2026-11-02',
+  publie: '2026-10-31',
   notions: ['generalisation-hative', 'correlation-causalite', 'surinterpretation', 'titre-trompeur'],
   corps: [
     {
