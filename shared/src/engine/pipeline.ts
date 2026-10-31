@@ -4,6 +4,7 @@ import {
   buildFourchesCaudinesUserPrompt,
 } from './prompts';
 import { parseAndValidateLlmOutput, reconcileResearchedFindings } from './validator';
+import { critiqueReport } from './critique';
 import { computeFourchesCaudinesScore } from './scoring';
 import { researchFindings, CitedSource } from './research';
 import { verifyCitedSources } from './sourceVerification';
@@ -236,10 +237,22 @@ export class AnalysisPipeline {
 
       this.reportProgress('parsing_response', 'Validation et notation du rapport...', 55);
 
-      const auditedReport = parseAndValidateLlmOutput(response.content, analysisInput, {
+      const parsedReport = parseAndValidateLlmOutput(response.content, analysisInput, {
         modelName: `${this.client.getProvider()}/${this.client.getModel()}`,
         durationMs: Date.now() - startedAt,
         articleSources: sourcesByBlock,
+      });
+
+      // A second reading withdraws or recalibrates the audit's unfair findings
+      // before any of them is researched, so a withdrawn one costs no search.
+      this.reportProgress('parsing_response', 'Relecture critique des constats...', 60);
+      const auditedReport = await critiqueReport({
+        client: this.client,
+        input: analysisInput,
+        report: parsedReport,
+        citedSources,
+        articleSources: sourcesByBlock,
+        abortSignal: this.abortController?.signal,
       });
 
       // Now the audit's own factual findings become the claims under test: the

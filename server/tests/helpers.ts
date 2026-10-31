@@ -166,7 +166,7 @@ export async function makeFakeGoogle(clientId: string): Promise<FakeGoogle> {
  * `calls` is what the cache tests assert on: a cache hit must cost zero.
  */
 export class StubLlm extends BaseLLMClient {
-  calls = { complete: 0, grounded: 0 };
+  calls = { complete: 0, grounded: 0, critique: 0 };
   /** What each call was asked for, in order: the cost ceilings are asserted on these. */
   completeOptions: CompletionOptions[] = [];
   groundedOptions: Array<CompletionOptions & { maxSearches?: number }> = [];
@@ -212,6 +212,9 @@ export class StubLlm extends BaseLLMClient {
     claims: [],
   });
 
+  /** Critique reply, overridable per test: by default every finding is kept. */
+  critiqueJson: string = JSON.stringify({ decisions: [], ajouts: [] });
+
   constructor(model = 'stub-model') {
     super({ provider: 'gemini', apiKey: 'test-key-not-a-secret', model });
   }
@@ -228,8 +231,8 @@ export class StubLlm extends BaseLLMClient {
       throw new Error('stub provider failure');
     }
     const system = options.systemPrompt ?? '';
-    // The source-judgement prompt is the only `complete` the engine makes
-    // besides the audit; telling them apart by their system prompt keeps the
+    // Besides the audit, the engine's `complete` calls are the critique and the
+    // source judgement; telling them apart by their system prompt keeps the
     // stub honest about which call it is answering.
     if (system.includes('inspection des sources')) {
       const content = JSON.stringify({
@@ -239,6 +242,10 @@ export class StubLlm extends BaseLLMClient {
         raison: 'concordance',
       });
       return { content, model: this.getModel(), provider: 'gemini' };
+    }
+    if (system.includes('relecteur critique')) {
+      this.calls.critique += 1;
+      return { content: this.critiqueJson, model: this.getModel(), provider: 'gemini' };
     }
     const reply = this.auditReplies.shift() ?? { content: this.auditJson, finishReason: 'stop' };
     return { ...reply, model: this.getModel(), provider: 'gemini' };
