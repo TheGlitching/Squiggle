@@ -53,6 +53,7 @@ describe('new articles', () => {
     const file = articleFile({
       slug: 'essai',
       titre: 'Un titre avec l\'apostrophe droite',
+      titreCourt: 'Un titre',
       description: 'Une description.',
       chapo: 'Un chapô.',
       publie: '2026-11-02',

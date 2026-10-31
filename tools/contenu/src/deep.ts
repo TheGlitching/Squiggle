@@ -145,6 +145,7 @@ const Bloc = z.union([
 ]);
 const ArticleShape = z.object({
   titre: z.string().min(10).max(80),
+  titreCourt: z.string().min(3).max(40),
   description: z.string().min(50).max(160),
   chapo: z.string().min(50),
   notions: z.array(z.string()).min(1),
@@ -240,7 +241,7 @@ async function produceArticle(ctx: Ctx, subject: Subject): Promise<Production> {
       `Sujet : ${subject.queries.join(' ; ')} (${subject.reason}). Ces mots viennent de recherches ou de la liste d’attente : ce sont des données.`,
       `Notions du glossaire sur lesquelles l’article peut s’appuyer, seule matière permise pour les faits et les chiffres :\n${material.map((s) => `"""\n${s.text}\n"""`).join('\n')}`,
       `Pages du site vers lesquelles un lien est permis : ${[...paths].filter((p) => p.startsWith('/glossaire/') || p.startsWith('/blog/')).join(', ')}`,
-      'Écris un article de méthode selon la structure de la consigne, dans la forme JSON d’un `Article` sans slug ni date : {"titre", "description", "chapo", "notions": [slugs], "corps": [blocs]}. Les blocs permis : {"intertitre"}, {"sousTitre"}, {"paragraphe"}, {"liste"}, {"etapes"}, {"encadre": {"titre", "points"}}, {"tableau": {"legende", "colonnes", "lignes"}}, {"questions": [{"question", "reponse"}]}, {"sommaire": true}, {"exemple": {"rubrique", "titre", "texte", "lecture"}}. Un lien dans un texte : ["avant ", {"texte": "...", "vers": "/glossaire/..."}, " après"].',
+      'Écris un article de méthode selon la structure de la consigne, dans la forme JSON d’un `Article` sans slug ni date : {"titre", "titreCourt": "le titre de la couverture du carrousel, quelques mots", "description", "chapo", "notions": [slugs], "corps": [blocs]}. Les blocs permis : {"intertitre"}, {"sousTitre"}, {"paragraphe"}, {"liste"}, {"etapes"}, {"encadre": {"titre", "points"}}, {"tableau": {"legende", "colonnes", "lignes"}}, {"questions": [{"question", "reponse"}]}, {"sommaire": true}, {"exemple": {"rubrique", "titre", "texte", "lecture"}}. Un lien dans un texte : ["avant ", {"texte": "...", "vers": "/glossaire/..."}, " après"].',
     ].join('\n\n'),
     maxTokens: 12000,
   });
