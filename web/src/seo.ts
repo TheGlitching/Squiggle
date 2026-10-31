@@ -9,11 +9,27 @@
 import { CONTACT_EMAIL } from './components/Layout';
 import { GITHUB_URL, PRICE_MONTHLY, TAGLINE } from './offer';
 import { BLOG_PATH, FEED_PATH, PUBLISHED, article, blogPath, type Article } from './blog';
-import { NOTIONS, famille, glossaryPath, notion } from './glossaire';
+import { NOTIONS, famille, glossaryPath, notion, type Notion } from './glossaire';
 import { CHROME_URL, FIREFOX_URL } from './install';
 import { SHORTCUT_PUBLISHED } from './shortcut';
 
 export const ORIGIN = 'https://squiggle.fr';
+
+/** Where Google cuts a result's title, give or take a few letters. */
+export const TITLE_MAX = 60;
+
+const BRAND = ' - Squiggle';
+
+/** A page's title, signed with the site's name when that still fits before the cut. */
+const titled = (title: string) => (title.length + BRAND.length <= TITLE_MAX ? `${title}${BRAND}` : title);
+
+/** A notion's title: what a search types first, then what the page gives, shortened until it fits. */
+const notionTitle = (notion: Notion) =>
+  titled(
+    [`${notion.nom} : définition et ${notion.exemples ? 'exemples' : 'exemple'}`, `${notion.nom} : définition`].find(
+      (title) => title.length + BRAND.length <= TITLE_MAX,
+    ) ?? notion.nom,
+  );
 
 const HOME_TITLE = `Squiggle : ${TAGLINE.charAt(0).toLowerCase()}${TAGLINE.slice(1, -1)}`;
 
@@ -43,7 +59,10 @@ export interface PublicPage {
 const GLOSSARY = `${ORIGIN}/glossaire`;
 const TERM_SET = { '@type': 'DefinedTermSet', '@id': `${GLOSSARY}#glossaire`, name: 'Glossaire de l’esprit critique', url: GLOSSARY };
 
-/** The trail a notion page shows above its title (`NotionPage`), for the results that still print one. */
+/**
+ * The trail a page shows above its title (`NotionPage`, `ArticlePage`), ending on the page
+ * itself, for the results that still print one.
+ */
 const breadcrumb = (trail: ReadonlyArray<readonly [string, string?]>) => ({
   '@type': 'BreadcrumbList',
   itemListElement: trail.map(([name, url], index) => ({
@@ -58,7 +77,7 @@ const breadcrumb = (trail: ReadonlyArray<readonly [string, string?]>) => ({
 const GLOSSARY_PAGES: PublicPage[] = [
   {
     path: '/glossaire',
-    title: 'Glossaire de l’esprit critique : sophismes, biais et procédés, expliqués simplement - Squiggle',
+    title: 'Glossaire de l’esprit critique : sophismes et biais',
     description:
       'Faux dilemme, homme de paille, chiffre sans origine… Les 25 notions que nomment les rapports Squiggle, avec un exemple et une question pour la classe.',
     share: {
@@ -81,7 +100,7 @@ const GLOSSARY_PAGES: PublicPage[] = [
   },
   ...NOTIONS.map((notion) => ({
     path: glossaryPath(notion.slug),
-    title: `${notion.nom} : définition et ${notion.exemples ? 'exemples' : 'exemple'} - Squiggle`,
+    title: notionTitle(notion),
     description: notion.description ?? `${notion.resume} Définition, exemple, comment le repérer.`,
     share: {
       kicker: `Glossaire de l’esprit critique · ${famille(notion.famille).titre}`,
@@ -139,7 +158,7 @@ export function blogPages(articles: readonly Article[]): PublicPage[] {
   return [
     {
       path: BLOG_PATH,
-      title: `${BLOG_TITLE} : des méthodes pour lire un article avec un œil critique`,
+      title: `${BLOG_TITLE} : lire un article d’un œil critique`,
       description:
         'Repérer un chiffre sans origine, un titre trompeur, un procès d’intention : des méthodes de lecture, chacune sur un exemple inventé.',
       share: {
@@ -154,14 +173,13 @@ export function blogPages(articles: readonly Article[]): PublicPage[] {
       const url = `${ORIGIN}${blogPath(item.slug)}`;
       const page: PublicPage = {
         path: blogPath(item.slug),
-        title: `${item.titre} - Squiggle`,
+        title: titled(item.titre),
         description: item.description,
         // The chapo would not fit under a title of three lines: the card says what the page is.
         share: { kicker: BLOG_TITLE, title: item.titre, text: 'Une méthode de lecture, sur un article inventé.', figure: 'lecture' },
         lastmod: lastmod(item),
       };
-      page.jsonLd = {
-        '@context': 'https://schema.org',
+      const schema = {
         '@type': 'Article',
         '@id': `${url}#article`,
         headline: item.titre,
@@ -179,6 +197,10 @@ export function blogPages(articles: readonly Article[]): PublicPage[] {
           name: notion(slug)!.nom,
           url: `${ORIGIN}${glossaryPath(slug)}`,
         })),
+      };
+      page.jsonLd = {
+        '@context': 'https://schema.org',
+        '@graph': [schema, breadcrumb([['Blog', `${ORIGIN}${BLOG_PATH}`], [item.titre]])],
       };
       return page;
     }),
@@ -254,7 +276,7 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
   },
   {
     path: '/enseignants/grille-lecture',
-    title: 'Grille de lecture : cinq raisons de douter d’un article - Squiggle',
+    title: 'Grille de lecture : cinq raisons de douter - Squiggle',
     description:
       'Une grille à photocopier pour chaque élève : cinq raisons de douter d’un article, avec un exemple chacune. Sert avec n’importe quel article.',
     jsonLd: learningResource(
@@ -342,7 +364,8 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
   {
     path: '/mentions-legales',
     title: 'Mentions légales - Squiggle',
-    description: 'Qui édite Squiggle et qui l’héberge.',
+    description:
+      'Qui édite Squiggle et qui l’héberge : éditeur, directeur de la publication, hébergeur, propriété intellectuelle, signalement d’un contenu illicite.',
   },
   ...GLOSSARY_PAGES,
   ...blogPages(PUBLISHED),
@@ -386,7 +409,7 @@ export function titleFor(path: string): string {
   if (APP_TITLES[path]) return APP_TITLES[path];
   // A draft, which only the dev server shows.
   const draft = path.startsWith(`${BLOG_PATH}/`) ? article(path.slice(BLOG_PATH.length + 1)) : undefined;
-  if (draft) return `${draft.titre} - Squiggle`;
+  if (draft) return titled(draft.titre);
   return APP_PATHS.includes(path) || path === '/tarifs' ? PUBLIC_PAGES[0].title : NOT_FOUND_TITLE;
 }
 
