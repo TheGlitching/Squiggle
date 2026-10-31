@@ -392,7 +392,9 @@ describe('page-change invalidation', () => {
       });
       await flush();
 
-      expect(container.textContent).toContain('Analyse en cours');
+      expect(container.textContent).toContain('Lecture : en cours');
+      // While it runs, the panel is the run: no second button saying so.
+      expect(container.querySelector('[data-tour="run-analysis"]')).toBeNull();
 
       // The reader navigates to a different article while the request for
       // the first one is still pending.
@@ -403,7 +405,7 @@ describe('page-change invalidation', () => {
       });
       await flush();
 
-      expect(container.textContent).not.toContain('Analyse en cours');
+      expect(container.textContent).not.toContain('Lecture : en cours');
       expect(container.textContent).toContain('Lancer l’analyse critique');
 
       // The stale request for the first article finally resolves.

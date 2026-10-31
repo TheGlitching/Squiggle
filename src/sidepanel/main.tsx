@@ -634,7 +634,9 @@ function SidepanelApp() {
       <main className="flex-1 py-4 space-y-5">
         {/* A reader with no key is offered both ways in, not a dead end: the account
             with the one primary, and the own key, free, explained beside it. */}
-        {showHostedCard && (
+        {/* While a run is under way the panel is the run: the account, the offer and
+            the run button come back with its outcome. */}
+        {showHostedCard && !busy && (
           <HostedAccountCard
             account={hostedAccount}
             error={hostedError}
@@ -648,29 +650,29 @@ function SidepanelApp() {
           />
         )}
 
-        {!report && offer}
+        {!report && !busy && offer}
 
-        <button
-          type="button"
-          data-tour="run-analysis"
-          onClick={isPdf ? openPdf : () => void runAnalysis()}
-          disabled={busy || !canRun}
-          className={`w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-50 ${
-            canRun
-              ? 'bg-accent text-accent-foreground hover:bg-accent-hover'
-              : 'border border-line text-ink/80'
-          }`}
-        >
-          {busy
-            ? 'Analyse en cours…'
-            : report
-            ? 'Relancer l’analyse'
-            : isVideoPage
-            ? 'Analyser cette vidéo'
-            : isPdf
-            ? 'Analyser ce PDF'
-            : 'Lancer l’analyse critique'}
-        </button>
+        {!busy && (
+          <button
+            type="button"
+            data-tour="run-analysis"
+            onClick={isPdf ? openPdf : () => void runAnalysis()}
+            disabled={!canRun}
+            className={`w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-50 ${
+              canRun
+                ? 'bg-accent text-accent-foreground hover:bg-accent-hover'
+                : 'border border-line text-ink/80'
+            }`}
+          >
+            {report
+              ? 'Relancer l’analyse'
+              : isVideoPage
+              ? 'Analyser cette vidéo'
+              : isPdf
+              ? 'Analyser ce PDF'
+              : 'Lancer l’analyse critique'}
+          </button>
+        )}
 
         {/* A post or a forwarded message is not the page's article: the reader points at it. */}
         {!isVideoPage && !report && !busy && !error && canRun && (

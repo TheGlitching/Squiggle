@@ -322,8 +322,6 @@ function AnalyserPage() {
   const [autoRun, setAutoRun] = useState(favori && !page);
   /** Cleared by a cancel that comes while the bookmark's page is still being read. */
   const readingPage = useRef(Boolean(page));
-  /** The run on screen is the bookmark's, which the reader never asked for with a tap. */
-  const [autoStarted, setAutoStarted] = useState(favori);
   const [sharedCount] = useState(sharedCaptures);
   const [returning] = useState(backFromVisit);
   const [mailed] = useState(mailedReport);
@@ -508,7 +506,6 @@ function AnalyserPage() {
 
   const problem = pasteProblem(article);
   const view = account ? describeAccount(account) : null;
-  const running = phase.kind === 'running';
   const chars = pastedChars(article.text);
   const transcript = useMemo(() => readTranscript(article.text), [article.text]);
 
@@ -796,7 +793,6 @@ function AnalyserPage() {
     const abort = new AbortController();
     controller.current = abort;
     if (readTranscript(article.text)) count('paste_transcript');
-    setAutoStarted(progress === AUTO_START);
     setPhase({ kind: 'running', progress });
     const visitor = account === null;
     try {
@@ -945,6 +941,21 @@ function AnalyserPage() {
     );
   }
 
+  // While the analysis runs, the form has nothing left to offer: the page is
+  // the run itself, and its one action is to stop it. The text stays in state
+  // and comes back with the form if the reader cancels.
+  if (phase.kind === 'running') {
+    return (
+      <div className={`${PAGE} py-8 sm:py-14`}>
+        <h1 className={TITLE}>Analyser un article</h1>
+        <p className="mt-3 mb-0 max-w-[55ch] text-lg leading-relaxed text-muted">
+          Le rapport arrive en une à deux minutes.
+        </p>
+        <Stages progress={phase.progress} onCancel={cancel} />
+      </div>
+    );
+  }
+
   return (
     <div className={`${PAGE} pt-8 sm:py-14`}>
       <h1 className={TITLE}>Analyser un article ou un message</h1>
@@ -952,18 +963,15 @@ function AnalyserPage() {
         Collez le texte. Le rapport arrive en une à deux minutes.
       </p>
 
-      {phase.kind === 'running' ? <Stages stage={phase.progress.stage} /> : null}
-
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-16">
         <form onSubmit={analyse} noValidate>
-          {/* Not disabled while screenshots are read: the reading's own Annuler is inside. */}
-          <fieldset disabled={running} className="m-0 grid gap-6 border-0 p-0">
+          <fieldset className="m-0 grid gap-6 border-0 p-0">
             <div>
               <div className="flex items-baseline justify-between gap-4">
                 <label htmlFor="texte" className="text-base font-medium">
                   Texte de l’article ou du message
                 </label>
-                {!running && !reading && !transcribing && (article.text || article.title || article.source) ? (
+                {!reading && !transcribing && (article.text || article.title || article.source) ? (
                   <div className="-my-2 -mr-2 flex gap-2">
                     {article.text ? (
                       <button type="button" onClick={appendCopied} className={TEXT_BUTTON}>
@@ -1011,7 +1019,7 @@ function AnalyserPage() {
                   onPick={(part) => void transcribePart(choosing.file, part)}
                   onCancel={() => setChoosing(null)}
                 />
-              ) : !running && !article.text ? (
+              ) : !article.text ? (
                 <div className="mt-3">
                   <div className="flex flex-wrap gap-3">
                     <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}>
@@ -1059,8 +1067,8 @@ function AnalyserPage() {
                   {notice}
                 </p>
               ) : null}
-              {longPdf && !reading && !running ? <PdfPages pdf={longPdf} onKeep={keepPages} /> : null}
-              {!running && !article.text && webAddress(article.source) ? (
+              {longPdf && !reading ? <PdfPages pdf={longPdf} onKeep={keepPages} /> : null}
+              {!article.text && webAddress(article.source) ? (
                 <OpenInBrowser address={webAddress(article.source)!} />
               ) : null}
               <textarea
@@ -1159,16 +1167,8 @@ function AnalyserPage() {
               </p>
             ) : null}
             {failure ? <FailureNotice failure={failure} /> : null}
-            {running ? (
-              <RunningPanel progress={phase.progress} onCancel={cancel} auto={autoStarted} />
-            ) : (
-              <Action
-                account={account}
-                empty={!article.text}
-                refused={failure?.kind === 'signup'}
-              />
-            )}
-            {view && !running && view.canAnalyse ? <p className="mt-3 mb-0 text-sm text-muted">{view.detail}</p> : null}
+            <Action account={account} empty={!article.text} refused={failure?.kind === 'signup'} />
+            {view && view.canAnalyse ? <p className="mt-3 mb-0 text-sm text-muted">{view.detail}</p> : null}
           </div>
         </form>
         <Aside />
@@ -1298,16 +1298,15 @@ function Aside() {
 }
 
 /**
- * The stages the server really runs, in order, each with what it does: the
- * same three, under the same names, as the extension's panel
- * (`src/ui/components/RunScene.tsx`). A stage the text does not need (no fact
- * to look up) passes as quickly as it runs: the page follows the server, it
- * never paces itself.
+ * The stages the server really runs, in order: the same three, under the same
+ * names, as the extension's panel (`src/ui/components/RunScene.tsx`). A stage
+ * the text does not need (no fact to look up) passes as quickly as it runs:
+ * the page follows the server, it never paces itself.
  */
-const STAGES: Array<[RunStep, string, string]> = [
-  ['lecture', 'Lecture', 'Le texte est relu en entier, contre les cinq domaines de la grille.'],
-  ['recherche', 'Recherche des sources', 'Chaque fait vérifiable est cherché sur le web, chaque source citée est lue.'],
-  ['verification', 'Vérification et note', 'Les objections sont confrontées à ce qui a été trouvé, la note recalculée.'],
+const STAGES: Array<[RunStep, string]> = [
+  ['lecture', 'Lecture'],
+  ['recherche', 'Recherche des sources'],
+  ['verification', 'Vérification et note'],
 ];
 
 /** The server's stage, as one of the three. The cache lookup before the reading counts as the reading's start. */
@@ -1317,40 +1316,58 @@ function stepOf(stage: Progress['stage']): number {
   return 0;
 }
 
-function Stages({ stage }: { stage: Progress['stage'] }) {
-  const current = stepOf(stage);
+/**
+ * The analysis running, and all the page shows while it does: the scene for
+ * the stage under way, the three stages with the server's own live message
+ * under the current one, and the one thing left to do, stopping it.
+ */
+function Stages({ progress, onCancel }: { progress: Progress; onCancel: () => void }) {
+  const current = stepOf(progress.stage);
   return (
     <div className="mt-8 grid max-w-3xl items-center gap-6 rounded-card border border-border bg-surface p-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-8 sm:p-7">
       {/* Remounted on each stage, so the new loop starts from its beginning. */}
       <div key={STAGES[current][0]} className="run-scene mx-auto w-full max-w-80">
         <RunScene step={STAGES[current][0]} />
       </div>
-      <ol className="m-0 grid list-none gap-3 p-0">
-        {STAGES.map(([step, label, detail], index) => (
-          <li key={step} aria-current={index === current ? 'step' : undefined} className="flex gap-3">
-            <span
-              aria-hidden="true"
-              className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-semibold tabular-nums ${
-                index < current
-                  ? 'border-accent bg-accent text-accentForeground'
-                  : index === current
-                    ? 'border-accent text-accentInk'
-                    : 'border-border text-muted'
-              }`}
-            >
-              {index < current ? '✓' : index + 1}
-            </span>
-            <span className="grid gap-0.5">
-              <span className={`text-base ${index === current ? 'font-semibold text-foreground' : index < current ? 'text-foreground' : 'text-muted'}`}>
-                {label}
-                {index < current ? <span className="sr-only"> : fait</span> : null}
-                {index === current ? <span className="sr-only"> : en cours</span> : null}
+      <div className="grid gap-5">
+        <ol className="m-0 grid list-none gap-3 p-0">
+          {STAGES.map(([step, label], index) => (
+            <li key={step} aria-current={index === current ? 'step' : undefined} className="flex gap-3">
+              <span
+                aria-hidden="true"
+                className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-semibold tabular-nums ${
+                  index < current
+                    ? 'border-accent bg-accent text-accentForeground'
+                    : index === current
+                      ? 'border-accent text-accentInk'
+                      : 'border-border text-muted'
+                }`}
+              >
+                {index < current ? '✓' : index + 1}
               </span>
-              {index === current ? <span className="text-sm text-muted">{detail}</span> : null}
-            </span>
-          </li>
-        ))}
-      </ol>
+              <span className="grid gap-0.5">
+                <span className={`text-base ${index === current ? 'font-semibold text-foreground' : index < current ? 'text-foreground' : 'text-muted'}`}>
+                  {label}
+                  {index < current ? <span className="sr-only"> : fait</span> : null}
+                  {index === current ? <span className="sr-only"> : en cours</span> : null}
+                </span>
+                {index === current ? (
+                  <span aria-hidden="true" className="text-sm text-muted">
+                    {progress.message}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {/* One live region for the whole run: the visible line moves from stage to stage. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {progress.message}
+        </p>
+        <button type="button" onClick={onCancel} className={`${QUIET_LINK} justify-self-start`}>
+          Annuler
+        </button>
+      </div>
     </div>
   );
 }
@@ -1607,42 +1624,6 @@ function PartChooser({
           Annuler
         </button>
       </div>
-    </div>
-  );
-}
-
-function RunningPanel({ progress, onCancel, auto }: { progress: Progress; onCancel: () => void; auto: boolean }) {
-  return (
-    <div className="grid gap-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <p role="status" aria-live="polite" className="m-0 text-base font-medium">
-          {progress.message}
-        </p>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="-my-2 -mr-2 shrink-0 px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground"
-        >
-          Annuler
-        </button>
-      </div>
-      <div
-        role="progressbar"
-        aria-label="Avancement de l’analyse"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(progress.percent)}
-        className="h-1.5 overflow-hidden rounded-full bg-border"
-      >
-        <div
-          className="h-full rounded-full bg-accent transition-[width] duration-200 ease-out motion-reduce:transition-none"
-          style={{ width: `${progress.percent}%` }}
-        />
-      </div>
-      <p className="m-0 text-sm text-muted">
-        {auto ? 'Le favori a lancé l’analyse, rien à toucher. ' : ''}
-        Une analyse prend en général une à deux minutes. Gardez cette page ouverte.
-      </p>
     </div>
   );
 }
