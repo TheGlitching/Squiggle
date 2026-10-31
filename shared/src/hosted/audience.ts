@@ -29,6 +29,8 @@ export const AUDIENCE_METRIC_NAMES = [
   'click_teacher_access',
   'click_subscribe',
   'click_example',
+  // From a glossary notion to /analyser: does the glossary bring readers to the product?
+  'click_glossaire_analyser',
   'open_in_browser',
   // An article brought to /analyser by the bookmark "Analyser avec Squiggle",
   // by the iPhone shortcut, and a text shared to the Android app.

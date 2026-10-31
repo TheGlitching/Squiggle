@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -157,6 +158,7 @@ const serifInFirstScreen = (path: string) =>
   path === '/transparence' ||
   path === '/enseignants/fiche-activite' ||
   path === '/enseignants/grille-lecture' ||
+  path === '/enseignants/exercices' ||
   path.startsWith('/glossaire/');
 
 /**
@@ -225,6 +227,25 @@ function firstPaintReady(
 }
 
 /**
+ * The date of the last commit touching any of `files` (relative to `web/`), or nothing
+ * when the history is not there to say it: outside a git checkout, or a file not yet
+ * committed. A shallow clone dates every page to its one commit, which only CI builds.
+ */
+function lastCommitDate(files: string[] | undefined): string | undefined {
+  if (!files) return undefined;
+  try {
+    const date = execFileSync('git', ['log', '-1', '--format=%cs', '--', ...files], {
+      cwd: new URL('.', import.meta.url).pathname,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Writes every public page (`src/seo.ts`) as its own HTML file, with its own head and
  * its content rendered in, and `sitemap.xml` beside them. A crawler or a link preview
  * reads only the HTML and never runs the app. The browser then hydrates it
@@ -265,7 +286,7 @@ function prerender(): Plugin {
         appType: 'custom',
       });
       try {
-        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, render, shareImage, shareImagePath, sitemap, titleFor } =
+        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, render, shareImage, shareImagePath, sitemap, titleFor } =
           (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
         const write = (file: string, content: string | Buffer) => {
           // `/classe/mode-emploi` lives in `classe/`, beside `classe.html`.
@@ -290,7 +311,9 @@ function prerender(): Plugin {
         // Every other address: Cloudflare answers it with this page and a 404 status
         // (`not_found_handling` in server/wrangler.jsonc), so a mistyped link is not the home page.
         write('404.html', page(appHeadFor(NOT_FOUND_TITLE), `<div id="root">${render('/404')}</div>`));
-        writeFileSync(dist('sitemap.xml'), sitemap());
+        // A blog article carries its own date; every other page, its source files' last commit.
+        const dated = PUBLIC_PAGES.map((item) => (item.lastmod ? item : { ...item, lastmod: lastCommitDate(pageSources(item.path)) }));
+        writeFileSync(dist('sitemap.xml'), sitemap(dated));
         if (BLOG_OPEN) write(FEED_PATH.slice(1), feed());
       } finally {
         await server.close();

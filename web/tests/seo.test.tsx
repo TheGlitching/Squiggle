@@ -3,16 +3,16 @@
  * that lists them, and the robots.txt that points at it. Neither runs the app, so
  * all of it must be in the files the build writes (`prerender` in vite.config.ts).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
-import { NOTIONS } from '../src/glossaire';
+import { FAMILLES, NOTIONS } from '../src/glossaire';
 import { OWNER_PATH } from '../src/api';
-import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, shareImagePath, sitemap, titleFor } from '../src/seo';
+import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, pageSources, shareImagePath, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
 // The analysis page asks who is signed in: no one, here.
@@ -60,9 +60,38 @@ describe('search engines and link previews', () => {
     expect(set['@type']).toBe('DefinedTermSet');
     expect(set.hasDefinedTerm).toHaveLength(NOTIONS.length);
     for (const notion of NOTIONS) {
-      const term = data(`/glossaire/${notion.slug}`);
+      const [term, trail] = data(`/glossaire/${notion.slug}`)['@graph'];
       expect(term).toMatchObject({ '@type': 'DefinedTerm', name: notion.nom, url: `${ORIGIN}/glossaire/${notion.slug}` });
+      expect(term.alternateName).toEqual(notion.aussi);
       expect(term.inDefinedTermSet['@id']).toBe(set['@id']);
+      // The trail the page shows above its title, ending on the notion itself.
+      expect(trail['@type']).toBe('BreadcrumbList');
+      expect(trail.itemListElement.map((item: { name: string; position: number }) => [item.position, item.name])).toEqual([
+        [1, 'Glossaire'],
+        [2, FAMILLES.find(({ id }) => id === notion.famille)!.titre],
+        [3, notion.nom],
+      ]);
+      expect(trail.itemListElement[0].item).toBe(`${ORIGIN}/glossaire`);
+      expect(trail.itemListElement[2].item).toBeUndefined();
+    }
+  });
+
+  it('titles a notion with several examples in the plural, and describes it by the question a search asks', () => {
+    const page = (slug: string) => PUBLIC_PAGES.find((item) => item.path === `/glossaire/${slug}`)!;
+    expect(page('proces-d-intention').title).toBe('Procès d’intention : définition et exemples - Squiggle');
+    expect(page('proces-d-intention').description).toMatch(/^Comment reconnaître un procès d’intention/);
+    expect(page('faux-dilemme').title).toBe('Faux dilemme : définition et exemple - Squiggle');
+  });
+
+  it('describes the teacher pages as learning resources for teachers', () => {
+    for (const path of ['/enseignants/fiche-activite', '/enseignants/grille-lecture', '/enseignants/exercices']) {
+      const json = headFor(PUBLIC_PAGES.find((page) => page.path === path)!).match(/ld\+json">(.+)<\/script>/)![1];
+      expect(JSON.parse(json), path).toMatchObject({
+        '@type': 'LearningResource',
+        url: `${ORIGIN}${path}`,
+        audience: { educationalRole: 'teacher' },
+        educationalLevel: ['Collège', 'Lycée'],
+      });
     }
   });
 
@@ -72,6 +101,18 @@ describe('search engines and link previews', () => {
     const robots = readFileSync(resolve(__dirname, '../public/robots.txt'), 'utf8');
     expect(robots).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
     expect(robots).not.toMatch(/^Disallow: \/$/m);
+  });
+
+  it('dates each page in the sitemap by its own source files, unless it carries its own date', () => {
+    // A blog article is dated by its own fields; the build dates every other page from git.
+    for (const page of PUBLIC_PAGES.filter((item) => !item.lastmod)) {
+      const files = pageSources(page.path);
+      expect(files, page.path).toBeDefined();
+      for (const file of files!) expect(existsSync(resolve(__dirname, '..', file)), file).toBe(true);
+    }
+    const dated = sitemap(PUBLIC_PAGES.map((page) => (page.path === '/' ? { ...page, lastmod: '2026-10-31' } : page)));
+    expect(dated).toContain(`<url><loc>${ORIGIN}/</loc><lastmod>2026-10-31</lastmod></url>`);
+    expect(dated).toContain(`<url><loc>${ORIGIN}/glossaire</loc></url>`);
   });
 
   it('gives every page a share image with its size and alt text, and each notion its own', () => {

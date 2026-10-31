@@ -43,6 +43,17 @@ export interface PublicPage {
 const GLOSSARY = `${ORIGIN}/glossaire`;
 const TERM_SET = { '@type': 'DefinedTermSet', '@id': `${GLOSSARY}#glossaire`, name: 'Glossaire de l’esprit critique', url: GLOSSARY };
 
+/** The trail a notion page shows above its title (`NotionPage`), for the results that still print one. */
+const breadcrumb = (trail: ReadonlyArray<readonly [string, string?]>) => ({
+  '@type': 'BreadcrumbList',
+  itemListElement: trail.map(([name, url], index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name,
+    ...(url ? { item: url } : {}),
+  })),
+});
+
 /** The glossary: its index as a `DefinedTermSet`, and each notion as a `DefinedTerm` of it. */
 const GLOSSARY_PAGES: PublicPage[] = [
   {
@@ -70,8 +81,8 @@ const GLOSSARY_PAGES: PublicPage[] = [
   },
   ...NOTIONS.map((notion) => ({
     path: glossaryPath(notion.slug),
-    title: `${notion.nom} : définition et exemple - Squiggle`,
-    description: `${notion.resume} Définition, exemple, comment le repérer.`,
+    title: `${notion.nom} : définition et ${notion.exemples ? 'exemples' : 'exemple'} - Squiggle`,
+    description: notion.description ?? `${notion.resume} Définition, exemple, comment le repérer.`,
     share: {
       kicker: `Glossaire de l’esprit critique · ${famille(notion.famille).titre}`,
       title: notion.nom,
@@ -80,17 +91,40 @@ const GLOSSARY_PAGES: PublicPage[] = [
     },
     jsonLd: {
       '@context': 'https://schema.org',
-      '@type': 'DefinedTerm',
-      '@id': `${ORIGIN}${glossaryPath(notion.slug)}#notion`,
-      name: notion.nom,
-      ...(notion.aussi ? { alternateName: notion.aussi } : {}),
-      description: notion.definition[0],
-      url: `${ORIGIN}${glossaryPath(notion.slug)}`,
-      inLanguage: 'fr',
-      inDefinedTermSet: TERM_SET,
+      '@graph': [
+        {
+          '@type': 'DefinedTerm',
+          '@id': `${ORIGIN}${glossaryPath(notion.slug)}#notion`,
+          name: notion.nom,
+          ...(notion.aussi ? { alternateName: notion.aussi } : {}),
+          description: notion.definition[0],
+          url: `${ORIGIN}${glossaryPath(notion.slug)}`,
+          inLanguage: 'fr',
+          inDefinedTermSet: TERM_SET,
+        },
+        breadcrumb([
+          ['Glossaire', GLOSSARY],
+          [famille(notion.famille).titre, `${GLOSSARY}#${notion.famille}`],
+          [notion.nom],
+        ]),
+      ],
     },
   })),
 ];
+
+/** A printable or classroom page for teachers: what it is to a search engine. No rich result is promised. */
+const learningResource = (path: string, name: string, description: string, type: string) => ({
+  '@context': 'https://schema.org',
+  '@type': 'LearningResource',
+  name,
+  description,
+  url: `${ORIGIN}${path}`,
+  inLanguage: 'fr',
+  learningResourceType: type,
+  educationalLevel: ['Collège', 'Lycée'],
+  audience: { '@type': 'EducationalAudience', educationalRole: 'teacher' },
+  isAccessibleForFree: true,
+});
 
 const BLOG_TITLE = 'Le blog de Squiggle';
 const ORGANISATION = { '@type': 'Organization', '@id': `${ORIGIN}/#organisation`, name: 'Squiggle', url: `${ORIGIN}/` };
@@ -205,6 +239,12 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     title: 'Fiche d’activité : ce qui fragilise un article - Squiggle',
     description:
       'Une séance d’éducation aux médias de 55 minutes, de la 4e à la terminale : objectifs, déroulé, variantes. Deux pages A4 à imprimer.',
+    jsonLd: learningResource(
+      '/enseignants/fiche-activite',
+      'Fiche d’activité : ce qui fragilise un article',
+      'Une séance d’éducation aux médias de 55 minutes, de la 4e à la terminale.',
+      'Fiche d’activité',
+    ),
     share: {
       kicker: 'Fiche d’activité',
       title: 'Ce qui fragilise un article',
@@ -217,12 +257,35 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     title: 'Grille de lecture : cinq raisons de douter d’un article - Squiggle',
     description:
       'Une grille à photocopier pour chaque élève : cinq raisons de douter d’un article, avec un exemple chacune. Sert avec n’importe quel article.',
+    jsonLd: learningResource(
+      '/enseignants/grille-lecture',
+      'Grille de lecture : cinq raisons de douter d’un article',
+      'Une page à photocopier pour chaque élève : cinq raisons de douter d’un article, avec un exemple chacune.',
+      'Grille de lecture',
+    ),
     share: {
       kicker: 'Grille de lecture',
       title: 'Cinq raisons de douter d’un article',
       text: 'Une page à photocopier pour chaque élève, avec un exemple pour chaque raison.',
       figure: 'classe',
     },
+  },
+  {
+    path: '/enseignants/exercices',
+    title: 'Exercices d’esprit critique pour la classe - Squiggle',
+    description: `${NOTIONS.length} exercices d’esprit critique pour une séance d’éducation aux médias : un passage d’article inventé, une question pour la classe, une fiche.`,
+    share: {
+      kicker: 'Exercices d’esprit critique',
+      title: `${NOTIONS.length} questions pour la classe`,
+      text: 'Une par notion du glossaire, chacune sur un passage d’article inventé.',
+      figure: 'classe',
+    },
+    jsonLd: learningResource(
+      '/enseignants/exercices',
+      'Exercices d’esprit critique',
+      `${NOTIONS.length} questions pour la classe, une par sophisme, biais ou procédé du glossaire, chacune sur un passage d’article inventé.`,
+      'Exercice',
+    ),
   },
   {
     path: '/classe',
@@ -451,6 +514,32 @@ export function appHeadFor(title: string): string {
     ...imageTags(),
   ].join('\n    ');
 }
+
+const GLOSSARY_SOURCES = ['src/glossaire.ts', 'src/pages/Glossaire.tsx'];
+const PAGE_SOURCES: Record<string, string[]> = {
+  '/': ['src/pages/Accueil.tsx'],
+  '/analyser': ['src/pages/Analyser.tsx'],
+  '/raccourci': ['src/pages/Raccourci.tsx'],
+  '/favori': ['src/pages/Favori.tsx'],
+  '/enseignants': ['src/pages/Enseignants.tsx'],
+  '/enseignants/fiche-activite': ['src/pages/Kit.tsx'],
+  '/enseignants/grille-lecture': ['src/pages/Kit.tsx'],
+  '/enseignants/exercices': GLOSSARY_SOURCES,
+  '/classe': ['src/pages/Classe.tsx'],
+  '/classe/mode-emploi': ['src/components/ModeEmploi.tsx'],
+  '/transparence': ['src/pages/Transparence.tsx'],
+  '/confidentialite': ['src/pages/Legal.tsx'],
+  '/conditions': ['src/pages/Legal.tsx'],
+  '/cgv': ['src/pages/Legal.tsx'],
+  '/mentions-legales': ['src/pages/Legal.tsx'],
+};
+
+/**
+ * The files, relative to `web/`, whose last commit dates a page in the sitemap. A page's
+ * own file only: a shared component's change is not a change Google needs to recrawl for.
+ */
+export const pageSources = (path: string): string[] | undefined =>
+  path === '/glossaire' || path.startsWith('/glossaire/') ? GLOSSARY_SOURCES : PAGE_SOURCES[path];
 
 /** Every public page, for `/sitemap.xml`. */
 export function sitemap(pages: readonly PublicPage[] = PUBLIC_PAGES): string {

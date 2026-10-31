@@ -25,11 +25,24 @@ import {
   type Reference,
   type Segments,
 } from '../glossaire';
+import { count } from '../count';
 import { Link } from '../router';
 
 const H2 = 'm-0 font-display text-2xl leading-tight font-semibold tracking-[-0.01em]';
 
 const lowerFirst = (text: string) => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+
+/** « Exemples de procès d’intention », « Exemples d’affirmation non étayée ». */
+const examplesOf = (nom: string) => `Exemples ${/^[aeiouhâéèêî]/i.test(nom) ? 'd’' : 'de '}${lowerFirst(nom)}`;
+
+/** A way from a notion to the analysis, counted: does the glossary bring readers to the product? */
+function AnalyseLink({ className }: { className: string }) {
+  return (
+    <Link to="/analyser" onClick={() => count('click_glossaire_analyser')} className={className}>
+      Analyser un article
+    </Link>
+  );
+}
 
 /** A notion as a card: its name and what it is, the whole card one link. */
 export function NotionCard({ item }: { item: Notion }) {
@@ -249,6 +262,40 @@ export function NotionPage({ item }: { item: Notion }) {
             <ExempleFigure exemple={item.exemple} />
           </Part>
 
+          {item.exemples ? (
+            <Part id="exemples" title={examplesOf(item.nom)}>
+              <p className={`m-0 text-lg leading-relaxed text-muted ${MEASURE}`}>
+                {typo('D’autres phrases, de la vie courante et du débat public. Toutes sont inventées.')}
+              </p>
+              <ul className="m-0 grid list-none gap-8 p-0">
+                {item.exemples.map(({ cadre, phrase, lecture }) => (
+                  <li key={cadre} className={`grid gap-3 ${MEASURE}`}>
+                    <p className="m-0 text-base font-semibold">{cadre}</p>
+                    <p className="m-0 rounded-card bg-paper px-5 py-4 font-serif text-lg leading-[1.6] text-paperInk sm:px-6">
+                      {typo(phrase)}
+                    </p>
+                    <p className="m-0 text-lg leading-relaxed">{typo(lecture)}</p>
+                  </li>
+                ))}
+              </ul>
+            </Part>
+          ) : null}
+
+          {/* Right after the example, where the reader has just seen the device at work. */}
+          <aside
+            aria-label="Analyser un article"
+            className={`grid gap-4 rounded-card border border-border bg-surface p-5 md:p-6 ${MEASURE}`}
+          >
+            <p className="m-0 text-lg leading-relaxed">
+              {typo(
+                `Ce procédé se cache peut-être dans l’article que vous lisez. Collez-le : Squiggle le surligne et explique pourquoi.`,
+              )}
+            </p>
+            <p className="m-0">
+              <AnalyseLink className={`${PRIMARY_BUTTON} max-sm:w-full`} />
+            </p>
+          </aside>
+
           <Part id="reperer" title="Comment le repérer">
             <ul className={`m-0 grid list-none gap-4 p-0 text-lg leading-snug ${MEASURE}`}>
               {item.reperer.map((text) => (
@@ -264,9 +311,7 @@ export function NotionPage({ item }: { item: Notion }) {
             <div className={`grid gap-4 ${MEASURE}`}>
               <p className="m-0 text-lg leading-relaxed">{typo(howReported(item))}</p>
               <div className="mt-2 flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
-                <Link to="/analyser" className={PRIMARY_BUTTON}>
-                  Analyser un article
-                </Link>
+                <AnalyseLink className={PRIMARY_BUTTON} />
                 <a href="/#exemple" className={SECONDARY_BUTTON}>
                   Voir un rapport d’exemple
                 </a>
@@ -321,5 +366,55 @@ export function NotionPage({ item }: { item: Notion }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+/** `/enseignants/exercices`: the classroom question of every notion, on the passage it is about. */
+export function Exercices() {
+  return (
+    <>
+      <div className={`${PAGE} pt-10 pb-16 md:pt-20 md:pb-24`}>
+        <h1 className={`${H1} max-w-[16ch]`}>Exercices d’esprit critique</h1>
+        <p className={`mt-6 ${LEAD} ${MEASURE}`}>
+          {typo(
+            `${NOTIONS.length} questions pour la classe, une par notion du glossaire. Chacune part d’un passage d’article inventé : lisez-le avec les élèves, posez la question, puis ouvrez la fiche pour la définition et les signes qui trahissent le procédé.`,
+          )}
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3 max-sm:flex-col max-sm:items-stretch">
+          <Link to="/classe" className={PRIMARY_BUTTON}>
+            Passer à un vrai article
+          </Link>
+          <Link to="/glossaire" className={SECONDARY_BUTTON}>
+            Le glossaire
+          </Link>
+        </div>
+      </div>
+
+      {FAMILLES.map(({ id, titre, intro }) => (
+        <Section key={id} id={id} title={titre} intro={typo(intro)}>
+          <ol className="m-0 grid list-none gap-12 p-0 lg:grid-cols-2 lg:gap-x-16">
+            {NOTIONS.filter((item) => item.famille === id).map((item) => (
+              <li key={item.slug} className="grid content-start gap-4">
+                <h3 className="m-0 font-display text-xl leading-snug font-semibold">{item.nom}</h3>
+                <div className="rounded-card bg-paper px-5 py-4 text-paperInk sm:px-6">
+                  <p className="m-0 font-serif text-xl leading-tight font-semibold tracking-tight">
+                    <Run segments={item.exemple.titre} />
+                  </p>
+                  <p className="mt-2 mb-0 font-serif text-lg leading-[1.6]">
+                    <Run segments={item.exemple.texte} />
+                  </p>
+                </div>
+                <p className="m-0 text-lg leading-relaxed">{typo(item.question)}</p>
+                <p className="m-0">
+                  <Link to={glossaryPath(item.slug)} className={QUIET_LINK}>
+                    {`La fiche : ${lowerFirst(item.nom)}`}
+                  </Link>
+                </p>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      ))}
+    </>
   );
 }

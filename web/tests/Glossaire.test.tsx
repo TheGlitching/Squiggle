@@ -133,6 +133,52 @@ describe('the glossary pages', () => {
     scroll.mockRestore();
   });
 
+  it('gives the notions a search already finds more made-up examples, under the words the search uses', () => {
+    const enriched = ['proces-d-intention', 'generalisation-hative', 'citation-tronquee', 'affirmation-non-etayee', 'correlation-causalite'];
+    expect(NOTIONS.filter((item) => item.exemples).map((item) => item.slug).sort()).toEqual([...enriched].sort());
+    for (const slug of enriched) {
+      const item = NOTIONS.find((notion) => notion.slug === slug)!;
+      expect(item.exemples!.length, slug).toBeGreaterThanOrEqual(2);
+      expect(item.description!.length, slug).toBeLessThanOrEqual(160);
+    }
+    render(<App path="/glossaire/proces-d-intention" />);
+    const part = within(screen.getByRole('region', { name: 'Exemples de procès d’intention' }));
+    expect(part.getByText(/Toutes sont inventées/)).toBeInTheDocument();
+    expect(part.getAllByRole('listitem')).toHaveLength(3);
+    cleanup();
+    render(<App path="/glossaire/affirmation-non-etayee" />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Exemples d’affirmation non étayée' })).toBeInTheDocument();
+    cleanup();
+    render(<App path="/glossaire/generalisation-hative" />);
+    expect(screen.getByText(/Autres noms : .*Conclusion hâtive/)).toBeInTheDocument();
+  });
+
+  it('offers the analysis right after the example, and counts who takes it', () => {
+    const fetch = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetch);
+    render(<App path="/glossaire/faux-dilemme" />);
+    const callout = within(screen.getByRole('complementary', { name: 'Analyser un article' }));
+    expect(callout.getByText(/Ce procédé se cache peut-être dans l’article que vous lisez/)).toBeInTheDocument();
+    fireEvent.click(callout.getByRole('link', { name: 'Analyser un article' }));
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/web\/count$/),
+      expect.objectContaining({ body: JSON.stringify({ name: 'click_glossaire_analyser' }) }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('gathers every classroom question on /enseignants/exercices, each linked to its notion', () => {
+    render(<App path="/enseignants/exercices" />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Exercices d’esprit critique' })).toBeInTheDocument();
+    for (const item of NOTIONS) {
+      expect(screen.getByText(item.question)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: `La fiche : ${item.nom.charAt(0).toLowerCase()}${item.nom.slice(1)}` })).toHaveAttribute(
+        'href',
+        `/glossaire/${item.slug}`,
+      );
+    }
+  });
+
   it('answers an unknown notion with the 404 page', () => {
     render(<App path="/glossaire/sophisme-inconnu" />);
     expect(screen.getByText('Page introuvable')).toBeInTheDocument();

@@ -53,6 +53,10 @@ export interface Notion {
   resume: string;
   definition: string[];
   exemple: { rubrique: string; titre: Segments; texte: Segments; lecture: string };
+  /** More made-up sentences, from everyday life and public debate: the « X exemple » a search asks for. */
+  exemples?: ReadonlyArray<{ cadre: string; phrase: string; lecture: string }>;
+  /** The page's description for search engines, where the summary alone would not make one click. */
+  description?: string;
   reperer: string[];
   /** The category a report files it under. */
   categorie: Exclude<DemoCategory, 'point-fort'>;
@@ -174,9 +178,11 @@ export const NOTIONS: readonly Notion[] = [
   {
     slug: 'correlation-causalite',
     nom: 'Corrélation prise pour causalité',
-    aussi: ['Corrélation n’est pas causalité', 'Post hoc'],
+    aussi: ['Corrélation n’est pas causalité', 'Effet cigogne', 'Post hoc'],
     famille: 'raisonnement',
     resume: 'Conclure qu’une chose cause l’autre parce qu’elles vont ensemble.',
+    description:
+      'Corrélation ou causalité : comment repérer la confusion dans un article ? Définition, trois exemples et les verbes qui trahissent le saut.',
     definition: [
       'Deux phénomènes qui évoluent ensemble sont corrélés. Cela ne prouve pas que l’un provoque l’autre : un troisième facteur peut agir sur les deux, la cause peut aller dans l’autre sens, ou la coïncidence peut tenir du hasard.',
       'Une variante, dite post hoc, tient pour cause ce qui est seulement arrivé avant : « après cela, donc à cause de cela ».',
@@ -192,6 +198,27 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Les élèves qui boivent du café sont peut-être plus âgés, ou révisent plus tard le soir. L’enquête montre que les deux vont ensemble, pas que l’un cause l’autre. Le conditionnel « rendrait » ne corrige pas le saut : le titre et la chute le tiennent pour acquis.',
     },
+    exemples: [
+      {
+        cadre: 'L’effet cigogne',
+        phrase:
+          'Dans les communes où nichent le plus de cigognes, on compte aussi le plus de naissances : les cigognes apportent donc les bébés.',
+        lecture:
+          'L’exemple qui a donné son nom à l’effet. Un troisième facteur, comme la taille de la commune ou son caractère rural, peut faire varier les nids et les naissances ensemble, sans que l’un agisse sur l’autre.',
+      },
+      {
+        cadre: 'Dans la vie courante',
+        phrase: 'Depuis que je porte ce bracelet magnétique, mon mal de dos a disparu.',
+        lecture:
+          'Après, donc à cause : c’est le post hoc. Beaucoup de douleurs passent d’elles-mêmes en quelques semaines. Seule une comparaison avec des personnes sans bracelet dirait s’il y est pour quelque chose.',
+      },
+      {
+        cadre: 'Dans un débat public',
+        phrase: 'Les villes qui ont le plus de policiers ont aussi le plus de délits : la police attire la délinquance.',
+        lecture:
+          'La cause va sans doute dans l’autre sens : on affecte plus de policiers là où il y a plus de délits. Et une grande ville a plus des deux. Le lien existe, la conclusion le lit à l’envers.',
+      },
+    ],
     reperer: [
       'Des verbes de cause (« provoque », « rend », « fait baisser ») appuyés sur une simple comparaison de groupes.',
       'Aucune mention d’un autre facteur qui pourrait expliquer les deux.',
@@ -204,14 +231,16 @@ export const NOTIONS: readonly Notion[] = [
     references: [
       { texte: 'Tyler Vigen, Spurious Correlations, Hachette Books, 2015 : un recueil de corrélations parfaites et absurdes.' },
     ],
-    motif: /correlation|causal|post hoc|lien de cause/,
+    motif: /correlation|causal|post hoc|lien de cause|effet cigogne/,
   },
   {
     slug: 'generalisation-hative',
     nom: 'Généralisation hâtive',
-    aussi: ['Généralisation abusive'],
+    aussi: ['Généralisation abusive', 'Conclusion hâtive'],
     famille: 'raisonnement',
     resume: 'Tirer une règle générale de quelques cas, parfois d’un seul.',
+    description:
+      'Comment reconnaître une généralisation hâtive, ou conclusion hâtive, dans un article ? Définition, trois exemples et les mots qui la trahissent.',
     definition: [
       'La généralisation hâtive part d’un petit nombre d’exemples, souvent frappants, et en tire une conclusion sur tout un groupe. Un témoignage devient une tendance, trois cas deviennent « les jeunes », « les médecins », « les habitants ».',
       'Les psychologues Amos Tversky et Daniel Kahneman ont montré en 1971 que nous attendons des petits échantillons qu’ils ressemblent à l’ensemble, ce qui rend ce raccourci très naturel.',
@@ -227,6 +256,26 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Une agence, quatre salariés : c’est un point de départ pour un reportage, pas une mesure de ce que font « les Français ». Pour parler du pays entier, il faudrait une enquête sur un échantillon large et représentatif.',
     },
+    exemples: [
+      {
+        cadre: 'Dans la vie courante',
+        phrase: 'J’ai eu deux pannes avec cette marque de voiture : elles ne valent rien.',
+        lecture:
+          'Deux voitures, c’est l’expérience d’un conducteur, pas la fiabilité d’une marque qui en vend des centaines de milliers. Les chiffres de pannes sur l’ensemble des véhicules pourraient dire la même chose, mais sur une vraie base.',
+      },
+      {
+        cadre: 'Dans un micro-trottoir',
+        phrase: 'Nous avons interrogé dix passants : la réforme est massivement rejetée par les Français.',
+        lecture:
+          'Dix passants, dans une rue, à une heure donnée, ne représentent pas le pays. Un micro-trottoir montre des avis, il ne mesure pas une opinion : c’est le rôle d’un sondage sur un échantillon construit pour cela.',
+      },
+      {
+        cadre: 'Après un fait divers',
+        phrase: 'Encore un accident de trottinette ce week-end : ces engins sont devenus un danger public.',
+        lecture:
+          'Un accident, même grave, ne dit pas si la trottinette est plus dangereuse que le vélo ou la voiture. Il faudrait compter les accidents par trajet ou par kilomètre parcouru, sur toute une année.',
+      },
+    ],
     reperer: [
       'Un passage brusque de « ici », « chez eux » à « les Français », « tout le monde ».',
       'Des mots comme « tous », « toujours », « plus personne ».',
@@ -242,7 +291,7 @@ export const NOTIONS: readonly Notion[] = [
         url: 'https://doi.org/10.1037/h0031322',
       },
     ],
-    motif: /generalisation|generalise|cas isole|anecdot/,
+    motif: /generalisation|generalise|cas isole|anecdot|conclusion hative/,
   },
   {
     slug: 'pente-savonneuse',
@@ -487,7 +536,7 @@ export const NOTIONS: readonly Notion[] = [
         url: 'https://doi.org/10.1136/bmj.g7015',
       },
     ],
-    motif: /surinterpret|extrapol|conclusion (hative|excessive|abusive)|depasse|surestim|portee/,
+    motif: /surinterpret|extrapol|conclusion (excessive|abusive)|depasse|surestim|portee/,
   },
   {
     slug: 'titre-trompeur',
@@ -653,6 +702,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Citation hors contexte', 'Citation sélective'],
     famille: 'cadrage',
     resume: 'Une citation coupée ou sortie de son contexte, qui fait dire à quelqu’un autre chose que ce qu’il a dit.',
+    description:
+      'Comment reconnaître une citation tronquée ou sortie de son contexte ? Définition, trois exemples et les signes qui la trahissent dans un article.',
     definition: [
       'Des guillemets donnent une impression d’exactitude : ce sont les mots mêmes de la personne. Mais on peut couper une phrase, retirer la réserve qui suivait, la déplacer d’un sujet à un autre, et lui faire dire l’inverse.',
       'Les chartes de déontologie des journalistes, dont la charte de Munich de 1971, demandent de ne pas altérer les textes et les documents.',
@@ -668,6 +719,29 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Supposons que la phrase complète ait été : « Nous allons augmenter les impôts si l’État supprime sa dotation, ce que nous ne souhaitons pas. » La citation est exacte mot pour mot, et pourtant elle trompe : la condition a disparu. Sans l’enregistrement ou le texte intégral, le lecteur ne peut pas le savoir.',
     },
+    exemples: [
+      {
+        cadre: 'Sur une affiche de film',
+        phrase:
+          'L’affiche cite une critique : « Un film magnifique ». La phrase complète était : « Un film magnifique pendant dix minutes, puis interminable. »',
+        lecture:
+          'Chaque mot cité est exact, et pourtant l’avis est inversé. C’est la forme la plus simple de la citation tronquée : garder le compliment, couper la réserve.',
+      },
+      {
+        cadre: 'Dans un débat',
+        phrase:
+          'Le ministre l’a reconnu lui-même : « la situation est grave ». Il avait dit : « Certains répètent que la situation est grave ; les chiffres montrent qu’elle s’améliore. »',
+        lecture:
+          'Le ministre rapportait l’avis des autres pour le contester. En gardant quatre mots, on lui fait dire le contraire de ce qu’il soutenait.',
+      },
+      {
+        cadre: 'Sur un réseau social',
+        phrase:
+          'Une chercheuse le dit : « Les écrans ne sont pas le problème ». Sa phrase continuait : « en soi ; c’est leur usage le soir qui abîme le sommeil. »',
+        lecture:
+          'La coupe transforme une mise en garde précise en feu vert. La citation circule sans date ni lien vers l’entretien, si bien que personne ne peut lire la suite.',
+      },
+    ],
     reperer: [
       'Une citation très courte, isolée, sur un sujet sensible.',
       'Des guillemets qui s’ouvrent ou se ferment au milieu d’une phrase, ou des points de suspension […].',
@@ -786,8 +860,11 @@ export const NOTIONS: readonly Notion[] = [
   {
     slug: 'proces-d-intention',
     nom: 'Procès d’intention',
+    aussi: ['Procès en intention'],
     famille: 'cadrage',
     resume: 'Prêter à quelqu’un des motivations cachées sans apporter de preuve.',
+    description:
+      'Comment reconnaître un procès d’intention dans un article ? Définition, trois exemples et les mots qui le trahissent.',
     definition: [
       'Le procès d’intention ne discute pas ce que quelqu’un fait ou dit : il affirme savoir pourquoi il le fait. « En réalité, il cherche à… », « derrière cette mesure se cache… ». Les intentions d’une personne sont presque toujours invérifiables, et c’est justement ce qui rend l’accusation difficile à contester.',
       'Un article peut rapporter que quelqu’un est soupçonné d’arrière-pensées. Il dit alors qui le soupçonne, sur quels éléments, et laisse la personne répondre.',
@@ -803,6 +880,26 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'La date des élections est un fait, et l’article peut la rappeler. Mais il affirme connaître l’intention réelle de la mesure, sans citer personne ni apporter d’élément. Le lecteur ne saura rien des raisons avancées par la région, ni de ce que la mesure coûte et change.',
     },
+    exemples: [
+      {
+        cadre: 'Au travail',
+        phrase: 'Si la directrice propose le télétravail le vendredi, c’est surtout pour pouvoir supprimer des bureaux.',
+        lecture:
+          'Peut-être, mais rien ne le montre. La phrase remplace la question utile, « le télétravail du vendredi est-il une bonne idée ? », par une accusation sur ce que pense la directrice, que personne ne peut vérifier.',
+      },
+      {
+        cadre: 'Dans un débat télévisé',
+        phrase: 'Mon adversaire ne défend pas l’écologie, il défend sa carrière.',
+        lecture:
+          'L’orateur ne répond à aucune des propositions de l’autre : il affirme connaître ses vraies raisons. Même intéressées, ces propositions resteraient à discuter pour ce qu’elles sont.',
+      },
+      {
+        cadre: 'Sur un réseau social',
+        phrase: 'Cette association ne publie ses chiffres sur la pauvreté que pour réclamer plus de subventions.',
+        lecture:
+          'Qu’une association ait intérêt à un chiffre mérite d’être dit. Mais l’intérêt ne rend pas le chiffre faux : c’est sa méthode qu’il faut vérifier, pas le motif qu’il faut deviner.',
+      },
+    ],
     reperer: [
       '« En réalité », « surtout », « ce qu’il cherche vraiment », « derrière cette décision ».',
       'Une intention affirmée, jamais attribuée à une source.',
@@ -814,7 +911,7 @@ export const NOTIONS: readonly Notion[] = [
     question:
       'Quelles autres raisons la région pourrait-elle avoir pour cette mesure ? Comment l’auteur de l’article pourrait-il vérifier laquelle est la bonne ?',
     voisines: ['ad-hominem', 'homme-de-paille', 'opinion-presentee-comme-fait'],
-    motif: /proces d'intention|intentions? (pretee|supposee|attribuee|cachee)|arriere-pensee|motivations? (pretee|supposee|cachee)/,
+    motif: /proces (d'|en )intention|intentions? (pretee|supposee|attribuee|cachee)|arriere-pensee|motivations? (pretee|supposee|cachee)/,
   },
   {
     slug: 'autorite-anonyme',
@@ -888,9 +985,11 @@ export const NOTIONS: readonly Notion[] = [
   {
     slug: 'affirmation-non-etayee',
     nom: 'Affirmation non étayée',
-    aussi: ['Affirmation gratuite'],
+    aussi: ['Affirmation gratuite', 'Affirmation sans preuve'],
     famille: 'preuves',
     resume: 'Une affirmation importante avancée sans preuve ni raisonnement pour la soutenir.',
+    description:
+      'Comment reconnaître une affirmation non étayée dans un article ? Définition, trois exemples et les formules qui la trahissent, comme « chacun sait ».',
     definition: [
       'Une affirmation non étayée n’est pas forcément fausse. Elle est posée là, sans donnée, sans exemple, sans source et sans raisonnement qui permettrait au lecteur de l’accepter autrement que sur parole.',
       'Plus une affirmation est forte ou surprenante, plus elle demande d’appui. Celle qui porte toute la conclusion de l’article en demande le plus.',
@@ -906,6 +1005,26 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         '« Il est désormais admis » : par qui, sur la foi de quoi ? L’article n’en dit rien, alors que toute la justification de la dépense repose sur cette phrase. Si elle tombe, l’argument tombe avec elle.',
     },
+    exemples: [
+      {
+        cadre: 'Dans une conversation',
+        phrase: 'Tout le monde sait que le sucre rend les enfants surexcités.',
+        lecture:
+          'L’idée est si répandue qu’elle passe sans preuve. Or des études ont donné du sucre ou un placebo à des enfants, sans que les adultes sachent lequel, et n’ont pas trouvé l’effet attendu.',
+      },
+      {
+        cadre: 'Dans une tribune',
+        phrase: 'La hausse de la délinquance s’explique évidemment par le laxisme des juges.',
+        lecture:
+          'Deux affirmations en une : que la délinquance augmente, et que les juges en sont la cause. Aucune n’est appuyée par un chiffre ou un exemple, et « évidemment » tient lieu de preuve.',
+      },
+      {
+        cadre: 'Au conseil municipal',
+        phrase: 'Ce nouveau parking va relancer le commerce du centre-ville, c’est une certitude.',
+        lecture:
+          'Peut-être. Mais quel commerce, de combien, en combien de temps ? Ni étude de fréquentation ni exemple d’une autre ville : le mot « certitude » remplace l’argument.',
+      },
+    ],
     reperer: [
       '« Il est admis que », « chacun sait que », « il est évident que ».',
       'L’affirmation centrale de l’article est celle qui a le moins d’appui.',
