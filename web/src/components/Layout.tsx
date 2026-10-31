@@ -4,6 +4,7 @@ import { BrandLockup } from './Brand';
 import { InstallHint } from './InstallHint';
 import { ExternalMark } from './Iso';
 import { LEAD, MEASURE, PAGE, QUIET_LINK, TITLE } from './Landing';
+import { BLOG_OPEN, BLOG_PATH } from '../blog';
 import { GITHUB_URL, LEGAL_PAGES, TAGLINE } from '../offer';
 import { Link } from '../router';
 
@@ -89,6 +90,11 @@ export function Layout({
             <Link to="/glossaire" className={QUIET_LINK}>
               Glossaire
             </Link>
+            {BLOG_OPEN ? (
+              <Link to={BLOG_PATH} className={QUIET_LINK}>
+                Blog
+              </Link>
+            ) : null}
             <Link to="/favori" className={QUIET_LINK}>
               Sur téléphone
             </Link>
