@@ -1,12 +1,15 @@
 import { SquiggleMark } from '../components/Iso';
 import { H1, LEAD, MEASURE, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
-import { BLOG_PATH, FEED_PATH, SHOWN, blogCounter, blogPath, dateLongue, type Article, type Bloc, type Texte } from '../blog';
+import { BLOG_PATH, FEED_PATH, SHOWN, ancre, blogCounter, blogPath, dateLongue, type Article, type Bloc, type Texte } from '../blog';
 import { count } from '../count';
 import { notion, typo } from '../glossaire';
 import { Link } from '../router';
 import { ExempleFigure, NotionCard } from './Glossaire';
 
 const H2 = 'm-0 font-display text-2xl leading-tight font-semibold tracking-[-0.01em]';
+const H3 = 'm-0 font-display text-xl leading-snug font-semibold';
+const BODY = `m-0 text-lg leading-relaxed text-pretty ${MEASURE}`;
+const BOX = `grid gap-3 rounded-card border border-border bg-surface p-5 md:p-6 ${MEASURE}`;
 
 function Dates({ item }: { item: Article }) {
   return (
@@ -90,27 +93,141 @@ function Run({ texte }: { texte: Texte }) {
   );
 }
 
-function Block({ bloc }: { bloc: Bloc }) {
-  if ('intertitre' in bloc) return <h2 className={`${H2} mt-6`}>{typo(bloc.intertitre)}</h2>;
+function Puces({ items }: { items: readonly Texte[] }) {
+  return (
+    <ul className={`m-0 grid list-none gap-4 p-0 text-lg leading-snug ${MEASURE}`}>
+      {items.map((texte, index) => (
+        <li key={index} className="flex gap-3">
+          <SquiggleMark />
+          <span>
+            <Run texte={texte} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Block({ bloc, corps }: { bloc: Bloc; corps: readonly Bloc[] }) {
+  if ('intertitre' in bloc)
+    return (
+      <h2 id={ancre(bloc.intertitre)} className={`${H2} mt-6 scroll-mt-24`}>
+        {typo(bloc.intertitre)}
+      </h2>
+    );
+  if ('sousTitre' in bloc) return <h3 className={`${H3} mt-2`}>{typo(bloc.sousTitre)}</h3>;
   if ('paragraphe' in bloc)
     return (
-      <p className={`m-0 text-lg leading-relaxed text-pretty ${MEASURE}`}>
+      <p className={BODY}>
         <Run texte={bloc.paragraphe} />
       </p>
     );
-  if ('liste' in bloc)
+  if ('liste' in bloc) return <Puces items={bloc.liste} />;
+  if ('etapes' in bloc)
     return (
-      <ul className={`m-0 grid list-none gap-4 p-0 text-lg leading-snug ${MEASURE}`}>
-        {bloc.liste.map((texte, index) => (
+      <ol className={`m-0 grid list-none gap-4 p-0 text-lg leading-snug ${MEASURE}`}>
+        {bloc.etapes.map((texte, index) => (
           <li key={index} className="flex gap-3">
-            <SquiggleMark />
-            <span>
+            <span
+              aria-hidden="true"
+              className="grid size-7 shrink-0 place-items-center rounded-full border border-borderControl font-display text-base font-semibold text-accentInk"
+            >
+              {index + 1}
+            </span>
+            <span className="pt-0.5">
               <Run texte={texte} />
             </span>
           </li>
         ))}
-      </ul>
+      </ol>
     );
+  if ('encadre' in bloc) {
+    const { titre, points } = bloc.encadre;
+    return (
+      <aside aria-label={typo(titre)} className={BOX}>
+        <p className="m-0 font-display text-base font-semibold tracking-wide text-accentInk uppercase">{typo(titre)}</p>
+        {points.length === 1 ? (
+          <p className="m-0 text-lg leading-relaxed text-pretty">
+            <Run texte={points[0]} />
+          </p>
+        ) : (
+          <Puces items={points} />
+        )}
+      </aside>
+    );
+  }
+  if ('tableau' in bloc) {
+    const { legende, colonnes, lignes } = bloc.tableau;
+    return (
+      // A table wider than a phone scrolls inside its own frame, never the page.
+      <div role="region" aria-label={typo(legende)} tabIndex={0} className={`max-w-full min-w-0 overflow-x-auto rounded-card border border-border ${MEASURE}`}>
+        <table className="w-full border-collapse text-left text-base leading-snug max-sm:text-sm">
+          <caption className="sr-only">{typo(legende)}</caption>
+          <thead className="bg-surface">
+            <tr>
+              {colonnes.map((colonne) => (
+                <th key={colonne} scope="col" className="border-b border-border px-3 py-3 sm:px-4 font-semibold">
+                  {typo(colonne)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((ligne, index) => (
+              <tr key={index} className="border-b border-border last:border-b-0">
+                {ligne.map((cellule, cell) =>
+                  cell === 0 ? (
+                    <th key={cell} scope="row" className="px-3 py-3 sm:px-4 align-top font-semibold">
+                      <Run texte={cellule} />
+                    </th>
+                  ) : (
+                    <td key={cell} className="px-3 py-3 sm:px-4 align-top text-muted">
+                      <Run texte={cellule} />
+                    </td>
+                  ),
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if ('questions' in bloc)
+    return (
+      <div className={`grid gap-6 ${MEASURE}`}>
+        {bloc.questions.map(({ question, reponse }) => (
+          <div key={question} className="grid gap-2">
+            <h3 className={H3}>{typo(question)}</h3>
+            <p className="m-0 text-lg leading-relaxed text-pretty">
+              <Run texte={reponse} />
+            </p>
+          </div>
+        ))}
+      </div>
+    );
+  if ('sommaire' in bloc) {
+    const titres = corps.flatMap((other) => ('intertitre' in other ? [other.intertitre] : []));
+    return (
+      <nav aria-labelledby="sommaire-titre" className={BOX}>
+        <p id="sommaire-titre" className="m-0 font-display text-base font-semibold tracking-wide text-muted uppercase">
+          Sommaire
+        </p>
+        <ol className="m-0 grid list-none gap-2 p-0 text-lg leading-snug">
+          {titres.map((titre) => (
+            <li key={titre}>
+              <a
+                href={`#${ancre(titre)}`}
+                className="underline decoration-borderControl underline-offset-4 transition-colors duration-160 ease-out hover:text-accentInk hover:decoration-accentInk"
+              >
+                {typo(titre)}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    );
+  }
   return (
     <div className="my-4">
       <ExempleFigure exemple={bloc.exemple} />
@@ -141,7 +258,7 @@ export function ArticlePage({ item }: { item: Article }) {
         </header>
 
         {item.corps.map((bloc, index) => (
-          <Block key={index} bloc={bloc} />
+          <Block key={index} bloc={bloc} corps={item.corps} />
         ))}
 
         <section

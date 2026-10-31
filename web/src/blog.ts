@@ -27,10 +27,32 @@ export type Texte = string | ReadonlyArray<string | Lien>;
 
 export type Bloc =
   | { intertitre: string }
+  /** A subsection under the last `intertitre`. */
+  | { sousTitre: string }
   | { paragraphe: Texte }
   | { liste: readonly Texte[] }
+  /** Steps to take in order, numbered. */
+  | { etapes: readonly Texte[] }
+  /** A box set apart from the text: « L’essentiel » under the chapô, or a reminder. One point is a sentence, several a list. */
+  | { encadre: { titre: string; points: readonly Texte[] } }
+  /** A comparison: a header row, then one row per line, as many cells as columns. */
+  | { tableau: { legende: string; colonnes: readonly string[]; lignes: ReadonlyArray<readonly Texte[]> } }
+  /** Questions a reader asks, each answered: plain headings and paragraphs, with no FAQ schema. */
+  | { questions: ReadonlyArray<{ question: string; reponse: Texte }> }
+  /** The table of contents: a link to every `intertitre` of the article. */
+  | { sommaire: true }
   /** A made-up article, its fragile passage highlighted, as on a glossary page. */
   | { exemple: Notion['exemple'] };
+
+/** The anchor of an `intertitre`, for the table of contents: `Les mots du saut` as `les-mots-du-saut`. */
+export function ancre(intertitre: string): string {
+  return intertitre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 export interface Article {
   slug: string;
