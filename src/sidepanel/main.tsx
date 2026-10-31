@@ -27,6 +27,8 @@ import {
   type HostedAccount,
 } from '../hosted/session';
 import { TRANSPARENCY_URL } from '../hosted/config';
+import { isPdfAddress, pdfPageUrl } from '../pdf/address';
+import { requestSiteAccess } from '../permissions/siteAccess';
 import { reportFinding } from '../hosted/flag';
 import type { AnalysisMode } from '../crypto/storage';
 
@@ -402,6 +404,25 @@ function SidepanelApp() {
   }, []);
 
   const isVideoPage = pageUrl ? youtubeVideoId(pageUrl) !== null : false;
+  const isPdf = isPdfAddress(pageUrl);
+
+  /**
+   * "Analyser ce PDF": no extension may read the browser's PDF viewer, so the
+   * tab opens the extension's own page, which reads the file in this browser
+   * and starts the analysis (`src/pdf/main.ts`). It fetches the file from its
+   * site, whose access is asked for in the click itself, the one moment the
+   * browser allows it; refused, the page offers to pick the file instead.
+   */
+  const openPdf = useCallback(() => {
+    if (!pageUrl || tabId === null) return;
+    const address = pageUrl;
+    const asked = /^https?:/.test(address) ? requestSiteAccess(address) : Promise.resolve(false);
+    void asked.finally(() => {
+      void UnifiedRuntime.getTabs().update(tabId, { url: pdfPageUrl(address) });
+      // The page is under the popup: let it be seen.
+      if (overPage) window.close();
+    });
+  }, [pageUrl, tabId, overPage]);
 
   const runAnalysis = useCallback(async () => {
     // The panel is driven by live events (`ANALYSIS_PROGRESS` / `ANALYSIS_COMPLETE`
@@ -568,7 +589,7 @@ function SidepanelApp() {
         <button
           type="button"
           data-tour="run-analysis"
-          onClick={runAnalysis}
+          onClick={isPdf ? openPdf : runAnalysis}
           disabled={busy || !canRun}
           className={`w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-50 ${
             canRun
@@ -582,6 +603,8 @@ function SidepanelApp() {
             ? 'Relancer l’analyse'
             : isVideoPage
             ? 'Analyser cette vidéo'
+            : isPdf
+            ? 'Analyser ce PDF'
             : 'Lancer l’analyse critique'}
         </button>
 
@@ -603,6 +626,14 @@ function SidepanelApp() {
             {overPage &&
               ' Squiggle se ferme le temps de cette lecture, qui demande la vidéo à l’écran : ' +
                 'rouvrez-le ensuite pour voir l’analyse.'}
+          </p>
+        )}
+
+        {isPdf && !report && !busy && !error && canRun && (
+          <p className="-mt-3 text-xs leading-relaxed text-muted">
+            Squiggle ouvre ce PDF dans sa propre page, le lit dans votre navigateur et lance
+            l’analyse : le fichier n’est envoyé nulle part. Les constats seront surlignés dans
+            cette page.
           </p>
         )}
 
@@ -752,7 +783,7 @@ function SidepanelApp() {
           </>
         )}
 
-        {!report && !busy && !error && !isVideoPage && (hosted ? hostedCanAnalyse : hasKey !== false) && (
+        {!report && !busy && !error && !isVideoPage && !isPdf && (hosted ? hostedCanAnalyse : hasKey !== false) && (
           <p className="text-xs leading-relaxed text-muted">
             Ouvrez un article de presse, puis lancez l’analyse. Les constats seront surlignés
             directement dans la page.

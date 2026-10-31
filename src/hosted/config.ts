@@ -28,6 +28,9 @@ export function hostedPontUrl(extensionId: string, publicKeyJwk: string): string
   return `${HOSTED_WEB_APP}/pont?${query.toString()}`;
 }
 
+/** The web app's own analysis, which also reads a scanned PDF on the reader's device. */
+export const ANALYSE_URL = `${HOSTED_WEB_APP}/analyser`;
+
 /** The data-flow page the hosted disclosure links to. */
 export const TRANSPARENCY_URL = `${HOSTED_WEB_APP}/transparence`;
 

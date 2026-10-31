@@ -1,6 +1,6 @@
 {
   "name": "squiggle",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "Squiggle - Critical analysis and editorial verification browser extension (Chrome MV3 & Firefox MV3)",
   "license": "MIT",

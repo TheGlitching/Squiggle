@@ -262,6 +262,10 @@ export class ContentScriptController {
           _sender: any,
           sendResponse: (res: ContentScriptResponse) => void
         ) => {
+          // Only its own messages. Loaded into the extension's PDF page (src/pdf), this
+          // listener also hears the panel's calls to the background, which an answer
+          // from here would intercept.
+          if (typeof message?.type !== 'string' || !message.type.startsWith('FC_')) return false;
           const response = this.handleMessage(message);
           sendResponse(response);
           return true; // Keep channel open for async if needed
