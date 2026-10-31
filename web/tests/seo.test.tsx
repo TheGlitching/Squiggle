@@ -10,10 +10,10 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
+import { ALL_ARTICLES, BLOG_PATH } from '../src/blog';
 import { FAMILLES, NOTIONS } from '../src/glossaire';
 import { OWNER_PATH } from '../src/api';
-import { BLOG_PATH } from '../src/blog';
-import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, pageSources, redirects, shareImagePath, sitemap, titleFor } from '../src/seo';
+import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, TITLE_MAX, appHeadFor, blogPages, headFor, pageSources, redirects, shareImagePath, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
 // The analysis page asks who is signed in: no one, here.
@@ -30,6 +30,15 @@ describe('search engines and link previews', () => {
     expect(new Set(PUBLIC_PAGES.map((page) => page.title)).size).toBe(PUBLIC_PAGES.length);
     expect(new Set(PUBLIC_PAGES.map((page) => page.description)).size).toBe(PUBLIC_PAGES.length);
     for (const page of PUBLIC_PAGES) expect(page.description.length).toBeLessThanOrEqual(160);
+    expect(PUBLIC_PAGES.find((page) => page.path === '/mentions-legales')!.description.length).toBeGreaterThanOrEqual(120);
+  });
+
+  it('keeps every title short enough that a result shows it whole', () => {
+    // The drafts too: an article is titled the day it is published.
+    for (const page of [...PUBLIC_PAGES, ...blogPages(ALL_ARTICLES)]) expect(page.title.length, page.path).toBeLessThanOrEqual(TITLE_MAX);
+    const page = (slug: string) => PUBLIC_PAGES.find((item) => item.path === `/glossaire/${slug}`)!;
+    // A long notion name keeps its definition and loses its examples before it loses the site's name.
+    expect(page('correlation-causalite').title).toBe('Corrélation prise pour causalité : définition - Squiggle');
   });
 
   it.each(PUBLIC_PAGES.map((page) => [page.path, page] as const))('%s is a page of the app, with its own head', (path, page) => {
