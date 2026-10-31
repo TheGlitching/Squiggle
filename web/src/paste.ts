@@ -1,11 +1,8 @@
 /**
  * A pasted article, from the textarea to the blocks the engine reads.
  *
- * The extension cuts a page into blocks from its markup; a paste has none, so
- * every non-empty line is a paragraph and the title, when there is one, is the
- * first block. That keeps the title inside the text fingerprint (two pastes
- * under different titles are two texts) and inside what the audit can quote,
- * so a finding about the title is highlighted in it like any other.
+ * The blocks themselves are cut by `shared/src/hosted/pastedText.ts`, which the
+ * server also uses for a forwarded e-mail; a transcript keeps its times here.
  *
  * The limits mirror `server/src/analyze/schemas.ts`, so a text the server
  * would refuse is stopped here with a sentence instead of a 400. The article
@@ -14,6 +11,7 @@
 import type { TextBlock } from '../../shared/src/engine/types';
 import { MAX_MESSAGE_CHARS, MIN_MESSAGE_CHARS } from '../../shared/src/engine/message';
 import { articleLength, MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
+import { blockWriter, plainTextBlocks, splitLongLine } from '../../shared/src/hosted/pastedText';
 import { readTranscript, timeAt, type Start } from './transcript';
 
 /**
@@ -22,7 +20,6 @@ import { readTranscript, timeAt, type Start } from './transcript';
  */
 export const MIN_TEXT_CHARS = MIN_MESSAGE_CHARS;
 export { MAX_MESSAGE_CHARS };
-const MAX_BLOCK_CHARS = 20_000;
 const MAX_BLOCKS = 2_000;
 export const MAX_TITLE_CHARS = 500;
 
@@ -35,53 +32,21 @@ export interface PastedArticle {
 
 export const EMPTY_ARTICLE: PastedArticle = { title: '', source: '', text: '' };
 
-/** A line longer than one block is cut after a sentence, never inside a word. */
-function splitLongLine(line: string): string[] {
-  const parts: string[] = [];
-  let rest = line;
-  while (rest.length > MAX_BLOCK_CHARS) {
-    const window = rest.slice(0, MAX_BLOCK_CHARS);
-    // After the last sentence in the window, unless that leaves most of it empty.
-    const sentence = window.lastIndexOf('. ');
-    const cut = sentence > MAX_BLOCK_CHARS / 2 ? sentence + 1 : window.lastIndexOf(' ');
-    const at = cut > 0 ? cut + 1 : MAX_BLOCK_CHARS;
-    parts.push(rest.slice(0, at).trim());
-    rest = rest.slice(at).trim();
-  }
-  if (rest) parts.push(rest);
-  return parts;
-}
-
 /**
  * The engine's blocks for a paste, and for a video's transcript where each of
- * its passages starts in each block, by block id. `charStart` places each block
- * in the text the blocks spell when joined by a blank line, which is what the
- * validator offsets a finding's quote against.
+ * its passages starts in each block, by block id.
  */
 export function readPaste(article: Pick<PastedArticle, 'title' | 'text'>): {
   blocks: TextBlock[];
   times: Record<string, Start[]> | null;
 } {
-  const blocks: TextBlock[] = [];
+  const transcript = readTranscript(article.text);
+  if (!transcript) return { blocks: plainTextBlocks(article.title, article.text), times: null };
+
+  const { blocks, push } = blockWriter();
   const times: Record<string, Start[]> = {};
-  let offset = 0;
-  const push = (type: TextBlock['type'], text: string) => {
-    const id = `b${blocks.length + 1}`;
-    blocks.push({ id, type, text, charStart: offset });
-    offset += text.length + 2;
-    return id;
-  };
   const title = article.title.trim();
   if (title) push('heading', title);
-
-  const transcript = readTranscript(article.text);
-  if (!transcript) {
-    for (const line of article.text.split(/\r?\n/)) {
-      const trimmed = line.replace(/\s+/g, ' ').trim();
-      if (trimmed) for (const part of splitLongLine(trimmed)) push('paragraph', part);
-    }
-    return { blocks, times: null };
-  }
   for (const paragraph of transcript) {
     // A part of a cut paragraph keeps the starts that fall in it, and the time it opens on.
     let from = 0;

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as entry from '../src/index';
 import { DAILY_CRON } from '../src/usage/limits';
+import { MAIL_JOB_ATTEMPTS } from '../src/mail/inbound';
 import { missingSecrets, parseJsonc, pendingVars } from '../scripts/config.mjs';
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
@@ -97,6 +98,14 @@ describe('environments', () => {
 
   it('run the retention sweeps', () => {
     for (const env of Object.values(envs)) expect(env.triggers.crons).toEqual(['0 * * * *', DAILY_CRON]);
+  });
+
+  it('finish a forwarded message on its own queue, one job at a time, as often as the job expects', () => {
+    for (const [name, env] of Object.entries(envs)) {
+      const queue = `squiggle-mail-in-${name}`;
+      expect(env.queues.producers).toEqual([{ binding: 'MAIL_QUEUE', queue }]);
+      expect(env.queues.consumers).toEqual([{ queue, max_batch_size: 1, max_retries: MAIL_JOB_ATTEMPTS - 1 }]);
+    }
   });
 
   it('serve production from the origin the app and the emailed links use', () => {

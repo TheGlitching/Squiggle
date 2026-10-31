@@ -69,6 +69,17 @@ read a page. A visitor without an account walks the same stages on `/web/anon/*`
 cookie, the client in its `session: 'none'` mode: one analysis per IP and per day, 40 a
 day for the site, from the web app's origin only.
 
+A third client is the forwarding address, `verifier@squiggle.fr` (`server/src/mail/`).
+Cloudflare Email Routing hands each message to the Worker's `email()` handler, which drops
+anything that is not a verified account's address authenticated by Cloudflare (DMARC, or
+DKIM or SPF aligned with the From domain), takes the forwarded text out of the message
+(`forwarded.ts`), cuts it into blocks as a paste is (`shared/src/hosted/pastedText.ts`, so
+the same words share one report), and runs the audit in process. The research, the
+finalize and the reply run from a Cloudflare Queue, which carries only the run's id: a
+queue consumer has fifteen minutes, which an e-mail event is not documented to give. The
+reply goes through Brevo and links to `/analyser?rapport=<fingerprint>`, which opens the
+cached report on the reader's session.
+
 ```
 +-----------------------------+
 |         Extension           |

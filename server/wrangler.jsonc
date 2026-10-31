@@ -46,6 +46,15 @@
       "triggers": {
         "crons": ["0 * * * *", "17 3 * * *"]
       },
+      // A message forwarded to the e-mail address is audited in the email()
+      // handler, then finishes (research, report, reply) from this queue, one
+      // job at a time; a job runs MAIL_JOB_ATTEMPTS times at most
+      // (src/mail/inbound.ts). The queue is created once per account, before
+      // the first deploy that carries it (docs/DEPLOYING.md).
+      "queues": {
+        "producers": [{ "binding": "MAIL_QUEUE", "queue": "squiggle-mail-in-staging" }],
+        "consumers": [{ "queue": "squiggle-mail-in-staging", "max_batch_size": 1, "max_retries": 2 }]
+      },
       "vars": {
         // The staging Worker's own address; the workers.dev subdomain is the
         // account's, so it is filled in once the account exists.
@@ -67,6 +76,15 @@
       // Retention sweeps (see runScheduled): hourly, and daily at DAILY_CRON.
       "triggers": {
         "crons": ["0 * * * *", "17 3 * * *"]
+      },
+      // A message forwarded to the e-mail address is audited in the email()
+      // handler, then finishes (research, report, reply) from this queue, one
+      // job at a time; a job runs MAIL_JOB_ATTEMPTS times at most
+      // (src/mail/inbound.ts). The queue is created once per account, before
+      // the first deploy that carries it (docs/DEPLOYING.md).
+      "queues": {
+        "producers": [{ "binding": "MAIL_QUEUE", "queue": "squiggle-mail-in-production" }],
+        "consumers": [{ "queue": "squiggle-mail-in-production", "max_batch_size": 1, "max_retries": 2 }]
       },
       "vars": {
         // Origin of the hosted web app; used to build magic-link / OAuth URLs.

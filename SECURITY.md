@@ -126,6 +126,20 @@ with a request. What that means concretely:
   as read by the extension on the page itself, never one built from a text
   pasted on the website, under the model and prompt version in use and before
   the report expires. A client still names an address, never a report.
+- **The forwarding address answers only an authenticated account.** Anyone can
+  write a `From:` line, so a message to `verifier@squiggle.fr` is only analysed
+  when the first `Authentication-Results` header, the one Cloudflare prepends
+  (`mx.cloudflare.net`), shows DMARC passing, or DKIM or SPF passing for the From
+  domain itself; a header further down came with the message and is ignored. The
+  address must also be a verified account's, and the run then spends that
+  account's own quota under the same ceilings as any other. Everything else (an
+  unknown or unauthenticated sender, a bounce, an automatic reply, a list's mail,
+  mail from our own domain) is dropped without a reply, so the address can neither
+  be used to send mail to a forged sender nor to learn which addresses have an
+  account. Messages over 2 MiB are refused at the SMTP stage, before they are
+  parsed; attachments are ignored and no link is followed. The reply always goes
+  to the account's own address and marks itself `Auto-Submitted`, which is what
+  ends a loop with an auto-responder.
 - **Report sanitization.** A cached report is written by one reader's analysis
   and served to every later reader of the same article, which makes the cache
   the one place where text derived from a hostile article could reach someone
@@ -163,6 +177,16 @@ with a request. What that means concretely:
   about *who* ran it, since the usage ledger deliberately does not record which
   article an analysis was of. It is still a corpus-level signal, and it is
   named here rather than left to be discovered.
+- **A forwarded e-mail's report is named by its fingerprint.** The reply links to
+  `/analyser?rapport=<fingerprint>`, which any signed-in account holding the link
+  could open. The fingerprint is a SHA-256 of the text, so the link is no easier to
+  guess than the text itself, and the same text pasted on the site already reaches
+  the same report: it discloses nothing the cache does not already serve.
+- **A forged sender inside a domain without DMARC.** Without a DMARC record, an SPF
+  pass for the From domain is enough. A domain whose SPF record authorises a shared
+  relay lets anyone on that relay pass as any of its addresses; that reader's
+  analyses could then be spent by someone else, within their quota, and the reply
+  still goes to the reader, never to the forger.
 - **The shared cache is a shared read.** If two readers open the same article,
   the second is served a report the first paid for. That is deliberate, and it
   is why the sanitizer exists. What it does mean: a report is not private to the

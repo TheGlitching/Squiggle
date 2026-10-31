@@ -3,8 +3,9 @@
  *
  * The destination travels through a hop the server does not control (Google,
  * a mailbox), so it is stored server-side with the handshake and only ever
- * taken from this allowlist: the account page, the analysis page, or the
- * extension bridge with both of its parameters. Anything else - another
+ * taken from this allowlist: the account page, the analysis page (or one
+ * report on it, by its fingerprint), or the extension bridge with both of its
+ * parameters. Anything else - another
  * origin, a protocol-relative URL, an unknown path - is dropped and the caller
  * falls back to `/compte`.
  */
@@ -47,7 +48,10 @@ export function sanitizeNext(raw: unknown): string | null {
 
   if (url.pathname === '/compte') return DEFAULT_NEXT;
   // Nothing of the pasted text travels: it waits in the reader's own browser.
+  // A forwarded e-mail's report is named by its text's fingerprint alone.
   if (url.pathname === '/analyser') {
+    const report = url.searchParams.get('rapport');
+    if (report && /^[0-9a-f]{64}$/.test(report)) return `/analyser?rapport=${report}`;
     const after = url.searchParams.get('apres');
     return after === 'essai' ? AFTER_ANON_NEXT : after === 'flou' ? AFTER_WITHHELD_NEXT : '/analyser';
   }
