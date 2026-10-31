@@ -711,7 +711,7 @@ describe('Analyser, signed in', () => {
     ].join('\n');
     const seen = serve(account());
     render(<Analyser />);
-    expect(screen.getByText(/Une vidéo YouTube \? Copiez sa transcription/)).toBeInTheDocument();
+    expect(screen.getByText(/collez sa transcription \(« Afficher la transcription »/)).toBeInTheDocument();
     paste(transcript);
     expect(screen.getByText(/Transcription reconnue : les horodatages sont retirés/)).toBeInTheDocument();
     fireEvent.click(await analyseButton());
@@ -964,7 +964,7 @@ describe('Analyser, from screenshots', () => {
       return TEXT;
     });
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('captures'), [image('capture-1.png'), image('capture-2.png')]);
+    await userEvent.upload(screen.getByTestId('fichier'), [image('capture-1.png'), image('capture-2.png')]);
 
     expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu sur 2 captures, sur cet appareil : aucune image n’a été envoyée/);
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
@@ -988,24 +988,38 @@ describe('Analyser, from screenshots', () => {
         }),
     );
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('captures'), [image('a.png'), image('b.png'), image('c.png')]);
+    await userEvent.upload(screen.getByTestId('fichier'), [image('a.png'), image('b.png'), image('c.png')]);
     expect(await screen.findByText('Préparation de la lecture…')).toBeInTheDocument();
     act(() => progress(1, 3));
     expect(screen.getByText('Lecture de la capture 2 sur 3…')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(await screen.findByText('Lecture annulée.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Importer des captures' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Importer un fichier' })).toBeInTheDocument();
   });
 
   it('says so when nothing was read, or when the reader could not load', async () => {
     serve(account());
     vi.mocked(readCaptures).mockResolvedValueOnce('  ').mockRejectedValueOnce(new Error('network'));
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('captures'), [image('vide.png')]);
+    await userEvent.upload(screen.getByTestId('fichier'), [image('vide.png')]);
     expect(await screen.findByText(/Aucun texte n’a été lu sur ces images/)).toBeInTheDocument();
-    await userEvent.upload(screen.getByTestId('captures'), [image('hors-ligne.png')]);
+    await userEvent.upload(screen.getByTestId('fichier'), [image('hors-ligne.png')]);
     expect(await screen.findByText(/le lecteur de texte se télécharge la première fois/)).toBeInTheDocument();
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
+  });
+
+  it('takes a dropped file to the reading that suits it, and refuses one it cannot read', async () => {
+    serve(account());
+    vi.mocked(readCaptures).mockResolvedValue(TEXT);
+    render(<Analyser />);
+    const zone = screen.getByTestId('depot');
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' })] } });
+    expect(await screen.findByText('Ce fichier n’est ni une image, ni un PDF, ni un son ou une vidéo.')).toBeInTheDocument();
+    expect(readCaptures).not.toHaveBeenCalled();
+
+    fireEvent.drop(zone, { dataTransfer: { files: [image('capture.png')] } });
+    expect(await screen.findByText(/Texte lu sur 1 capture/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
   });
 
   it('reads the screenshots shared to the installed app, and wipes the share from the address bar', async () => {
@@ -1057,7 +1071,7 @@ describe('Analyser, from a PDF', () => {
     const seen = serve(account());
     vi.mocked(readPdfFile).mockResolvedValue(read());
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('pdf'), file());
+    await userEvent.upload(screen.getByTestId('fichier'), file());
 
     expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu dans le PDF \(3 pages\), sur cet appareil : le fichier n’a pas été envoyé/);
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(paragraphs.join('\n'));
@@ -1075,7 +1089,7 @@ describe('Analyser, from a PDF', () => {
     const blocks = [1, 2, 3, 4].map((n) => ({ type: 'paragraph' as const, text: page(n), page: n }));
     vi.mocked(readPdfFile).mockResolvedValue(read({ blocks, pages: 4 }));
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('pdf'), file());
+    await userEvent.upload(screen.getByTestId('fichier'), file());
 
     expect(await screen.findByText(/Ce PDF de 4 pages est trop long pour une seule analyse : le champ en garde les pages 1 à 2/)).toBeInTheDocument();
     const field = screen.getByLabelText('Texte de l’article ou du message') as HTMLTextAreaElement;
@@ -1094,7 +1108,7 @@ describe('Analyser, from a PDF', () => {
     vi.mocked(readPdfFile).mockResolvedValue(read({ blocks: [], pages: 2, scanned: true, scans, title: '' }));
     vi.mocked(readCaptures).mockResolvedValue(TEXT);
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('pdf'), file('scan.pdf'));
+    await userEvent.upload(screen.getByTestId('fichier'), file('scan.pdf'));
 
     expect(await screen.findByText(/Ce PDF est un document scanné : ses 2 pages ont été lues comme des captures/)).toBeInTheDocument();
     expect(vi.mocked(readCaptures).mock.calls[0][0]).toEqual(scans);
@@ -1110,11 +1124,11 @@ describe('Analyser, from a PDF', () => {
       .mockRejectedValueOnce(named('InvalidPDFException'))
       .mockRejectedValueOnce(new Error('network'));
     render(<Analyser />);
-    await userEvent.upload(screen.getByTestId('pdf'), file());
+    await userEvent.upload(screen.getByTestId('fichier'), file());
     expect(await screen.findByText(/Ce PDF est protégé par un mot de passe/)).toBeInTheDocument();
-    await userEvent.upload(screen.getByTestId('pdf'), file());
+    await userEvent.upload(screen.getByTestId('fichier'), file());
     expect(await screen.findByText(/Ce fichier n’est pas un PDF lisible/)).toBeInTheDocument();
-    await userEvent.upload(screen.getByTestId('pdf'), file());
+    await userEvent.upload(screen.getByTestId('fichier'), file());
     expect(await screen.findByText(/le lecteur de PDF se télécharge la première fois/)).toBeInTheDocument();
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
   });
@@ -1156,7 +1170,7 @@ describe('Analyser, from a recording', () => {
     vi.mocked(mediaDuration).mockResolvedValue(90);
     render(<Analyser />);
     await analyseButton();
-    await userEvent.upload(screen.getByTestId('media'), recording());
+    await userEvent.upload(screen.getByTestId('fichier'), recording());
 
     expect(await screen.findByText(/Transcription de 1 min 30 s\. Relisez-la/)).toBeInTheDocument();
     const field = screen.getByLabelText('Texte de l’article ou du message') as HTMLTextAreaElement;
@@ -1178,7 +1192,7 @@ describe('Analyser, from a recording', () => {
     vi.mocked(soundPart).mockImplementation(async () => ({ wav: new Blob(['wav']), seconds: 2000 }));
     render(<Analyser />);
     await analyseButton();
-    await userEvent.upload(screen.getByTestId('media'), recording('video/mp4'));
+    await userEvent.upload(screen.getByTestId('fichier'), recording('video/mp4'));
 
     const choice = await screen.findByLabelText(/Cet enregistrement dure 33 min 20 s/);
     expect([...(choice as HTMLSelectElement).options].map((o) => o.text)).toEqual([
@@ -1205,7 +1219,7 @@ describe('Analyser, from a recording', () => {
     const seen = serve(null);
     render(<Analyser />);
     await analyseButton();
-    await userEvent.upload(screen.getByTestId('media'), recording());
+    await userEvent.upload(screen.getByTestId('fichier'), recording());
     expect(await screen.findByText(/La transcription d’un enregistrement demande un compte/)).toBeInTheDocument();
     expect(soundPart).not.toHaveBeenCalled();
     expect(sent(seen)).toHaveLength(0);
@@ -1218,11 +1232,11 @@ describe('Analyser, from a recording', () => {
     vi.mocked(mediaDuration).mockResolvedValue(30);
     render(<Analyser />);
     await analyseButton();
-    await userEvent.upload(screen.getByTestId('media'), recording());
+    await userEvent.upload(screen.getByTestId('fichier'), recording());
     expect(await screen.findByText(/tout ce qu’il peut en un jour/)).toBeInTheDocument();
 
     vi.mocked(soundPart).mockRejectedValueOnce(new DOMException('decode', 'EncodingError'));
-    await userEvent.upload(screen.getByTestId('media'), recording());
+    await userEvent.upload(screen.getByTestId('fichier'), recording());
     expect(await screen.findByText(/Le son de ce fichier n’a pas pu être lu sur cet appareil/)).toBeInTheDocument();
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
   });
