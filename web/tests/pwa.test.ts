@@ -116,6 +116,11 @@ describe('the service worker', () => {
     ['/auth/google/callback?code=x&state=y', 'navigate'],
     ['/health', 'cors'],
     ['/landing/rapport.png', 'no-cors'],
+    // A real file opened as a page is that file, not the app's 404.
+    ['/sitemap.xml', 'navigate'],
+    ['/robots.txt', 'navigate'],
+    ['/.well-known/assetlinks.json', 'navigate'],
+    ['/og/accueil.png', 'navigate'],
   ])('lets %s through to the network, uncached', async (url, mode) => {
     const worker = loadWorker();
     await worker.lifecycle('install');

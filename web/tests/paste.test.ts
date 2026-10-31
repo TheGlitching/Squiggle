@@ -112,6 +112,14 @@ describe('articleFromShare', () => {
     });
   });
 
+  it('keeps a short text shared without a link as the text: it is a message, not a headline', () => {
+    expect(share({ text: 'La CAF supprime les APL. Transférez !' })).toEqual({
+      title: '',
+      source: '',
+      text: 'La CAF supprime les APL. Transférez !',
+    });
+  });
+
   it('drops a shared address that is not a web page', () => {
     expect(share({ url: 'javascript:alert(1)', text: 'Un texte.' })?.source).toBe('');
   });
