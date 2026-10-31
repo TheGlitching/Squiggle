@@ -550,15 +550,24 @@ export function StepFigure({ step }: { step: Step }) {
   );
 }
 
-/** The four stages an analysis really goes through, as the analysis page names them. */
-export type RunStep = 'lecture' | 'recherche' | 'verification' | 'rapport';
+/** The three stages an analysis really goes through, as the analysis page and the extension name them. */
+export type RunStep = 'lecture' | 'recherche' | 'verification';
+
+/**
+ * Each stage's frame, so what it draws sits in the middle of its box: the
+ * reading has only the article, the later stages add the two pages to its right.
+ */
+function frameOf(step: RunStep): string {
+  return step === 'lecture' ? '-33 -18 320 222' : '0 0 320 222';
+}
 
 /**
  * The analysis running: one scene, in the hero's materials, whose loop is the
- * stage under way. The article and Squiggle's sheet stay put from one stage to
- * the next; only what the stage does moves. Nothing in it is a result: the
- * marks and the ring are the drawings the home page explains, not this text's.
- * Without motion, each stage is a still.
+ * stage under way. Squiggle's sheet stays on the article from one stage to the
+ * next; only what the stage does moves, and the frame recentres on it. Nothing
+ * in it is a result: the marks are the drawings the home page explains, not
+ * this text's. Without motion, each stage is a still. The extension's panel
+ * draws the same scene (`src/ui/components/RunScene.tsx`); change the two together.
  */
 export function RunScene({ step }: { step: RunStep }) {
   const v = iso(140, 40);
@@ -576,14 +585,14 @@ export function RunScene({ step }: { step: RunStep }) {
   const [fx, fy] = v.P(76, body[1][0] + 2, Z);
 
   return (
-    <svg viewBox="0 0 320 222" className="block h-auto w-full overflow-visible" aria-hidden="true">
+    <svg viewBox={frameOf(step)} className="block h-auto w-full overflow-visible" aria-hidden="true">
       <Box v={v} at={[0, 0, 0]} size={[W, D, 2]} r={3} face="iso-paper" edge="iso-paper-edge" />
       <g transform={v.top(0, 0, 2)}>
         <rect x={14} y={14} width={70} height={9} rx={2} fill="var(--color-paperInk)" />
         <Lines lines={body} h={4} />
       </g>
 
-      {step === 'recherche' || step === 'verification'
+      {step !== 'lecture'
         ? cards.map((y, index) => (
             <g key={y} className={step === 'recherche' ? 'run-card' : undefined} style={{ '--i': index } as CSSProperties}>
               <Box v={v} at={[156, y, 0]} size={[50, 62, 3]} r={2} />
@@ -634,31 +643,13 @@ export function RunScene({ step }: { step: RunStep }) {
           </>
         ) : null}
         {step === 'recherche' ? <Mark x={body[1][1]} y={body[1][0]} w={62} severity="warning" h={9} /> : null}
-        {step === 'verification' || step === 'rapport'
+        {step === 'verification'
           ? marks.map(([x, line, w, severity], index) => (
-              <g key={line} className={step === 'verification' ? 'run-mark' : undefined} style={{ '--i': index } as CSSProperties}>
+              <g key={line} className="run-mark" style={{ '--i': index } as CSSProperties}>
                 <Mark x={x} y={body[line][0]} w={w} severity={severity} h={9} />
               </g>
             ))
           : null}
-        {step === 'rapport' ? (
-          <g>
-            <circle cx={96} cy={22} r={13} fill="#0f0f11" stroke="#3a3a42" strokeWidth={4} />
-            <circle
-              className="run-ring"
-              cx={96}
-              cy={22}
-              r={13}
-              fill="none"
-              stroke={SEVERITY_COLORS.warning.color}
-              strokeWidth={4}
-              strokeLinecap="round"
-              pathLength={100}
-              strokeDasharray="61 100"
-              transform="rotate(-90 96 22)"
-            />
-          </g>
-        ) : null}
       </g>
 
       {/* Drawn over the sheet, so each line leaves from the mark. */}
