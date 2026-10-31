@@ -58,6 +58,7 @@ import {
   takeSharedMedia,
   transcriptText,
 } from '../media';
+import { useBrowserValue } from '../client';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
 import { RunScene, type RunStep } from '../components/Iso';
@@ -285,6 +286,28 @@ function initialArticle(): {
   }
   const entry = shared.text ? AUTO_ENTRIES.get(params.get(FAVORI_PARAM)) : undefined;
   return { article: article as PastedArticle, shared, favori: Boolean(entry), entry };
+}
+
+/**
+ * Whether this reader's first render of the page differs from the build's: a draft
+ * kept from a last visit, or anything the address brought (a share, the bookmark, a
+ * return from sign-in or checkout, a mailed report). Each of `AnalyserPage`'s
+ * first-render reads of the browser is here; `src/main.tsx` hydrates the page otherwise.
+ */
+export function analyserReadsReader(): boolean {
+  const { article, shared, favori } = initialArticle();
+  return Boolean(
+    article.title ||
+      article.source ||
+      article.text ||
+      shared ||
+      favori ||
+      sharedCaptures() ||
+      backFromVisit() ||
+      mailedReport() ||
+      paymentNotice() ||
+      new URLSearchParams(window.location.search).get('media') === '1',
+  );
 }
 
 /**
@@ -1269,7 +1292,7 @@ function PhoneGuide({ os }: { os: PhoneOs }) {
 /** The questions a first paste raises: what it costs, where the text goes, how to have it on a phone. */
 function Aside() {
   const install = useInstall();
-  const [os] = useState(currentPhoneOs);
+  const os = useBrowserValue(currentPhoneOs, null);
   return (
     <aside
       aria-label="Bon à savoir"

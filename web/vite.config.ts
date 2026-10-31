@@ -312,7 +312,7 @@ function lastCommitDate(files: string[] | undefined): string | undefined {
  * reads only the HTML and never runs the app. The browser then hydrates it
  * (`src/main.tsx`), so a page's first render must match the build's: what depends on
  * the reader's device (the user agent) is read after it, never during it. The pages
- * whose first render is the reader's own (`READER_STATE_PAGES` in `src/App.tsx`) are
+ * whose first render is the reader's own (`rendersReaderState` in `src/App.tsx`) are
  * rendered afresh instead.
  */
 function prerender(): Plugin {
