@@ -37,6 +37,7 @@ import {
   analysisFailure,
   analyzePasted,
   cachedReport,
+  reportByFingerprint,
   reportByLink,
   type AnalysisFailure,
   type Progress,
@@ -95,6 +96,8 @@ type Phase =
       visitor: boolean;
       /** Found by this link alone: the report of a reader who used the extension, without the text. */
       link?: string;
+      /** The report of an e-mail the reader forwarded: its text is in their mailbox, not here. */
+      mailed?: boolean;
     };
 
 /** Back from the sign-in a visitor's report offered. Read before the address bar is wiped. */
@@ -103,6 +106,20 @@ function backFromVisit(): boolean {
   const after = new URLSearchParams(window.location.search).get('apres');
   return after === 'essai' || after === 'flou';
 }
+
+/**
+ * The report a forwarded e-mail's reply links to, named by the fingerprint of
+ * the e-mail's text (`server/src/mail/inbound.ts`). Read before the address bar is wiped.
+ */
+function mailedReport(): string | null {
+  if (typeof window === 'undefined') return null;
+  const fingerprint = new URLSearchParams(window.location.search).get('rapport');
+  return fingerprint && /^[0-9a-f]{64}$/.test(fingerprint) ? fingerprint : null;
+}
+
+const OPENING_MAILED = 'Ouverture du rapport de votre e-mail…';
+const MAILED_GONE =
+  'Ce rapport n’est plus disponible. Transférez de nouveau l’e-mail à verifier@squiggle.fr, ou collez son texte ici.';
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
 const LOOKING_UP = 'Adresse reçue. Recherche d’un rapport déjà fait pour ce lien…';
@@ -270,6 +287,7 @@ function AnalyserPage() {
   const [autoStarted, setAutoStarted] = useState(favori);
   const [sharedCount] = useState(sharedCaptures);
   const [returning] = useState(backFromVisit);
+  const [mailed] = useState(mailedReport);
   const [article, setArticle] = useState<PastedArticle>(start);
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   // The bookmark's analysis shows as started from the first frame, while the
@@ -281,13 +299,15 @@ function AnalyserPage() {
   // A link shared alone is looked up first: someone may already have analysed it with the extension.
   const [notice, setNotice] = useState<string | null>(() =>
     // Shared screenshots bring their own text.
-    entry === 'entry_short_message'
-      ? SHORT_MESSAGE
-      : shared && !shared.text && !sharedCount
-        ? shared.source
-          ? LOOKING_UP
-          : ADDRESS_ONLY
-        : paymentNotice(),
+    mailed
+      ? OPENING_MAILED
+      : entry === 'entry_short_message'
+        ? SHORT_MESSAGE
+        : shared && !shared.text && !sharedCount
+          ? shared.source
+            ? LOOKING_UP
+            : ADDRESS_ONLY
+          : paymentNotice(),
   );
   const [showProblem, setShowProblem] = useState(false);
   const [reading, setReading] = useState<Reading | null>(null);
@@ -378,6 +398,31 @@ function AnalyserPage() {
     // Once, with the paste the reader came back with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returning, signedIn]);
+
+  // Once the account is known, for the report a forwarded e-mail's reply links
+  // to: it opens on the reader's own account, from the shared cache, at no credit.
+  useEffect(() => {
+    if (!mailed || account === undefined) return;
+    if (account === null) {
+      navigate(`/connexion?next=${encodeURIComponent(`/analyser?rapport=${mailed}`)}`, { replace: true });
+      return;
+    }
+    let live = true;
+    reportByFingerprint(mailed).then(
+      (report) => {
+        if (!live) return;
+        if (!report) return void setNotice(MAILED_GONE);
+        setNotice(null);
+        setPhase((current) =>
+          current.kind === 'edit' ? { kind: 'done', report, blocks: [], times: null, visitor: false, mailed: true } : current,
+        );
+      },
+      () => live && setNotice(MAILED_GONE),
+    );
+    return () => {
+      live = false;
+    };
+  }, [mailed, account]);
 
   useEffect(() => {
     if (!autoRun || account === undefined) return;
@@ -666,6 +711,25 @@ function AnalyserPage() {
     setShowProblem(false);
   }
 
+  if (phase.kind === 'done' && phase.mailed) {
+    return (
+      <div className={`${PAGE} py-8 sm:py-14`}>
+        <h1 ref={reportTop} tabIndex={-1} className={`${TITLE} outline-hidden focus-visible:ring-0`}>
+          Rapport de votre e-mail
+        </h1>
+        <p className="mt-3 mb-10 max-w-[55ch] text-lg leading-relaxed text-muted">
+          Le texte que vous avez transféré est resté dans votre messagerie : chaque constat en cite le passage.
+        </p>
+        <Rapport report={phase.report} blocks={[]} textElsewhere="mail" />
+        <p className="mt-10 mb-0">
+          <button type="button" onClick={startOver} className={QUIET_LINK}>
+            Analyser un autre article
+          </button>
+        </p>
+      </div>
+    );
+  }
+
   if (phase.kind === 'done' && phase.link) {
     return (
       <div className={`${PAGE} py-8 sm:py-14`}>
@@ -683,7 +747,7 @@ function AnalyserPage() {
               : 'Un lecteur l’a analysé avec l’extension Squiggle, sur la page même. Le rapport n’en garde que de courtes citations : l’article complet est chez l’éditeur.'}
           </p>
         </div>
-        <Rapport report={phase.report} blocks={[]} byLink />
+        <Rapport report={phase.report} blocks={[]} textElsewhere="link" />
         <p className="mt-10 mb-0">
           <button type="button" onClick={startOver} className={QUIET_LINK}>
             Analyser un autre article

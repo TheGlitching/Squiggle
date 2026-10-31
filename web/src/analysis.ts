@@ -83,6 +83,17 @@ export async function reportByLink(link: string): Promise<{ report: AnalysisRepo
   }
 }
 
+/**
+ * The report of an e-mail the reader forwarded, by the fingerprint of its text
+ * the reply's link carries: the same zero-credit cache lookup a pasted text's
+ * preflight makes, on the reader's session. Null when it is no longer filed.
+ */
+export async function reportByFingerprint(fingerprint: string): Promise<AnalysisReport | null> {
+  const res = await fetch(`${API_BASE}/web/analyze/check?text=${fingerprint}`, { credentials: 'include' });
+  const body = (await res.json()) as { ok?: boolean; hit?: boolean; report?: AnalysisReport };
+  return body.ok && body.hit && body.report ? body.report : null;
+}
+
 /** What the reader is told, by the code the server named. */
 const ANALYSIS_ERRORS: Record<string, string> = {
   rate_limited: 'Une analyse est déjà en cours, ou le service est très demandé. Réessayez dans un instant.',

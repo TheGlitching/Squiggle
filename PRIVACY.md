@@ -173,6 +173,24 @@ aucun serveur : le site en lit l'article dans votre navigateur, avec l'extracteu
 l'extension, et ce texte est ensuite traité exactement comme un texte collé. La page
 elle-même ne quitte pas votre téléphone.
 
+**Un e-mail transféré est lu comme un texte collé.** Un e-mail (une lettre
+d'information, un article reçu, une chaîne) transféré à `verifier@squiggle.fr` depuis
+l'adresse de votre compte est analysé sur votre compte, et la réponse vous apporte la
+phrase de synthèse et le lien du rapport. Le serveur garde la partie texte du message,
+sans votre mot d'accompagnement, sans l'en-tête du transfert (qui nomme les personnes
+par qui il est passé) et sans signature ; il ignore les pièces jointes et ne suit aucun
+lien. Ce texte n'est lu que le temps de l'audit, comme un texte collé : la suite de
+l'analyse attend dans une file de Cloudflare, qui ne porte que l'identifiant de
+l'analyse. Seule l'adresse d'un compte est acceptée, et seulement quand Cloudflare a
+authentifié l'expéditeur (DMARC, ou DKIM ou SPF du domaine de l'expéditeur), pour
+qu'un tiers ne puisse pas dépenser vos analyses en écrivant votre adresse. Un message
+d'une adresse inconnue ou non authentifiée, une réponse automatique ou le courrier
+d'une liste ne reçoivent aucune réponse : y répondre écrirait à une adresse que
+quelqu'un d'autre a choisie. Un message transféré peut contenir des noms et des
+adresses de tiers : ce qui en reste dans le texte part à l'analyse comme le reste du
+texte, et le rapport n'en garde que les courtes citations de ses constats. Votre
+adresse n'apparaît dans aucun journal ni aucun compteur.
+
 **Le rapport est mis en cache et partagé.** Deux lecteurs du même article obtiennent le
 même rapport, et c'est ce qui rend le service abordable : le second ne consomme aucun
 crédit et son navigateur n'envoie même pas l'article. **Un rapport contient des extraits
@@ -199,6 +217,7 @@ raconte.
 | Donnée | Où | Durée |
 |---|---|---|
 | Texte de l'article, lu par l'extension ou collé sur le site | mémoire, le temps de l'appel d'audit | **jamais écrit** |
+| E-mail transféré à `verifier@squiggle.fr` | mémoire, le temps de l'appel d'audit ; la file d'attente de Cloudflare ne porte que l'identifiant de l'analyse et de votre compte | **jamais écrit** ; la file, le temps de finir l'analyse |
 | Texte collé sur le site, avant l'analyse | **votre navigateur** (stockage local du site), jamais notre serveur | jusqu'à ce que vous l'effaciez |
 | Captures d'écran importées sur le site, ou partagées vers l'appli installée | **votre appareil** : leur texte y est lu, et seul ce texte part à l'analyse, comme un texte collé ; **aucune image n'est envoyée** | le temps de la lecture ; une capture partagée attend la page dans le cache du site, qui la vide dès qu'elle l'a prise |
 | PDF importés sur le site, partagés vers l'appli installée, ou lus par l'extension (« Analyser ce PDF ») | **votre appareil** : son texte y est lu (celui d'un PDF scanné, par la lecture des captures), et seul ce texte part à l'analyse ; **le fichier n'est jamais envoyé**. L'extension le reprend à l'adresse de votre onglet, depuis votre navigateur | le temps de la lecture ; un PDF partagé attend la page dans le cache du site, qui le vide dès qu'il l'a pris |
@@ -262,10 +281,10 @@ pas ce signalement : elle n'envoie toujours rien à notre serveur.
 | **Parallel Web Systems** (États-Unis), via OpenRouter | moteur de la recherche web de l'étape de vérification | les requêtes de recherche rédigées par le modèle, jamais l'article ni une identité de lecteur |
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini, ce qui n'est pas le cas aujourd'hui ; ses serveurs ne sont pas tous en Europe | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |
-| **Cloudflare** (Workers, Web Analytics) | hébergement du serveur et du site, mesure d'audience du site | le trafic, sans contenu d'article dans les journaux ; pour l'audience, des totaux sans cookie ni empreinte |
+| **Cloudflare** (Workers, Email Routing, Queues, Web Analytics) | hébergement du serveur et du site, réception des e-mails transférés, mesure d'audience du site | le trafic, et les e-mails transférés à `verifier@squiggle.fr`, sans contenu d'article dans les journaux ; pour l'audience, des totaux sans cookie ni empreinte |
 | **Neon** (base hébergée à Francfort, Allemagne, région AWS `eu-central-1` ; société établie aux États-Unis) | base de données | tout ce que décrit le tableau ci-dessus |
 | **Stripe** | paiement | votre e-mail et vos données de paiement — **nous ne voyons aucun numéro de carte** |
-| **Brevo** | envoi des e-mails de connexion | votre adresse e-mail |
+| **Brevo** | envoi des e-mails de connexion, et des réponses aux e-mails transférés | votre adresse e-mail ; pour une réponse, la phrase de synthèse du rapport et le titre de l'e-mail transféré |
 
 ## Vos droits
 

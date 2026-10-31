@@ -11,6 +11,8 @@ export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
+  /** Extra headers, e.g. `Auto-Submitted` and `In-Reply-To` on a reply to a forwarded message. */
+  headers?: Record<string, string>;
 }
 
 export interface EmailSender {
@@ -54,6 +56,7 @@ export class BrevoEmailSender implements EmailSender {
         to: [{ email: message.to }],
         subject: message.subject,
         htmlContent: message.html,
+        ...(message.headers ? { headers: message.headers } : {}),
       }),
     });
     if (!res.ok) {
