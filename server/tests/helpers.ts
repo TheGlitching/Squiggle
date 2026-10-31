@@ -380,6 +380,7 @@ export function makeTestEnv(
   opts: {
     fetchImpl?: FetchLike;
     adminToken?: string;
+    metricsToken?: string;
     ownerEmails?: string[];
     llm?: StubLlm;
     db?: MemoryDb;
@@ -408,6 +409,7 @@ export function makeTestEnv(
     googleClientId: 'test-google-client-id',
     fetchImpl: opts.fetchImpl,
     adminToken: opts.adminToken,
+    metricsToken: opts.metricsToken,
     ownerEmails: opts.ownerEmails,
     llm: () => llm,
     stripe: {
