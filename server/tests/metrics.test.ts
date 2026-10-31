@@ -254,7 +254,7 @@ describe('POST /web/count', () => {
     expect((await countRequest(env, 'click_example', {})).status).toBe(403);
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
-    expect(Object.keys(m.audience)).toEqual(['campaigns', 'clicks', 'pastes', 'flags']);
+    expect(Object.keys(m.audience)).toEqual(['campaigns', 'clicks', 'pastes', 'blog', 'flags']);
     expect(m.audience.campaigns).toMatchObject({ clemi: 2, linuxfr: 0, bluesky: 1, linkedin: 0 });
     expect(m.audience.clicks).toMatchObject({ install_firefox: 1, install_chrome: 0 });
     expect(m.audience.pastes).toEqual({ transcript: 1 });

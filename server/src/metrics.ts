@@ -65,6 +65,8 @@ export interface Metrics {
     campaigns: Record<string, number>;
     clicks: Record<string, number>;
     pastes: Record<string, number>;
+    /** Calls to analyse followed from a blog article, by article. */
+    blog: Record<string, number>;
     /** Findings reported as wrong, by category and, apart, by reason: the two are never linked. */
     flags: { categories: Record<string, number>; reasons: Record<string, number> };
   };
@@ -146,6 +148,7 @@ export async function collectLaunchMetrics(
       campaigns,
       clicks: family(c, 'click_'),
       pastes: family(c, 'paste_'),
+      blog: family(c, 'blog_'),
       flags: { categories: family(c, 'flag_finding_'), reasons: family(c, 'flag_reason_') },
     },
     funnel: {

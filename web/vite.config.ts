@@ -132,6 +132,12 @@ const SHORTCUT_DEFINE = {
   __SHORTCUT_PUBLISHED__: JSON.stringify(existsSync(new URL('./public/raccourci/Analyser avec Squiggle.shortcut', import.meta.url))),
 };
 
+/**
+ * What every build of the app is given. The blog's drafts (`src/blog.ts`) are never in
+ * it: only the dev server shows them, to read one as it will look.
+ */
+const BUILD_DEFINE = { ...SHORTCUT_DEFINE, __BLOG_DRAFTS__: 'false' };
+
 /** Where the built page lives: `/enseignants` is `enseignants.html`, which Cloudflare serves without a redirect. */
 const pageFile = (path: string) => (path === '/' ? 'index.html' : `${path.slice(1)}.html`);
 
@@ -253,13 +259,13 @@ function prerender(): Plugin {
         configFile: false,
         root: new URL('.', import.meta.url).pathname,
         plugins: [favori()],
-        define: SHORTCUT_DEFINE,
+        define: BUILD_DEFINE,
         logLevel: 'error',
         server: { middlewareMode: true, hmr: false, ws: false },
         appType: 'custom',
       });
       try {
-        const { APP_PATHS, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, headFor, render, shareImage, shareImagePath, sitemap, titleFor } =
+        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, render, shareImage, shareImagePath, sitemap, titleFor } =
           (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
         const write = (file: string, content: string | Buffer) => {
           // `/classe/mode-emploi` lives in `classe/`, beside `classe.html`.
@@ -285,6 +291,7 @@ function prerender(): Plugin {
         // (`not_found_handling` in server/wrangler.jsonc), so a mistyped link is not the home page.
         write('404.html', page(appHeadFor(NOT_FOUND_TITLE), `<div id="root">${render('/404')}</div>`));
         writeFileSync(dist('sitemap.xml'), sitemap());
+        if (BLOG_OPEN) write(FEED_PATH.slice(1), feed());
       } finally {
         await server.close();
       }
@@ -292,9 +299,9 @@ function prerender(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
   plugins: [react(), favori(), serviceWorker(), prerender(), ocr()],
-  define: SHORTCUT_DEFINE,
+  define: { ...BUILD_DEFINE, __BLOG_DRAFTS__: JSON.stringify(command === 'serve' && mode === 'development') },
   // The API origin is same-origin in production. A local dev build points at
   // a local server with VITE_API_BASE_URL; it is never a secret.
   server: { port: 5174, strictPort: true },
@@ -305,4 +312,4 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
   },
-});
+}));

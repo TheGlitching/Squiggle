@@ -8,7 +8,8 @@
  */
 import { CONTACT_EMAIL } from './components/Layout';
 import { GITHUB_URL, PRICE_MONTHLY, TAGLINE } from './offer';
-import { NOTIONS, famille, glossaryPath } from './glossaire';
+import { BLOG_PATH, FEED_PATH, PUBLISHED, article, blogPath, type Article } from './blog';
+import { NOTIONS, famille, glossaryPath, notion } from './glossaire';
 import { CHROME_URL, FIREFOX_URL } from './install';
 import { SHORTCUT_PUBLISHED } from './shortcut';
 
@@ -35,6 +36,8 @@ export interface PublicPage {
   jsonLd?: object;
   /** Its own share image; without one, a page shares the home page's. */
   share?: ShareCard;
+  /** The day it last changed, `YYYY-MM-DD`, where it is known for sure: the blog's. */
+  lastmod?: string;
 }
 
 const GLOSSARY = `${ORIGIN}/glossaire`;
@@ -88,6 +91,65 @@ const GLOSSARY_PAGES: PublicPage[] = [
     },
   })),
 ];
+
+const BLOG_TITLE = 'Le blog de Squiggle';
+const ORGANISATION = { '@type': 'Organization', '@id': `${ORIGIN}/#organisation`, name: 'Squiggle', url: `${ORIGIN}/` };
+
+/**
+ * The blog: its index, and each article with an `Article` schema. Its author is
+ * Squiggle: the site names no person. Nothing at all until one article is published.
+ */
+export function blogPages(articles: readonly Article[]): PublicPage[] {
+  if (!articles.length) return [];
+  const lastmod = (item: Article) => item.misAJour ?? item.publie;
+  return [
+    {
+      path: BLOG_PATH,
+      title: `${BLOG_TITLE} : des méthodes pour lire un article avec un œil critique`,
+      description:
+        'Repérer un chiffre sans origine, un titre trompeur, un procès d’intention : des méthodes de lecture, chacune sur un exemple inventé.',
+      share: {
+        kicker: BLOG_TITLE,
+        title: 'Des méthodes pour lire un article avec un œil critique',
+        text: 'Chacune sur un exemple inventé, avec les notions du glossaire qu’elle met en jeu.',
+        figure: 'lecture',
+      },
+      lastmod: articles.map(lastmod).sort().at(-1),
+    },
+    ...articles.map((item) => {
+      const url = `${ORIGIN}${blogPath(item.slug)}`;
+      const page: PublicPage = {
+        path: blogPath(item.slug),
+        title: `${item.titre} - Squiggle`,
+        description: item.description,
+        // The chapo would not fit under a title of three lines: the card says what the page is.
+        share: { kicker: BLOG_TITLE, title: item.titre, text: 'Une méthode de lecture, sur un article inventé.', figure: 'lecture' },
+        lastmod: lastmod(item),
+      };
+      page.jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        '@id': `${url}#article`,
+        headline: item.titre,
+        description: item.description,
+        url,
+        mainEntityOfPage: url,
+        image: `${ORIGIN}${shareImagePath(page)}`,
+        datePublished: item.publie,
+        dateModified: lastmod(item),
+        inLanguage: 'fr',
+        author: ORGANISATION,
+        publisher: { ...ORGANISATION, logo: { '@type': 'ImageObject', url: `${ORIGIN}/icons/icon-512.png` } },
+        about: item.notions.map((slug) => ({
+          '@type': 'DefinedTerm',
+          name: notion(slug)!.nom,
+          url: `${ORIGIN}${glossaryPath(slug)}`,
+        })),
+      };
+      return page;
+    }),
+  ];
+}
 
 /** Every page worth finding from a search. `/tarifs` is the home page's pricing anchor, not a page. */
 export const PUBLIC_PAGES: readonly PublicPage[] = [
@@ -220,6 +282,7 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     description: 'Qui édite Squiggle et qui l’héberge.',
   },
   ...GLOSSARY_PAGES,
+  ...blogPages(PUBLISHED),
 ];
 
 /**
@@ -258,6 +321,9 @@ export function titleFor(path: string): string {
   const page = PUBLIC_PAGES.find((item) => item.path === path);
   if (page) return page.title;
   if (APP_TITLES[path]) return APP_TITLES[path];
+  // A draft, which only the dev server shows.
+  const draft = path.startsWith(`${BLOG_PATH}/`) ? article(path.slice(BLOG_PATH.length + 1)) : undefined;
+  if (draft) return `${draft.titre} - Squiggle`;
   return APP_PATHS.includes(path) || path === '/tarifs' ? PUBLIC_PAGES[0].title : NOT_FOUND_TITLE;
 }
 
@@ -327,7 +393,9 @@ const DEFAULT_IMAGE = {
 };
 
 /** Where the build writes a page's own share image: `/og/glossaire/faux-dilemme.png` for `/glossaire/faux-dilemme`. */
-export const shareImagePath = (page: PublicPage) => (page.share ? `/og${page.path}.png` : DEFAULT_IMAGE.path);
+export function shareImagePath(page: PublicPage): string {
+  return page.share ? `/og${page.path}.png` : DEFAULT_IMAGE.path;
+}
 
 function imageTags(page?: PublicPage): string[] {
   const card = page?.share;
@@ -359,6 +427,9 @@ export function headFor(page: PublicPage): string {
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     ...imageTags(page),
+    ...(page.path === BLOG_PATH || page.path.startsWith(`${BLOG_PATH}/`)
+      ? [`<link rel="alternate" type="application/rss+xml" title="${BLOG_TITLE}" href="${ORIGIN}${FEED_PATH}" />`]
+      : []),
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
     ...(page.path === '/' ? [structuredData()] : page.jsonLd ? [jsonLdScript(page.jsonLd)] : []),
@@ -382,7 +453,43 @@ export function appHeadFor(title: string): string {
 }
 
 /** Every public page, for `/sitemap.xml`. */
-export function sitemap(): string {
-  const urls = PUBLIC_PAGES.map((page) => `  <url><loc>${ORIGIN}${page.path}</loc></url>`).join('\n');
+export function sitemap(pages: readonly PublicPage[] = PUBLIC_PAGES): string {
+  const urls = pages.map(
+    (page) => `  <url><loc>${ORIGIN}${page.path}</loc>${page.lastmod ? `<lastmod>${page.lastmod}</lastmod>` : ''}</url>`,
+  ).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+}
+
+/** RFC 822, as RSS wants it: `2026-11-06` is `Fri, 06 Nov 2026 00:00:00 GMT`. */
+const rssDate = (day: string) => new Date(`${day}T00:00:00Z`).toUTCString();
+
+/** `/blog/rss.xml`: the published articles, newest first. */
+export function feed(articles: readonly Article[] = PUBLISHED): string {
+  const items = articles.map((item) => {
+    const url = `${ORIGIN}${blogPath(item.slug)}`;
+    return [
+      '    <item>',
+      `      <title>${escape(item.titre)}</title>`,
+      `      <link>${url}</link>`,
+      `      <guid isPermaLink="true">${url}</guid>`,
+      `      <pubDate>${rssDate(item.publie)}</pubDate>`,
+      `      <description>${escape(item.chapo)}</description>`,
+      '    </item>',
+    ].join('\n');
+  });
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+    '  <channel>',
+    `    <title>${BLOG_TITLE}</title>`,
+    `    <link>${ORIGIN}${BLOG_PATH}</link>`,
+    `    <atom:link href="${ORIGIN}${FEED_PATH}" rel="self" type="application/rss+xml" />`,
+    '    <description>Des méthodes pour lire un article avec un œil critique.</description>',
+    '    <language>fr</language>',
+    ...(articles.length ? [`    <lastBuildDate>${rssDate(articles.map((item) => item.misAJour ?? item.publie).sort().at(-1)!)}</lastBuildDate>`] : []),
+    ...items,
+    '  </channel>',
+    '</rss>',
+    '',
+  ].join('\n');
 }

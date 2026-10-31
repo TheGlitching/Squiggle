@@ -60,6 +60,8 @@ export const AUDIENCE_METRIC_NAMES = [
   'flag_reason_wrong_kind',
   'flag_reason_too_harsh',
   'flag_reason_other',
+  // The call to analyse followed from a blog article, one name per published
+  // article (`blogCounter` in web/src/blog.ts): `blog_` and its slug.
 ] as const;
 export type AudienceMetricName = (typeof AUDIENCE_METRIC_NAMES)[number];
 

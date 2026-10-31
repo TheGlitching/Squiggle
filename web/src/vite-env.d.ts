@@ -11,6 +11,9 @@ interface ImportMetaEnv {
 /** Whether the signed iPhone shortcut is in the build, set by `vite.config.ts`. */
 declare const __SHORTCUT_PUBLISHED__: boolean;
 
+/** Whether the blog's drafts are shown: on the dev server only, set by `vite.config.ts`. */
+declare const __BLOG_DRAFTS__: boolean;
+
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }

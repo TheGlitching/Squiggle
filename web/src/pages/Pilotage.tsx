@@ -160,6 +160,7 @@ function Figures({ m }: { m: OwnerMetrics }) {
         <Counts title="Campagnes" counts={m.audience.campaigns} />
         <Counts title="Boutons" counts={m.audience.clicks} />
         <Counts title="Textes collés" counts={m.audience.pastes ?? {}} />
+        <Counts title="Blog : vers l’analyse" counts={m.audience.blog ?? {}} />
       </Band>
 
       {/* An older server leaves the band out rather than blanking the page. */}
