@@ -42,6 +42,11 @@ describe('campaignOf', () => {
     for (const network of ['bluesky', 'mastodon', 'facebook', 'instagram', 'threads', 'x', 'linkedin']) {
       expect(campaignOf(`?ref=${network}`)).toBe(`ref_${network}`);
     }
+    const outreach = ['lel', 'sjowall', 'proches', 'reddit', 'afis', 'presse'];
+    for (const ref of [...outreach, ...Array.from({ length: 12 }, (_, i) => `createur${i + 1}`)]) {
+      expect(campaignOf(`?ref=${ref}`)).toBe(`ref_${ref}`);
+    }
+    expect(campaignOf('?ref=createur13')).toBeNull();
     expect(campaignOf('?ref=inconnu')).toBeNull();
     expect(campaignOf('?ref=')).toBeNull();
     expect(campaignOf('')).toBeNull();

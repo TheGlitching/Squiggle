@@ -20,7 +20,7 @@ const METRICS: OwnerMetrics = {
   cache: { checks: 20, hits: 5, hitRate: 0.25 },
   stages: { audit: { ...stage, truncated: 0 }, research: stage, sourceCheck: stage },
   audience: {
-    campaigns: { clemi: 3 },
+    campaigns: { clemi: 3, lel: 2, createur12: 1, presse: 0 },
     clicks: {},
     flags: { categories: { sophisme: 2, cadrage: 0 }, reasons: { misread: 1, too_harsh: 1 } },
   },
@@ -69,6 +69,9 @@ describe('/tableau', () => {
       'https://dash.cloudflare.com/?to=/:account/web-analytics',
     );
     expect(screen.getByRole('heading', { name: 'Campagnes, boutons, textes collés' })).toBeInTheDocument();
+    expect(screen.getByText('lel').nextSibling).toHaveTextContent('2');
+    expect(screen.getByText('createur12').nextSibling).toHaveTextContent('1');
+    expect(screen.queryByText('presse')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Constats signalés comme erronés' })).toBeInTheDocument();
     expect(screen.getByText('Sophisme').nextSibling).toHaveTextContent('2');
     expect(screen.getByText('Le passage ne dit pas cela').nextSibling).toHaveTextContent('1');
