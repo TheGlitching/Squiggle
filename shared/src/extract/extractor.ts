@@ -267,12 +267,13 @@ export class ArticleExtractor {
           bestArticle = art;
         }
       }
-      // An <article> holding a small part of the page's main text is a box inside it (a live
-      // page's credits, a teaser), not the article: the main container is read instead.
+      // An <article> holding a small part of the page's main text is a box (a live page's
+      // credits, a teaser, a related-article card below the main column), not the article:
+      // the main container is read instead. An <article> with no readable text at all, a
+      // card that is only a link, is never the article.
       const main = this.doc.querySelector('main, [role="main"]') as HTMLElement | null;
-      const boxInMain =
-        main !== null && main.contains(bestArticle) && maxScore * MINOR_ARTICLE_SHARE < this.calculateTextDensityScore(main);
-      if (!boxInMain) {
+      const minorBox = main !== null && maxScore * MINOR_ARTICLE_SHARE < this.calculateTextDensityScore(main);
+      if (maxScore > 0 && !minorBox) {
         return { container: bestArticle, method: 'semantic-article', confidence: articles.length === 1 ? 0.95 : 0.9 };
       }
     }
