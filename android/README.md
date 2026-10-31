@@ -21,6 +21,17 @@ in the same package (`fr.squiggle.app`). Not published on any store yet.
   article** to read it again.
 - **A YouTube link** has no page to read here: it opens `/analyser?url=…`,
   which shows the report already made for that link, or says what to do.
+- **A text without a link** opens `/analyser#text=…&via=appli` in the TWA,
+  where the analysis starts on its own. A text too short to be an article (a
+  forwarded message) stays in the field with a sentence that says why it is
+  not analysed.
+- **Screenshots**, one or several, go to the site's share target
+  (`share_target` in `web/public/manifest.webmanifest`): the browser posts them
+  to the site's service worker, which keeps them on the phone for the page to
+  read, as a share to the installed web app does. Until the app has opened the
+  site once, the worker is not there yet, so the first share opens the page
+  with its "Importer des captures" instead of posting the images.
+- **A PDF** is not read yet: the screen says how to share its text instead.
 
 The paper's page is shown as it is, the text is never kept, and our server
 never fetches the article: the same invariants as the extension and the bookmark.
