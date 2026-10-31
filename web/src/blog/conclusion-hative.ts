@@ -3,6 +3,7 @@ import type { Article } from '../blog';
 const article: Article = {
   slug: 'conclusion-hative',
   titre: 'Conclusion hâtive : ce que l’article a vu, ce qu’il conclut',
+  titreCourt: 'Conclusion hâtive',
   description:
     'Comment repérer une conclusion hâtive dans un article ? Séparez ce qui a été observé de ce qui est conclu, et mesurez l’écart. Une méthode, un exemple.',
   chapo:

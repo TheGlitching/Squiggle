@@ -58,6 +58,8 @@ export interface Article {
   slug: string;
   /** At most 80 characters: three lines on the share card. */
   titre: string;
+  /** The title on the carousel's cover, set as large as a notion's name: a few words. */
+  titreCourt: string;
   /** For search engines and link previews: at most 160 characters. */
   description: string;
   /** The opening paragraph, under the title. */
