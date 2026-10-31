@@ -220,7 +220,7 @@ describe('Analyser, signed out', () => {
   });
 
   it('follows the stages the server runs, one at a time, and draws none ahead of it', async () => {
-    let answer: (res: Response) => void = () => {};
+    let answer: ((res: Response) => void) | null = null;
     serve(null, {
       audit: () => new Promise<Response>((resolve) => (answer = resolve)) as unknown as Response,
     });
@@ -233,8 +233,11 @@ describe('Analyser, signed out', () => {
     expect(screen.getByText('Recherche des sources')).toBeInTheDocument();
     expect(screen.queryByText(/: fait$/)).toBeNull();
 
+    // The step shows from the cache lookup on, which comes before the audit is asked:
+    // answering before then would answer nothing, and the run would hang.
+    await waitFor(() => expect(answer).not.toBeNull());
     // The audit answered with nothing to look up: the run goes straight to the report.
-    answer(jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] }));
+    answer!(jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] }));
     expect(await screen.findByText('58')).toBeInTheDocument();
   });
 

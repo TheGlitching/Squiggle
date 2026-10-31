@@ -57,7 +57,7 @@ describe('Fourches Caudines Engine', () => {
 
   it('keeps the borrowed method name out of reader-facing text', () => {
     // The prompt version is shown to readers and is part of the cache key.
-    expect(PROMPT_VERSION).toBe('1.2.0');
+    expect(PROMPT_VERSION).toBe('1.3.0');
     expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).not.toMatch(/fourches|caudines/i);
     expect(buildFourchesCaudinesUserPrompt(sampleInput)).not.toMatch(/fourches|caudines/i);
   });
@@ -151,5 +151,48 @@ describe('Fourches Caudines Engine', () => {
     const ids = report.findings.map((f) => f.id);
     expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  it('anchors a quote the model retyped with a straight apostrophe and other case, restoring the article text', () => {
+    const scores = Object.keys(SCORE_DOMAINS).map((domain) => ({ domain, score: 4, strengths: [], weaknesses: [] }));
+    const raw = JSON.stringify({
+      summary: 'Synthèse.',
+      scores,
+      findings: [
+        {
+          blockId: 'b1',
+          quote: "Tous les serveurs existants d'ici deux ans",
+          category: 'surinterpretation',
+          severity: 2,
+          label: 'Prédiction présentée comme acquise',
+          explanation: 'Le texte annonce un remplacement total sans le démontrer.',
+        },
+      ],
+    });
+
+    const [finding] = parseAndValidateLlmOutput(raw, sampleInput).findings;
+
+    const b2 = sampleInput.blocks[1];
+    expect(finding.blockId).toBe('b2');
+    expect(finding.quote).toBe('tous les serveurs existants d’ici deux ans');
+    expect(b2.text.slice(finding.charStart! - b2.charStart, finding.charEnd! - b2.charStart)).toBe(finding.quote);
+  });
+
+  it('anchors a partial quote the model wrapped in guillemets the article closes further on', () => {
+    const scores = Object.keys(SCORE_DOMAINS).map((domain) => ({ domain, score: 4, strengths: [], weaknesses: [] }));
+    const said: AnalysisInput = {
+      ...sampleInput,
+      blocks: [{ id: 'b1', type: 'paragraph', text: '« Les colis volumineux, clairement. Et la pluie reste une contrainte. »', charStart: 0 }],
+    };
+    const raw = JSON.stringify({
+      summary: 'Synthèse.',
+      scores,
+      findings: [{ blockId: 'b1', quote: '« Les colis volumineux, clairement. »', category: 'cadrage', severity: 1, label: 'Formule', explanation: 'Une formule.' }],
+    });
+
+    const [finding] = parseAndValidateLlmOutput(raw, said).findings;
+
+    expect(finding.charStart).toBe(0);
+    expect(finding.quote).toBe('« Les colis volumineux, clairement.');
   });
 });

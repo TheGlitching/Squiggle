@@ -9,7 +9,7 @@ import { isVideoTranscriptUrl } from './video';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.2.0';
+export const PROMPT_VERSION = '1.3.0';
 
 /**
  * Output ceiling of the audit, reasoning included. A reasoning model thinks
@@ -290,6 +290,29 @@ Ce texte n'est pas un article écrit : ce sont les sous-titres de la parole d'un
 - "quote" reste une citation littérale exacte du texte transcrit.`;
 
 /**
+ * Closing rules of the audit prompt, measured against a bench of 20 French
+ * texts with planted defects and 6 defect-free controls: false positives fell
+ * from 13 % to 7 % of negative findings with every planted defect still found.
+ * Rule 2 is about the article's own sources (a named institution, a person
+ * interviewed), not Squiggle's: it does not loosen the system prompt's
+ * requirement that a finding calling a claim false cite a source of its own.
+ * Rule 5 lists the devices that stay defects in an opinion piece, because an
+ * earlier wording that only excused declared opinion let ad hominem through.
+ * They close the article prompt only: a short message is read under its own
+ * questions, which already tell a message with nothing to verify from a rumour.
+ */
+const RELEVANCE_RULES = `
+
+PERTINENCE DES CONSTATS (contraignant) :
+1. Un constat n'existe que s'il change ce qu'un lecteur raisonnable doit penser de la solidité du texte. Pas de pinaillage : aucun constat sur un détail de forme, une information banale ou une précision qu'aucun lecteur n'attend dans ce genre de texte. Un texte sans défaut réel reçoit zéro constat négatif : n'en invente pas pour paraître exhaustif.
+2. Une information attribuée à une source identifiable (institution, ministère, mairie, communiqué, rapport, étude nommée, personne nommée, interviewé) EST sourcée. Ne la classe ni 'source-absente' ni 'affirmation-non-etayee' faute de lien, de DOI ou de porte-parole nommé. Au plus, un chiffre attribué mais spectaculaire justifie une réserve de sévérité 1.
+3. Les propos d'une personne citée entre guillemets (témoin, interviewé, élu, militant) sont les siens, pas ceux de l'article : ne les reproche pas au texte, sauf si l'auteur les reprend à son compte, les généralise ou s'en sert comme preuve - c'est alors ce passage de l'auteur que tu cites.
+4. Les connaissances scientifiques établies et les faits notoires stables n'ont pas besoin de source.
+5. Adapte l'exigence au genre : une brève, une interview relue, un article de vulgarisation ne sont pas des enquêtes. Dans une tribune, un communiqué ou un texte militant, l'opinion annoncée comme telle n'est pas un défaut, mais ses procédés le restent toujours et se relèvent un par un : faux dilemme, homme de paille, attaque ad hominem, pente glissante, procès d'intention, appel à la peur, vocabulaire chargé, fait non étayé.
+6. Sévérité : 3 = le défaut peut tromper le lecteur sur l'essentiel (fait central faux ou invérifiable, sophisme qui porte la conclusion, titre contredit par le texte) ; 2 = défaut réel qui fragilise un point secondaire ; 1 = réserve mineure, à ne formuler que si elle aide vraiment le lecteur.
+7. "quote" se copie caractère pour caractère depuis le bloc : garde l'apostrophe typographique (’), les guillemets « » et les espaces tels qu'ils sont, ne corrige rien, ne reformule rien.`;
+
+/**
  * Generates the user prompt embedding the article data and the Squiggle 8-block criteria.
  *
  * No factual-verification evidence is embedded here: research now runs on the
@@ -370,7 +393,7 @@ FORMAT JSON STRICT ATTENDU :
       "confidence": 0.95
     }
   ]
-}`;
+}${RELEVANCE_RULES}`;
 }
 
 /**
