@@ -95,7 +95,7 @@ export async function classifyComments(ctx: Ctx): Promise<CommentRow[]> {
       `Pour chacun : {"id", "categorie": une de ${CATEGORIES.join(', ')}, "brouillon": la réponse proposée ou null, "sujet": le sujet demandé ou la question récurrente, sinon null, "lecon": la leçon de rédaction qu’une objection ou une correction justifie, sinon null}.`,
       'Réponds {"commentaires": [...]}.',
     ].join('\n\n'),
-    maxTokens: 3000,
+    maxTokens: 6000,
   });
   const byId = new Map(fresh.map((c) => [c.id, c]));
   for (const c of answer.commentaires ?? []) {
@@ -148,7 +148,7 @@ export async function learnFromReplies(ctx: Ctx): Promise<number> {
         `Réponse publiée par le propriétaire : ${c.actual_reply}`,
         'Quelle habitude de rédaction des réponses cet écart enseigne-t-il ? Réponds {"lecon": "..."} ou {"lecon": null} si l’écart ne dit rien de général.',
       ].join('\n\n'),
-      maxTokens: 300,
+      maxTokens: 1000,
     }).catch(() => ({ lecon: null }));
     if (answer.lecon) {
       addLesson(ctx, { origin: 'réponse modifiée par le propriétaire', kind: 'redaction', text: answer.lecon, evidence: `${c.draft}\n→\n${c.actual_reply}` });
@@ -169,7 +169,7 @@ export async function learnFromRemovals(ctx: Ctx, removed: Array<{ network: stri
       ...removed.map((r) => `- ${r.network}, source ${r.source_id} : ${r.text}`),
       'Quelles leçons de rédaction en tirer, avec prudence (une seule publication ne fait pas une règle) ? Réponds {"lecons": [{"texte": "...", "nature": "redaction" | "strategie"}]}, au plus deux, ou une liste vide.',
     ].join('\n'),
-    maxTokens: 500,
+    maxTokens: 1500,
   });
   for (const l of (answer.lecons ?? []).slice(0, 2)) {
     addLesson(ctx, { origin: 'publication retirée par le propriétaire', kind: l.nature === 'strategie' ? 'strategie' : 'redaction', text: String(l.texte ?? ''), evidence: removed.map((r) => r.text).join('\n') });

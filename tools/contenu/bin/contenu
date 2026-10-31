@@ -37,7 +37,7 @@ run() {
 # The routine's own dependencies only (esbuild, zod, postal-mime), reinstalled when the lockfile changes.
 stamp=$(sha256sum "$DEPOT/package-lock.json" | cut -c1-16)
 if [ "$(cat "$CONTENU_HOME/.npm-stamp" 2>/dev/null)" != "$stamp" ]; then
-  run npm ci --omit=dev --workspace=@squiggle/contenu --include-workspace-root=false --no-audit --no-fund --loglevel=error
+  run npm ci --omit=dev --workspace=@squiggle/contenu --include-workspace-root=false --no-audit --no-fund --no-update-notifier --loglevel=error
   echo "$stamp" > "$CONTENU_HOME/.npm-stamp"
 fi
 

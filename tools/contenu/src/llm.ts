@@ -69,6 +69,11 @@ export async function askJson<T>(ctx: Ctx, ask: Ask): Promise<T> {
     response_format: { type: 'json_object' },
     max_tokens: ask.maxTokens ?? 2000,
     temperature: 0.4,
+    // As on the server: left at its default `high` effort, the model spends the output
+    // ceiling thinking and stops mid-answer. A host that would ignore it is skipped,
+    // and none may keep what it reads (comments and the owner's replies among it).
+    reasoning: { effort: 'low' },
+    provider: { require_parameters: true, data_collection: 'deny' },
     usage: { include: true },
   };
   const answer = await fetchJson<Completion>(ctx, 'OpenRouter', `${API}/chat/completions`, {

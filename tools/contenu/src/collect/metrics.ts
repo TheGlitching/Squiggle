@@ -23,7 +23,9 @@ export interface SiteMetrics {
 }
 
 export async function collectMetrics(ctx: Ctx, weeks: number): Promise<SiteMetrics> {
-  return fetchJson<SiteMetrics>(ctx, 'Squiggle', `${ORIGIN}/admin/metrics?weeks=${weeks}`, {
+  const answer = await fetchJson<{ ok: boolean; metrics?: SiteMetrics }>(ctx, 'Squiggle', `${ORIGIN}/admin/metrics?weeks=${weeks}`, {
     headers: { Authorization: `Bearer ${ctx.secrets.metricsToken}` },
   });
+  if (!answer.metrics?.audience) throw new Error('Squiggle : réponse de /admin/metrics sans chiffres');
+  return answer.metrics;
 }

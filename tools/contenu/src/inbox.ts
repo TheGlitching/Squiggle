@@ -92,7 +92,7 @@ async function apply(ctx: Ctx, text: string): Promise<{ category: MailCategory; 
       `"""\n${text.slice(0, 4000)}\n"""`,
       `Catégories : ${MAIL_CATEGORIES.join(', ')}. Réponds {"categorie", "reseau": un de ${NETWORKS.join(', ')} ou null, "sujet": null ou le sujet à éviter, "extrait": null ou quelques mots de la publication à retirer, "jour": null ou "AAAA-MM-JJ", "lecon": null ou la leçon de rédaction, "reformulation": null ou la demande de stratégie reformulée pour confirmation}.`,
     ].join('\n\n'),
-    maxTokens: 500,
+    maxTokens: 1500,
   });
   const category = (MAIL_CATEGORIES as readonly string[]).includes(r.categorie) ? (r.categorie as MailCategory) : 'autre';
   const network = NETWORKS.includes(r.reseau as Network) ? (r.reseau as Network) : null;

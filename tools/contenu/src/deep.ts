@@ -108,7 +108,7 @@ export async function chooseSubject(ctx: Ctx, gsc: GscData | undefined): Promise
           'Choisis au plus une requête qui mérite une page de méthode sur l’esprit critique face à un article, ou qui est un synonyme réellement employé d’une notion existante. Une requête hors sujet, une marque, un média, une personne ou une actualité ne se retient pas.',
           'Réponds {"requete": "..." | null, "forme": "article" | "synonyme" | null, "notion": "<slug pour un synonyme>", "slug": "<slug de l’article>", "raison": "..."}.',
         ].join('\n\n'),
-        maxTokens: 500,
+        maxTokens: 1500,
       }).catch(() => null);
       if (pick?.requete && pick.forme === 'synonyme' && pick.notion && findNotion(pick.notion) && !busy.has(pick.notion)) {
         return { rule: 'requete-sans-page', kind: 'fiche', slug: pick.notion, reason: `requête « ${pick.requete} » sans page qui y réponde`, queries: [pick.requete] };
@@ -192,7 +192,7 @@ async function produceFiche(ctx: Ctx, subject: Subject): Promise<Production> {
     ]
       .filter(Boolean)
       .join('\n\n'),
-    maxTokens: 2500,
+    maxTokens: 5000,
   });
   const parsed = Enrichment.parse(answer);
   const set = (s: string) => typography(s);
@@ -242,7 +242,7 @@ async function produceArticle(ctx: Ctx, subject: Subject): Promise<Production> {
       `Pages du site vers lesquelles un lien est permis : ${[...paths].filter((p) => p.startsWith('/glossaire/') || p.startsWith('/blog/')).join(', ')}`,
       'Écris un article de méthode selon la structure de la consigne, dans la forme JSON d’un `Article` sans slug ni date : {"titre", "description", "chapo", "notions": [slugs], "corps": [blocs]}. Les blocs permis : {"intertitre"}, {"sousTitre"}, {"paragraphe"}, {"liste"}, {"etapes"}, {"encadre": {"titre", "points"}}, {"tableau": {"legende", "colonnes", "lignes"}}, {"questions": [{"question", "reponse"}]}, {"sommaire": true}, {"exemple": {"rubrique", "titre", "texte", "lecture"}}. Un lien dans un texte : ["avant ", {"texte": "...", "vers": "/glossaire/..."}, " après"].',
     ].join('\n\n'),
-    maxTokens: 7000,
+    maxTokens: 12000,
   });
   const parsed = ArticleShape.parse(answer);
   const article: Article = { slug: subject.slug, publie: day(ctx.now), ...(JSON.parse(typographyDeep(JSON.stringify(parsed))) as typeof parsed) };
@@ -289,7 +289,7 @@ function produceDraft(ctx: Ctx, subject: Subject): Production {
 
 /** Squiggle reads its own text with the shared engine, as a BYOK reader would, on the routine's key. */
 async function selfAnalysis(ctx: Ctx, title: string, text: string): Promise<string[]> {
-  const pipeline = new AnalysisPipeline({ client: new OpenRouterClient({ provider: 'openrouter', apiKey: ctx.secrets.openrouterKey, model: MODEL }) });
+  const pipeline = new AnalysisPipeline({ client: new OpenRouterClient({ provider: 'openrouter', apiKey: ctx.secrets.openrouterKey, model: MODEL }, { require_parameters: true, data_collection: 'deny' }, { effort: 'low' }) });
   const report = await pipeline.analyze({ text, title, url: `${ORIGIN}/`, now: ctx.now });
   return report.findings.filter((f) => f.category !== 'point-fort').map((f) => `${f.label} : « ${f.quote} ». ${f.explanation}`.slice(0, 400));
 }
@@ -427,7 +427,7 @@ async function learnFromPull(ctx: Ctx, row: { kind: string; slug: string; pr_num
     ]
       .filter(Boolean)
       .join('\n\n'),
-    maxTokens: 800,
+    maxTokens: 1500,
   });
   for (const l of (answer.lecons ?? []).slice(0, 3)) {
     addLesson(ctx, { origin: `pull request #${row.pr_number}`, kind: l.nature === 'strategie' ? 'strategie' : 'redaction', text: String(l.texte ?? ''), evidence: diffs.join('\n').slice(0, 1000) });

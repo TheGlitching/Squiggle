@@ -203,7 +203,7 @@ async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks): Promise
     ]
       .filter(Boolean)
       .join('\n\n'),
-    maxTokens: 800,
+    maxTokens: 2500,
   });
   return String(answer.texte ?? '');
 }
@@ -220,7 +220,7 @@ async function review(ctx: Ctx, network: Network, text: string, source: Source, 
       'Réponds {"conforme": true} ou {"conforme": false, "raison": "..."}.',
     ].join('\n\n'),
     images: images.slice(0, 2).map((i) => i.url),
-    maxTokens: 400,
+    maxTokens: 1500,
   });
   return { conforme: answer.conforme === true, raison: String(answer.raison ?? '') };
 }
