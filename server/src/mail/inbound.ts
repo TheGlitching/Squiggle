@@ -45,6 +45,7 @@ import {
   analyzeFinalize,
   analyzeLink,
   analyzeResearch,
+  runReport,
   type AnalyzeServices,
 } from '../analyze/stages';
 import { PastedAuditRequestSchema } from '../analyze/schemas';
@@ -55,6 +56,7 @@ import type { Clock } from '../lib/clock';
 import type { ApiError } from '../lib/errors';
 import { logEvent, newRequestId } from '../lib/log';
 import { firstLink, forwardedArticle, withoutLinks } from './forwarded';
+import { renderMailHtml, renderMailText, type MailContent } from './reply';
 
 /** The address readers forward to. Routed to this Worker in Cloudflare (docs/DEPLOYING.md). */
 export const MAIL_IN_ADDRESS = 'verifier@squiggle.fr';
@@ -159,11 +161,13 @@ async function receive(
   if (!user || !user.emailVerified || !user.email) return { code: 'unknown_sender' };
 
   // From here on the sender is a reader, and every outcome is answered.
-  const reply = (subject: string, paragraphs: Paragraph[]) =>
-    sendReply(s, user, { subject, paragraphs, inReplyTo: email.messageId });
+  const reply = (subject: string, content: Omit<MailContent, 'heading'>) =>
+    sendReply(s, user, { subject, content: { heading: subject, ...content }, inReplyTo: email.messageId });
 
   if (!s.llm) {
-    await reply('Squiggle n’a pas pu lire votre message', ['Le service d’analyse est momentanément indisponible. Réessayez plus tard.']);
+    await reply('Squiggle n’a pas pu lire votre message', {
+      paragraphs: ['Le service d’analyse est momentanément indisponible. Réessayez plus tard.'],
+    });
     return { code: 'unconfigured', userId: user.id };
   }
   const analyze: AnalyzeServices = {
@@ -187,38 +191,48 @@ async function receive(
   if (withoutLinks(article.text).length < MIN_MESSAGE_CHARS) {
     const link = firstLink(article.text);
     if (!link) {
-      await reply('Squiggle n’a pas trouvé de texte dans votre message', [
-        `Transférez l’e-mail qui contient le texte, l’article ou le message reçu : il faut au moins ${MIN_MESSAGE_CHARS} caractères pour une analyse.`,
-      ]);
+      await reply('Squiggle n’a pas trouvé de texte dans votre message', {
+        paragraphs: [
+          `Transférez l’e-mail qui contient le texte, l’article ou le message reçu : il faut au moins ${MIN_MESSAGE_CHARS} caractères pour une analyse.`,
+        ],
+      });
       return { code: 'too_short', userId: user.id };
     }
     const found = await analyzeLink(analyze, link);
     if (found.ok && found.hit) {
-      await reply('Le rapport Squiggle de votre lien', [
-        'Cet article a déjà été analysé par Squiggle.',
-        found.report?.summary ?? '',
-        linkParagraph(`${s.webAppOrigin}/analyser?url=${encodeURIComponent(link)}`),
-      ]);
+      const action = { href: `${s.webAppOrigin}/analyser?url=${encodeURIComponent(link)}`, label: REPORT_LABEL };
+      await sendReply(s, user, {
+        subject: 'Le rapport Squiggle de votre lien',
+        content: found.report
+          ? { heading: 'Cet article a déjà été analysé', report: found.report, action }
+          : { heading: 'Le rapport Squiggle de votre lien', paragraphs: ['Cet article a déjà été analysé par Squiggle.'], action },
+        inReplyTo: email.messageId,
+      });
       return { code: 'link_report', userId: user.id };
     }
-    await reply('Squiggle ne va pas chercher les pages des liens', [
-      'Votre message ne contient qu’un lien, et Squiggle ne va jamais chercher une page : il lit le texte qu’on lui envoie.',
-      'Ouvrez l’article, copiez son texte dans un e-mail et transférez-le de nouveau, ou analysez la page avec l’extension Squiggle.',
-    ]);
+    await reply('Squiggle ne va pas chercher les pages des liens', {
+      paragraphs: [
+        'Votre message ne contient qu’un lien, et Squiggle ne va jamais chercher une page : il lit le texte qu’on lui envoie.',
+        'Ouvrez l’article, copiez son texte dans un e-mail et transférez-le de nouveau, ou analysez la page avec l’extension Squiggle.',
+      ],
+    });
     return { code: 'link_unknown', userId: user.id };
   }
 
   const payload = PastedAuditRequestSchema.safeParse({ title, blocks });
   if (!payload.success) {
-    await reply('Squiggle n’a pas pu lire votre message', [
-      'Ce message n’a pas pu être lu comme un article. Transférez l’article seul, sans le reste de la conversation.',
-    ]);
+    await reply('Squiggle n’a pas pu lire votre message', {
+      paragraphs: ['Ce message n’a pas pu être lu comme un article. Transférez l’article seul, sans le reste de la conversation.'],
+    });
     return { code: 'refused', userId: user.id };
   }
 
   const audited = await analyzeAudit(analyze, user, payload.data);
   if (!audited.ok) {
-    await reply('Squiggle n’a pas pu analyser votre message', refusalParagraphs(s, audited));
+    const subject = BILLING_CODES.has(audited.code)
+      ? 'Plus d’analyse disponible sur votre compte Squiggle'
+      : 'Squiggle n’a pas pu analyser votre message';
+    await reply(subject, refusalContent(s, audited));
     return { code: 'refused', userId: user.id };
   }
 
@@ -265,12 +279,15 @@ export async function runMailJob(s: MailServices, job: MailJob, opts: { lastAtte
     const run = await s.db.getAnalysisRun(job.runId);
     const state = run && parseRunState(run.state);
     if (!state?.textHash) throw new Error('run_not_found');
+    const titled = state.title && state.title !== 'Article sans titre';
     await sendReply(s, user, {
-      subject: state.title && state.title !== 'Article sans titre' ? `Rapport Squiggle : ${state.title}` : 'Votre rapport Squiggle',
-      paragraphs: [
-        state.summary,
-        linkParagraph(`${s.webAppOrigin}/analyser?rapport=${state.textHash}`),
-      ],
+      subject: titled ? `Rapport Squiggle : ${state.title}` : 'Votre rapport Squiggle',
+      content: {
+        heading: titled ? state.title : 'Votre texte analysé',
+        // A retried job finds the run already finalized: the same report, rebuilt from the run.
+        report: finalized.ok ? finalized.report : runReport(state, s.clock.now()),
+        action: { href: `${s.webAppOrigin}/analyser?rapport=${state.textHash}`, label: REPORT_LABEL },
+      },
       inReplyTo: job.inReplyTo,
     });
     logEvent({ event: 'mail_replied', requestId, userId: user.id });
@@ -279,7 +296,10 @@ export async function runMailJob(s: MailServices, job: MailJob, opts: { lastAtte
     logEvent({ event: 'mail_replied', requestId, userId: user.id, code: 'failed' });
     await sendReply(s, user, {
       subject: 'Squiggle n’a pas pu analyser votre message',
-      paragraphs: ['L’analyse n’a pas abouti, et aucune analyse ne vous a été décomptée. Transférez de nouveau le message dans quelques minutes.'],
+      content: {
+        heading: 'Squiggle n’a pas pu analyser votre message',
+        paragraphs: ['L’analyse n’a pas abouti, et aucune analyse ne vous a été décomptée. Transférez de nouveau le message dans quelques minutes.'],
+      },
       inReplyTo: job.inReplyTo,
     });
   }
@@ -342,23 +362,14 @@ export function senderAuthenticated(email: Pick<Email, 'headers'>, fromDomain: s
 
 const BILLING_CODES = new Set(['trial_exhausted', 'subscription_required', 'quota_exhausted', 'starts_exhausted', 'quota_exceeded']);
 
-function refusalParagraphs(s: MailServices, refusal: ApiError): Paragraph[] {
+function refusalContent(s: MailServices, refusal: ApiError): Omit<MailContent, 'heading'> {
   if (BILLING_CODES.has(refusal.code)) {
-    return [refusal.message, linkParagraph(`${s.webAppOrigin}/compte`, 'Voir mon compte')];
+    return { paragraphs: [refusal.message], action: { href: `${s.webAppOrigin}/compte`, label: 'Voir mon compte' } };
   }
-  return [refusal.message];
+  return { paragraphs: [refusal.message] };
 }
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
-
-/** A reply's paragraph: a sentence, or one link. */
-type Paragraph = string | { href: string; label: string };
-
-function linkParagraph(href: string, label = 'Ouvrir le rapport'): Paragraph {
-  return { href, label };
-}
+const REPORT_LABEL = 'Voir le rapport complet';
 
 /** A Message-ID as it may travel into a header we write: no folding, no second header. */
 const MESSAGE_ID = /^<[^<>\s]{1,250}>$/;
@@ -372,20 +383,20 @@ const MESSAGE_ID = /^<[^<>\s]{1,250}>$/;
 async function sendReply(
   s: MailServices,
   user: UserRow,
-  reply: { subject: string; paragraphs: Paragraph[]; inReplyTo?: string },
+  reply: { subject: string; content: MailContent; inReplyTo?: string },
 ): Promise<void> {
   if (!user.email) return;
-  const html = reply.paragraphs
-    .filter(Boolean)
-    .map((p) =>
-      typeof p === 'string' ? `<p>${escapeHtml(p)}</p>` : `<p><a href="${escapeHtml(p.href)}">${escapeHtml(p.label)}</a></p>`,
-    )
-    .join('\n');
   const headers: Record<string, string> = { 'Auto-Submitted': 'auto-replied' };
   if (reply.inReplyTo && MESSAGE_ID.test(reply.inReplyTo)) {
     headers['In-Reply-To'] = reply.inReplyTo;
     headers.References = reply.inReplyTo;
   }
   const subject = reply.subject.replace(/\s+/g, ' ').trim().slice(0, 200);
-  await s.email.send({ to: user.email, subject, html, headers });
+  await s.email.send({
+    to: user.email,
+    subject,
+    html: renderMailHtml(reply.content),
+    text: renderMailText(reply.content),
+    headers,
+  });
 }

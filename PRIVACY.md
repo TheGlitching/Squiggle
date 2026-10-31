@@ -191,8 +191,9 @@ elle-même ne quitte pas votre téléphone.
 
 **Un e-mail transféré est lu comme un texte collé.** Un e-mail (une lettre
 d'information, un article reçu, une chaîne) transféré à `verifier@squiggle.fr` depuis
-l'adresse de votre compte est analysé sur votre compte, et la réponse vous apporte la
-phrase de synthèse et le lien du rapport. Le serveur garde la partie texte du message,
+l'adresse de votre compte est analysé sur votre compte, et la réponse vous apporte
+l'essentiel du rapport (la note, la synthèse, les deux ou trois passages relevés avec
+leur explication, un point fort, le résultat des vérifications) et son lien. Le serveur garde la partie texte du message,
 sans votre mot d'accompagnement, sans l'en-tête du transfert (qui nomme les personnes
 par qui il est passé) et sans signature ; il ignore les pièces jointes et ne suit aucun
 lien. Ce texte n'est lu que le temps de l'audit, comme un texte collé : la suite de
@@ -303,7 +304,7 @@ pas ce signalement : elle n'envoie toujours rien à notre serveur.
 | **Cloudflare** (Workers, Email Routing, Queues, Web Analytics) | hébergement du serveur et du site, réception des e-mails transférés, mesure d'audience du site | le trafic, et les e-mails transférés à `verifier@squiggle.fr`, sans contenu d'article dans les journaux ; pour l'audience, des totaux sans cookie ni empreinte |
 | **Neon** (base hébergée à Francfort, Allemagne, région AWS `eu-central-1` ; société établie aux États-Unis) | base de données | tout ce que décrit le tableau ci-dessus |
 | **Stripe** | paiement | votre e-mail et vos données de paiement — **nous ne voyons aucun numéro de carte** |
-| **Brevo** | envoi des e-mails de connexion, et des réponses aux e-mails transférés | votre adresse e-mail ; pour une réponse, la phrase de synthèse du rapport et le titre de l'e-mail transféré |
+| **Brevo** | envoi des e-mails de connexion, et des réponses aux e-mails transférés | votre adresse e-mail ; pour une réponse, l'essentiel du rapport (note, synthèse, passages relevés et leur explication, résultat des vérifications) et le titre de l'e-mail transféré |
 
 ## Vos droits
 
