@@ -45,8 +45,13 @@ export interface FcRpcMap {
     response: { state: TabAnalysisSnapshot | null };
   };
   TRIGGER_ANALYSIS: {
-    request: { tabId?: number; articleText?: string; articleTitle?: string };
+    request: { tabId?: number; articleText?: string; articleTitle?: string; podcast?: boolean };
     response: AnalysisOutcome;
+  };
+  PODCAST_PROBE: {
+    request: { tabId: number };
+    /** `access`: the feeds whose site the reader must first let the extension read. */
+    response: { available: boolean; title?: string; access?: string[] };
   };
   CANCEL_ANALYSIS: {
     request: { tabId: number };

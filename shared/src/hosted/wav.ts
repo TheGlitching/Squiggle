@@ -14,15 +14,13 @@ import { HOSTED_TRANSCRIPTION } from './disclosure';
 const HEADER_BYTES = 44;
 const BYTES_PER_SECOND = HOSTED_TRANSCRIPTION.sampleRate * 2;
 
-/** The WAV file of `samples` (mono, at the transcription rate, each in [-1, 1]). */
-export function encodeWav(samples: Float32Array): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(HEADER_BYTES + samples.length * 2);
-  const view = new DataView(bytes.buffer);
+function header(bytes: Uint8Array, dataBytes: number): void {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, HEADER_BYTES);
   const ascii = (offset: number, text: string) => {
     for (let i = 0; i < text.length; i++) bytes[offset + i] = text.charCodeAt(i);
   };
   ascii(0, 'RIFF');
-  view.setUint32(4, bytes.length - 8, true);
+  view.setUint32(4, dataBytes + HEADER_BYTES - 8, true);
   ascii(8, 'WAVE');
   ascii(12, 'fmt ');
   view.setUint32(16, 16, true);
@@ -33,7 +31,14 @@ export function encodeWav(samples: Float32Array): Uint8Array<ArrayBuffer> {
   view.setUint16(32, 2, true);
   view.setUint16(34, 16, true);
   ascii(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
+  view.setUint32(40, dataBytes, true);
+}
+
+/** The WAV file of `samples` (mono, at the transcription rate, each in [-1, 1]). */
+export function encodeWav(samples: Float32Array): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(HEADER_BYTES + samples.length * 2);
+  const view = new DataView(bytes.buffer);
+  header(bytes, samples.length * 2);
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     view.setInt16(HEADER_BYTES + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
@@ -68,4 +73,20 @@ export function wavSeconds(bytes: Uint8Array): number | null {
     ascii(36) === 'data' &&
     view.getUint32(40, true) === bytes.length - HEADER_BYTES;
   return ok ? (bytes.length - HEADER_BYTES) / BYTES_PER_SECOND : null;
+}
+
+/**
+ * A file `wavSeconds` accepts, cut into files of `seconds` each (the last one
+ * shorter), each in the same format, so that a long recording can be sent a
+ * piece at a time. Lazy: a piece is copied out only when it is asked for.
+ */
+export function* splitWav(bytes: Uint8Array, seconds: number): Generator<Uint8Array<ArrayBuffer>> {
+  const step = seconds * BYTES_PER_SECOND;
+  for (let start = HEADER_BYTES; start < bytes.length; start += step) {
+    const data = bytes.subarray(start, Math.min(bytes.length, start + step));
+    const piece = new Uint8Array(HEADER_BYTES + data.length);
+    header(piece, data.length);
+    piece.set(data, HEADER_BYTES);
+    yield piece;
+  }
 }

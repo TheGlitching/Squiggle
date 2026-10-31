@@ -167,7 +167,7 @@ function FindingCard({
       </blockquote>
       {at !== undefined ? (
         <p className="mt-2 mb-0 text-sm text-muted">
-          À <span className="tabular-nums">{videoTime(at)}</span> dans la vidéo
+          À <span className="tabular-nums">{videoTime(at)}</span> dans l’enregistrement
         </p>
       ) : null}
       <p className="mt-3 mb-0 text-base leading-relaxed">{finding.explanation}</p>

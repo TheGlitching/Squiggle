@@ -194,6 +194,23 @@ and starts the analysis, so the panel and the highlights work there as on a news
 content script answers only its own `FC_*` messages, since in an extension page it also hears
 the panel's calls to the background.
 
+A recording (a saved video, a voice message, a podcast episode), imported on `/analyser`
+or shared to the app, is decoded on the device (`web/src/media.ts`): only its sound, mono at
+16 kHz, fifteen minutes at most (one part per analysis), goes to `POST /web/transcribe` as a
+WAV file (`shared/src/hosted/wav.ts`). That fixed format lets the server read the exact
+duration from the bytes before anything is paid for; it then checks the account has an
+analysis left and that the account's and the site's daily minutes allow it
+(`TRANSCRIBE_DAILY_MINUTES`, the spending cap), and sends the sound to Voxtral on OpenRouter
+a minute at a time (`server/src/transcribe/`). The timed text comes back into the form, like
+a pasted transcript; neither the sound nor the text is kept. The Android app hands a shared
+recording to the site's share target inside the Trusted Web Activity.
+
+A podcast episode's own transcript, when its feed publishes one (`podcast:transcript`), is
+read by the extension in the reader's browser (`src/podcast/transcript.ts`): the page's
+feed, the episode in it, then the transcript, analysed like a video's captions. The server
+never fetches the feed, the transcript or the episode. A feed whose host refuses
+cross-origin reads asks the reader for access to that one site.
+
 `SECURITY.md` has the controls and the residual risks; `PRIVACY.md` has the retention
 table and the subprocessors.
 

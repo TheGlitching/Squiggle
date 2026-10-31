@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { encodeWav, HOSTED_TRANSCRIPTION } from '@squiggle/shared';
 
 import { magicLogin, makeTestEnv, type TestEnv } from './helpers';
-import { openRouterTranscriber, TranscriptionFailed, type Transcriber } from '../src/transcribe/openrouter';
+import { openRouterTranscriber, PIECE_SECONDS, TranscriptionFailed, type Transcriber } from '../src/transcribe/openrouter';
 import { ACCOUNT_TRANSCRIPTION_SECONDS_PER_DAY } from '../src/usage/limits';
 import { collectLaunchMetrics } from '../src/metrics';
 
@@ -138,7 +138,7 @@ describe('POST /web/transcribe', () => {
 
 describe('openRouterTranscriber', () => {
   async function bodyOf(init: RequestInit | undefined): Promise<Record<string, any>> {
-    return JSON.parse(await new Response(init?.body as ReadableStream).text());
+    return JSON.parse(init?.body as string);
   }
 
   it('sends the sound whole, to the named host’s zero-retention endpoint only, and reads the times', async () => {
@@ -177,6 +177,27 @@ describe('openRouterTranscriber', () => {
     expect(Buffer.from(body.input_audio.data, 'base64').equals(Buffer.from(sound))).toBe(true);
   });
 
+  it('sends a long recording in pieces, and puts each segment at its time in the whole', async () => {
+    const sizes: number[] = [];
+    let failedOnce = false;
+    const transcribe = openRouterTranscriber('key', (async (_url: string, init?: RequestInit) => {
+      const body = await bodyOf(init);
+      const bytes = Buffer.from(body.input_audio.data, 'base64');
+      // One piece is refused once, as the host sometimes does: it is tried again.
+      if (sizes.length === 1 && !failedOnce) {
+        failedOnce = true;
+        return new Response('', { status: 502 });
+      }
+      sizes.push(bytes.length);
+      const n = sizes.length;
+      return Response.json({ text: `Morceau ${n}.`, segments: [{ start: 1, text: `Morceau ${n}.` }] });
+    }) as typeof fetch, 0);
+    const result = await transcribe(wav(PIECE_SECONDS * 2 + 30));
+    expect(sizes.map((n) => (n - 44) / (RATE * 2)).sort((a, b) => b - a)).toEqual([PIECE_SECONDS, PIECE_SECONDS, 30]);
+    expect(result.segments.map((s) => s.start)).toEqual([1, PIECE_SECONDS + 1, 2 * PIECE_SECONDS + 1]);
+    expect(failedOnce).toBe(true);
+  });
+
   it('asks for the text alone when the host cannot give times, and fails on anything else', async () => {
     const formats: unknown[] = [];
     const transcribe = openRouterTranscriber('key', (async (_url: string, init?: RequestInit) => {
@@ -187,7 +208,12 @@ describe('openRouterTranscriber', () => {
     expect(await transcribe(wav(1))).toEqual({ text: 'Texte seul.', segments: [] });
     expect(formats).toEqual(['verbose_json', undefined]);
 
-    const failing = openRouterTranscriber('key', (async () => new Response('', { status: 502 })) as typeof fetch);
+    let calls = 0;
+    const failing = openRouterTranscriber('key', (async () => {
+      calls += 1;
+      return new Response('', { status: 429 });
+    }) as typeof fetch, 0);
     await expect(failing(wav(1))).rejects.toBeInstanceOf(TranscriptionFailed);
+    expect(calls).toBe(4);
   });
 });

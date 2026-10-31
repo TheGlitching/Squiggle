@@ -88,6 +88,7 @@ export async function transcribeRecording(
   } catch (err) {
     if (!(err instanceof TranscriptionFailed)) throw err;
     // A failed call is not billed: the minutes go back to both allowances.
+    // ponytail: pieces transcribed before one failed were billed and are not counted; a partial count if failures cost.
     await s.db.releaseRate(account);
     await s.db.releaseRate(site);
     await count('transcription_failed');

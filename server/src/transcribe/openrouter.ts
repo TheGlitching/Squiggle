@@ -4,12 +4,16 @@
  * endpoint (`zdr`). The file is in this process's memory for this one call
  * and nowhere else.
  *
- * The body is JSON with the sound in base64, because OpenRouter's multipart
- * upload stops at 25 MB and fifteen minutes of our format weigh 28.8. It is
- * streamed, a slice at a time, because a Worker has 128 MB: the file, its
- * base64, the JSON around it and that JSON's bytes held at once would not fit.
+ * The sound goes in pieces of `PIECE_SECONDS`, one after the other, and their
+ * texts are joined back with each segment at its time in the whole. Sent
+ * whole, fifteen minutes (28.8 MB) never came back, nor did four: measured on
+ * 31 October 2026, past about three and a half minutes of sound OpenRouter
+ * answers 504 after three minutes, while a minute comes back in two seconds.
+ * Even small pieces now and then hang or are refused (429, without a
+ * Retry-After), so each is given a short deadline and a few attempts; a
+ * refused or abandoned request is not billed.
  */
-import { HOSTED_TRANSCRIPTION } from '@squiggle/shared';
+import { HOSTED_TRANSCRIPTION, splitWav } from '@squiggle/shared';
 
 /** A stretch of speech and the second it starts at, in the file sent. */
 export interface Segment {
@@ -29,10 +33,13 @@ export type Transcriber = (wav: Uint8Array) => Promise<Transcript>;
 export class TranscriptionFailed extends Error {}
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/audio/transcriptions';
-/** A multiple of 3, so that each slice's base64 joins the next without padding. */
-const SLICE_BYTES = 3 * 64 * 1024;
-/** Fifteen minutes of sound take well under a minute; past this the reader is better told to retry. */
-const TIMEOUT_MS = 170_000;
+// ponytail: a piece is cut on the second, not on a silence; a word across two pieces may be misheard.
+export const PIECE_SECONDS = 60;
+/** A minute of sound takes about two seconds: past this deadline the attempt is abandoned. */
+const TIMEOUT_MS = 25_000;
+/** Attempts per piece, the next after `RETRY_MS`, then twice, then four times that. */
+const ATTEMPTS = 4;
+const RETRY_MS = 2_500;
 
 function base64(bytes: Uint8Array): string {
   let binary = '';
@@ -40,27 +47,6 @@ function base64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   }
   return btoa(binary);
-}
-
-function body(fields: Record<string, unknown>, wav: Uint8Array): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  const json = JSON.stringify({ ...fields, input_audio: { format: 'wav', data: '' } });
-  const [head, tail] = json.split('"data":""');
-  let offset = -1;
-  return new ReadableStream({
-    pull(controller) {
-      if (offset < 0) {
-        controller.enqueue(encoder.encode(`${head}"data":"`));
-        offset = 0;
-      } else if (offset < wav.length) {
-        controller.enqueue(encoder.encode(base64(wav.subarray(offset, offset + SLICE_BYTES))));
-        offset += SLICE_BYTES;
-      } else {
-        controller.enqueue(encoder.encode(`"${tail}`));
-        controller.close();
-      }
-    },
-  });
 }
 
 function segmentsOf(raw: unknown): Segment[] {
@@ -74,18 +60,16 @@ function segmentsOf(raw: unknown): Segment[] {
     .filter((s) => s.text);
 }
 
-export function openRouterTranscriber(apiKey: string, fetchImpl: typeof fetch = fetch): Transcriber {
-  const call = (fields: Record<string, unknown>, wav: Uint8Array) =>
+export function openRouterTranscriber(apiKey: string, fetchImpl: typeof fetch = fetch, retryMs = RETRY_MS): Transcriber {
+  const call = (fields: Record<string, unknown>) =>
     fetchImpl(ENDPOINT, {
       method: 'POST',
       headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      body: body(fields, wav),
+      body: JSON.stringify(fields),
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      // Node's fetch refuses a stream body without it; the Workers runtime ignores it.
-      duplex: 'half',
-    } as RequestInit);
+    });
 
-  return async (wav) => {
+  const piece = async (wav: Uint8Array): Promise<Transcript> => {
     const base = {
       model: HOSTED_TRANSCRIPTION.model,
       provider: {
@@ -95,13 +79,14 @@ export function openRouterTranscriber(apiKey: string, fetchImpl: typeof fetch = 
         zdr: true,
         data_collection: 'deny',
       },
+      input_audio: { format: 'wav', data: base64(wav) },
     };
     let res: Response;
     try {
       // The times are asked for; a host that cannot give them answers 400,
       // which is not billed, and the text alone is asked for instead.
-      res = await call({ ...base, response_format: 'verbose_json', timestamp_granularities: ['segment'] }, wav);
-      if (res.status === 400) res = await call(base, wav);
+      res = await call({ ...base, response_format: 'verbose_json', timestamp_granularities: ['segment'] });
+      if (res.status === 400) res = await call(base);
     } catch {
       throw new TranscriptionFailed();
     }
@@ -115,4 +100,25 @@ export function openRouterTranscriber(apiKey: string, fetchImpl: typeof fetch = 
     const text = typeof answer.text === 'string' ? answer.text.trim() : '';
     return { text, segments: segmentsOf(answer.segments) };
   };
+
+  return async (wav) => {
+    const results: Transcript[] = [];
+    // One piece at a time: the host answers 429 to a few at once.
+    for (const sound of splitWav(wav, PIECE_SECONDS)) results.push(await withRetries(() => piece(sound), retryMs));
+    return {
+      text: results.map((r) => r.text).filter(Boolean).join(' '),
+      segments: results.flatMap((r, i) => r.segments.map((s) => ({ ...s, start: s.start + i * PIECE_SECONDS }))),
+    };
+  };
+}
+
+async function withRetries<T>(attempt: () => Promise<T>, retryMs: number): Promise<T> {
+  for (let n = 1; ; n++) {
+    try {
+      return await attempt();
+    } catch (err) {
+      if (n >= ATTEMPTS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, retryMs * 2 ** (n - 1)));
+    }
+  }
 }

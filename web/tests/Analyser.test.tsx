@@ -723,7 +723,7 @@ describe('Analyser, signed in', () => {
     expect(within(text).getByText('0:00')).toBeInTheDocument();
     expect(within(text).getByText('1:02')).toBeInTheDocument();
     const card = screen.getByRole('article', { name: 'Chiffre sans source' });
-    expect(card).toHaveTextContent('À 1:02 dans la vidéo');
+    expect(card).toHaveTextContent('À 1:02 dans l’enregistrement');
   });
 
   it('stops a paste that is only an address, before any request', async () => {

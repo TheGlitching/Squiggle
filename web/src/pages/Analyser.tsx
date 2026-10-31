@@ -756,7 +756,7 @@ function AnalyserPage() {
       if (abort.signal.aborted) return setNotice('Transcription annulée.');
       const total = partsOf(sound.seconds);
       setTranscribing(
-        `Transcription${total > 1 ? ` de la partie ${part + 1} sur ${total}` : ''}… Comptez une minute au plus.`,
+        `Transcription${total > 1 ? ` de la partie ${part + 1} sur ${total}` : ''}… Comptez une minute environ.`,
       );
       const result = await transcribe(sound.wav, abort.signal);
       setRecording(part + 1 < total ? { file, seconds: sound.seconds, part } : null);
@@ -1046,8 +1046,8 @@ function AnalyserPage() {
                     envoyé.
                   </p>
                   <p className="mt-2 mb-0 text-sm text-muted">
-                    Une vidéo enregistrée, un message vocal, un épisode de podcast ? Importez le fichier : son son est
-                    transcrit, quinze minutes par analyse, puis le fichier est oublié. Il faut un compte.
+                    Une vidéo enregistrée, un message vocal, un épisode de podcast ? Importez le fichier : Squiggle en
+                    transcrit la parole, quinze minutes par analyse, puis l’oublie. Il faut un compte.
                   </p>
                 </div>
               ) : null}
@@ -1589,7 +1589,7 @@ function PartChooser({
   return (
     <div className="mt-3 grid gap-3 rounded-control border border-border bg-surface p-4">
       <label htmlFor="partie" className="m-0 text-base">
-        Cet enregistrement dure {minutes(seconds)} : une analyse en couvre quinze minutes. Quelle partie d’abord ?
+        Cet enregistrement dure {minutes(seconds)} : une analyse en couvre quinze minutes. Quelle partie d’abord ?
       </label>
       <select id="partie" value={part} onChange={(event) => setPart(Number(event.target.value))} className={FIELD}>
         {Array.from({ length: total }, (_, i) => (
