@@ -116,7 +116,10 @@ Cloudflare authenticated (the checks of `server/src/mail/authenticated.ts`), str
 quoted report and attachments, and files the text in a KV namespace. The daily check
 reads it through Cloudflare's API (`src/inbox.ts`). Short answers are read without a
 model: « ok » (or « ok sauf 3 ») approves the launch, « retire 4 » (several numbers allowed) removes those posts, « oui B » or « non B »
-answers decision B of the last report (« non » on a page to review closes it). The rest
+answers decision B of the last report (« non » on a page to review closes it). Each may be
+written naturally (« ok tout part », « parfait, merci », « oui pour la B »); one followed by a
+reserve or a negation (« ok mais pas la 3 ») is not acted on, and the next report says it was
+not understood, as it says when a launch still waits for its « ok ». The rest
 is classed in a closed list: « stop » and « reprendre » act the same day; removing a post, leaving a subject alone,
 one network less or more this week are applied and confirmed in the next report; a
 remark on the writing becomes a lesson; a request touching the strategy is restated

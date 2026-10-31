@@ -132,7 +132,7 @@ describe('the summary check', () => {
 
 describe('short answers', () => {
   it('reads « retire 4 », several numbers, and « oui B », one a line, leaving the rest', () => {
-    expect(parseCommands('retire 4')).toEqual({ launch: null, retire: [4], answers: [], rest: '' });
+    expect(parseCommands('retire 4')).toEqual({ launch: null, retire: [4], answers: [], unclear: [], rest: '' });
     const c = parseCommands('Retirez la 4 et 7.\nnon b\nMerci, très bien sinon');
     expect(c.retire).toEqual([4, 7]);
     expect(c.answers).toEqual([{ yes: false, letter: 'B' }]);
@@ -146,5 +146,31 @@ describe('short answers', () => {
     expect(parseCommands('OK sauf 3 et 5').launch).toEqual({ except: [3, 5] });
     expect(parseCommands('ok pour le lancement').launch).toEqual({ except: [] });
     expect(parseCommands('oui A').launch).toBeNull();
+  });
+
+  it('takes a natural agreement as the launch’s « ok », with « sauf N » anywhere in the line', () => {
+    for (const reply of ['ok tout part', 'OK, c’est bon pour moi', 'D’accord, merci !', 'Go', 'Validé.', 'oui', 'Parfait, merci beaucoup', 'top, on y va', 'ok pour moi, tout peut partir'])
+      expect(parseCommands(reply), reply).toMatchObject({ launch: { except: [] }, unclear: [], rest: '' });
+    expect(parseCommands('ok tout part sauf la 3').launch).toEqual({ except: [3] });
+    expect(parseCommands('Parfait, sauf 2 et 5, merci').launch).toEqual({ except: [2, 5] });
+  });
+
+  it('never takes an agreement with a reserve or a negation for one, and keeps it to say so', () => {
+    for (const reply of ['ok mais pas la 3', 'ok sauf celle de jeudi', 'oui, enfin pas tout de suite', 'ok, attendez lundi', 'go sauf', 'ok pas encore']) {
+      const c = parseCommands(reply);
+      expect(c.launch, reply).toBeNull();
+      expect(c.unclear, reply).toEqual([{ kind: 'launch', line: reply }]);
+    }
+    expect(parseCommands('Merci, très bien sinon')).toMatchObject({ launch: null, unclear: [] });
+  });
+
+  it('reads « retire N » and « oui B » with the same tolerance', () => {
+    expect(parseCommands('retirez la 4 et la 7, merci').retire).toEqual([4, 7]);
+    expect(parseCommands('Retire 4 svp').retire).toEqual([4]);
+    expect(parseCommands('retire 4 mais garde la 5')).toMatchObject({ retire: [], unclear: [{ kind: 'retire', line: 'retire 4 mais garde la 5' }] });
+    expect(parseCommands('Oui pour la B, merci').answers).toEqual([{ yes: true, letter: 'B' }]);
+    expect(parseCommands('non C, c’est bon').answers).toEqual([{ yes: false, letter: 'C' }]);
+    expect(parseCommands('non B, pas maintenant').unclear).toEqual([{ kind: 'answer', line: 'non B, pas maintenant' }]);
+    expect(parseCommands('oui B mais plus tard')).toMatchObject({ answers: [], launch: null, unclear: [{ kind: 'answer', line: 'oui B mais plus tard' }] });
   });
 });
