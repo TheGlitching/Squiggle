@@ -32,7 +32,7 @@ const H2 = 'm-0 font-display text-2xl leading-tight font-semibold tracking-[-0.0
 const lowerFirst = (text: string) => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 
 /** A notion as a card: its name and what it is, the whole card one link. */
-function NotionCard({ item }: { item: Notion }) {
+export function NotionCard({ item }: { item: Notion }) {
   return (
     <Link
       to={glossaryPath(item.slug)}
@@ -173,6 +173,27 @@ function Run({ segments }: { segments: Segments }) {
   );
 }
 
+/** A made-up article on paper, its fragile passage highlighted, and what is wrong with it. */
+export function ExempleFigure({ exemple }: { exemple: Notion['exemple'] }) {
+  return (
+    <figure className="m-0 grid gap-5">
+      <div className="rounded-card bg-paper px-5 py-7 text-paperInk sm:px-8 md:px-10 md:py-9">
+        <p className="m-0 text-base font-medium text-paperMuted">{exemple.rubrique}, un article inventé</p>
+        <p className="mt-2 mb-0 font-serif text-2xl leading-tight font-semibold tracking-tight md:text-3xl">
+          <Run segments={exemple.titre} />
+        </p>
+        <p className="mt-4 mb-0 font-serif text-lg leading-[1.65] md:text-xl">
+          <Run segments={exemple.texte} />
+        </p>
+      </div>
+      <figcaption className={`grid gap-2 ${MEASURE}`}>
+        <span className="text-base font-semibold">Ce qui cloche</span>
+        <span className="text-lg leading-relaxed">{typo(exemple.lecture)}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
 function Part({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="grid content-start gap-5">
@@ -187,7 +208,6 @@ function Part({ id, title, children }: { id: string; title: string; children: Re
 /** `/glossaire/<notion>`: one notion, from its definition to the classroom question. */
 export function NotionPage({ item }: { item: Notion }) {
   const { titre: familyTitle, id: familyId } = famille(item.famille);
-  const { exemple } = item;
   const neighbours = item.voisines.map((slug) => notion(slug)!);
   return (
     <div className={`${PAGE} py-12 md:py-20`}>
@@ -226,21 +246,7 @@ export function NotionPage({ item }: { item: Notion }) {
           </header>
 
           <Part id="exemple" title="Sur un article d’exemple">
-            <figure className="m-0 grid gap-5">
-              <div className="rounded-card bg-paper px-5 py-7 text-paperInk sm:px-8 md:px-10 md:py-9">
-                <p className="m-0 text-base font-medium text-paperMuted">{exemple.rubrique}, un article inventé</p>
-                <p className="mt-2 mb-0 font-serif text-2xl leading-tight font-semibold tracking-tight md:text-3xl">
-                  <Run segments={exemple.titre} />
-                </p>
-                <p className="mt-4 mb-0 font-serif text-lg leading-[1.65] md:text-xl">
-                  <Run segments={exemple.texte} />
-                </p>
-              </div>
-              <figcaption className={`grid gap-2 ${MEASURE}`}>
-                <span className="text-base font-semibold">Ce qui cloche</span>
-                <span className="text-lg leading-relaxed">{typo(exemple.lecture)}</span>
-              </figcaption>
-            </figure>
+            <ExempleFigure exemple={item.exemple} />
           </Part>
 
           <Part id="reperer" title="Comment le repérer">

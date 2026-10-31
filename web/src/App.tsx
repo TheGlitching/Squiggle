@@ -13,6 +13,7 @@ import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
 import { Favori, FavoriEssai, favoriTried } from './pages/Favori';
 import { Corrige, Fiche } from './pages/Feuilles';
+import { ArticlePage, Blog } from './pages/Blog';
 import { Glossaire, NotionPage } from './pages/Glossaire';
 import { FicheActivite, GrilleLecture } from './pages/Kit';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
@@ -21,6 +22,7 @@ import { Pont } from './pages/Pont';
 import { Raccourci } from './pages/Raccourci';
 import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
+import { BLOG_OPEN, BLOG_PATH, article } from './blog';
 import { notion } from './glossaire';
 import { SHORTCUT_PUBLISHED } from './shortcut';
 import { titleFor } from './seo';
@@ -154,7 +156,12 @@ export function App({ path: at }: { path?: string }) {
       break;
     default: {
       const item = route.startsWith('/glossaire/') ? notion(route.slice('/glossaire/'.length)) : undefined;
-      page = item ? <NotionPage item={item} /> : <NotFound />;
+      // Not a `case`: until an article is published, /blog is not a page (`BLOG_OPEN`).
+      const post = route.startsWith(`${BLOG_PATH}/`) ? article(route.slice(BLOG_PATH.length + 1)) : undefined;
+      if (item) page = <NotionPage item={item} />;
+      else if (post) page = <ArticlePage item={post} />;
+      else if (route === BLOG_PATH && BLOG_OPEN) page = <Blog />;
+      else page = <NotFound />;
     }
   }
 
