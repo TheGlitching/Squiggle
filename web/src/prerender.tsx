@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server';
 
 import { App } from './App';
 
-export { APP_PATHS, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, shareImagePath, sitemap, titleFor } from './seo';
+export { APP_PATHS, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, redirects, shareImagePath, sitemap, titleFor } from './seo';
 export { BLOG_OPEN, FEED_PATH } from './blog';
 export { shareImage } from './share';
 

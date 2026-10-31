@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { FAMILLES, NOTIONS } from '../src/glossaire';
 import { OWNER_PATH } from '../src/api';
-import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, pageSources, shareImagePath, sitemap, titleFor } from '../src/seo';
+import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, pageSources, redirects, shareImagePath, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
 // The analysis page asks who is signed in: no one, here.
@@ -101,6 +101,16 @@ describe('search engines and link previews', () => {
     const robots = readFileSync(resolve(__dirname, '../public/robots.txt'), 'utf8');
     expect(robots).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
     expect(robots).not.toMatch(/^Disallow: \/$/m);
+  });
+
+  it('sends a page’s address with a trailing slash to the page for good', () => {
+    const lines = redirects().trim().split('\n');
+    expect(lines).toContain('/glossaire/ /glossaire 301');
+    expect(lines).toContain('/glossaire/proces-d-intention/ /glossaire/proces-d-intention 301');
+    expect(lines).toContain('/connexion/ /connexion 301');
+    expect(lines.some((line) => line.startsWith('/ '))).toBe(false);
+    // Cloudflare refuses the whole file past 2 000 static rules.
+    expect(lines.length).toBeLessThan(2000);
   });
 
   it('dates each page in the sitemap by its own source files, unless it carries its own date', () => {

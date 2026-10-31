@@ -286,7 +286,7 @@ function prerender(): Plugin {
         appType: 'custom',
       });
       try {
-        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, render, shareImage, shareImagePath, sitemap, titleFor } =
+        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, redirects, render, shareImage, shareImagePath, sitemap, titleFor } =
           (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
         const write = (file: string, content: string | Buffer) => {
           // `/classe/mode-emploi` lives in `classe/`, beside `classe.html`.
@@ -314,6 +314,7 @@ function prerender(): Plugin {
         // A blog article carries its own date; every other page, its source files' last commit.
         const dated = PUBLIC_PAGES.map((item) => (item.lastmod ? item : { ...item, lastmod: lastCommitDate(pageSources(item.path)) }));
         writeFileSync(dist('sitemap.xml'), sitemap(dated));
+        writeFileSync(dist('_redirects'), redirects());
         if (BLOG_OPEN) write(FEED_PATH.slice(1), feed());
       } finally {
         await server.close();

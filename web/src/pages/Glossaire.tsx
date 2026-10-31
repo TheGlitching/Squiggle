@@ -32,8 +32,8 @@ const H2 = 'm-0 font-display text-2xl leading-tight font-semibold tracking-[-0.0
 
 const lowerFirst = (text: string) => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 
-/** « Exemples de procès d’intention », « Exemples d’affirmation non étayée ». */
-const examplesOf = (nom: string) => `Exemples ${/^[aeiouhâéèêî]/i.test(nom) ? 'd’' : 'de '}${lowerFirst(nom)}`;
+/** « Autres exemples de procès d’intention », « Autres exemples d’affirmation non étayée ». */
+const examplesOf = (nom: string) => `Autres exemples ${/^[aeiouhâéèêî]/i.test(nom) ? 'd’' : 'de '}${lowerFirst(nom)}`;
 
 /** A way from a notion to the analysis, counted: does the glossary bring readers to the product? */
 function AnalyseLink({ className }: { className: string }) {
@@ -264,17 +264,10 @@ export function NotionPage({ item }: { item: Notion }) {
 
           {item.exemples ? (
             <Part id="exemples" title={examplesOf(item.nom)}>
-              <p className={`m-0 text-lg leading-relaxed text-muted ${MEASURE}`}>
-                {typo('D’autres phrases, de la vie courante et du débat public. Toutes sont inventées.')}
-              </p>
-              <ul className="m-0 grid list-none gap-8 p-0">
-                {item.exemples.map(({ cadre, phrase, lecture }) => (
-                  <li key={cadre} className={`grid gap-3 ${MEASURE}`}>
-                    <p className="m-0 text-base font-semibold">{cadre}</p>
-                    <p className="m-0 rounded-card bg-paper px-5 py-4 font-serif text-lg leading-[1.6] text-paperInk sm:px-6">
-                      {typo(phrase)}
-                    </p>
-                    <p className="m-0 text-lg leading-relaxed">{typo(lecture)}</p>
+              <ul className="m-0 grid list-none gap-12 p-0">
+                {item.exemples.map((other) => (
+                  <li key={other.rubrique}>
+                    <ExempleFigure exemple={other} />
                   </li>
                 ))}
               </ul>

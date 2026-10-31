@@ -33,10 +33,11 @@ describe('the glossary content', () => {
   });
 
   it('shows each notion on its own made-up article, with exactly one passage highlighted', () => {
-    for (const { slug, exemple } of NOTIONS) {
-      expect(passages(exemple.titre).length + passages(exemple.texte).length, slug).toBe(1);
+    const all = NOTIONS.flatMap(({ slug, exemple, exemples = [] }) => [exemple, ...exemples].map((item) => [slug, item] as const));
+    for (const [slug, item] of all) {
+      expect(passages(item.titre).length + passages(item.texte).length, slug).toBe(1);
     }
-    expect(new Set(NOTIONS.map(({ exemple }) => exemple.lecture)).size).toBe(NOTIONS.length);
+    expect(new Set(all.map(([, item]) => item.lecture)).size).toBe(all.length);
   });
 
   it('writes no em dash, and keeps French punctuation off the start of a line', () => {
@@ -142,12 +143,11 @@ describe('the glossary pages', () => {
       expect(item.description!.length, slug).toBeLessThanOrEqual(160);
     }
     render(<App path="/glossaire/proces-d-intention" />);
-    const part = within(screen.getByRole('region', { name: 'Exemples de procès d’intention' }));
-    expect(part.getByText(/Toutes sont inventées/)).toBeInTheDocument();
-    expect(part.getAllByRole('listitem')).toHaveLength(3);
+    const part = within(screen.getByRole('region', { name: 'Autres exemples de procès d’intention' }));
+    expect(part.getAllByText(/, un article inventé$/)).toHaveLength(3);
     cleanup();
     render(<App path="/glossaire/affirmation-non-etayee" />);
-    expect(screen.getByRole('heading', { level: 2, name: 'Exemples d’affirmation non étayée' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Autres exemples d’affirmation non étayée' })).toBeInTheDocument();
     cleanup();
     render(<App path="/glossaire/generalisation-hative" />);
     expect(screen.getByText(/Autres noms : .*Conclusion hâtive/)).toBeInTheDocument();

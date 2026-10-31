@@ -541,6 +541,16 @@ const PAGE_SOURCES: Record<string, string[]> = {
 export const pageSources = (path: string): string[] | undefined =>
   path === '/glossaire' || path.startsWith('/glossaire/') ? GLOSSARY_SOURCES : PAGE_SOURCES[path];
 
+/**
+ * `_redirects`: each page's address with a trailing slash, sent for good (301) to the
+ * address without it. Cloudflare's own redirect for an HTML file is a 307, which a
+ * search engine treats as temporary and keeps reporting.
+ */
+export function redirects(): string {
+  const paths = [...PUBLIC_PAGES.map((page) => page.path), ...APP_PATHS, '/tarifs'].filter((path) => path !== '/');
+  return paths.map((path) => `${path}/ ${path} 301`).join('\n') + '\n';
+}
+
 /** Every public page, for `/sitemap.xml`. */
 export function sitemap(pages: readonly PublicPage[] = PUBLIC_PAGES): string {
   const urls = pages.map(
