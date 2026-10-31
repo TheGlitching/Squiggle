@@ -1,6 +1,6 @@
 {
   "name": "squiggle",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "Squiggle - Critical analysis and editorial verification browser extension (Chrome MV3 & Firefox MV3)",
   "license": "MIT",
@@ -41,6 +41,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.475.0",
+    "pdfjs-dist": "^6.4.299",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.0.1",

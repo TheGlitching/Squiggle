@@ -16,6 +16,7 @@ import type { AnalysisReport } from '../../shared/src/engine/types';
 import type { Account } from '../src/api';
 import { loadSeance, saveSeance } from '../src/classe';
 import { readCaptures, takeSharedCaptures } from '../src/captures';
+import { readPdfFile } from '../src/pdf';
 import { pageFragment } from '../src/favori/payload';
 import { loadDraft, saveDraft } from '../src/paste';
 import { Analyser } from '../src/pages/Analyser';
@@ -26,6 +27,11 @@ vi.mock('../src/captures', async (actual) => ({
   ...(await actual<typeof import('../src/captures')>()),
   readCaptures: vi.fn(),
   takeSharedCaptures: vi.fn(),
+}));
+// The PDF layout is pinned in shared/tests/pdf.test.ts, and pdf.js in the browser; here it is the page around it.
+vi.mock('../src/pdf', async (actual) => ({
+  ...(await actual<typeof import('../src/pdf')>()),
+  readPdfFile: vi.fn(),
 }));
 
 const TEXT = [
@@ -1005,7 +1011,106 @@ describe('Analyser, from screenshots', () => {
     vi.mocked(takeSharedCaptures).mockResolvedValue([]);
     at('/analyser?captures=2');
     render(<Analyser />);
-    expect(await screen.findByText(/Les captures partagées n’ont pas été retrouvées/)).toBeInTheDocument();
+    expect(await screen.findByText(/Les fichiers partagés n’ont pas été retrouvés/)).toBeInTheDocument();
     expect(readCaptures).not.toHaveBeenCalled();
+  });
+});
+
+describe('Analyser, from a PDF', () => {
+  const file = (name = 'rapport.pdf') => new File(['%PDF'], name, { type: 'application/pdf' });
+  const counted = (seen: Seen[]) => seen.filter((s) => s.url === '/web/count').map((s) => s.body?.name);
+  const paragraphs = TEXT.split('\n\n');
+  const read = (overrides: Partial<Awaited<ReturnType<typeof readPdfFile>>> = {}) => ({
+    title: 'Bilan démographique 2025',
+    blocks: paragraphs.map((text, index) => ({ type: 'paragraph' as const, text, page: index + 1 })),
+    pages: 3,
+    scanned: false,
+    scans: [],
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    vi.mocked(readPdfFile).mockReset();
+    vi.mocked(readCaptures).mockReset();
+    vi.mocked(takeSharedCaptures).mockReset();
+  });
+
+  it('reads the imported PDF into the form, title included, for the reader to check before the analysis', async () => {
+    const seen = serve(account());
+    vi.mocked(readPdfFile).mockResolvedValue(read());
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('pdf'), file());
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu dans le PDF \(3 pages\), sur cet appareil : le fichier n’a pas été envoyé/);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(paragraphs.join('\n'));
+    expect(screen.getByLabelText(/Titre/)).toHaveValue('Bilan démographique 2025');
+    expect(seen.some((s) => s.url.startsWith('/web/analyze/'))).toBe(false);
+    expect(counted(seen)).toEqual(['import_pdf']);
+
+    fireEvent.click(await analyseButton());
+    expect(await screen.findByText('58')).toBeInTheDocument();
+  });
+
+  it('keeps the first pages of a PDF too long for one analysis, and lets the reader pick others', async () => {
+    serve(account());
+    const page = (n: number) => `${`Page ${n} : une phrase du rapport. `.repeat(1_400)}`.trim();
+    const blocks = [1, 2, 3, 4].map((n) => ({ type: 'paragraph' as const, text: page(n), page: n }));
+    vi.mocked(readPdfFile).mockResolvedValue(read({ blocks, pages: 4 }));
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('pdf'), file());
+
+    expect(await screen.findByText(/Ce PDF de 4 pages est trop long pour une seule analyse : le champ en garde les pages 1 à 2/)).toBeInTheDocument();
+    const field = screen.getByLabelText('Texte de l’article ou du message') as HTMLTextAreaElement;
+    expect(field.value).toBe(`${page(1)}\n${page(2)}`);
+
+    fireEvent.change(screen.getByLabelText('De la page'), { target: { value: '3' } });
+    expect(screen.getByLabelText('à la page')).toHaveValue(4);
+    fireEvent.click(screen.getByRole('button', { name: 'Garder ces pages' }));
+    expect(field.value).toBe(`${page(3)}\n${page(4)}`);
+    expect(screen.getByRole('status')).toHaveTextContent(/Pages 3 à 4 du PDF/);
+  });
+
+  it('reads a scanned PDF’s pages with the OCR', async () => {
+    const seen = serve(account());
+    const scans = [new Blob(['png'], { type: 'image/png' }), new Blob(['png'], { type: 'image/png' })];
+    vi.mocked(readPdfFile).mockResolvedValue(read({ blocks: [], pages: 2, scanned: true, scans, title: '' }));
+    vi.mocked(readCaptures).mockResolvedValue(TEXT);
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('pdf'), file('scan.pdf'));
+
+    expect(await screen.findByText(/Ce PDF est un document scanné : ses 2 pages ont été lues comme des captures/)).toBeInTheDocument();
+    expect(vi.mocked(readCaptures).mock.calls[0][0]).toEqual(scans);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
+    expect(counted(seen)).toEqual(['import_pdf', 'pdf_scanned']);
+  });
+
+  it('says what to do with a locked PDF, a file that is not one, and a reader that could not load', async () => {
+    serve(account());
+    const named = (name: string) => Object.assign(new Error('pdf.js'), { name });
+    vi.mocked(readPdfFile)
+      .mockRejectedValueOnce(named('PasswordException'))
+      .mockRejectedValueOnce(named('InvalidPDFException'))
+      .mockRejectedValueOnce(new Error('network'));
+    render(<Analyser />);
+    await userEvent.upload(screen.getByTestId('pdf'), file());
+    expect(await screen.findByText(/Ce PDF est protégé par un mot de passe/)).toBeInTheDocument();
+    await userEvent.upload(screen.getByTestId('pdf'), file());
+    expect(await screen.findByText(/Ce fichier n’est pas un PDF lisible/)).toBeInTheDocument();
+    await userEvent.upload(screen.getByTestId('pdf'), file());
+    expect(await screen.findByText(/le lecteur de PDF se télécharge la première fois/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
+  });
+
+  it('reads a PDF shared to the installed app', async () => {
+    const seen = serve(account());
+    vi.mocked(takeSharedCaptures).mockResolvedValue([file()]);
+    vi.mocked(readPdfFile).mockResolvedValue(read());
+    at('/analyser?captures=1');
+    render(<Analyser />);
+
+    expect(await screen.findByText(/Texte lu dans le PDF/)).toBeInTheDocument();
+    expect(readCaptures).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+    expect(counted(seen)).toEqual(['share_pdf']);
   });
 });

@@ -42,9 +42,9 @@ import com.google.androidbrowserhelper.trusted.TwaLauncher
  * Activity: a text in the address's fragment, which /analyser analyses at once
  * as a short message or an article (or says why it cannot, for a text too short
  * to claim anything), and
- * screenshots through the site's share target (`share_target` in
+ * screenshots or a PDF through the site's share target (`share_target` in
  * `web/public/manifest.webmanifest`), whose service worker keeps them on the
- * phone for the page to read. A PDF is not read yet: the screen says what to do.
+ * phone for the page to read there (`web/src/captures.ts`, `web/src/pdf.ts`).
  * A text that carries a link but more around it than a headline (a WhatsApp
  * chain, a post) goes there too: it is a message, not an article to open.
  */
@@ -119,24 +119,23 @@ class LectureActivity : Activity() {
     private fun open(intent: Intent) {
         handler.removeCallbacksAndMessages(null)
         val type = intent.type.orEmpty()
-        if (type.startsWith("image/")) {
-            val images = sharedStreams(intent)
-            if (images.isEmpty()) return say(R.string.empty_share)
+        if (type.startsWith("image/") || type == PDF) {
+            val files = sharedStreams(intent)
+            if (files.isEmpty()) return say(R.string.empty_share)
             // The share target is the site's service worker, which the browser only has once
-            // the site has been opened: before that, the POST would carry the images to our
+            // the site has been opened: before that, the POST would carry the files to our
             // server and end on an error. The page then offers to import them, and the next
             // share goes through.
             // ponytail: a flag, not a check of the worker itself; a browser whose data was
             // cleared since still gets the server's error, until the site is opened again.
             if (prefs.getBoolean(SITE_OPENED, false)) {
-                openReport(Uri.parse("$ORIGIN/analyser"), ShareData(null, null, images))
+                openReport(Uri.parse("$ORIGIN/analyser"), ShareData(null, null, files))
             } else {
-                openReport(Uri.parse("$ORIGIN/analyser?captures=${images.size}"))
+                openReport(Uri.parse("$ORIGIN/analyser?captures=${files.size}"))
             }
             finish()
             return
         }
-        if (type == "application/pdf") return say(R.string.no_pdf)
         val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().trim()
         val link = sharedLink(text)
         if (link == null || isMessage(text)) {
@@ -177,8 +176,8 @@ class LectureActivity : Activity() {
         status.text = message
     }
 
-    /** `images`: screenshots for the site's share target, which the browser posts to it with read access. */
-    private fun openReport(url: Uri, images: ShareData? = null) {
+    /** `files`: screenshots or a PDF for the site's share target, which the browser posts to it with read access. */
+    private fun openReport(url: Uri, files: ShareData? = null) {
         idle(getString(R.string.ready))
         // In a browser the bookmark's banner leaves with the page; here the page stays, behind the report.
         page.evaluateJavascript(REMOVE_BANNER, null)
@@ -190,7 +189,7 @@ class LectureActivity : Activity() {
             .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
             .setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_DARK, colors)
             .setDefaultColorSchemeParams(colors)
-        if (images != null) twa.setShareParams(SHARE_TARGET, images)
+        if (files != null) twa.setShareParams(SHARE_TARGET, files)
         launcher?.destroy()
         launcher = TwaLauncher(this).also { it.launch(twa, null, null, null) }
         prefs.edit().putBoolean(SITE_OPENED, true).apply()
@@ -216,6 +215,7 @@ class LectureActivity : Activity() {
 
     companion object {
         const val ORIGIN = "https://squiggle.fr"
+        private const val PDF = "application/pdf"
         /** Whether this app has opened the site in the browser, which installs its service worker. */
         private const val SITE_OPENED = "site_opened"
         private const val SETTLE_MS = 1_500L
@@ -229,7 +229,7 @@ class LectureActivity : Activity() {
             "$ORIGIN/analyser",
             ShareTarget.METHOD_POST,
             ShareTarget.ENCODING_TYPE_MULTIPART,
-            ShareTarget.Params("title", "text", listOf(ShareTarget.FileFormField("captures", listOf("image/*")))),
+            ShareTarget.Params("title", "text", listOf(ShareTarget.FileFormField("captures", listOf("image/*", PDF, ".pdf")))),
         )
         private val LINK = Regex("""https?://\S+""")
         private val YOUTUBE = Regex("""(^|\.)(youtube\.com|youtu\.be)$""")

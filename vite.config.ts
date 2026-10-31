@@ -54,6 +54,8 @@ export default defineConfig({
       input: {
         sidepanel: resolve(__dirname, 'src/sidepanel/index.html'),
         welcome: resolve(__dirname, 'src/welcome/index.html'),
+        // "Analyser ce PDF": the page that reads a PDF in the reader's browser.
+        pdf: resolve(__dirname, 'src/pdf/index.html'),
         // The Chromium sign-in landing page. It must sit at the package root
         // as `squiggle-auth.html` because the web app navigates to exactly that
         // path; see web/BRIDGE.md §2.

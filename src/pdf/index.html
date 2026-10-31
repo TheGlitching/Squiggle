@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Squiggle - PDF</title>
+    <link rel="stylesheet" href="/src/index.css" />
+  </head>
+  <body class="bg-ground text-ink">
+    <main class="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+      <p class="m-0 text-xs font-semibold uppercase tracking-wider text-muted">Squiggle · PDF lu sur cet appareil</p>
+      <p id="status" role="status" aria-live="polite" class="mt-4 rounded-xl border border-line bg-panel px-4 py-3 text-sm leading-relaxed">
+        Lecture du PDF…
+      </p>
+      <div id="choices" class="mt-4 flex flex-wrap items-end gap-3" hidden></div>
+      <article id="article" class="mt-8 font-serif text-lg leading-relaxed" hidden></article>
+    </main>
+    <script type="module" src="/src/pdf/main.ts"></script>
+  </body>
+</html>
