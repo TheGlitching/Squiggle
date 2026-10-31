@@ -818,7 +818,7 @@ function AnalyserPage() {
   );
 }
 
-const TEXT_BUTTON = 'px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground';
+const TEXT_BUTTON = 'whitespace-nowrap px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground';
 
 /**
  * A link received alone: Squiggle does not fetch it, so the reader opens it in

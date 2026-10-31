@@ -417,6 +417,18 @@ describe('Analyser, from the bookmark', () => {
     expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_bookmarklet' }]);
   });
 
+  it('analyses at once a message shared to the Android app, as the message itself and not a title', async () => {
+    const seen = serve(account());
+    const rumour = 'URGENT ⚠️ à partir du 1er novembre la CAF supprime les APL pour les retraités propriétaires. Transférez à tous vos contacts !';
+    at(`/analyser#${new URLSearchParams({ text: rumour, via: 'appli' })}`);
+    render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    const audit = seen.find((s) => s.url === '/web/analyze/audit');
+    expect(audit?.body).toMatchObject({ title: '', blocks: [{ text: rumour }] });
+    expect(seen.filter((s) => s.url === '/web/count').map((s) => s.body)).toEqual([{ name: 'entry_android_share' }]);
+  });
+
   it('shows the analysis as started from the first frame, with nothing to tap', async () => {
     const seen = serve(account());
     at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));

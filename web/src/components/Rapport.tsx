@@ -417,7 +417,12 @@ export function Rapport({
             {band.title}
           </p>
           <p className="mt-1 mb-0 text-base text-muted">{band.description}</p>
-          <p className="mt-5 mb-0 max-w-[55ch] whitespace-pre-line text-lg leading-relaxed">{report.summary}</p>
+          {/* A message's summary answers its four questions one per line. */}
+          {report.summary.split('\n').map((line, i) => (
+            <p key={i} className={`${i ? 'mt-3' : 'mt-5'} mb-0 max-w-[55ch] text-lg leading-relaxed`}>
+              {line}
+            </p>
+          ))}
         </div>
 
         <div>
