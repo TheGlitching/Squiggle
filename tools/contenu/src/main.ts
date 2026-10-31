@@ -12,7 +12,8 @@
  *   etat            what the routine holds, without calling anything
  *
  * `--a-blanc` runs for real (collection, model, filter, review, e-mail) but
- * writes nothing to Postiz or GitHub, on a database of its own.
+ * writes nothing to Postiz or GitHub, on a database of its own. `--sans-courriel`
+ * prints the e-mails instead of sending them.
  */
 import { closeSync, openSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,9 +40,10 @@ function lock(dir: string): () => void {
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
   const dry = args.includes('--a-blanc');
+  const noMail = args.includes('--sans-courriel');
   const command = args.find((a) => !a.startsWith('--')) as (typeof COMMANDS)[number] | undefined;
   if (!command || !COMMANDS.includes(command)) {
-    console.error(`usage : contenu <${COMMANDS.join('|')}> [--a-blanc]`);
+    console.error(`usage : contenu <${COMMANDS.join('|')}> [--a-blanc] [--sans-courriel]`);
     return 2;
   }
   const p = paths();
@@ -69,7 +71,7 @@ async function main(): Promise<number> {
   }
   const started = new Date();
   const runId = db.run('INSERT INTO runs (kind, started) VALUES (?, ?)', dry ? `${command}-a-blanc` : command, started.toISOString());
-  const ctx: Ctx = { db, secrets: secrets(), paths: p, dry, now: started, runId, steps: [], fetch: globalThis.fetch, log: (line) => console.log(line) };
+  const ctx: Ctx = { db, secrets: secrets(), paths: p, dry, noMail, now: started, runId, steps: [], fetch: globalThis.fetch, log: (line) => console.log(line) };
   console.log(`contenu ${command}${dry ? ' (à blanc)' : ''}, ${started.toISOString()}`);
   try {
     if (command === 'quotidien') await daily(ctx);

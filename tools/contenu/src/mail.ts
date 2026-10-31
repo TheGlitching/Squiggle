@@ -9,6 +9,10 @@ import { fetchJson, type Ctx } from './context';
 
 export async function sendMail(ctx: Ctx, subject: string, text: string): Promise<void> {
   const prefix = ctx.dry ? '[À BLANC] ' : '';
+  if (ctx.noMail) {
+    ctx.log(`\n===== e-mail non envoyé : ${prefix}${subject}\n${text}\n=====`);
+    return;
+  }
   await fetchJson(ctx, 'Brevo', 'https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': ctx.secrets.brevoKey, 'content-type': 'application/json', accept: 'application/json' },

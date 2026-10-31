@@ -22,6 +22,8 @@ export interface Ctx {
   paths: Paths;
   /** A dry run reads everything and calls the model, but writes nothing to Postiz or GitHub. */
   dry: boolean;
+  /** `--sans-courriel`: e-mails are printed instead of sent, to read a run before anyone receives it. */
+  noMail: boolean;
   now: Date;
   runId: number;
   steps: Step[];
