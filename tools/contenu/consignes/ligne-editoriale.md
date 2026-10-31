@@ -14,9 +14,13 @@ qu'aucune mauvaise position dans Google.
 2. **Aucune anecdote inventée présentée comme vraie.** Pas de « un enseignant nous a
    raconté », pas d'élève, de lecteur ou de client imaginaire, pas de « nous avons
    testé » qui n'a pas eu lieu.
-3. **Les exemples sont inventés, et le disent.** Un exemple est un article fictif,
-   annoncé comme tel (« un article inventé »), qui ne nomme aucun média, aucun
-   journaliste, aucune personnalité, aucun parti, aucune marque.
+3. **Les exemples sont inventés.** Un exemple est un article fictif qui ne nomme
+   aucun média, aucun journaliste, aucune personnalité, aucun parti, aucune marque.
+   Sur le site (glossaire, blog), il est annoncé comme inventé. **Dans les
+   publications et les carrousels, il ne l'est pas** : on le montre comme un passage
+   d'article à lire (« Dans cet article : … », « Un titre : … »), ce qui donne envie de
+   chercher ce qui cloche. Il n'est pour autant jamais présenté comme réel : ni « paru
+   hier », ni « lu dans la presse », ni rattaché à un média, une date ou un lieu réels.
 4. **Pas de verdict, pas de note, pas de classement** de médias ou de personnes.
    Squiggle montre un procédé et donne la question à se poser ; le lecteur juge.
 5. **Pas d'actualité du jour** comme matière d'exemple : elle vieillit, et elle met

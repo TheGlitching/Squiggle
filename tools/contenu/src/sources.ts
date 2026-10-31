@@ -34,7 +34,7 @@ export const flat = (segments: Segments): string => segments.map((s) => (typeof 
 const texte = (t: Texte): string => (typeof t === 'string' ? t : t.map((p) => (typeof p === 'string' ? p : p.texte)).join(''));
 
 function exempleText(e: Notion['exemple'], label: string): string {
-  return [`${label} (article inventé), rubrique ${e.rubrique} : « ${flat(e.titre)} »`, flat(e.texte), `Ce qui cloche : ${e.lecture}`].join('\n');
+  return [`${label}, rubrique ${e.rubrique} : « ${flat(e.titre)} »`, flat(e.texte), `Ce qui cloche : ${e.lecture}`].join('\n');
 }
 
 export function notionSource(n: Notion): Source {

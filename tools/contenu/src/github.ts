@@ -65,6 +65,11 @@ export class GitHub {
     }
   }
 
+  /** Closes a content pull request the owner refused by e-mail. */
+  async close(number: number): Promise<void> {
+    await this.call(`/pulls/${number}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) });
+  }
+
   /**
    * One pull request from `main`: a branch, a commit per file, then the request.
    * A file set to `null` is deleted (a draft renamed on publication).

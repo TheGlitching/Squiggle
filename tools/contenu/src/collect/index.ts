@@ -112,17 +112,17 @@ async function collectPostiz(ctx: Ctx): Promise<PostizStats> {
 /** Collects every source for the week that ends with `ctx.now`, each on its own. */
 export async function collectAll(ctx: Ctx): Promise<Week> {
   const week = weekOf(ctx.now);
-  const gsc = await step(ctx, 'collecte Search Console', () => collectGsc(ctx), (d) => `${d.totals7.impressions} impressions sur 7 jours`);
+  const gsc = await step(ctx, 'lecture des chiffres de Google', () => collectGsc(ctx), (d) => `${d.totals7.impressions} impressions sur 7 jours`);
   saveSnapshot(ctx, 'gsc', week, gsc);
-  const cloudflare = await step(ctx, 'collecte Cloudflare', () => collectCloudflare(ctx), (d) => `${d.visits} visites sur 7 jours`);
+  const cloudflare = await step(ctx, 'lecture des visites du site', () => collectCloudflare(ctx), (d) => `${d.visits} visites sur 7 jours`);
   saveSnapshot(ctx, 'cloudflare', week, cloudflare);
-  const metrics1 = await step(ctx, 'collecte /admin/metrics (1 semaine)', () => collectMetrics(ctx, 1));
+  const metrics1 = await step(ctx, 'lecture des compteurs du site', () => collectMetrics(ctx, 1));
   saveSnapshot(ctx, 'metrics1', week, metrics1);
-  const metrics4 = await step(ctx, 'collecte /admin/metrics (4 semaines)', () => collectMetrics(ctx, 4));
+  const metrics4 = await step(ctx, 'lecture des compteurs du site sur 4 semaines', () => collectMetrics(ctx, 4));
   saveSnapshot(ctx, 'metrics4', week, metrics4);
-  const postiz = await step(ctx, 'collecte Postiz', () => collectPostiz(ctx), (d) => `${d.posts.length} publications de la semaine lues`);
+  const postiz = await step(ctx, 'lecture des statistiques des réseaux', () => collectPostiz(ctx), (d) => `${d.posts.length} publications de la semaine lues`);
   saveSnapshot(ctx, 'postiz', week, postiz);
-  const bluesky = await step(ctx, 'collecte Bluesky', () => collectBluesky(ctx, addDays(ctx.now, -28)), (d) => `${d.posts.length} publications sur 4 semaines`);
+  const bluesky = await step(ctx, 'lecture de Bluesky', () => collectBluesky(ctx, addDays(ctx.now, -28)), (d) => `${d.posts.length} publications sur 4 semaines`);
   saveSnapshot(ctx, 'bluesky', week, bluesky);
   return { week, gsc, cloudflare, metrics1, metrics4, postiz, bluesky };
 }

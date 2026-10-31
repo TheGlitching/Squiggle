@@ -37,10 +37,10 @@ export const LINK_POLICY: Record<Network, 'required' | 'none' | 'domain'> = {
  * review reads for the rest, and any acronym is refused below.
  */
 const NAMED: RegExp[] = [
-  /\b(Le Monde|Le Point|Libération|Les Échos|L[’']Express|L[’']Obs|Le Parisien|La Croix|L[’']Humanité|Marianne|Challenges|Arte|Le Canard enchaîné|Paris Match|Valeurs actuelles|Courrier international|Sud Ouest|Ouest-France|La Dépêche|Nice-Matin|Le Dauphiné|La Voix du Nord|Le Progrès|Quotidien|Brut|Konbini|Slate|Télérama|Closer|Voici|Gala|Renaissance|Horizons|Reconquête|Ensemble|Le JDD|Le Journal du dimanche)\b/u,
-  /\b(figaro|mediapart|franceinfo|france ?info|france ?inter|france ?culture|france ?t[ée]l[ée]visions|france ?[2-5]|bfm ?tv|bfm|cnews|lci|tf1|m6|rmc|rtl|europe ?1|c8|tmc|huffpost|huffington|20 ?minutes|afp|reuters|associated press|le figaro|lib[ée]ration\.fr|youtube|tiktok|twitch)\b/iu,
-  /\b(la france insoumise|rassemblement national|front national|les r[ée]publicains|parti socialiste|parti communiste|europe [ée]cologie|les [ée]cologistes|nouveau front populaire|mouvement d[ée]mocrate|modem)\b/iu,
-  /\b(macron|le pen|m[ée]lenchon|bardella|zemmour|attal|bayrou|barnier|retailleau|darmanin|hollande|sarkozy|chirac|mitterrand|trump|biden|kamala|poutine|putin|zelensky|musk|zuckerberg|bollor[ée]|hanouna|ruffin|glucksmann|tondelier|lecornu|[ée]douard philippe|wauquiez|ciotti|p[ée]cresse|hidalgo|netanyahou|netanyahu|meloni|orb[aá]n|milei|xi jinping)\b/iu,
+  /(?<![\p{L}\p{N}])(Le Monde|Le Point|Libération|Les Échos|L[’']Express|L[’']Obs|Le Parisien|La Croix|L[’']Humanité|Marianne|Challenges|Arte|Le Canard enchaîné|Paris Match|Valeurs actuelles|Courrier international|Sud Ouest|Ouest-France|La Dépêche|Nice-Matin|Le Dauphiné|La Voix du Nord|Le Progrès|Quotidien|Brut|Konbini|Slate|Télérama|Closer|Voici|Gala|Renaissance|Horizons|Reconquête|Ensemble|Le JDD|Le Journal du dimanche)(?![\p{L}\p{N}])/u,
+  /(?<![\p{L}\p{N}])(figaro|mediapart|franceinfo|france ?info|france ?inter|france ?culture|france ?t[ée]l[ée]visions|france ?[2-5]|bfm ?tv|bfm|cnews|lci|tf1|m6|rmc|rtl|europe ?1|c8|tmc|huffpost|huffington|20 ?minutes|afp|reuters|associated press|le figaro|lib[ée]ration\.fr|youtube|tiktok|twitch)(?![\p{L}\p{N}])/iu,
+  /(?<![\p{L}\p{N}])(la france insoumise|rassemblement national|front national|les r[ée]publicains|parti socialiste|parti communiste|europe [ée]cologie|les [ée]cologistes|nouveau front populaire|mouvement d[ée]mocrate|modem)(?![\p{L}\p{N}])/iu,
+  /(?<![\p{L}\p{N}])(macron|le pen|m[ée]lenchon|bardella|zemmour|attal|bayrou|barnier|retailleau|darmanin|hollande|sarkozy|chirac|mitterrand|trump|biden|kamala|poutine|putin|zelensky|musk|zuckerberg|bollor[ée]|hanouna|ruffin|glucksmann|tondelier|lecornu|[ée]douard philippe|wauquiez|ciotti|p[ée]cresse|hidalgo|netanyahou|netanyahu|meloni|orb[aá]n|milei|xi jinping)(?![\p{L}\p{N}])/iu,
 ];
 
 /** Capitals that are not someone's acronym. */
@@ -48,8 +48,8 @@ const ALLOWED_ACRONYMS = new Set(['PDF', 'IA', 'QR']);
 
 const RATING: RegExp[] = [
   /\d+\s*\/\s*\d+/,
-  /\b(note|notes|noté|notée|notés|notées|classement|classements|palmarès)\b/iu,
-  /\b(le|la|les) (pire|pires|meilleur|meilleure|meilleurs|meilleures)\b/iu,
+  /(?<![\p{L}\p{N}])(note|notes|noté|notée|notés|notées|classement|classements|palmarès)(?![\p{L}\p{N}])/iu,
+  /(?<![\p{L}\p{N}])(le|la|les) (pire|pires|meilleur|meilleure|meilleurs|meilleures)(?![\p{L}\p{N}])/iu,
 ];
 
 /** A number as relecture_fr.py reads one: digits, thousands separators, a decimal part, a unit. */
@@ -179,7 +179,7 @@ export function contentReasons(prose: string, source: string): string[] {
     if (m) reasons.push(`note ou classement : ${m[0]}`);
   }
   if (/(^|[^\p{L}])(je(?![\p{L}])|j’)/iu.test(prose)) reasons.push('« je » : Squiggle parle sans première personne');
-  if (/\b(denis|fonteneau)\b/iu.test(prose)) reasons.push('le propriétaire n’apparaît jamais');
+  if (/(?<![\p{L}\p{N}])(denis|fonteneau)(?![\p{L}\p{N}])/iu.test(prose)) reasons.push('le propriétaire n’apparaît jamais');
   if (/[—]/.test(prose)) reasons.push('tiret cadratin');
   if (/["]/.test(prose)) reasons.push('guillemets droits');
   return reasons;
@@ -198,6 +198,11 @@ export function filterPost(input: FilterInput): FilterResult {
   const prose = text.replace(LINK, ' ');
 
   reasons.push(...contentReasons(prose, input.source));
+  // On the networks the example is shown, not announced as made up (the carousels' rule), nor passed off as real.
+  const announced = /(?<![\p{L}])(invent[ée]e?s?|fictif|fictive|fictifs|fictives|imaginaire|imaginons|imaginez)(?![\p{L}])/iu.exec(prose);
+  if (announced) reasons.push(`annonce l’exemple comme inventé : ${announced[0]}`);
+  const real = /(?<![\p{L}])(paru (hier|ce matin|cette semaine)|lu dans (la presse|un journal)|publié (hier|ce matin))(?![\p{L}])/iu.exec(prose);
+  if (real) reasons.push(`fait passer l’exemple pour réel : ${real[0]}`);
   if ((prose.match(/#[\p{L}\p{N}_]+/gu) ?? []).length > 3) reasons.push('plus de trois mots-dièse');
 
   const opening = hook(text);

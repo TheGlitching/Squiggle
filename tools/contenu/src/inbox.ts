@@ -22,9 +22,11 @@ import { addDays, fetchJson, pauseFile, type Ctx } from './context';
 import { askJson } from './llm';
 import { addDirective, addLesson, consigne } from './memory';
 import { Postiz } from './postiz';
+import { GitHub } from './github';
 import type { PostRow } from './posts';
+import type { Decision } from './report';
 
-export const MAIL_CATEGORIES = ['stop', 'reprendre', 'retirer_publication', 'eviter_sujet', 'reseau_moins', 'reseau_plus', 'lecon', 'strategie', 'autre'] as const;
+export const MAIL_CATEGORIES = ['stop', 'reprendre', 'reponse_courte', 'retirer_publication', 'eviter_sujet', 'reseau_moins', 'reseau_plus', 'lecon', 'strategie', 'autre'] as const;
 export type MailCategory = (typeof MAIL_CATEGORIES)[number];
 
 /** What the Worker stores under `reponse:<received-at>:<id>`. */
@@ -138,11 +140,85 @@ async function apply(ctx: Ctx, text: string): Promise<{ category: MailCategory; 
   }
 }
 
+
+/**
+ * The short answers the report asks for, read without a model: « retire 4 »
+ * (several numbers allowed), « oui B », « non B ». One a line; the lines they
+ * do not match are left for the model to class.
+ */
+export interface Commands {
+  retire: number[];
+  answers: Array<{ yes: boolean; letter: string }>;
+  rest: string;
+}
+
+export function parseCommands(text: string): Commands {
+  const out: Commands = { retire: [], answers: [], rest: '' };
+  const rest: string[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const retire = /^(?:retir\w*|supprim\w*|enl[eè]v\w*)\s+(?:(?:la|le|les|publications?|n°|numéros?)\s*)*((?:\d+\s*(?:,|et|&)?\s*)+)[.!]?$/iu.exec(line);
+    if (retire) {
+      out.retire.push(...(retire[1].match(/\d+/g) ?? []).map(Number));
+      continue;
+    }
+    const answer = /^(oui|non|ok|d[’']accord)\s+(?:pour\s+)?(?:la\s+)?([a-z])[.!]?$/iu.exec(line);
+    if (answer) {
+      out.answers.push({ yes: !/^non$/i.test(answer[1]), letter: answer[2].toUpperCase() });
+      continue;
+    }
+    rest.push(line);
+  }
+  out.rest = rest.join('\n');
+  return out;
+}
+
+async function applyCommands(ctx: Ctx, c: Commands): Promise<string[]> {
+  const outcomes: string[] = [];
+  for (const num of c.retire) {
+    const p = ctx.db.get<PostRow>("SELECT * FROM posts WHERE num = ? AND status IN ('programme', 'brouillon_postiz', 'propose') AND slot_at > ?", num, ctx.now.toISOString());
+    if (!p) {
+      outcomes.push(`publication ${num} introuvable, ou déjà partie`);
+      continue;
+    }
+    if (!ctx.dry && p.postiz_id) await new Postiz(ctx).delete(p.postiz_id);
+    if (!ctx.dry) ctx.db.run("UPDATE posts SET status = 'retire', reason = 'retirée à votre demande', checked_at = ? WHERE id = ?", ctx.now.toISOString(), p.id);
+    outcomes.push(`publication ${num} retirée (${p.network}, ${p.slot_at.slice(0, 10)})`);
+  }
+  const decisions = ctx.db.getKv<Decision[]>('decisions') ?? [];
+  for (const a of c.answers) {
+    const d = decisions.find((x) => x.letter === a.letter);
+    if (!d) {
+      outcomes.push(`« ${a.letter} » ne correspond à aucune décision du dernier compte rendu`);
+      continue;
+    }
+    if (d.kind === 'article') {
+      if (a.yes) outcomes.push(`${a.letter} : pour le publier, appuyez sur « Merge » sur la page de relecture`);
+      else {
+        if (!ctx.dry && d.ref) await new GitHub(ctx).close(Number(d.ref));
+        outcomes.push(`${a.letter} : contenu refusé, la proposition est fermée`);
+      }
+      continue;
+    }
+    addLesson(ctx, { origin: `décision ${a.letter}`, kind: 'strategie', text: `${a.yes ? 'Accepté' : 'Refusé'} : ${d.title}`, evidence: d.ref });
+    ctx.db.run("UPDATE lessons SET status = ? WHERE text = ?", a.yes ? 'acceptee' : 'refusee', `${a.yes ? 'Accepté' : 'Refusé'} : ${d.title}`);
+    outcomes.push(a.yes ? `${a.letter} : accepté, « ${d.title} ». Ce réglage se fait à la main dans la routine ; il est noté.` : `${a.letter} : refusé, rien ne change`);
+  }
+  return outcomes;
+}
+
 /** The daily step: every new reply, in the order it arrived. */
 export async function readOwnerMail(ctx: Ctx): Promise<number> {
   const replies = (await listReplies(ctx)).sort((a, b) => a.value.receivedAt.localeCompare(b.value.receivedAt));
   for (const { key, value } of replies) {
-    const { category, outcome } = await apply(ctx, value.text).catch((e: Error) => ({ category: 'autre' as MailCategory, outcome: `illisible : ${e.message}` }));
+    const commands = parseCommands(value.text);
+    const done = await applyCommands(ctx, commands).catch((e: Error) => [`illisible : ${e.message}`]);
+    const rest = commands.rest ? await apply(ctx, commands.rest).catch((e: Error) => ({ category: 'autre' as MailCategory, outcome: `illisible : ${e.message}` })) : null;
+    // A short answer with a word of thanks under it is a short answer.
+    const extra = rest && !(done.length && rest.category === 'autre') ? rest : null;
+    const category: MailCategory = extra?.category ?? (done.length ? 'reponse_courte' : 'autre');
+    const outcome = [...done, ...(extra ? [extra.outcome] : [])].join(' ; ') || 'lu, sans suite à donner';
     ctx.db.run(
       'INSERT INTO owner_mail (key, received_at, text, category, outcome, handled_at) VALUES (?, ?, ?, ?, ?, ?)',
       key,

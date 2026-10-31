@@ -27,6 +27,7 @@ export interface PostRow {
   pillar: Pillar;
   angle: Angle;
   source_id: string;
+  source_title: string | null;
   text: string;
   image_url: string | null;
   alt: string | null;
@@ -34,6 +35,7 @@ export interface PostRow {
   reason: string | null;
   postiz_id: string | null;
   created_at: string;
+  num: number | null;
 }
 
 /** The posts that count as being in the queue or out: what rotation and repeats are judged on. */
@@ -145,10 +147,10 @@ export async function planWeek(ctx: Ctx, monday: string, taken: ReadonlySet<stri
 }
 
 const ANGLE_BRIEF: Record<Angle, string> = {
-  exemple: 'Angle « l’exemple » : l’article inventé de la fiche en une ou deux phrases, annoncé comme inventé, puis ce qui cloche, en une phrase.',
+  exemple: 'Angle « l’exemple » : l’article de la fiche en une ou deux phrases, montré comme un passage à lire, sans dire qu’il est inventé ni le faire passer pour réel, puis ce qui cloche, en une phrase.',
   reperer: 'Angle « comment le repérer » : les signes de la fiche (champ « Comment le repérer »), tels quels ou condensés.',
   question: 'Angle « la question » : la question de la fiche, posée au lecteur, avec juste assez de l’exemple pour y répondre.',
-  long: 'Angle « texte long » : trois à six phrases, l’exemple inventé puis sa lecture, puis le lien.',
+  long: 'Angle « texte long » : trois à six phrases, l’exemple puis sa lecture, puis le lien.',
   carrousel: 'Légende d’un carrousel qui montre la fiche en images : deux ou trois phrases qui donnent envie de faire défiler, puis « Lien dans la bio ».',
   page: 'Ce que la page apporte au lecteur, en partant d’un exemple ou d’un geste qu’elle contient.',
 };
@@ -280,6 +282,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       pillar: p.pillar,
       angle: p.angle,
       source_id: p.source.id,
+      source_title: p.source.title,
       text: d.text,
       image_url: d.images.map((i) => i.url).join(' ') || null,
       alt: d.images.map((i) => i.alt).join(' | ') || null,
@@ -287,6 +290,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       reason: d.reason,
       postiz_id: null,
       created_at: new Date().toISOString(),
+      num: null,
     };
     if (d.status === 'propose' && !ctx.dry) {
       const integration = integrations.find((i) => i.identifier === p.slot.network && !i.disabled);
@@ -306,9 +310,11 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
         }
       }
     }
+    // Every post that enters the queue gets the next short number, never reused.
+    if (row.status !== 'refuse') row.num = (ctx.db.get<{ n: number | null }>('SELECT MAX(num) AS n FROM posts')?.n ?? 0) + 1;
     ctx.db.run(
-      `INSERT INTO posts (id, week, network, slot_at, pillar, angle, source_id, text, image_url, alt, status, reason, postiz_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO posts (id, week, network, slot_at, pillar, angle, source_id, source_title, text, image_url, alt, status, reason, postiz_id, created_at, num)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       row.id,
       row.week,
       row.network,
@@ -316,6 +322,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       row.pillar,
       row.angle,
       row.source_id,
+      row.source_title,
       row.text,
       row.image_url,
       row.alt,
@@ -323,6 +330,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       row.reason,
       row.postiz_id,
       row.created_at,
+      row.num,
     );
     rows.push(row);
   }

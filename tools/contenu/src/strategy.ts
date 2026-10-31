@@ -54,6 +54,12 @@ function postsOut(ctx: Pick<Ctx, 'db'>, network: Network, from: string, to: stri
   );
 }
 
+/** The average of the weeks that were collected, rounded to a tenth; null when none was. */
+function avgOf(values: Array<number | undefined>): number | null {
+  const known = values.filter((v): v is number => v !== undefined);
+  return known.length ? Math.round((known.reduce((a, b) => a + b, 0) / known.length) * 10) / 10 : null;
+}
+
 const pct = (now: number, base: number | null) => (base === null || base === 0 ? null : Math.round(((now - base) / base) * 100));
 
 export interface Facts {
@@ -63,6 +69,9 @@ export interface Facts {
   google: { impressions: number; clicks: number; position: number | null; impressionsVs4: number | null; clicksVs4: number | null } | null;
   networks: Record<Network, { visits: number; posts: number; visitsPerPost4w: number | null; followers: number | null }>;
   contentVisits: number | null;
+  /** Visits through the networks this week, and their weekly average over the four weeks before. */
+  networkVisits: { week: number; previous: number | null } | null;
+  accounts: { week: number; previous: number | null } | null;
   site: { analysesFromBlog: number; analysesFromGlossary: number; newAccounts: number; paying: number } | null;
   tests: Array<{ network: Network; kind: string; value: string; hypothesis: string; start: string; end: string; week: number; verdict: Verdict | null }>;
   weeksOfData: number;
@@ -75,10 +84,7 @@ export function computeFacts(ctx: Ctx, current: Week): Facts {
   const weeks = Array.from({ length: 12 }, (_, i) => loadWeek(ctx, day(addDays(new Date(`${current.week}T00:00:00Z`), -7 * (i + 1)))));
   const previous4 = weeks.slice(0, 4);
   const g = current.gsc;
-  const avg = (values: Array<number | undefined>) => {
-    const known = values.filter((v): v is number => v !== undefined);
-    return known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
-  };
+  const avg = avgOf;
   const weekStart = day(addDays(new Date(`${current.week}T00:00:00Z`), -7));
   const networks = Object.fromEntries(
     NETWORKS.map((n) => {
@@ -141,6 +147,8 @@ export function computeFacts(ctx: Ctx, current: Week): Facts {
         }
       : null,
     networks,
+    networkVisits: m ? { week: NETWORKS.reduce((s, n) => s + refVisits(current, n), 0), previous: avgOf(previous4.map((w) => (w.metrics1 ? NETWORKS.reduce((s, n) => s + refVisits(w, n), 0) : undefined))) } : null,
+    accounts: m ? { week: m.headline.newAccounts.count, previous: avgOf(previous4.map((w) => w.metrics1?.headline.newAccounts.count)) } : null,
     contentVisits: g && m ? g.totals7.clicks + NETWORKS.reduce((s, n) => s + refVisits(current, n), 0) : null,
     site: m
       ? {

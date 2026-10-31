@@ -16,7 +16,7 @@ import { monthlySpend } from './llm';
 import { alert, sendMail } from './mail';
 import { Postiz } from './postiz';
 import { declineFresh, reconcile, reserve, sitePaths } from './posts';
-import { parisDate, reserveDays } from './report';
+import { buildNotice, parisDate, reserveDays } from './report';
 
 /** Notifications that mean a post did not go out, or a network needs reconnecting. */
 const FAILED = /fail|error|échou|erreur|could not|impossible/i;
@@ -93,7 +93,7 @@ export async function daily(ctx: Ctx): Promise<void> {
     return `${visits} visites`;
   });
 
-  await step(ctx, 'pull requests de contenu', async () => {
+  await step(ctx, 'contenus à relire', async () => {
     const open = await new GitHub(ctx).contentPulls('open');
     const old = open.filter((p) => Date.parse(p.created_at) < addDays(ctx.now, -14).getTime());
     if (old.length >= MAX_OPEN_CONTENT_PRS) await alert(ctx, 'pr-anciennes', `${old.length} pull requests de contenu en attente`, `Elles attendent depuis plus de 14 jours, et la routine n’en ouvre plus d’ici là :\n${old.map((p) => p.html_url).join('\n')}\n\nÀ relire, ou à fermer.`);
@@ -108,7 +108,7 @@ export async function daily(ctx: Ctx): Promise<void> {
     return added.join(', ') || 'aucune';
   });
 
-  const live = await step(ctx, 'contenu de fond fusionné', () => followDeep(ctx), (l) => l.map((x) => `${x.slug} ${x.status}`).join(', ') || 'rien de nouveau');
+  const live = await step(ctx, 'contenus publiés', () => followDeep(ctx), (l) => l.map((x) => `${x.slug} ${x.status}`).join(', ') || 'rien de nouveau');
   for (const item of (live ?? []).filter((x) => x.status === 'en_ligne')) {
     if (isPaused) continue;
     const source = freshSource(item.slug, item.kind);
@@ -120,14 +120,8 @@ export async function daily(ctx: Ctx): Promise<void> {
     const rows = await step(ctx, `déclinaisons de ${item.slug}`, () => declineFresh(ctx, source), (r) => `${r.filter((p) => p.status !== 'refuse').length} programmées`);
     const accepted = (rows ?? []).filter((p) => p.status !== 'refuse');
     if (accepted.length) {
-      await sendMail(
-        ctx,
-        `Squiggle : ${source.title}, ses publications de la semaine`,
-        [
-          `« ${source.title} » est en ligne (${source.path}). Ses publications partent au plus tôt dans 48 heures ; à retirer dans Postiz si besoin, ou en répondant à cet e-mail.`,
-          ...accepted.map((p) => `\n${parisDate(p.slot_at)}, ${p.network}\n${p.text}`),
-        ].join('\n'),
-      );
+      const notice = buildNotice(source.title, source.path, accepted, ctx.dry);
+      await sendMail(ctx, notice.subject, notice.text, notice.html);
     }
   }
 }

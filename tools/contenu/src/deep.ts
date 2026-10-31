@@ -68,7 +68,7 @@ export function impressionsWithoutClicks(gsc: GscData): Subject | null {
     rule: 'impressions-sans-clic',
     kind: 'fiche',
     slug,
-    reason: `${best.row.impressions} impressions en position ${Math.round(best.row.position * 10) / 10}, ${best.row.clicks} clic sur 28 jours`,
+    reason: `la page apparaît souvent dans Google (${best.row.impressions} fois en 4 semaines, vers la ${Math.round(best.row.position)}e place) mais n’est presque jamais ouverte (${best.row.clicks} clic)`,
     queries,
   };
 }
@@ -111,20 +111,20 @@ export async function chooseSubject(ctx: Ctx, gsc: GscData | undefined): Promise
         maxTokens: 1500,
       }).catch(() => null);
       if (pick?.requete && pick.forme === 'synonyme' && pick.notion && findNotion(pick.notion) && !busy.has(pick.notion)) {
-        return { rule: 'requete-sans-page', kind: 'fiche', slug: pick.notion, reason: `requête « ${pick.requete} » sans page qui y réponde`, queries: [pick.requete] };
+        return { rule: 'requete-sans-page', kind: 'fiche', slug: pick.notion, reason: `des gens cherchent « ${pick.requete} » et tombent sur le site sans page qui y réponde`, queries: [pick.requete] };
       }
       if (pick?.requete && pick.forme === 'article' && pick.slug && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(pick.slug) && !busy.has(pick.slug) && !ARTICLE_SOURCES.some((a) => a.id === `blog/${pick.slug}`)) {
-        return { rule: 'requete-sans-page', kind: 'article', slug: pick.slug, reason: `requête « ${pick.requete} » sans page qui y réponde : ${pick.raison ?? ''}`.trim(), queries: [pick.requete] };
+        return { rule: 'requete-sans-page', kind: 'article', slug: pick.slug, reason: `des gens cherchent « ${pick.requete} » et tombent sur le site sans page qui y réponde`, queries: [pick.requete] };
       }
     }
   }
   const waiting = ctx.db.get<{ id: number; subject: string; reason: string }>('SELECT id, subject, reason FROM waitlist WHERE done = 0 ORDER BY id LIMIT 1');
   if (waiting) {
     const slug = fold(waiting.subject).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
-    if (slug && !busy.has(slug)) return { rule: 'liste-attente', kind: 'article', slug, reason: `liste d’attente : ${waiting.subject} (${waiting.reason})`, queries: [waiting.subject] };
+    if (slug && !busy.has(slug)) return { rule: 'liste-attente', kind: 'article', slug, reason: `un sujet ${waiting.reason} : « ${waiting.subject} »`, queries: [waiting.subject] };
   }
   const draft = draftsInRepo(ctx).find((slug) => !busy.has(slug));
-  if (draft) return { rule: 'brouillon', kind: 'brouillon', slug: draft, reason: `brouillon déjà dans le dépôt : web/src/blog/${draft}.brouillon.ts`, queries: [] };
+  if (draft) return { rule: 'brouillon', kind: 'brouillon', slug: draft, reason: 'un article déjà rédigé attendait d’être publié, et les chiffres ne désignent pas encore d’autre sujet', queries: [] };
   return null;
 }
 
@@ -160,6 +160,8 @@ const Enrichment = z.object({
 export interface Production {
   subject: Subject;
   title: string;
+  /** How the report names it: « la fiche « Faux dilemme » du glossaire, avec 2 exemples de plus ». */
+  label: string;
   /** Path to new text, or null to delete. */
   files: Record<string, string | null>;
   /** The text a reader will read, for the checks and the engine's analysis. */
@@ -218,6 +220,7 @@ async function produceFiche(ctx: Ctx, subject: Subject): Promise<Production> {
   return {
     subject,
     title: `Glossaire : ${exemples.length ? `${exemples.length} exemple${exemples.length > 1 ? 's' : ''} de plus` : 'des synonymes'} pour « ${n.nom} »`,
+    label: `la fiche « ${n.nom} » du glossaire, ${exemples.length ? `avec ${exemples.length} exemple${exemples.length > 1 ? 's' : ''} de plus` : 'avec les mots que les gens cherchent'}`,
     files: { 'web/src/glossaire.ts': updated },
     readable,
     preview: readable,
@@ -257,6 +260,7 @@ async function produceArticle(ctx: Ctx, subject: Subject): Promise<Production> {
   return {
     subject,
     title: `Blog : ${article.titre}`,
+    label: `l’article « ${article.titre} »`,
     files: { [`web/src/blog/${subject.slug}.ts`]: articleFile(article), 'shared/src/hosted/audience.ts': addBlogCounter(audience, subject.slug) },
     readable: source.text,
     preview: [article.titre, article.chapo].join('\n\n'),
@@ -279,6 +283,7 @@ function produceDraft(ctx: Ctx, subject: Subject): Production {
   return {
     subject,
     title: `Blog : ${titre}`,
+    label: `l’article « ${titre} »`,
     files: { [file]: null, [`web/src/blog/${subject.slug}.ts`]: text, 'shared/src/hosted/audience.ts': addBlogCounter(audience, subject.slug) },
     readable: '',
     preview: `Publication du brouillon ${file}, relu et écrit dans le dépôt.`,
@@ -332,11 +337,11 @@ export interface DeepResult {
 export async function weeklyDeep(ctx: Ctx, gsc: GscData | undefined): Promise<DeepResult> {
   const github = new GitHub(ctx);
   const open = await github.contentPulls('open');
-  if (open.length >= MAX_OPEN_CONTENT_PRS) return { subject: null, production: null, pr: null, why: `${open.length} pull requests de contenu déjà ouvertes : rien de nouveau tant qu’elles attendent` };
+  if (open.length >= MAX_OPEN_CONTENT_PRS) return { subject: null, production: null, pr: null, why: `${open.length} contenus attendent déjà votre relecture, rien de nouveau tant qu’ils attendent` };
   const subject = await chooseSubject(ctx, gsc);
-  if (!subject) return { subject: null, production: null, pr: null, why: 'aucun sujet ne passe les règles cette semaine' };
+  if (!subject) return { subject: null, production: null, pr: null, why: 'aucun sujet ne ressort assez des chiffres, et rien n’attend dans la liste des sujets' };
   const production = subject.kind === 'fiche' ? await produceFiche(ctx, subject) : subject.kind === 'article' ? await produceArticle(ctx, subject) : produceDraft(ctx, subject);
-  const findings = production.readable ? await step(ctx, 'analyse Squiggle du contenu de fond', () => selfAnalysis(ctx, production.title, production.readable), (f) => `${f.length} passages relevés`) : null;
+  const findings = production.readable ? await step(ctx, 'analyse Squiggle du contenu de la semaine', () => selfAnalysis(ctx, production.title, production.readable), (f) => `${f.length} passages relevés`) : null;
   const branch = `contenu/${subject.slug}`;
   const now = new Date().toISOString();
   let pr: DeepResult['pr'] = null;

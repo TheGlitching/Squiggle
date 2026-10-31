@@ -108,7 +108,7 @@ export async function classifyComments(ctx: Ctx): Promise<CommentRow[]> {
       ctx.db.run(
         'INSERT OR IGNORE INTO waitlist (subject, reason, origin, created_at) VALUES (?, ?, ?, ?)',
         c.sujet.trim().slice(0, 200),
-        category === 'demande_sujet' ? 'demandé en commentaire' : 'question posée en commentaire',
+        category === 'demande_sujet' ? 'demandé en commentaire' : 'posé en question en commentaire',
         row.post_ref,
         ctx.now.toISOString(),
       );

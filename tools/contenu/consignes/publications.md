@@ -6,8 +6,8 @@ L'accroche est l'exemple inventé ou la question, jamais un chiffre trouvé aill
 
 ## Les angles d'une notion du glossaire
 
-- **L'exemple** : l'article inventé de la fiche, en une ou deux phrases, annoncé comme
-  inventé, puis ce qui cloche.
+- **L'exemple** : l'article de la fiche, en une ou deux phrases, montré comme un passage
+  à lire (sans dire qu'il est inventé, sans le dire réel), puis ce qui cloche.
 - **Comment le repérer** : les signes de la fiche, tels quels ou condensés.
 - **La question** : la question de la fiche, posée au lecteur.
 - **Texte long** (Facebook) : trois à six phrases, l'exemple puis sa lecture.
@@ -27,6 +27,10 @@ décrit. Jamais de promesse au-delà de ce que dit la page.
 | X | débat public, médias | texte court sans aucun lien ni adresse ; l'image porte la page |
 
 ## Toujours
+
+- Jamais « un article inventé », « un exemple fictif », « imaginons » ni rien qui annonce
+  l'exemple comme inventé : on le montre, simplement. Jamais non plus « vu hier », « lu
+  dans la presse » ni rien qui le fasse passer pour réel.
 
 - Le lien, quand il y en a un, est recopié **exactement** tel qu'il est donné, avec
   son `?ref=`.

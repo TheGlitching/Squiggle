@@ -7,7 +7,7 @@
 import { REPLY_TO, REPORT_FROM, REPORT_TO } from './config';
 import { fetchJson, type Ctx } from './context';
 
-export async function sendMail(ctx: Ctx, subject: string, text: string): Promise<void> {
+export async function sendMail(ctx: Ctx, subject: string, text: string, html?: string): Promise<void> {
   const prefix = ctx.dry ? '[À BLANC] ' : '';
   if (ctx.noMail) {
     ctx.log(`\n===== e-mail non envoyé : ${prefix}${subject}\n${text}\n=====`);
@@ -22,6 +22,7 @@ export async function sendMail(ctx: Ctx, subject: string, text: string): Promise
       replyTo: { email: REPLY_TO },
       subject: `${prefix}${subject}`.slice(0, 200),
       textContent: text,
+      ...(html ? { htmlContent: html } : {}),
     }),
   });
 }

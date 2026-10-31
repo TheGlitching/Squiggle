@@ -8,7 +8,9 @@ Elle est **non conforme** dès qu'un de ces points est vrai :
 
 1. elle affirme quelque chose que la page source ne dit pas (un fait, un chiffre, une
    promesse sur le produit, une citation) ;
-2. elle présente un exemple inventé comme un fait réel, ou une anecdote comme vécue ;
+2. elle fait passer l'exemple pour réel (« paru hier », « lu dans la presse », un
+   média, une date ou un lieu réels), ou une anecdote pour vécue ; ou à l'inverse elle
+   annonce l'exemple comme inventé, ce que les publications ne font pas ;
 3. elle nomme ou laisse reconnaître un média, un journaliste, une personnalité, un
    parti, une marque, ou une affaire d'actualité ;
 4. elle porte un jugement sur un média ou une personne, une note, un classement ;

@@ -5,6 +5,9 @@
  * always leaves, and says which step is missing. Content pull requests are
  * followed by the daily check, which drafts their posts once they are online.
  */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { weeksToFill } from './calendar';
 import { collectAll } from './collect';
 import { gscPath } from './collect/gsc';
@@ -16,7 +19,8 @@ import { readOwnerMail } from './inbox';
 import { lessonsSince } from './memory';
 import { Postiz } from './postiz';
 import { draftMode, fillQueue, reconcile, reserve } from './posts';
-import { buildReport } from './report';
+import { buildReport, decisionsFor, type ReportInput } from './report';
+import { summarize } from './summary';
 import { classifyComments, collectComments, commentsToRead, learnFromRemovals, learnFromReplies, signals } from './replies';
 import { sendMail } from './mail';
 import { startTests, weekGuidance, writeStrategy } from './strategy';
@@ -40,14 +44,14 @@ export async function weekly(ctx: Ctx): Promise<void> {
 
   const strategy = await step(ctx, 'note de stratégie', () => writeStrategy(ctx, week, signals(ctx)), (s) => (s.problem ? `note bloquée : ${s.problem}` : 'réécrite'));
 
-  const deep = isPaused ? null : await step(ctx, 'contenu de fond', () => weeklyDeep(ctx, week.gsc), (d) => d.pr?.url ?? d.why);
+  const deep = isPaused ? null : await step(ctx, 'contenu de la semaine', () => weeklyDeep(ctx, week.gsc), (d) => d.pr?.url ?? d.why);
 
   const impressions = new Map((week.gsc?.pages28 ?? []).map((r) => [gscPath(r.keys[0]), r.impressions]));
   const weight = (id: string) => impressions.get(`/${id}`) ?? 0;
-  const entering = isPaused ? [] : ((await step(ctx, 'publications', () => fillQueue(ctx, weekGuidance(ctx), weight), (r) => `${r.filter((p) => p.status !== 'refuse').length} acceptées, ${r.filter((p) => p.status === 'refuse').length} refusées`)) ?? []);
+  const entering = isPaused ? [] : ((await step(ctx, 'rédaction des publications', () => fillQueue(ctx, weekGuidance(ctx), weight), (r) => `${r.filter((p) => p.status !== 'refuse').length} acceptées, ${r.filter((p) => p.status === 'refuse').length} refusées`)) ?? []);
   if (strategy && !isPaused) startTests(ctx, strategy.newTests, weeksToFill(ctx.now, weekOf(ctx.now))[0]);
 
-  const health = await step(ctx, 'santé', async () => {
+  const health = await step(ctx, 'état de la file et des réseaux', async () => {
     const integrations = await new Postiz(ctx).integrations();
     return {
       reserve: await reserve(ctx),
@@ -60,7 +64,7 @@ export async function weekly(ctx: Ctx): Promise<void> {
   });
   const mail = ctx.db.all<{ key: string; text: string; outcome: string }>('SELECT key, text, outcome FROM owner_mail WHERE reported = 0 ORDER BY received_at');
   const comments = ctx.db.all<Parameters<typeof buildReport>[0]['comments'][number]>("SELECT * FROM comments WHERE seen_at >= ? OR draft_status = 'propose' ORDER BY created_at", since);
-  const report = buildReport({
+  const input: ReportInput = {
     facts: strategy?.facts ?? null,
     strategy: strategy ?? null,
     deep: deep ?? null,
@@ -73,8 +77,15 @@ export async function weekly(ctx: Ctx): Promise<void> {
     steps: ctx.steps,
     now: ctx.now,
     dry: ctx.dry,
-  });
-  await sendMail(ctx, report.subject, report.text);
+  };
+  const summary = await step(ctx, 'résumé du compte rendu', () => summarize(ctx, input, decisionsFor(input)), (s) => (s ? 'écrit' : 'phrases du programme'));
+  const report = buildReport(input, summary ?? null);
+  // The report on disk too, private like the rest of the data: what was sent, as it was sent.
+  const folder = join(ctx.paths.data, 'comptes-rendus');
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, `${weekOf(ctx.now)}${ctx.dry ? '-a-blanc' : ''}.html`), report.html);
+  await sendMail(ctx, report.subject, report.text, report.html);
+  // What « oui B » refers to, until the next report.
+  ctx.db.setKv('decisions', report.decisions);
   for (const m of mail) ctx.db.run('UPDATE owner_mail SET reported = 1 WHERE key = ?', m.key);
-  ctx.db.setKv('dernier_compte_rendu', report);
 }

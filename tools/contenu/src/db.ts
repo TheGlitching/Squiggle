@@ -23,9 +23,11 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 CREATE TABLE IF NOT EXISTS posts (
   id TEXT PRIMARY KEY, week TEXT NOT NULL, network TEXT NOT NULL, slot_at TEXT NOT NULL,
-  pillar TEXT NOT NULL, angle TEXT NOT NULL, source_id TEXT NOT NULL, text TEXT NOT NULL,
+  pillar TEXT NOT NULL, angle TEXT NOT NULL, source_id TEXT NOT NULL, source_title TEXT, text TEXT NOT NULL,
   image_url TEXT, alt TEXT, status TEXT NOT NULL, reason TEXT,
-  postiz_id TEXT, created_at TEXT NOT NULL, checked_at TEXT
+  postiz_id TEXT, created_at TEXT NOT NULL, checked_at TEXT,
+  -- The short number a report shows, so the owner can answer « retire 4 ».
+  num INTEGER UNIQUE
 );
 CREATE TABLE IF NOT EXISTS media (url TEXT PRIMARY KEY, postiz_id TEXT NOT NULL, postiz_path TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS strategy (

@@ -20,7 +20,7 @@ function input(text: string, extra: Partial<FilterInput> = {}): FilterInput {
 }
 
 const GOOD =
-  'Un article inventé : « Soit on interdit le téléphone avant quinze ans, soit on accepte de sacrifier une génération. » Entre les deux, tout un éventail a disparu. Comment le repérer : squiggle.fr/glossaire/faux-dilemme?ref=bluesky';
+  'Dans cet article : « Soit on interdit le téléphone avant quinze ans, soit on accepte de sacrifier une génération. » Entre les deux, tout un éventail a disparu. Comment le repérer : squiggle.fr/glossaire/faux-dilemme?ref=bluesky';
 
 describe('filterPost', () => {
   it('accepts a post drawn from its notion, with its tracked link', () => {
@@ -69,13 +69,22 @@ describe('filterPost', () => {
     const add = (s: string) => filterPost(input(GOOD.replace('Entre les deux', `${s}. Entre les deux`))).reasons;
     expect(add('Une tribune quinze sur vingt, 15/20')).toEqual(expect.arrayContaining([expect.stringMatching(/^note ou classement/)]));
     expect(add('Le pire article de la semaine')).toContain('note ou classement : Le pire');
+    // Accented words end where \\b cannot see them.
+    expect(add('Un texte bien noté')).toContain('note ou classement : noté');
+    expect(add('Repris par Libération')).toContain('nom de média, de parti ou de personnalité : Libération');
     expect(add('Je trouve cela fragile')).toContain('« je » : Squiggle parle sans première personne');
     expect(add('J\'ai lu cela')).toContain('« je » : Squiggle parle sans première personne');
     expect(add('Une idée — fragile')).toContain('tiret cadratin');
   });
 
+  it('refuses a post that announces the example as made up, or passes it off as real', () => {
+    expect(filterPost(input(`Un article inventé. ${GOOD}`)).reasons).toContain('annonce l’exemple comme inventé : inventé');
+    expect(filterPost(input(GOOD.replace('Dans cet article', 'Un exemple fictif'))).reasons).toContain('annonce l’exemple comme inventé : fictif');
+    expect(filterPost(input(GOOD.replace('Dans cet article', 'Lu dans la presse'))).reasons).toContain('fait passer l’exemple pour réel : Lu dans la presse');
+  });
+
   it('counts Bluesky in graphemes, link included', () => {
-    const long = `${'Un exemple inventé, un passage fragile. '.repeat(7)}squiggle.fr/glossaire/faux-dilemme?ref=bluesky`;
+    const long = `${'Un exemple, un passage fragile à relire. '.repeat(7)}squiggle.fr/glossaire/faux-dilemme?ref=bluesky`;
     expect(filterPost(input(long)).reasons.some((r) => r.startsWith('trop long pour bluesky'))).toBe(true);
     expect(filterPost(input(long, { network: 'threads', text: long.replace('?ref=bluesky', '?ref=threads') })).reasons).toEqual([]);
   });
