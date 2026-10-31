@@ -37,7 +37,7 @@ export const AUDIENCE_METRIC_NAMES = [
   'entry_bookmarklet',
   'entry_shortcut',
   'entry_app_text',
-  // A shared text too short to be an article: a forwarded message, refused for now.
+  // A shared text too short to claim anything, refused.
   'entry_short_message',
   // A kind of text pasted on /analyser, counted when it is analysed.
   'paste_transcript',

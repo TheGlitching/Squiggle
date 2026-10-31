@@ -40,10 +40,13 @@ import com.google.androidbrowserhelper.trusted.TwaLauncher
  *
  * A share without a link goes straight to the site in the Trusted Web
  * Activity: a text in the address's fragment, which /analyser analyses at once
- * (or says why it cannot, for a message too short to be an article), and
+ * as a short message or an article (or says why it cannot, for a text too short
+ * to claim anything), and
  * screenshots through the site's share target (`share_target` in
  * `web/public/manifest.webmanifest`), whose service worker keeps them on the
  * phone for the page to read. A PDF is not read yet: the screen says what to do.
+ * A text that carries a link but more around it than a headline (a WhatsApp
+ * chain, a post) goes there too: it is a message, not an article to open.
  */
 class LectureActivity : Activity() {
     private lateinit var page: WebView
@@ -136,7 +139,7 @@ class LectureActivity : Activity() {
         if (type == "application/pdf") return say(R.string.no_pdf)
         val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().trim()
         val link = sharedLink(text)
-        if (link == null) {
+        if (link == null || isMessage(text)) {
             if (text.isEmpty()) return say(R.string.empty_share)
             // In the fragment, which never reaches a server, as the iPhone shortcut sends an article.
             openReport(Uri.parse("$ORIGIN/analyser#text=${Uri.encode(text)}&via=appli"))
@@ -231,8 +234,14 @@ class LectureActivity : Activity() {
         private val LINK = Regex("""https?://\S+""")
         private val YOUTUBE = Regex("""(^|\.)(youtube\.com|youtu\.be)$""")
 
+        /** Longest line a paper's app sends before its link, as `paste.ts` reads a share. */
+        private const val HEADLINE_MAX_CHARS = 200
+
         /** The link in a share: papers' apps send "headline link", YouTube a lone link. */
         fun sharedLink(text: String): Uri? = LINK.findAll(text).lastOrNull()?.let { Uri.parse(it.value) }
+
+        /** More around its link than a paper's headline: a message (a chain, a post) that carries a link. */
+        fun isMessage(text: String): Boolean = LINK.replace(text, "").trim().length >= HEADLINE_MAX_CHARS
 
         /** The files of a share: one with SEND, several with SEND_MULTIPLE. */
         @Suppress("DEPRECATION")

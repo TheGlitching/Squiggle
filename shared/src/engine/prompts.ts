@@ -1,4 +1,5 @@
 import { AnalysisInput } from './types';
+import { isShortMessage } from './message';
 import { isVideoTranscriptUrl } from './video';
 
 /**
@@ -8,7 +9,7 @@ import { isVideoTranscriptUrl } from './video';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.1.0';
+export const PROMPT_VERSION = '1.2.0';
 
 /**
  * Output ceiling of the audit, reasoning included. A reasoning model thinks
@@ -299,6 +300,7 @@ export function buildFourchesCaudinesUserPrompt(
   input: AnalysisInput,
   opts: { citedSources?: { href: string; domain: string; text: string }[]; now?: Date } = {}
 ): string {
+  if (isShortMessage(input)) return buildMessageUserPrompt(input, opts);
   const blocksFormatted = formatBlocksForPrompt(input);
   const citedSourcesSection = formatCitedSourcesSection(opts.citedSources ?? []);
   const temporalSection = formatTemporalContextSection(opts.now ?? new Date());
@@ -369,4 +371,114 @@ FORMAT JSON STRICT ATTENDU :
     }
   ]
 }`;
+}
+
+/**
+ * The audit's instructions for a short message (`message.ts`): a chain, a post,
+ * a text message, often a rumour. The article grid would judge its structure and
+ * its sourcing as a journalist's, and find a two-line rumour wanting on both for
+ * reasons that tell its reader nothing. What that reader needs is four answers:
+ * what it is about, who says it, what is known, what is missing; and the signs
+ * that usually come with a false message, named as signs, never as a verdict.
+ *
+ * The model's own knowledge is the thing most likely to mislead here: a rumour
+ * is often about something recent, local or invented, and a confident "c'est
+ * faux" from memory is exactly the unsourced assertion the reader is being
+ * taught to doubt. So the audit says nothing about truth; the main claim is
+ * handed to the research stage, whose verdict carries its sources.
+ */
+export const MESSAGE_SYSTEM_PROMPT = `Tu es le moteur d'analyse critique de Squiggle. Un lecteur te confie un MESSAGE COURT qu'il a reçu ou lu : chaîne transférée sur une messagerie, publication de réseau social, SMS, rumeur. Ce n'est pas un article de presse : tu ne juges ni sa construction, ni son style, ni son orthographe.
+Ton rôle est de dire à ce lecteur, avant qu'il le croie ou le fasse suivre, ce que vaut ce message : de quoi il parle, qui l'affirme, ce qu'on en sait, ce qui manque.
+
+DIRECTIVES ABSOLUES DE RÉPONSE :
+1. Tu t'adresses au LECTEUR qui a reçu le message, jamais à son auteur, avec un ton calme, précis et neutre. Recevoir une rumeur n'est pas une faute : aucune moquerie, aucune leçon de morale.
+2. Tu n'inventes AUCUN fait. Tu ne dis jamais qu'une affirmation est vraie ou fausse d'après tes connaissances internes : elles peuvent être périmées, et un message parle souvent d'un fait récent, local ou inventé. Une recherche web suivra ton analyse et c'est elle, sources à l'appui, qui dira ce qu'on sait de l'affirmation. Tu ne remplaces jamais un chiffre, une date ou un nom par celui que tu crois exact.
+3. Ce que tu ne peux pas vérifier, tu le dis tel quel. Pour un message, « rien dans ce texte ne permet de le vérifier » est souvent l'information la plus utile.
+4. Tu signales, chaque fois qu'ils sont PRÉSENTS dans le texte, les signes qui accompagnent d'ordinaire les fausses nouvelles :
+   - source absente, invérifiable ou anonyme (« un ami gendarme », « une infirmière de l'hôpital », « les médias n'en parlent pas ») ;
+   - urgence ou peur (« URGENT », « avant qu'il soit trop tard », menace sur la santé, l'argent, les enfants) ;
+   - appel à faire suivre (« transférez à tous vos contacts », « partagez avant que ce soit supprimé ») ;
+   - chiffre, date ou montant donné sans son origine ;
+   - autorité invoquée sans être nommée, ou nommée sans moyen de retrouver ce qu'elle aurait dit ;
+   - détail vague qui donne l'air du vécu sans pouvoir être retrouvé (« hier », « dans notre région », « à l'hôpital de la ville »).
+   Un signe n'est pas une preuve : tu le présentes comme un indice qui invite à la prudence, jamais comme la démonstration que le message est faux. Tu n'inventes jamais un signe absent du texte.
+5. Un message anodin (message personnel, rendez-vous entre proches, opinion présentée comme telle) n'a rien à vérifier : dis-le simplement, sans chercher de défaut ni de signe qui n'y est pas. Une information d'intérêt général, même pratique et sans signe d'alerte (une date officielle, une mesure, un horaire), n'est pas anodine : elle reste une affirmation à vérifier.
+6. Pour chaque finding, tu DOIS fournir une citation EXACTE et LITTÉRALE ('quote') tirée fidèlement du message (≤ 25 mots), ainsi que l'identifiant exact du bloc 'blockId' correspondant.
+7. Chaque assertion vérifiable est classée dans l'un de ces quatre états, et dans aucun autre : 'vérifiée' (une source consultée l'établit), 'non sourcée dans le texte' (elle est vérifiable mais le message ne cite rien pour l'étayer), 'douteuse' (une source consultée la contredit) ou 'non vérifiable telle qu'écrite' (elle ne peut être ni établie ni contredite, faute de preuve mobilisable). À ce stade, aucune source n'a encore été consultée.
+8. Tu produis UNIQUEMENT du JSON valide conforme au schéma fourni, sans aucun texte introductif ni markdown autour (ou dans un bloc \`\`\`json \`\`\`).`;
+
+/** The audit's user prompt for a short message: the same JSON as an article's, its fields read for a message. */
+function buildMessageUserPrompt(
+  input: AnalysisInput,
+  opts: { citedSources?: { href: string; domain: string; text: string }[]; now?: Date }
+): string {
+  const citedSourcesSection = formatCitedSourcesSection(opts.citedSources ?? []);
+  const temporalSection = formatTemporalContextSection(opts.now ?? new Date());
+
+  return `Analyse le message court suivant pour son lecteur, selon les consignes Squiggle pour les messages :
+
+${input.outlet ? `LU SUR : ${input.outlet}\n` : ''}URL : ${input.url}
+
+MESSAGE SEGMENTÉ PAR BLOCS :
+---
+${formatBlocksForPrompt(input)}
+---${citedSourcesSection}${temporalSection}
+
+SYNTHÈSE ("summary") : exactement quatre lignes, séparées par un saut de ligne, dans cet ordre et avec ces débuts :
+De quoi parle-t-on : ce que le message affirme ou demande, en une phrase neutre, sans le reprendre à ton compte.
+Qui l'affirme : la source que le message donne lui-même (personne, organisme, média), ou le fait qu'il n'en donne aucune ou une invérifiable.
+Ce qu'on en sait : ce que le texte lui-même permet d'établir (un nom, une date, un lien, ou rien), et que l'affirmation principale est soumise à la recherche présentée sous le message ; JAMAIS ce que tu crois savoir sur le sujet.
+Ce qui manque : ce qu'il faudrait pour pouvoir le croire (une source nommée, un document, une date, un lieu précis), et les signes de prudence relevés.
+Pour un message anodin, chaque ligne le dit simplement (par exemple « Ce qui manque : rien, ce message n'affirme rien d'intérêt général. »).
+
+GRILLE DE NOTATION SUR 100 POINTS, LUE POUR UN MESSAGE :
+Tu dois noter obligatoirement chacun des 5 domaines suivants :
+1. "robustesse_factuelle" (Max 35 pts) : l'affirmation est-elle précise et vérifiable (qui, quoi, quand, où), ses chiffres, dates et montants ont-ils une origine.
+2. "solidite_logique" (Max 25 pts) : la conclusion découle-t-elle de ce qui est dit (généralisation à partir d'un cas, cause supposée, « on vous cache donc c'est vrai »).
+3. "cadrage_manipulation" (Max 25 pts) : urgence, peur, appel à faire suivre, majuscules et symboles d'alerte, « les médias n'en parlent pas ».
+4. "deontologie" (Max 10 pts) : qui l'affirme : une source identifiable et retrouvable, ou une autorité anonyme, un témoin sans nom, un « copié-collé » sans origine.
+5. "orthographe_grammaire" (Max 5 pts) : ne juge PAS la langue d'un message tapé sur un téléphone : donne toujours 5.
+Un message anodin, qui n'affirme rien d'intérêt général, n'a pas de défaut à ce titre : il ne perd aucun point pour ne pas citer de source.
+
+COHÉRENCE ENTRE TA NOTE ET TES CONSTATS :
+Chaque défaut que tu relèves dans un domaine réduit mécaniquement la note de ce domaine, en proportion de sa sévérité. Tout défaut mentionné dans un "weaknesses" DOIT aussi figurer dans "findings", avec son "blockId", sa "category" et sa "severity".
+
+LES FINDINGS D'UN MESSAGE :
+- L'affirmation principale du message, s'il en porte une d'intérêt général, fait TOUJOURS l'objet d'un finding 'affirmation-non-etayee' avec son "checkableClaim" : c'est ainsi qu'une recherche web dira ce qu'on en sait. Une autre affirmation factuelle distincte et vérifiable (un chiffre, une décision, un événement) peut en recevoir un aussi ; trois au plus.
+- Chaque signe de prudence présent dans le texte est un finding : 'source-absente' pour une source absente ou anonyme, 'cadrage' pour l'urgence, la peur ou l'appel à faire suivre, 'sophisme' ou 'surinterpretation' pour un raisonnement qui ne tient pas. Son "explanation" dit pourquoi ce signe invite à la prudence, sans conclure que le message est faux.
+- Un message anodin reçoit un seul finding 'point-fort', qui dit qu'il n'y a rien à vérifier.
+
+AFFIRMATION VÉRIFIABLE ("checkableClaim") :
+Pour chaque finding 'affirmation-non-etayee', "checkableClaim" reformule ce que le message affirme en UNE phrase autonome, compréhensible sans le message, avec son contexte : qui, quoi, quand, où, quel chiffre (ex. pour « la CAF supprime les APL des retraités au 1er novembre » : "La CAF supprime les APL des retraités propriétaires à partir du 1er novembre"). Laisse-le vide ("") quand une recherche web ne peut pas trancher : témoignage privé, opinion, menace vague.
+
+FORMAT JSON STRICT ATTENDU :
+{
+  "summary": "De quoi parle-t-on : ...\\nQui l'affirme : ...\\nCe qu'on en sait : ...\\nCe qui manque : ...",
+  "scores": [
+    {
+      "domain": "cadrage_manipulation",
+      "score": 10,
+      "strengths": [],
+      "weaknesses": ["Appel à faire suivre le message à tous ses contacts"]
+    },
+    ... (pour les 5 domaines)
+  ],
+  "findings": [
+    {
+      "blockId": "block_id_exact",
+      "quote": "citation littérale exacte du message",
+      "category": "sophisme" | "affirmation-non-etayee" | "surinterpretation" | "source-absente" | "cadrage" | "point-fort",
+      "severity": 1 | 2 | 3,
+      "label": "Nom de la remarque (ex: Appel à faire suivre)",
+      "explanation": "Explication pour le lecteur en 1 à 3 phrases.",
+      "checkableClaim": "Pour 'affirmation-non-etayee' uniquement, voir AFFIRMATION VÉRIFIABLE ci-dessus ; chaîne vide sinon.",
+      "confidence": 0.95
+    }
+  ]
+}`;
+}
+
+/** The audit's system prompt for this text: a short message's own, or the article's. */
+export function auditSystemPrompt(input: Pick<AnalysisInput, 'url' | 'blocks'>): string {
+  return isShortMessage(input) ? MESSAGE_SYSTEM_PROMPT : FOURCHES_CAUDINES_SYSTEM_PROMPT;
 }

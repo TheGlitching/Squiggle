@@ -314,29 +314,35 @@ describe('the counters the server bumps itself', () => {
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
     expect(m.funnel.signin).toEqual({ link_sent: 1, google: 0, completed: 1, after_anon: 0, after_withheld: 0 });
-    expect(m.funnel.runsStarted).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0, video: 0 });
+    // BLOCKS is one sentence: a short message.
+    expect(m.funnel.runsStarted).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0, video: 0, message: TRIAL_ANALYSES });
     expect(m.funnel.finalized).toEqual({ install: TRIAL_ANALYSES, session: 0, anon: 0 });
     expect(m.funnel.refused).toMatchObject({ trial_exhausted: 1, article_too_long: 1, quota_exhausted: 0 });
     expect(m.headline.successRate).toEqual({ started: TRIAL_ANALYSES, finalized: TRIAL_ANALYSES, share: 1 });
     expect(m.headline.activeAccounts).toBe(1);
   });
 
-  it('counts a run on a video transcript, read as one from its address alone', async () => {
+  it('counts a run on a video transcript, read as one from its address alone, and one on a short message, from its length', async () => {
     const env = makeTestEnv({ adminToken: 'admin-secret' });
     const marie = await signedIn(env, 'marie@example.org');
     const video = 'https://www.youtube.com/watch?v=k1KPNO-1vJc';
-    for (const url of [video, URL_]) {
-      const run = await call(env, marie, '/v1/analyze/audit', { url, title: 'T', blocks: BLOCKS, citedSources: [] });
+    const article = [{ ...BLOCKS[0], text: 'Le chômage a baissé de 12 % en un an. '.repeat(40) }];
+    for (const [url, blocks] of [[video, BLOCKS], [URL_, article], [URL_, BLOCKS]] as const) {
+      const run = await call(env, marie, '/v1/analyze/audit', { url, title: 'T', blocks, citedSources: [] });
       expect(run.status).toBe(200);
       expect((await call(env, marie, '/v1/analyze/finalize', { runId: run.json.runId })).status).toBe(200);
     }
 
-    const prompts = env.llm.completeOptions.map((o) => o.messages.map((m) => m.content).join('\n'));
+    const prompts = env.llm.completeOptions.map((o) => [o.systemPrompt, ...o.messages.map((m) => m.content)].join('\n'));
+    // However short, a video's transcript stays one.
     expect(prompts[0]).toContain('TRANSCRIPTION D\'UNE VIDÉO');
+    expect(prompts[0]).not.toContain('MESSAGE COURT');
     expect(prompts[1]).not.toContain('TRANSCRIPTION');
+    expect(prompts[1]).not.toContain('MESSAGE COURT');
+    expect(prompts[2]).toContain('MESSAGE COURT');
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
-    expect(m.funnel.runsStarted).toEqual({ install: 2, session: 0, anon: 0, video: 1 });
+    expect(m.funnel.runsStarted).toEqual({ install: 3, session: 0, anon: 0, video: 1, message: 1 });
   });
 
   it('measures activation over the accounts that have had their whole first week', async () => {

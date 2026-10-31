@@ -55,6 +55,7 @@ const LABELS: Record<string, string> = {
   session: 'Site',
   anon: 'Site, sans compte',
   video: 'dont vidéos YouTube',
+  message: 'dont messages courts',
   // refusals
   trial_exhausted: 'Essai épuisé',
   quota_exhausted: 'Quota épuisé',

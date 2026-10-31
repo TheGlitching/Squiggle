@@ -1,6 +1,6 @@
 import {
   AUDIT_MAX_OUTPUT_TOKENS,
-  FOURCHES_CAUDINES_SYSTEM_PROMPT,
+  auditSystemPrompt,
   buildFourchesCaudinesUserPrompt,
 } from './prompts';
 import { parseAndValidateLlmOutput, reconcileResearchedFindings } from './validator';
@@ -208,7 +208,7 @@ export class AnalysisPipeline {
       // strict-JSON stream. It cannot pause mid-answer to look anything up, so
       // nothing has been researched yet at this point - only the article's own
       // hyperlinked sources and today's date are available to it.
-      const systemPrompt = FOURCHES_CAUDINES_SYSTEM_PROMPT;
+      const systemPrompt = auditSystemPrompt(analysisInput);
       const userPrompt = buildFourchesCaudinesUserPrompt(analysisInput, { citedSources, now });
 
       this.reportProgress('calling_provider', 'Audit critique en cours par le modèle IA...', 20);

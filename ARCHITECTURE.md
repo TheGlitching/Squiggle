@@ -269,6 +269,21 @@ under the address `https://www.youtube.com/watch?v=<id>`, and that address alone
 what tells the audit prompt (and the hosted counter `run_started_video`) that it is
 reading a spoken transcript (`shared/src/engine/video.ts`).
 
+### Short messages
+A text of at most 1 200 characters (`MAX_MESSAGE_CHARS`, `shared/src/engine/message.ts`)
+is a short message: a chain forwarded on a messaging app, a two-line post, a rumour. The
+audit reads it under its own instructions (`MESSAGE_SYSTEM_PROMPT`), not the article grid,
+which judges the sourcing and the structure of a long text and would mark a rumour on what
+it cannot hold. The report has the same shape; its summary answers four questions (what it
+is about, who says it, what is known, what is missing), its findings name the signs that
+usually come with a false message (no source, urgency, a call to forward, a figure without
+an origin), and its main claim always goes to research, so what is known about it carries
+sources rather than the model's memory. Like the video mode, the mode is read from the text
+itself, never from a client's flag, so the fingerprint that keys the cache also fixes the
+instructions. A video's transcript stays one however short. A message the extension read
+(a passage the reader selected, `src/content/selection.ts`, or a short social post) is never
+served by link alone: it is not the page's article.
+
 ### Background and messaging
 - **`UnifiedRuntime`** (`src/messaging/runtime.ts`) - the one place Chrome's
   `chrome.*` and Firefox's `browser.*` differences are absorbed.
