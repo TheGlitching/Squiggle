@@ -19,7 +19,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import satori, { type SatoriNode } from 'satori';
 
 import { PUBLISHED, dateLongue, type Article, type Texte } from './blog';
-import { Box, ClassFigure, GuideFigure, StepFigure, iso, squiggle } from './components/Iso';
+import { ClassFigure, GuideFigure, HeroFigure, StepFigure, squiggle } from './components/Iso';
 import { SEVERITY_COLORS } from './demo';
 import { NOTIONS, famille, typo, type Notion, type Segments } from './glossaire';
 import type { PublicPage, ShareCard } from './seo';
@@ -306,38 +306,27 @@ function words(segments: Segments): Run[][] {
  * not by looking at the image (`misfit`). Half a space on each side of a word
  * makes the space between two, so a marked passage reads as one mark per line.
  */
-function Words({ segments, style, mark = true }: { segments: Segments | string; style: CSSProperties; mark?: boolean }) {
+function Words({ segments, style }: { segments: Segments | string; style: CSSProperties }) {
   const list = words(typeof segments === 'string' ? [segments] : segments);
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -0.13em', flexShrink: 0, ...style }}>
       {list.map((word, index) => (
         <div key={index} style={{ display: 'flex' }}>
-          {word.map((run, at) => {
-            const space = {
-              paddingLeft: at === 0 ? '0.13em' : run.joined ? '0.26em' : 0,
-              paddingRight: at === word.length - 1 ? '0.13em' : 0,
-            };
-            // Unmarked, the passage keeps its place, so the glass marks it where the marked sheet does.
-            return run.marked ? (
-              <div
-                key={at}
-                data-mark=""
-                style={{
-                  display: 'flex',
-                  whiteSpace: 'nowrap',
-                  ...space,
-                  background: mark ? solid(PASSAGE.tint, color('paper')) : 'transparent',
-                  borderBottom: `3px solid ${mark ? PASSAGE.color : 'transparent'}`,
-                }}
-              >
-                {run.text}
-              </div>
-            ) : (
-              <div key={at} style={{ display: 'flex', whiteSpace: 'nowrap', ...space }}>
-                {run.text}
-              </div>
-            );
-          })}
+          {word.map((run, at) => (
+            <div
+              key={at}
+              style={{
+                display: 'flex',
+                whiteSpace: 'nowrap',
+                paddingLeft: at === 0 ? '0.13em' : run.joined ? '0.26em' : 0,
+                paddingRight: at === word.length - 1 ? '0.13em' : 0,
+                // The passage, as the glossary page marks it on its paper (`.hero-hl`).
+                ...(run.marked ? { background: solid(PASSAGE.tint, color('paper')), borderBottom: `3px solid ${PASSAGE.color}` } : {}),
+              }}
+            >
+              {run.text}
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -383,112 +372,57 @@ function misfit(nodes: SatoriNode[], area: Rect): string | null {
   return null;
 }
 
-/** The made-up article, flat on its sheet: the image an isometric face carries. */
-interface Sheet {
-  /** Satori's SVG of it, nested as is in the drawing: the passage marked, and plain for the glass to mark. */
-  marked: string;
-  plain: string;
-  width: number;
-  height: number;
-  /** The passage, one box per line, in the sheet's own pixels. */
-  marks: Rect[];
-}
-
-const SHEET_WIDTH = 860;
-
-async function sheetOf(exemple: Notion['exemple']): Promise<Sheet> {
-  const pad = 56;
-  const draw = (mark: boolean) => (
-    <div
-      style={{
-        width: SHEET_WIDTH,
-        display: 'flex',
-        flexDirection: 'column',
-        padding: `${pad - 6}px ${pad + 8}px ${pad}px`,
-        background: color('paper'),
-        color: color('paperInk'),
-        fontFamily: 'Newsreader',
-      }}
-    >
-      <Words
-        segments={`${exemple.rubrique}, un article inventé`}
-        style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 500, fontSize: 30, lineHeight: 1.3, color: color('paperMuted') }}
-      />
-      <Words
-        segments={exemple.titre}
-        mark={mark}
-        style={{ marginTop: 14, fontWeight: 600, fontSize: 54, lineHeight: 1.14, rowGap: 6, letterSpacing: -0.8 }}
-      />
-      <Words segments={exemple.texte} mark={mark} style={{ marginTop: 26, fontSize: 42, lineHeight: 1.4 }} />
+/**
+ * The made-up article on its paper, flat and facing the reader, as the glossary
+ * page shows it (`ExempleFigure`): a text meant to be read is never put in
+ * perspective. With `glass`, Squiggle's violet pane lies over it.
+ */
+function Paper({ children, glass = false, top }: { children: ReactNode; glass?: boolean; top: number }) {
+  return (
+    <div style={{ display: 'flex', position: 'relative', flexShrink: 0, marginTop: top }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flexGrow: 1,
+          padding: '40px 52px 48px',
+          borderRadius: 20,
+          borderBottom: `8px solid ${color('paperEdge')}`,
+          background: color('paper'),
+          color: color('paperInk'),
+          fontFamily: 'Newsreader',
+        }}
+      >
+        {children}
+      </div>
+      {glass ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: -16,
+            top: -16,
+            right: -16,
+            bottom: -16,
+            borderRadius: 30,
+            border: `3px solid ${color('accent')}`,
+            background: 'rgba(144, 97, 240, 0.12)',
+          }}
+        />
+      ) : null}
     </div>
   );
-  const { svg, nodes } = await layout(draw(true), { width: SHEET_WIDTH });
-  const { svg: plain } = await layout(draw(false), { width: SHEET_WIDTH });
-  const height = Number(/height="([\d.]+)"/.exec(svg)![1]);
-  const problem = misfit(nodes, { left: pad, top: 0, width: SHEET_WIDTH - 2 * pad, height });
-  if (problem) throw new Error(`the example sheet « ${exemple.rubrique} »: ${problem}`);
-  // One mark per line: the marked runs that share a line, joined.
-  const marks: Rect[] = [];
-  for (const node of nodes.filter((item) => 'data-mark' in item.props)) {
-    const last = marks.at(-1);
-    if (last && Math.abs(last.top - node.top) < 1) last.width = node.left + node.width - last.left;
-    else marks.push({ left: node.left, top: node.top, width: node.width, height: node.height });
-  }
-  return { marked: svg, plain, width: SHEET_WIDTH, height, marks };
 }
 
-/**
- * The sheet standing in isometric, its text in perspective, and, when `glass`,
- * Squiggle's violet pane laid on it with the passage marked: the
- * hero's two materials (`HeroFigure`), at a size a phone can read.
- */
-function SheetFigure({ sheet, glass }: { sheet: Sheet; glass: boolean }) {
-  const { width: W, height: H } = sheet;
-  const T = 10;
-  // Laid flat on the sheet, so each mark sits on its own words.
-  const GAP = 2;
-  const v = iso();
-  const depth = glass ? T + GAP + 4 : T;
-  const corners = [
-    v.P(0, 0, H),
-    v.P(W, 0, H),
-    v.P(W, depth, 0),
-    v.P(0, depth, 0),
-    v.P(0, depth, H),
-    v.P(W, 0, 0),
-  ];
-  const xs = corners.map(([x]) => x);
-  const ys = corners.map(([, y]) => y);
-  const pad = glass ? 24 : 4;
-  const box = [Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad];
+/** The line above the article's title, as the glossary page writes it. */
+function Rubrique({ exemple, scale }: { exemple: Notion['exemple']; scale: number }) {
   return (
-    <svg viewBox={box.map((value) => Math.round(value * 100) / 100).join(' ')}>
-      <Box v={v} at={[0, 0, 0]} size={[W, T, H]} r={4} face="iso-paper" edge="iso-paper-edge" />
-      <g transform={v.front(0, T, H)} dangerouslySetInnerHTML={{ __html: glass ? sheet.plain : sheet.marked }} />
-      {glass ? (
-        <>
-          <g transform={v.front(0, T + GAP, H)}>
-            <rect className="iso-face iso-glass" x={-16} y={-16} width={W + 32} height={H + 32} rx={10} />
-            {sheet.marks.map((mark, index) => (
-              <g key={index}>
-                <rect x={mark.left} y={mark.top} width={mark.width} height={mark.height} rx={4} fill={tintOf(0.3)} />
-                <path
-                  d={squiggle(mark.left, mark.top + mark.height - 2, mark.width, 3, 12)}
-                  fill="none"
-                  stroke={PASSAGE.color}
-                  strokeWidth={4}
-                  strokeLinecap="round"
-                />
-              </g>
-            ))}
-          </g>
-        </>
-      ) : null}
-    </svg>
+    <Words
+      segments={`${exemple.rubrique}, un article inventé`}
+      style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 500, fontSize: 30 * scale, lineHeight: 1.3, color: color('paperMuted') }}
+    />
   );
 }
 
-const tintOf = (alpha: number) => PASSAGE.tint.replace(/[\d.]+\)$/, `${alpha})`);
 
 /** What the four corners say, as a caption band in small capitals. */
 interface Corners {
@@ -673,31 +607,64 @@ function exampleOf(source: SocialSource): Notion['exemple'] {
   return bloc.exemple;
 }
 
-/** The two slides about the example: the article on its sheet, then the glass on it and what is wrong. */
-function exampleDrafts(exemple: Notion['exemple'], sheet: Sheet, corners: (index: number) => Corners): Draft[] {
+/** The passage the example marks, from its title, its text, or both. */
+const passages = (exemple: Notion['exemple']): Segments[] =>
+  [exemple.titre, exemple.texte].flatMap((segments) =>
+    segments.flatMap((part, index): Segments[] => {
+      if (typeof part === 'string') return [];
+      const [before, after] = [segments[index - 1], segments[index + 1]];
+      // Cut out of its sentence, an excerpt says so: « … veulent tout simplement chasser les voitures … ».
+      const opens = typeof before !== 'string' || /[.?!:«»]\s*$/.test(before);
+      const closes = typeof after !== 'string' || /^\s*[.?!…»]/.test(after) || /[.?!…»]$/.test(part[0]);
+      return [[opens ? '' : '… ', part, closes ? '' : ' …']];
+    }),
+  );
+
+/** The two slides about the example: the article on its paper, then the glass on its passage and what is wrong. */
+function exampleDrafts(exemple: Notion['exemple'], corners: (index: number) => Corners): Draft[] {
+  const titled = exemple.titre.some((part) => typeof part !== 'string');
   return [
     {
       alt: exampleAlt(exemple),
-      draw: (_, figure) => (
+      draw: (scale) => (
         <Frame corners={corners(1)}>
-          <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Figure figure={<SheetFigure sheet={sheet} glass={false} />} width={940 * figure} />
+          <Heading text="Sur un article d’exemple" size={64 * scale} />
+          <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}>
+            <Paper top={40 * scale}>
+              <Rubrique exemple={exemple} scale={scale} />
+              <Words
+                segments={exemple.titre}
+                style={{ marginTop: 14 * scale, fontWeight: 600, fontSize: 70 * scale, lineHeight: 1.14, rowGap: 6, letterSpacing: -0.8 }}
+              />
+              <Words segments={exemple.texte} style={{ marginTop: 26 * scale, fontSize: 58 * scale, lineHeight: 1.42 }} />
+            </Paper>
           </div>
         </Frame>
       ),
     },
     {
-      alt: `Ce qui cloche. ${exemple.lecture}`,
-      yields: true,
-      draw: (scale, figure) => (
+      alt: `Ce qui cloche. ${passages(exemple).map((passage) => `« ${plain(passage)} »`).join(' ')} ${exemple.lecture}`,
+      draw: (scale) => (
         <Frame corners={corners(2)}>
           <Heading text="Ce qui cloche" size={64 * scale} />
-          <div style={{ display: 'flex', marginTop: 28 * scale, justifyContent: 'center' }}>
-            <Figure figure={<SheetFigure sheet={sheet} glass />} width={700 * figure} />
-          </div>
+          <Paper glass top={60 * scale}>
+            <Rubrique exemple={exemple} scale={scale} />
+            {passages(exemple).map((passage, index) => (
+              <Words
+                key={index}
+                segments={passage}
+                style={{
+                  marginTop: 14 * scale,
+                  fontSize: (index === 0 && titled ? 56 : 50) * scale,
+                  fontWeight: index === 0 && titled ? 600 : 400,
+                  lineHeight: 1.4,
+                }}
+              />
+            ))}
+          </Paper>
           <Words
             segments={exemple.lecture}
-            style={{ marginTop: 36 * scale, fontFamily: 'Newsreader', fontSize: 46 * scale, lineHeight: 1.36 }}
+            style={{ marginTop: 64 * scale, fontFamily: 'Newsreader', fontSize: 50 * scale, lineHeight: 1.36 }}
           />
         </Frame>
       ),
@@ -706,10 +673,11 @@ function exampleDrafts(exemple: Notion['exemple'], sheet: Sheet, corners: (index
 }
 
 /**
- * The cover: a surtitle, the title, and the sheet under the glass, seen from
- * further away. A cover that needs room takes it from the drawing first, then from its title.
+ * The cover: a surtitle, the title, and the site's drawing of the article under
+ * Squiggle's glass, its lines drawn, not written. A cover that needs room takes
+ * it from the drawing first, then from its title.
  */
-function coverDraft({ alt, kicker, title, sheet, corners }: { alt: string; kicker: string; title: (scale: number) => ReactNode; sheet: Sheet; corners: Corners }): Draft {
+function coverDraft({ alt, kicker, title, corners }: { alt: string; kicker: string; title: (scale: number) => ReactNode; corners: Corners }): Draft {
   return {
     alt,
     yields: true,
@@ -718,15 +686,15 @@ function coverDraft({ alt, kicker, title, sheet, corners }: { alt: string; kicke
         <Words segments={kicker} style={{ fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.2, color: color('accentInk') }} />
         <div style={{ display: 'flex', flexDirection: 'column', marginTop: 34 * scale, flexShrink: 0 }}>{title(scale)}</div>
         <div style={{ display: 'flex', marginTop: 'auto', paddingTop: 40, justifyContent: 'center' }}>
-          <Figure figure={<SheetFigure sheet={sheet} glass />} width={820 * figure} />
+          <Figure figure={<HeroFigure pins={false} />} width={900 * figure} />
         </div>
       </Frame>
     ),
   };
 }
 
-/** A notion's carousel: its name, its example, what is wrong with it, how to spot it, and the classroom question. */
-function notionDrafts(item: Notion, sheet: Sheet): Draft[] {
+/** A notion's carousel: its name, its example, what is wrong with it, how to spot it, and a question for any reader to try. */
+function notionDrafts(item: Notion): Draft[] {
   const number = `Fiche ${String(NOTIONS.indexOf(item) + 1).padStart(2, '0')}`;
   const family = famille(item.famille).titre;
   const address = `squiggle.fr/glossaire/${item.slug}`;
@@ -742,10 +710,9 @@ function notionDrafts(item: Notion, sheet: Sheet): Draft[] {
       alt: `${ended(item.nom)} ${family}. Glossaire de l’esprit critique de Squiggle.`,
       kicker: family,
       title: (scale) => <Marked text={item.nom} size={Math.round(124 * scale)} />,
-      sheet,
       corners: corners(0),
     }),
-    ...exampleDrafts(item.exemple, sheet, corners),
+    ...exampleDrafts(item.exemple, corners),
     {
       alt: `Comment le repérer. ${item.reperer.join(' ')}`,
       draw: (scale) => (
@@ -756,10 +723,11 @@ function notionDrafts(item: Notion, sheet: Sheet): Draft[] {
       ),
     },
     {
-      alt: `En classe. ${item.question} ${address}`,
+      alt: `À vous de jouer. ${item.question} ${address}`,
       draw: (scale) => (
         <Frame corners={corners(4)}>
-          <Heading text="En classe" size={64 * scale} />
+          {/* The glossary's question is asked of any reader: the classroom is one audience among others. */}
+          <Heading text="À vous de jouer" size={64 * scale} />
           <Words
             segments={item.question}
             style={{ marginTop: 52 * scale, fontFamily: 'Newsreader', fontSize: 76 * scale, lineHeight: 1.22 }}
@@ -774,7 +742,7 @@ function notionDrafts(item: Notion, sheet: Sheet): Draft[] {
 const text = (run: Texte) => (typeof run === 'string' ? run : run.map((part) => (typeof part === 'string' ? part : part.texte)).join(''));
 
 /** An article's carousel: its title, its example and what is wrong with it, then each of its lists of steps. */
-function articleDrafts(item: Article, sheet: Sheet): Draft[] {
+function articleDrafts(item: Article): Draft[] {
   const steps = item.corps.flatMap((bloc, index) => {
     if (!('etapes' in bloc)) return [];
     const heading = item.corps
@@ -795,8 +763,8 @@ function articleDrafts(item: Article, sheet: Sheet): Draft[] {
     <Words segments={item.titre} style={{ fontSize: 84 * scale, fontWeight: 600, lineHeight: 1.06, letterSpacing: -2.1 * scale }} />
   );
   return [
-    coverDraft({ alt: `${ended(item.titre)} Le blog de Squiggle.`, kicker: 'Une méthode de lecture', title, sheet, corners: corners(0) }),
-    ...exampleDrafts(exampleOf(item), sheet, corners),
+    coverDraft({ alt: `${ended(item.titre)} Le blog de Squiggle.`, kicker: 'Une méthode de lecture', title, corners: corners(0) }),
+    ...exampleDrafts(exampleOf(item), corners),
     ...steps.map(
       ({ heading, points }, index): Draft => ({
         alt: `${ended(heading)} ${points.map((point, at) => `${at + 1}. ${point}`).join(' ')}${index === steps.length - 1 ? ` ${address}` : ''}`,
@@ -814,8 +782,7 @@ function articleDrafts(item: Article, sheet: Sheet): Draft[] {
 
 /** A notion's or an article's carousel, every slide at the largest size its text fits. */
 export async function socialSlides(source: SocialSource): Promise<SocialSlide[]> {
-  const sheet = await sheetOf(exampleOf(source));
-  const drafts = 'nom' in source ? notionDrafts(source, sheet) : articleDrafts(source, sheet);
+  const drafts = 'nom' in source ? notionDrafts(source) : articleDrafts(source);
   return Promise.all(
     drafts.map(async (draft, index) => ({
       alt: draft.alt,
