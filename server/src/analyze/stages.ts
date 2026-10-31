@@ -861,7 +861,7 @@ export async function analyzeFinalize(
 
   // Sanitized once, here, before it is either cached or returned: the cached
   // bytes and the bytes this reader sees are the same sanitized report.
-  const report = sanitizeReport(buildReport(state, now));
+  const report = runReport(state, now);
 
   const serialized = JSON.stringify(report);
   const sizeBytes = new TextEncoder().encode(serialized).length;
@@ -926,6 +926,11 @@ function pendingState(now: number, textHash: string): AnalysisRunState {
     researchPerformed: false,
     startedAt: now,
   };
+}
+
+/** A finalized run's report, rebuilt from its state, as `analyzeFinalize` returned it. */
+export function runReport(state: AnalysisRunState, now: number): AnalysisReport {
+  return sanitizeReport(buildReport(state, now));
 }
 
 /** Reconcile, rescore and assemble — the same arithmetic the BYOK pipeline does. */

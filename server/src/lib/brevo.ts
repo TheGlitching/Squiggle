@@ -11,6 +11,8 @@ export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
+  /** The same message as plain text, for the clients and readers that prefer it. */
+  text?: string;
   /** Extra headers, e.g. `Auto-Submitted` and `In-Reply-To` on a reply to a forwarded message. */
   headers?: Record<string, string>;
 }
@@ -56,6 +58,7 @@ export class BrevoEmailSender implements EmailSender {
         to: [{ email: message.to }],
         subject: message.subject,
         htmlContent: message.html,
+        ...(message.text ? { textContent: message.text } : {}),
         ...(message.headers ? { headers: message.headers } : {}),
       }),
     });
