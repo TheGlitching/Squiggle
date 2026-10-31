@@ -29,7 +29,7 @@ it, so CI does not rebuild it. Rebuild and commit it whenever `page.ts`,
   Safari's downloads offers to add it in Raccourcis.
 - With "Autoriser l'exécution de scripts" on, sharing a Safari article to it
   asks once to allow the site, then opens `/analyser` with the title, the text
-  and the address filled in.
+  and the address filled in, and the analysis starts on its own (`via=raccourci`).
 - Sharing several screenshots from Photos opens `/analyser` with their text, one
   capture after the other.
 - A long article (10 000 words) still arrives whole: the text travels in the

@@ -30,8 +30,13 @@ export const AUDIENCE_METRIC_NAMES = [
   'click_subscribe',
   'click_example',
   'open_in_browser',
-  // An article brought to /analyser by the bookmark "Analyser avec Squiggle".
+  // An article brought to /analyser by the bookmark "Analyser avec Squiggle",
+  // by the iPhone shortcut, and a text shared to the Android app.
   'entry_bookmarklet',
+  'entry_shortcut',
+  'entry_app_text',
+  // A shared text too short to be an article: a forwarded message, refused for now.
+  'entry_short_message',
   // A kind of text pasted on /analyser, counted when it is analysed.
   'paste_transcript',
   // Screenshots read on the device on /analyser: imported from the page or

@@ -9,6 +9,7 @@
  * global `completion`, and stops it if that is not called within its time limit.
  */
 import { ArticleExtractor } from '../../shared/src/extract/extractor';
+import { FAVORI_PARAM, SHORTCUT_VALUE } from '../src/favori/payload';
 
 declare const completion: (result: string) => void;
 
@@ -23,6 +24,8 @@ const fields = {
   title,
   text: blocks.join('\n'),
   url: article.metadata.canonicalUrl || location.href,
+  // The whole article is here: /analyser starts at once, as for the bookmark.
+  [FAVORI_PARAM]: SHORTCUT_VALUE,
 };
 
 completion(

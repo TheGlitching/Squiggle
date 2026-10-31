@@ -17,6 +17,9 @@
  */
 export const FAVORI_PARAM = 'via';
 export const FAVORI_VALUE = 'favori';
+/** `via` of the other entries that bring a whole text and start at once, counted apart: the iPhone shortcut and a text shared to the Android app. */
+export const SHORTCUT_VALUE = 'raccourci';
+export const APP_VALUE = 'appli';
 export const PAGE_PARAM = 'page';
 export const HTML_PARAM = 'html';
 /** The address of the page the bookmark read, as the reader had it. */

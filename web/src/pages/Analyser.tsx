@@ -27,7 +27,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react';
 
-import { screenshotsCounter } from '@squiggle/shared/src/hosted/audience';
+import { screenshotsCounter, type AudienceMetricName } from '@squiggle/shared/src/hosted/audience';
 
 import type { AnalysisReport, TextBlock } from '../../../shared/src/engine/types';
 import { youtubeVideoId } from '../../../shared/src/engine/video';
@@ -66,7 +66,7 @@ import {
   webAddress,
 } from '../paste';
 import { carriesPage, readFavori } from '../favori/article';
-import { FAVORI_PARAM, FAVORI_VALUE } from '../favori/payload';
+import { APP_VALUE, FAVORI_PARAM, FAVORI_VALUE, SHORTCUT_VALUE } from '../favori/payload';
 import { browserLink, currentPhoneOs, type PhoneOs } from '../phone';
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
@@ -105,8 +105,11 @@ const LOOKING_UP = 'Adresse reçue. Recherche d’un rapport déjà fait pour ce
 
 /** What to do with a link nobody has analysed with the extension yet, in one sentence. */
 function noReportFor(link: string): string {
+  // A phone's YouTube app shows the transcript but does not let it be copied: the next step is a computer.
+  if (youtubeVideoId(link) && currentPhoneOs())
+    return 'Cette vidéo n’a pas encore de rapport, et Squiggle ne lit pas encore les vidéos sur téléphone. Envoyez-vous ce lien par e-mail, puis ouvrez-le sur un ordinateur avec l’extension Squiggle : elle lit les sous-titres de la vidéo.';
   return youtubeVideoId(link)
-    ? 'Cette vidéo n’a pas encore de rapport : collez ici sa transcription (« Afficher la transcription », sous la description), ou ouvrez-la sur ordinateur avec l’extension Squiggle.'
+    ? 'Cette vidéo n’a pas encore de rapport : collez ici sa transcription (« Afficher la transcription », sous la description), ou ouvrez-la avec l’extension Squiggle.'
     : 'Cet article n’a pas encore de rapport. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
 }
 
@@ -160,6 +163,16 @@ const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un arti
 /** Where a reading of screenshots stands: `done` is null while the reader itself loads. */
 type Reading = { done: number | null; total: number };
 
+/** A text shared without a link and too short for an article: a forwarded message, which Squiggle does not analyse yet. */
+const SHORT_MESSAGE = `Ce message est trop court pour être analysé : Squiggle analyse des articles, de ${MIN_TEXT_CHARS} caractères au moins. S’il cite un article, partagez plutôt l’article vers Squiggle.`;
+
+/** The entries that bring a whole text and start its analysis without a tap, by their `via`, with their counter. */
+const AUTO_ENTRIES = new Map<string | null, AudienceMetricName>([
+  [FAVORI_VALUE, 'entry_bookmarklet'],
+  [SHORTCUT_VALUE, 'entry_shortcut'],
+  [APP_VALUE, 'entry_app_text'],
+]);
+
 /** The bookmark's analysis, from the moment the page opens. */
 const AUTO_START: Progress = { message: 'Analyse lancée automatiquement…', percent: 2 };
 
@@ -171,12 +184,14 @@ function initialArticle(): {
   article: PastedArticle;
   shared: Partial<PastedArticle> | null;
   favori: boolean;
+  /** The counter of the entry the page opened with, if it is one that is counted. */
+  entry?: AudienceMetricName;
   page?: URLSearchParams;
 } {
   const draft = loadDraft();
   if (typeof window === 'undefined') return { article: draft, shared: null, favori: false };
   const params = sharedParams(window.location);
-  if (carriesPage(params)) return { article: EMPTY_ARTICLE, shared: null, favori: true, page: params };
+  if (carriesPage(params)) return { article: EMPTY_ARTICLE, shared: null, favori: true, entry: 'entry_bookmarklet', page: params };
   const shared = articleFromShare(params);
   if (!shared) return { article: draft, shared: null, favori: false };
   // A shared text replaces the draft; a shared address alone keeps the draft's text,
@@ -186,11 +201,33 @@ function initialArticle(): {
     shared.text || otherArticle
       ? { ...EMPTY_ARTICLE, ...shared }
       : { ...draft, title: shared.title || draft.title, source: shared.source || draft.source };
-  return { article: article as PastedArticle, shared, favori: Boolean(shared.text) && params.get(FAVORI_PARAM) === FAVORI_VALUE };
+  if (shared.text && !shared.source && pasteProblem(article as PastedArticle) === 'too_short') {
+    return { article: article as PastedArticle, shared, favori: false, entry: 'entry_short_message' };
+  }
+  const entry = shared.text ? AUTO_ENTRIES.get(params.get(FAVORI_PARAM)) : undefined;
+  return { article: article as PastedArticle, shared, favori: Boolean(entry), entry };
 }
 
+/**
+ * The Android app opens a share on /analyser#text=… in the app's tab, which
+ * may already show this page: then only the fragment changes. The page starts
+ * over, and reads it as it reads any share.
+ */
 export function Analyser() {
-  const [{ article: start, shared, favori, page }] = useState(initialArticle);
+  const [visit, setVisit] = useState(0);
+  useEffect(() => {
+    const reread = () => {
+      const params = sharedParams(window.location);
+      if (carriesPage(params) || articleFromShare(params)) setVisit((n) => n + 1);
+    };
+    window.addEventListener('hashchange', reread);
+    return () => window.removeEventListener('hashchange', reread);
+  }, []);
+  return <AnalyserPage key={visit} />;
+}
+
+function AnalyserPage() {
+  const [{ article: start, shared, favori, entry, page }] = useState(initialArticle);
   /** The bookmark's article is analysed as soon as it is read and the account says it can be. */
   const [autoRun, setAutoRun] = useState(favori && !page);
   /** Cleared by a cancel that comes while the bookmark's page is still being read. */
@@ -210,7 +247,13 @@ export function Analyser() {
   // A link shared alone is looked up first: someone may already have analysed it with the extension.
   const [notice, setNotice] = useState<string | null>(() =>
     // Shared screenshots bring their own text.
-    shared && !shared.text && !sharedCount ? (shared.source ? LOOKING_UP : ADDRESS_ONLY) : paymentNotice(),
+    entry === 'entry_short_message'
+      ? SHORT_MESSAGE
+      : shared && !shared.text && !sharedCount
+        ? shared.source
+          ? LOOKING_UP
+          : ADDRESS_ONLY
+        : paymentNotice(),
   );
   const [showProblem, setShowProblem] = useState(false);
   const [reading, setReading] = useState<Reading | null>(null);
@@ -222,7 +265,7 @@ export function Analyser() {
   // The shared text is in the form now; it does not stay in the address bar or the history.
   useEffect(() => {
     if (window.location.search || window.location.hash) window.history.replaceState(window.history.state, '', '/analyser');
-    if (favori) count('entry_bookmarklet');
+    if (entry) count(entry);
     // Once, as the page opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
