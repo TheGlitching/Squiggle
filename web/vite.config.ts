@@ -347,7 +347,7 @@ function prerender(): Plugin {
         appType: 'custom',
       });
       try {
-        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, redirects, render, shareImage, shareImagePath, sitemap, titleFor } =
+        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, SOCIAL_SOURCES, appHeadFor, feed, headFor, pageSources, redirects, render, shareImage, shareImagePath, sitemap, socialPath, socialSlides, titleFor } =
           (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
         const pages: string[] = [];
         const write = (file: string, content: string | Buffer) => {
@@ -366,6 +366,13 @@ function prerender(): Plugin {
         for (const item of PUBLIC_PAGES) {
           write(pageFile(item.path), page(headFor(item), rendered(item.path), item.path));
           if (item.share) write(shareImagePath(item).slice(1), await shareImage(item));
+        }
+        // The social carousels, fetched by their address when a post is scheduled; `slides.json` gives each image its text.
+        for (const source of SOCIAL_SOURCES) {
+          const dir = socialPath(source).slice(1);
+          const slides = await socialSlides(source);
+          slides.forEach((slide, index) => write(`${dir}/${index + 1}.png`, slide.png));
+          write(`${dir}/slides.json`, JSON.stringify(slides.map((slide, index) => ({ image: `/${dir}/${index + 1}.png`, alt: slide.alt })), null, 2));
         }
         // The pricing anchor is the home page, under its own address.
         write(pageFile('/tarifs'), page(headFor(PUBLIC_PAGES[0]), rendered('/tarifs')));
