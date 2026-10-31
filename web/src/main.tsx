@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 
-import { App, READER_STATE_PAGES } from './App';
+import { App, rendersReaderState } from './App';
 import { countCampaign } from './count';
 import './index.css';
 
@@ -19,7 +19,7 @@ const app = (
 // its nodes rather than paint them again, so the first paint is the page's largest one.
 // A page whose first render is the reader's own is rendered afresh over the build's copy,
 // as is any other page, from an empty root.
-if (root.hasChildNodes() && !READER_STATE_PAGES.includes(location.pathname)) hydrateRoot(root, app);
+if (root.hasChildNodes() && !rendersReaderState(location.pathname)) hydrateRoot(root, app);
 else createRoot(root).render(app);
 
 // The installed app's shell (manifest.webmanifest). Production only: a dev

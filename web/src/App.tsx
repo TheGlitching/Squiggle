@@ -6,7 +6,7 @@ import { Layout } from './components/Layout';
 import { ModeEmploiPage } from './components/ModeEmploi';
 import { navigate, usePath } from './router';
 import { Accueil } from './pages/Accueil';
-import { Analyser } from './pages/Analyser';
+import { Analyser, analyserReadsReader } from './pages/Analyser';
 import { Classe } from './pages/Classe';
 import { Compte } from './pages/Compte';
 import { Connexion } from './pages/Connexion';
@@ -59,9 +59,20 @@ function NotFound() {
 /**
  * The public pages whose first render reads the reader's browser: the draft on
  * `/analyser`, the class session on `/classe`, the step reached on `/favori`. The build
- * cannot know them, so these are rendered afresh rather than hydrated (`src/main.tsx`).
+ * cannot know them, so these are rendered afresh rather than hydrated (`src/main.tsx`)
+ * when the reader has one. `/analyser` says whether they do: a reader who has none, as
+ * on a first visit, gets the build's page, and its title stays the node first painted.
  */
-export const READER_STATE_PAGES: readonly string[] = ['/analyser', '/classe', '/favori'];
+const READER_STATE_PAGES: Record<string, () => boolean> = {
+  '/analyser': analyserReadsReader,
+  '/classe': () => true,
+  '/favori': () => true,
+};
+
+/** Whether this reader's first render of `path` is their own, not the build's. Read in a browser only. */
+export function rendersReaderState(path: string): boolean {
+  return READER_STATE_PAGES[path]?.() ?? false;
+}
 
 /** `path` is given only by the build, which renders each public page outside a browser (`src/prerender.tsx`). */
 export function App({ path: at }: { path?: string }) {
