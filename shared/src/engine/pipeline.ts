@@ -285,6 +285,8 @@ export class AnalysisPipeline {
       });
       const resolvedClaims = sourceVerification.claims;
 
+      // The same last stage the hosted run reports, so both engines show it.
+      this.reportProgress('scoring', 'Synthèse et calcul de la note...', 97);
       const { findings, withdrawn } = reconcileResearchedFindings(auditedReport.findings, resolvedClaims);
 
       // Recompute the composite score against the findings the reader will

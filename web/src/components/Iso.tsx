@@ -558,7 +558,8 @@ export type RunStep = 'lecture' | 'recherche' | 'verification' | 'rapport';
  * stage under way. The article and Squiggle's sheet stay put from one stage to
  * the next; only what the stage does moves. Nothing in it is a result: the
  * marks and the ring are the drawings the home page explains, not this text's.
- * Without motion, each stage is a still.
+ * Without motion, each stage is a still. The extension's panel draws the same
+ * scene (`src/ui/components/RunScene.tsx`); change the two together.
  */
 export function RunScene({ step }: { step: RunStep }) {
   const v = iso(140, 40);

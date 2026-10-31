@@ -35,7 +35,8 @@ import type { AnalysisMode } from '../crypto/storage';
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
 import { reportSubject, SCORE_DOMAINS, youtubeVideoId } from '@squiggle/shared';
 import type { VideoReport } from '../video/youtube';
-import type { AnalysisResult, Finding, ScoreDomainKey } from '@squiggle/shared';
+import type { AnalysisResult, Finding, PipelineStage, ScoreDomainKey } from '@squiggle/shared';
+import { RunProgress } from '../ui/components/RunScene';
 
 /**
  * The sidepanel is the integration point of the whole extension. It previously
@@ -50,6 +51,8 @@ interface ProgressState {
   status: Status;
   message: string;
   progress: number;
+  /** The engine's own stage, which the loading scene draws. */
+  stage?: PipelineStage;
   /** Cumulative human-readable steps of the run, for the live activity feed. */
   notes: string[];
 }
@@ -217,6 +220,7 @@ function SidepanelApp() {
             video?: VideoReport;
             error?: string;
             currentStep?: string;
+            stage?: PipelineStage;
             progress?: number;
           } | null;
         };
@@ -230,6 +234,7 @@ function SidepanelApp() {
             status: state.status,
             message: state.currentStep ?? '',
             progress: state.progress ?? 0,
+            stage: state.stage,
             notes: [],
           });
         }
@@ -352,7 +357,14 @@ function SidepanelApp() {
   useEffect(() => {
     const isTrackedTab = (payloadTabId: number) => payloadTabId === currentTabIdRef.current;
 
-    const offProgress = bus.on<{ tabId: number; status: string; message: string; progress: number; notes?: string[] }>(
+    const offProgress = bus.on<{
+      tabId: number;
+      status: string;
+      stage?: PipelineStage;
+      message: string;
+      progress: number;
+      notes?: string[];
+    }>(
       'ANALYSIS_PROGRESS',
       (payload) => {
         if (!isTrackedTab(payload.tabId)) return;
@@ -360,6 +372,7 @@ function SidepanelApp() {
           status: (payload.status === 'completed' ? 'complete' : payload.status) as Status,
           message: payload.message ?? '',
           progress: payload.progress ?? 0,
+          stage: payload.stage,
           notes: payload.notes ?? [],
         });
       }
@@ -558,6 +571,7 @@ function SidepanelApp() {
   );
 
   const busy = progress.status === 'extracting' || progress.status === 'analyzing';
+  const feed = progress.notes.at(-1) === progress.message ? progress.notes.slice(0, -1) : progress.notes;
   const hosted = mode === 'hosted';
   const hostedView = hosted && hostedAccount ? describeHostedAccount(hostedAccount) : null;
   const hostedCanAnalyse = hostedView?.canAnalyse ?? false;
@@ -717,27 +731,20 @@ function SidepanelApp() {
         )}
 
         {busy && (
-          <div className="space-y-2" role="status" aria-live="polite">
-            <div className="space-y-1.5">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                <div
-                  className="h-full rounded-full bg-accent transition-all duration-300"
-                  style={{ width: `${Math.max(progress.progress, 4)}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted">{progress.message}</p>
-            </div>
+          <div className="space-y-2">
+            <RunProgress stage={progress.stage} message={progress.message} />
 
             {/* Live feed: what the research agent is doing right now, so a long
                 run never looks stuck. Each line is one step the engine already
-                took; the most recent sits at the bottom, newest-last. */}
-            {progress.notes.length > 0 && (
+                took; the most recent sits at the bottom, newest-last, unless it
+                is the line the current stage already shows. */}
+            {feed.length > 0 && (
               <ol className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-line bg-panel p-3">
-                {progress.notes.map((note, idx) => (
+                {feed.map((note, idx) => (
                   <li
                     key={`${idx}-${note}`}
                     className={
-                      idx === progress.notes.length - 1
+                      idx === feed.length - 1 && feed === progress.notes
                         ? 'flex gap-1.5 items-start text-xs font-medium text-ink'
                         : 'flex gap-1.5 items-start text-xs text-faint'
                     }
