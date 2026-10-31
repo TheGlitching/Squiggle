@@ -260,6 +260,34 @@ function firstPaintReady(
 }
 
 /**
+ * What the site's pages may load, for `_headers`. Every script is our own, but for
+ * Cloudflare Web Analytics' beacon, and every inline one is allowed by its hash: the
+ * build writes them (the first-paint loader, the stale-page guard, `index.html`'s two)
+ * and no reader's text ever becomes one. pdf.js and the OCR compile WebAssembly, and
+ * the OCR starts its worker from a blob. Styles stay inline-able: the page's stylesheet
+ * is written into it, and a rendered element carries its severity tint as a `style`.
+ * The API is this origin; Stripe and Google sign-in are pages the reader is sent to,
+ * not resources a page loads.
+ */
+function contentSecurityPolicy(pages: readonly string[]): string {
+  const inline = new Set(pages.flatMap((html) => [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1])));
+  const hashes = [...inline].map((script) => `'sha256-${createHash('sha256').update(script).digest('base64')}'`);
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com ${hashes.sort().join(' ')}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "connect-src 'self' https://cloudflareinsights.com",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
+/**
  * The date of the last commit touching any of `files` (relative to `web/`), or nothing
  * when the history is not there to say it: outside a git checkout, or a file not yet
  * committed. A shallow clone dates every page to its one commit, which only CI builds.
@@ -321,7 +349,9 @@ function prerender(): Plugin {
       try {
         const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pageSources, redirects, render, shareImage, shareImagePath, sitemap, titleFor } =
           (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
+        const pages: string[] = [];
         const write = (file: string, content: string | Buffer) => {
+          if (file.endsWith('.html')) pages.push(content.toString());
           // `/classe/mode-emploi` lives in `classe/`, beside `classe.html`.
           mkdirSync(new URL('.', dist(file)), { recursive: true });
           writeFileSync(dist(file), content);
@@ -349,6 +379,9 @@ function prerender(): Plugin {
         writeFileSync(dist('sitemap.xml'), sitemap(dated));
         writeFileSync(dist('_redirects'), redirects());
         if (BLOG_OPEN) write(FEED_PATH.slice(1), feed());
+        const headers = readFileSync(dist('_headers'), 'utf8');
+        if (!headers.includes('__CONTENT_SECURITY_POLICY__')) this.error('_headers no longer has the content policy this plugin fills in');
+        writeFileSync(dist('_headers'), headers.replace('__CONTENT_SECURITY_POLICY__', contentSecurityPolicy(pages)));
       } finally {
         await server.close();
       }

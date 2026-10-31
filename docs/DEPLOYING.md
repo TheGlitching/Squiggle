@@ -189,9 +189,9 @@ the edge, it was fetched during the first paint, and PageSpeed counted it as hol
 paint back. So the site is set up in the dashboard as *Enable with JS Snippet
 installation* (Web Analytics, the site, *Manage site*), never *Enable*, which injects it
 a second time and counts every visit twice. The token is the one in the snippet that
-setting shows; it is not committed, it is given to the build. The site has no
-Content-Security-Policy, so nothing has to allow `static.cloudflareinsights.com` or
-`cloudflareinsights.com`; one added later must.
+setting shows; it is not committed, it is given to the build. The site's
+Content-Security-Policy (`web/public/_headers`, completed by the build) allows the script
+from `static.cloudflareinsights.com` and its reports to `cloudflareinsights.com`.
 
 `headline` gathers the five figures to read every week; ask with `?weeks=1` to read them
 over the last week. Revenue is read in Stripe, net of discounts: `subscriptions.active`
