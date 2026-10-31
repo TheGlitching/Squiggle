@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { FAMILLES, NOTIONS } from '../src/glossaire';
 import { OWNER_PATH } from '../src/api';
+import { BLOG_PATH } from '../src/blog';
 import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, appHeadFor, headFor, pageSources, redirects, shareImagePath, sitemap, titleFor } from '../src/seo';
 import { installFetch } from './helpers';
 
@@ -48,7 +49,10 @@ describe('search engines and link previews', () => {
     ];
     expect(types.map((item) => item['@type'])).toEqual(['Organization', 'WebSite', 'SoftwareApplication']);
     expect(types[2].offers?.map((offer) => offer.price)).toEqual(['0', '4.99']);
-    for (const page of PUBLIC_PAGES.slice(1)) expect(headFor(page)).not.toContain('Organization');
+    // A blog article names Squiggle as its author and publisher, as its Article schema requires.
+    for (const page of PUBLIC_PAGES.slice(1).filter((item) => !item.path.startsWith(`${BLOG_PATH}/`)))
+      expect(headFor(page)).not.toContain('Organization');
+    for (const page of PUBLIC_PAGES.slice(1)) expect(headFor(page)).not.toContain('SoftwareApplication');
     for (const page of PUBLIC_PAGES.filter((item) => !item.jsonLd).slice(1)) expect(headFor(page)).not.toContain('ld+json');
     expect(PUBLIC_PAGES.map(headFor).join('')).not.toContain('FAQPage');
   });
