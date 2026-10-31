@@ -816,7 +816,9 @@ describe('the anonymous-witness case (franceinfo, smartphone prices)', () => {
   });
 
   it('asks the audit for the checkable claim, and the research prompts to search the claim, not the quote', () => {
-    expect(buildFourchesCaudinesUserPrompt(article, { now: pinnedNow })).toMatch(/"checkableClaim"[\s\S]*témoignage anonyme/);
+    // Long enough to be read as the article it is, not as a short message.
+    const long = { ...article, blocks: [...article.blocks, { id: 'pad', type: 'paragraph' as const, text: 'Suite. '.repeat(200), charStart: 0 }] };
+    expect(buildFourchesCaudinesUserPrompt(long, { now: pinnedNow })).toMatch(/"checkableClaim"[\s\S]*témoignage anonyme/);
     expect(RESEARCH_AGENT_SYSTEM_PROMPT).toMatch(/jamais la seule citation exacte/);
     expect(FOURCHES_CAUDINES_CLAIM_GROUNDED_JUDGEMENT_SYSTEM_PROMPT).toMatch(/jamais la seule citation exacte/);
   });

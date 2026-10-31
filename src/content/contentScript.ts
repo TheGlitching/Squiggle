@@ -10,6 +10,7 @@
 
 import { ArticleExtractor } from '../../shared/src/extract/extractor';
 import { detectSocialPlatform } from './socialPlatform';
+import { selectedMessage } from './selection';
 import { SocialExtractor } from './socialExtractor';
 import { RangeTracker } from './rangeTracker';
 import { ShadowHighlightOverlay } from './shadowOverlay';
@@ -61,11 +62,12 @@ export class ContentScriptController {
    * thread (an X status page) is assembled by the platform thread extractor,
    * which reads the same article shape the rest of the pipeline expects;
    * anything else falls back to the semantic article extractor, or to it when
-   * the thread rendered no readable posts.
+   * the thread rendered no readable posts. A message the reader selected
+   * (`selection.ts`) comes before both.
    */
   public detectAndExtract(): ExtractedArticle {
-    let article: ExtractedArticle | null = null;
-    if (this.url) {
+    let article = selectedMessage(this.doc.getSelection?.()?.toString() ?? '', this.url);
+    if (!article && this.url) {
       const match = detectSocialPlatform(this.hostOf(this.url), this.pathOf(this.url));
       if (match) {
         if (!this.socialExtractor) {

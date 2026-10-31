@@ -67,7 +67,9 @@ describe('pasteProblem', () => {
   });
 
   it('stops a paste the server would refuse, or that is no article at all', () => {
-    expect(pasteProblem({ title: '', source: '', text: 'https://presse.example/a' })).toBe('too_short');
+    expect(pasteProblem({ title: '', source: '', text: 'Trop court.' })).toBe('too_short');
+    // Long enough for a message, but an address says nothing, and nothing fetches it.
+    expect(pasteProblem({ title: '', source: '', text: 'https://presse.example/a' })).toBe('only_address');
     expect(pasteProblem({ title: '', source: '', text: 'x'.repeat(MAX_ARTICLE_CHARS + 1) })).toBe('too_long');
     // The title is part of what the server counts.
     expect(pasteProblem({ title: '', source: '', text: 'x'.repeat(MAX_ARTICLE_CHARS) })).toBeNull();
@@ -112,12 +114,12 @@ describe('articleFromShare', () => {
     });
   });
 
-  it('keeps a short text shared without a link as the text: it is a message, not a headline', () => {
-    expect(share({ text: 'La CAF supprime les APL. Transférez !' })).toEqual({
-      title: '',
-      source: '',
-      text: 'La CAF supprime les APL. Transférez !',
-    });
+  it('reads a one-line text shared without a link as the message itself, not a title', () => {
+    // A forwarded WhatsApp chain or a post: the words are what the reader wants checked.
+    const rumour = 'URGENT ⚠️ à partir du 1er novembre la CAF supprime les APL pour les retraités propriétaires. Transférez à tous vos contacts !';
+    const shared = share({ text: rumour })!;
+    expect(shared).toEqual({ title: '', source: '', text: rumour });
+    expect(pasteProblem({ title: '', source: '', ...shared, text: shared.text! })).toBeNull();
   });
 
   it('drops a shared address that is not a web page', () => {

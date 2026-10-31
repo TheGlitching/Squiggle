@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SecureKeyStorage } from '../src/crypto/storage';
 import { BackgroundServiceWorker } from '../src/background';
 import { DEMO_FOURCHES_CAUDINES_REPORT } from '@squiggle/shared';
+import { selectedMessage } from '../src/content/selection';
 
 /**
  * The question this answers: when a key is configured, does clicking analyse
@@ -14,7 +15,8 @@ describe('analysis with a configured key', () => {
   const ARTICLE =
     'Le gouvernement affirme que la dette baissera dès 2027, sans citer aucune source chiffrée, ' +
     'et attribue à ses opposants une position qu’ils n’ont jamais défendue. ' +
-    'Cette assertion repose sur une corrélation présentée comme une causalité. '.repeat(12);
+    // Past a short message's length, so it is read as the article it is.
+    'Cette assertion repose sur une corrélation présentée comme une causalité. '.repeat(20);
 
   let shared: Record<string, unknown>;
   let requests: Array<{ url: string; body: string }>;
@@ -117,6 +119,28 @@ describe('analysis with a configured key', () => {
     expect(res.success).toBe(true);
     expect(res.result?.summary).toBe('Verdict portant sur l’article réellement transmis.');
     expect(res.result?.meta.model).not.toContain('démonstration');
+  });
+
+  it('analyses a message the reader selected as one, where a page that short would be refused', async () => {
+    const rumour = 'URGENT : à partir du 1er novembre la CAF supprime les APL des retraités. Transférez à tous vos contacts !';
+    const page = { ...selectedMessage(rumour, 'https://www.facebook.com/groups/1/posts/2')! };
+    const extracting = (article: unknown) =>
+      vi.fn((_t: number, message: { type: string }, cb?: (r?: unknown) => void) =>
+        cb?.(message.type === 'FC_EXTRACT_CONTENT' ? { success: true, data: article } : { success: true })
+      );
+    const chrome = (globalThis as unknown as { chrome: { tabs: { sendMessage: unknown } } }).chrome;
+
+    chrome.tabs.sendMessage = extracting(page);
+    const res = await new BackgroundServiceWorker().runAnalysisForTab(TAB);
+    expect(res.success).toBe(true);
+    expect(requests[0].body).toContain('MESSAGE COURT');
+    expect(requests[0].body).toContain('supprime les APL des retraités');
+
+    // The same few words read as a page's article are a paywall's teaser, and refused.
+    chrome.tabs.sendMessage = extracting({ ...page, detectionMethod: 'semantic-article' });
+    const teaser = await new BackgroundServiceWorker().runAnalysisForTab(TAB);
+    expect(teaser.success).toBe(false);
+    expect(teaser.error).toMatch(/réservé aux abonnés/);
   });
 
   it('surfaces a provider failure instead of substituting a report', async () => {

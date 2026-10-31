@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, type CSSProperties } from 'react';
 
-import { getScoreBandLabel } from '../../../shared/src/engine/bands';
+import { getScoreBandLabel, reportSubject } from '../../../shared/src/engine/bands';
 import { FLAG_REASONS, flagCounters } from '../../../shared/src/hosted/audience';
 import type { AnalysisReport, EvidenceSource, Finding, TextBlock } from '../../../shared/src/engine/types';
 import {
@@ -391,7 +391,7 @@ export function Rapport({
     return { findings, findingAt };
   }, [blocks, segments, report.findings, times]);
 
-  const band = getScoreBandLabel(report.scoreBand);
+  const band = getScoreBandLabel(report.scoreBand, reportSubject(report, Boolean(times)));
   const bandTone = severityColor(SCORE_BANDS[report.scoreBand].tone);
   const select = (finding: Finding) => setSelected(finding.id);
   const withdrawn = report.research.withdrawn ?? [];
@@ -417,7 +417,7 @@ export function Rapport({
             {band.title}
           </p>
           <p className="mt-1 mb-0 text-base text-muted">{band.description}</p>
-          <p className="mt-5 mb-0 max-w-[55ch] text-lg leading-relaxed">{report.summary}</p>
+          <p className="mt-5 mb-0 max-w-[55ch] whitespace-pre-line text-lg leading-relaxed">{report.summary}</p>
         </div>
 
         <div>

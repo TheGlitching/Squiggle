@@ -57,7 +57,8 @@ export interface ExtractedArticle {
     | 'semantic-article'
     | 'text-density'
     | 'readability-fallback'
-    | 'social-thread';
+    | 'social-thread'
+    | 'selection';
   extractionConfidence: number; // 0.0 - 1.0
   rootContainerSelector: string;
   citedSources: CitedSource[];

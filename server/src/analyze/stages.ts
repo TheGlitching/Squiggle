@@ -44,10 +44,11 @@ import {
   articleTextHash,
   articleTooLongMessage,
   AUDIT_MAX_OUTPUT_TOKENS,
+  auditSystemPrompt,
   buildFourchesCaudinesUserPrompt,
   computeFourchesCaudinesScore,
-  FOURCHES_CAUDINES_SYSTEM_PROMPT,
   isResearchableFinding,
+  isShortMessage,
   isVideoTranscriptUrl,
   MAX_ARTICLE_CHARS,
   parseAndValidateLlmOutput,
@@ -339,6 +340,8 @@ export async function analyzeAudit(
   }
   await count(s, `run_started_${s.surface}`);
   if (isVideoTranscriptUrl(canonical)) await count(s, 'run_started_video');
+  const message = isShortMessage({ url: canonical, blocks: payload.blocks });
+  if (message) await count(s, 'run_started_message');
 
   // The run row is opened BEFORE the audit call, not after it. The audit takes
   // 5-25 seconds, and a row written afterwards leaves that whole window with
@@ -394,7 +397,7 @@ export async function analyzeAudit(
     await count(s, 'audit');
     try {
       completion = await client.complete({
-        systemPrompt: FOURCHES_CAUDINES_SYSTEM_PROMPT,
+        systemPrompt: auditSystemPrompt(input),
         messages: [
           {
             role: 'user',
@@ -455,8 +458,10 @@ export async function analyzeAudit(
     // declared: this is the key the finished report will be filed under.
     textHash,
     // Only the extension reads the page itself; the site's text is whatever
-    // the reader pasted, so its report is never served by link alone.
-    readByExtension: s.surface === 'install',
+    // the reader pasted, so its report is never served by link alone. Nor is a
+    // short message the extension read: it is a passage the reader selected, a
+    // post among others on the page, never the page's own article.
+    readByExtension: s.surface === 'install' && !message,
     auditDurationMs: audited.meta.durationMs,
     textLengthChars: audited.meta.textLengthChars ?? 0,
     blocksCount: audited.meta.blocksCount ?? payload.blocks.length,
