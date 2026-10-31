@@ -272,6 +272,10 @@ export function Cgv() {
 const PROCESSING = [
   ['Créer et faire fonctionner votre compte (connexion, sessions, extension connectée)', 'Exécution du contrat (art. 6.1.b)'],
   ['Produire l’analyse demandée et tenir le quota de l’abonnement', 'Exécution du contrat (art. 6.1.b)'],
+  [
+    'Analyser un e-mail que vous transférez à verifier@squiggle.fr depuis l’adresse de votre compte, et vous répondre',
+    'Exécution du contrat (art. 6.1.b)',
+  ],
   ['Encaisser l’abonnement et tenir le journal d’usage, preuve de ce qui a été fourni', 'Exécution du contrat (art. 6.1.b)'],
   ['Conserver les pièces de facturation', 'Obligation légale (art. 6.1.c)'],
   ['Protéger le service contre les abus : limites de fréquence, signature des requêtes, journaux techniques', 'Intérêt légitime (art. 6.1.f) : la sécurité du service'],
@@ -298,7 +302,7 @@ const TRANSFERS = [
     'États-Unis',
     'Engagements d’OpenRouter envers ses fournisseurs ; seules les requêtes de recherche sont transmises, jamais l’article ni une identité',
   ],
-  ['Cloudflare, Inc. (hébergement, mesure d’audience)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
+  ['Cloudflare, Inc. (hébergement, réception des e-mails transférés, mesure d’audience)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Stripe (paiement)', 'Irlande, et États-Unis pour Stripe, Inc.', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Google (connexion, si vous la choisissez)', 'États-Unis', 'Data Privacy Framework UE-États-Unis'],
   [
@@ -306,7 +310,7 @@ const TRANSFERS = [
     'Allemagne (Francfort) pour les données, États-Unis pour la société',
     'Clauses contractuelles types, dans l’accord de traitement de Neon',
   ],
-  ['Brevo (e-mails de connexion)', 'France', 'Aucun transfert hors UE'],
+  ['Brevo (e-mails de connexion, réponses aux e-mails transférés)', 'France', 'Aucun transfert hors UE'],
 ] as const;
 
 function Table({ head, rows }: { head: readonly string[]; rows: readonly (readonly string[])[] }) {

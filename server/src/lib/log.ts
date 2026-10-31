@@ -37,7 +37,11 @@ export interface LogFields {
     | 'install_revoked'
     | 'stripe_email_sync_failed'
     | 'stripe_teacher_end_failed'
-    | 'metric_failed';
+    | 'metric_failed'
+    // A message to the forwarding address, with its outcome as `code` (`mail/inbound.ts`).
+    | 'mail_received'
+    // The report's reply to one, sent from the queue; `code: 'failed'` when the analysis was not.
+    | 'mail_replied';
   requestId: string;
   method?: string;
   /** The route pattern, never the query string (which carries the article URL). */

@@ -42,7 +42,7 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | Secret | What it is |
    |---|---|
    | `DATABASE_URL` | Neon connection string of the environment |
-   | `BREVO_API_KEY` | key of the Brevo account that sends the sign-in emails |
+   | `BREVO_API_KEY` | key of the Brevo account that sends the sign-in emails and the forwarding address's replies |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the Google OAuth client |
    | `OPENROUTER_API_KEY` | the key hosted analyses run on |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
@@ -69,6 +69,39 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    `<origin>/conditions`), the Stripe webhook
    endpoint `<origin>/webhooks/stripe` (see [stripe-webhook.md](stripe-webhook.md)), and
    the sender address of `BREVO_FROM_ADDRESS` verified in Brevo.
+
+6. **The queue the forwarding address finishes its analyses on**, created once, before
+   the first deploy that carries it (a deploy whose queue does not exist is refused by
+   wrangler):
+
+   ```bash
+   npx wrangler queues create squiggle-mail-in-production
+   ```
+
+   (`squiggle-mail-in-staging` for staging). Its producer and consumer are declared in
+   `server/wrangler.jsonc`.
+
+## The forwarding address
+
+A reader forwards an e-mail to `verifier@squiggle.fr` and gets the report's summary and
+link back by e-mail (`server/src/mail/inbound.ts`). Cloudflare Email Routing hands the
+message to the Worker's `email()` handler; the audit runs there, the research and the
+reply run from the queue above, and the reply is sent through Brevo from
+`BREVO_FROM_ADDRESS`. Only a verified account's address is answered, and only when
+Cloudflare authenticated it; everything else is dropped without a reply.
+
+The address is a routing rule on the `squiggle.fr` zone, set in the dashboard, once the
+queue exists and a deploy carrying `email()` is live:
+
+1. Email > Email Routing > Routing rules > **Create address**.
+2. Custom address `verifier`, action **Send to a Worker**, destination
+   `squiggle-server-production`. Save.
+3. Leave every other rule as it is: `contact@squiggle.fr` keeps its own route.
+
+Check it by forwarding an article from an account's address: the reply arrives within
+two or three minutes, and the Worker's logs show one `mail_received` line with
+`code: "queued"`, then one `mail_replied`. A message from any other address shows
+`code: "unknown_sender"` and gets nothing. To turn it off, disable the rule.
 
 ## Staging is optional
 

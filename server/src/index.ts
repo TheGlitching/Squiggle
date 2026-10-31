@@ -52,6 +52,10 @@
  *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
+ *
+ * Besides HTTP, the Worker receives the mail Cloudflare Email Routing hands it
+ * for the forwarding address (`email()`, `mail/inbound.ts`) and runs the rest
+ * of those analyses from a queue (`queue()`).
  */
 import { neon } from '@neondatabase/serverless';
 import {
@@ -121,6 +125,7 @@ import { HOSTED_ANALYSIS, isAudienceMetricName, sha256Hex } from '@squiggle/shar
 import { migrate, type SqlQuery } from './migrations';
 import { collectLaunchMetrics, countMetric } from './metrics';
 import { secureEquals } from './lib/secureCompare';
+import { MAIL_JOB_ATTEMPTS, receiveEmail, runMailJob, type MailJob, type MailQueue } from './mail/inbound';
 
 export interface Env {
   // Non-secret (wrangler.jsonc vars)
@@ -165,6 +170,8 @@ export interface Env {
   GEMINI_API_KEY?: string;
   /** Non-secret: the exact Gemini model id, used only for the `gemini` selection. */
   GEMINI_MODEL?: string;
+  /** The queue a forwarded message's analysis finishes on (`wrangler.jsonc` `queues`). */
+  MAIL_QUEUE: Queue<MailJob>;
 }
 
 export interface Services {
@@ -191,6 +198,8 @@ export interface Services {
   stripe?: StripeConfig;
   /** Apply pending migrations; only present in the live (Neon) deployment. */
   runMigrations?: (now: number) => Promise<string[]>;
+  /** Where a forwarded message's research and reply are queued (`mail/inbound.ts`). */
+  mailQueue?: MailQueue;
 }
 
 /** The deployment settings the provider gateway reads. */
@@ -989,6 +998,11 @@ function servicesFromEnv(env: Env): Services {
       teacherCouponId: env.STRIPE_TEACHER_COUPON_ID,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     },
+    mailQueue: {
+      send: async (job) => {
+        await env.MAIL_QUEUE.send(job);
+      },
+    },
     runMigrations: (now) => {
       const q: SqlQuery = {
         query: (text, params) =>
@@ -998,6 +1012,20 @@ function servicesFromEnv(env: Env): Services {
     },
   };
   return live;
+}
+
+/** What the forwarding address needs of the services. */
+export function mailServicesOf(s: Services) {
+  return {
+    db: s.db,
+    clock: s.clock,
+    email: s.email,
+    webAppOrigin: s.webAppOrigin,
+    llm: s.llm,
+    promptVersion: s.promptVersion ?? PROMPT_VERSION,
+    fetchImpl: s.fetchImpl as typeof fetch | undefined,
+    mailQueue: s.mailQueue,
+  };
 }
 
 /**
@@ -1024,4 +1052,27 @@ export default {
   scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): void {
     ctx.waitUntil(runScheduled(servicesFromEnv(env), event.cron));
   },
-} satisfies ExportedHandler<Env>;
+  async email(message: ForwardableEmailMessage, env: Env): Promise<void> {
+    try {
+      await receiveEmail(mailServicesOf(servicesFromEnv(env)), message);
+    } catch {
+      // As in `handle`, the thrown value is never logged: it can carry the
+      // message's text. The SMTP refusal tells the sender's server to bounce it,
+      // so the reader learns it did not go through.
+      logEvent({ event: 'unhandled_error', requestId: newRequestId(), path: 'email' });
+      message.setReject('Squiggle n’a pas pu traiter ce message. Réessayez plus tard.');
+    }
+  },
+  async queue(batch: MessageBatch<MailJob>, env: Env): Promise<void> {
+    const s = mailServicesOf(servicesFromEnv(env));
+    for (const message of batch.messages) {
+      try {
+        await runMailJob(s, message.body, { lastAttempt: message.attempts >= MAIL_JOB_ATTEMPTS });
+        message.ack();
+      } catch {
+        // The thrown value is never logged, as in `handle`: it can carry article text.
+        message.retry({ delaySeconds: 60 });
+      }
+    }
+  },
+} satisfies ExportedHandler<Env, MailJob>;

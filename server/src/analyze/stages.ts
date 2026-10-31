@@ -150,10 +150,10 @@ export interface AnalyzeServices {
   requestId: string;
   /**
    * Who is asking: the extension (`install`), the web app on an account
-   * (`session`), or a visitor on the web app without one (`anon`). Counted,
-   * never stored with the run.
+   * (`session`), a visitor on the web app without one (`anon`), or a message
+   * forwarded to the e-mail address (`email`). Counted, never stored with the run.
    */
-  surface: 'install' | 'session' | 'anon';
+  surface: 'install' | 'session' | 'anon' | 'email';
 }
 
 /**

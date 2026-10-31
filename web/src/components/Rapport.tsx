@@ -353,18 +353,22 @@ export function Rapport({
   report,
   blocks,
   times = null,
-  byLink = false,
+  textElsewhere,
   signUp = '/connexion',
 }: {
   report: AnalysisReport;
   blocks: TextBlock[];
   /** For a video transcript, where each passage starts in each block, by block id. */
   times?: Record<string, Start[]> | null;
-  /** Found by its link alone: there is no text here to annotate, only the report and its short quotes. */
-  byLink?: boolean;
+  /**
+   * The text is not on this page, so there is nothing to annotate: the report
+   * was found by its link alone (`link`), or made from a forwarded e-mail (`mail`).
+   */
+  textElsewhere?: 'link' | 'mail';
   /** Where a visitor's report with findings kept back sends them to open an account. */
   signUp?: string;
 }) {
+  const byLink = textElsewhere !== undefined;
   const [selected, setSelected] = useState<string | null>(null);
   const { segments, located } = useMemo(() => locateFindings(blocks, report.findings), [blocks, report.findings]);
 
@@ -552,9 +556,11 @@ export function Rapport({
         {/* The model behind an analysis changes over time; the page names the method, not the model. */}
         Analyse effectuée par Squiggle, consignes v{report.meta.promptVersion}
         {analysedOn ? `, le ${analysedOn}` : ''}.{' '}
-        {byLink
+        {textElsewhere === 'link'
           ? 'Elle porte sur le texte que l’extension a lu sur la page, ou sur les sous-titres d’une vidéo ; Squiggle n’a pas consulté ce lien.'
-          : 'Elle porte sur le texte collé : l’adresse source, si vous en avez donné une, n’a pas été consultée.'}
+          : textElsewhere === 'mail'
+            ? 'Elle porte sur le texte de l’e-mail que vous avez transféré ; Squiggle n’a suivi aucun de ses liens.'
+            : 'Elle porte sur le texte collé : l’adresse source, si vous en avez donné une, n’a pas été consultée.'}
       </p>
     </div>
   );
