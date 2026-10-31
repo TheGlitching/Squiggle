@@ -723,11 +723,14 @@ function articleDrafts(item: Article): Draft[] {
   const total = 3 + steps.length;
   const address = `squiggle.fr/blog/${item.slug}`;
   const page = (index: number) => `${index + 1}/${total}`;
-  const title = (scale: number) => (
-    <Words segments={item.titre} style={{ fontSize: 84 * scale, fontWeight: 600, lineHeight: 1.06, letterSpacing: -2.1 * scale }} />
-  );
   return [
-    coverDraft({ alt: `${ended(item.titre)} Une méthode de lecture.`, slug: item.slug, kicker: 'Une méthode de lecture', title }),
+    // Set like a notion's name, so the article's cover sits in the same series; the alternative text keeps the whole title.
+    coverDraft({
+      alt: `${ended(item.titre)} Une méthode de lecture.`,
+      slug: item.slug,
+      kicker: 'Une méthode de lecture',
+      title: (scale) => <Marked text={item.titreCourt} size={Math.round(124 * scale)} />,
+    }),
     ...exampleDrafts(exampleOf(item), page),
     ...steps.map(
       ({ heading, points }, index): Draft => ({

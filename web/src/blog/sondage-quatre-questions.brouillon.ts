@@ -3,6 +3,7 @@ import type { Article } from '../blog';
 const article: Article = {
   slug: 'sondage-quatre-questions',
   titre: 'Un sondage dans un article : les quatre questions à poser',
+  titreCourt: 'Un sondage dans un article',
   description:
     'Un pourcentage en titre, et l’article bâti dessus. Qui a posé la question, à qui, laquelle, et que dit vraiment la réponse ? Une méthode en quatre questions.',
   chapo:

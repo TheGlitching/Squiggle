@@ -11,7 +11,7 @@
 import type { ReactElement, ReactNode } from 'react';
 
 import { SEVERITY_COLORS } from '../demo';
-import { Box, HeroFigure, iso, squiggle } from './Iso';
+import { Box, HeroFigure, iso } from './Iso';
 
 /** The amber of a warning passage: on a cover, the thing the notion is about. */
 export const AMBER = SEVERITY_COLORS.warning.color;
@@ -417,18 +417,22 @@ const SCENES: Record<string, () => ReactNode> = {
       </>
     );
   },
-  // A small scene under the lens, and the large conclusion drawn from it.
-  'conclusion-hative': () => (
-    <>
-      <B at={[20, -90, 0]} size={[70, 70, 110]} m={WARN} r={4} />
-      <Pawn at={[-70, 20]} s={0.8} />
-      <Pawn at={[-46, 40]} s={0.8} />
-      <Lens at={[-58, 30, 60]} r={32} />
-      <On plane="top" at={[-20, -20, 0]}>
-        <path d={squiggle(0, 0, 40, 4, 10)} fill="none" stroke="var(--color-accent)" strokeWidth={3} />
-      </On>
-    </>
-  ),
+  // A small fact, and a leap over every step in between to a towering conclusion.
+  'conclusion-hative': () => {
+    // Laid along the slab's diagonal, so the steps stand side by side and none hides another.
+    const [[ax, ay], [bx, by]] = [v.P(-72, 72, 24), v.P(70, -70, 140)];
+    return (
+      <>
+        <B at={[-84, 60, 0]} size={[24, 24, 24]} m={PAPER} />
+        {[50, 80, 110].map((h, i) => (
+          <B key={h} at={[-50 + i * 34, 26 - i * 34, 0]} size={[24, 24, h]} m={GHOST} r={2} />
+        ))}
+        <B at={[50, -90, 0]} size={[40, 40, 140]} m={WARN} r={4} />
+        <path d={`M ${ax} ${ay - 8} C ${ax + 20} ${ay - 200} ${bx - 60} ${by - 120} ${bx} ${by - 14}`} fill="none" stroke="var(--color-accent)" strokeWidth={4} strokeDasharray="8 7" strokeLinecap="round" />
+        <path d={`M ${bx - 14} ${by - 28} L ${bx} ${by - 12} L ${bx + 10} ${by - 32}`} fill="none" stroke="var(--color-accent)" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    );
+  },
 };
 
 /** A notion's or an article's cover scene, or the hero's drawing for one that has none yet. */
