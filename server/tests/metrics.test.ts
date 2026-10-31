@@ -276,6 +276,8 @@ describe('POST /web/count', () => {
     expect((await countRequest(env, 'ref_clemi')).status).toBe(204);
     expect((await countRequest(env, 'ref_clemi')).status).toBe(204);
     expect((await countRequest(env, 'ref_bluesky')).status).toBe(204);
+    expect((await countRequest(env, 'ref_lel')).status).toBe(204);
+    expect((await countRequest(env, 'ref_createur12')).status).toBe(204);
     expect((await countRequest(env, 'click_install_firefox')).status).toBe(204);
     expect((await countRequest(env, 'paste_transcript')).status).toBe(204);
 
@@ -291,7 +293,7 @@ describe('POST /web/count', () => {
 
     const m = (await metrics(env, '?weeks=1')).body.metrics;
     expect(Object.keys(m.audience)).toEqual(['campaigns', 'clicks', 'pastes', 'blog', 'flags']);
-    expect(m.audience.campaigns).toMatchObject({ clemi: 2, linuxfr: 0, bluesky: 1, linkedin: 0 });
+    expect(m.audience.campaigns).toMatchObject({ clemi: 2, linuxfr: 0, bluesky: 1, linkedin: 0, lel: 1, presse: 0, createur12: 1 });
     expect(m.audience.clicks).toMatchObject({ install_firefox: 1, install_chrome: 0 });
     expect(m.audience.pastes).toEqual({ transcript: 1 });
     expect(m.funnel.checkout).toEqual({ started: 0, paid: 0, free: 0 });
