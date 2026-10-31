@@ -74,14 +74,19 @@ describe('stories', () => {
     }
   }, 180_000);
 
-  it('hooks with the example’s own title, word for word', async () => {
+  it('shows the example itself, title and text word for word, then names the trap', async () => {
     const item = NOTIONS[0];
-    const title = item.exemple.titre.map((part) => (typeof part === 'string' ? part : part[0])).join('');
-    expect((await socialStory(item)).alt).toContain(title);
+    const plain = (segments: typeof item.exemple.titre) => segments.map((part) => (typeof part === 'string' ? part : part[0])).join('');
+    const { alt } = await socialStory(item);
+    expect(alt).toContain(plain(item.exemple.titre));
+    expect(alt).toContain(plain(item.exemple.texte));
+    expect(alt).toContain(`La réponse : ${item.nom}`);
   });
 
   it('refuses a hook that would not fit rather than cut it', async () => {
     const word = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, titre: ['Anticonstitutionnellementanticonstitutionnellement'] } };
     await expect(socialStory(word)).rejects.toThrow(/leaves its area/);
+    const long = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, texte: [NOTIONS[0].exemple.lecture.repeat(4)] } };
+    await expect(socialStory(long)).rejects.toThrow(/does not fit at any size a phone can read/);
   });
 });

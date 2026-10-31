@@ -602,10 +602,11 @@ function exampleDrafts(exemple: Notion['exemple'], page: (index: number) => stri
   const titled = exemple.titre.some((part) => typeof part !== 'string');
   return [
     {
-      alt: `Lisez ceci. Quelque chose vous gêne ? ${exampleAlt(exemple)}`,
+      alt: `Lisez ceci. Un détail vous gêne ? ${exampleAlt(exemple)}`,
       draw: (scale) => (
         <Frame page={page(1)}>
-          <Heading text="Lisez ceci. Quelque chose vous gêne ?" size={64 * scale} />
+          {/* Not « Quelque chose » : Bricolage's Q trails a tail that reads, that large, as an underline. */}
+          <Heading text="Lisez ceci. Un détail vous gêne ?" size={64 * scale} />
           <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}>
             <Paper top={40 * scale}>
               <Words
@@ -760,39 +761,44 @@ export async function socialSlides(source: SocialSource): Promise<SocialSlide[]>
 
 /**
  * The story that goes with a post on Instagram and Facebook: 1080 x 1920 (9:16),
- * the carousel's cover and a hook to read, the same frame, fonts and overflow
- * check. Instagram lays its own bar over the top and its reply field over the
- * bottom of a story, so nothing is drawn there.
+ * understood alone in three seconds, without the carousel. A question; the
+ * made-up article itself, title and text, on its paper like a press cutting;
+ * then the answer, the notion's name marked as a passage, and where to read
+ * the explanation. The notion's drawing stays, small. The same frame, fonts and
+ * overflow check as the slides; nothing is drawn where Instagram lays its own
+ * bar (top) and reply field (bottom).
  */
 export const STORY_HEIGHT = 1920;
-const STORY_INSET = 300;
+const STORY_INSET = 260;
 
 /** Where the build writes a story: `/og/social/faux-dilemme/story.png`, with `story.json` for its text. */
 export const storyPath = (source: SocialSource) => `${socialPath(source)}/story.png`;
 
 export async function socialStory(source: SocialSource): Promise<SocialSlide> {
   const notion = 'nom' in source;
-  const kicker = notion ? 'Un piège à repérer quand on lit' : 'Une méthode de lecture';
   const name = notion ? source.nom : source.titreCourt;
   const exemple = exampleOf(source);
   const address = `squiggle.fr/${notion ? 'glossaire' : 'blog'}/${source.slug}`;
   const draft: Draft = {
-    alt: `${ended(name)} ${kicker}. Lisez ceci : ${ended(plain(exemple.titre))} ${address}, lien dans la bio.`,
+    alt: `Où est le piège ? ${exampleAlt(exemple)} La réponse : ${ended(name)} L’explication : ${address}, lien dans la bio.`,
     yields: true,
     draw: (scale, figure) => (
       <Frame page="" height={STORY_HEIGHT} inset={STORY_INSET}>
-        <Words segments={kicker} style={{ fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.2, color: color('accentInk') }} />
-        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 30 * scale, flexShrink: 0 }}>
-          <Marked text={name} size={Math.round(112 * scale)} />
+        <div style={{ display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+          <Figure figure={<CoverFigure slug={source.slug} />} width={420 * figure} />
         </div>
-        <div style={{ display: 'flex', marginTop: 36 * scale, justifyContent: 'center' }}>
-          <Figure figure={<CoverFigure slug={source.slug} />} width={760 * figure} />
-        </div>
-        <Heading text="Lisez ceci. Quelque chose vous gêne ?" size={46 * scale} />
-        <Paper top={24 * scale}>
-          <Words segments={exemple.titre} mark={false} style={{ fontWeight: 600, fontSize: 60 * scale, lineHeight: 1.16, letterSpacing: -0.6 }} />
+        <Heading text="Où est le piège ?" size={72 * scale} />
+        <Paper top={30 * scale}>
+          <Words segments={exemple.rubrique} mark={false} style={{ fontFamily: 'Bricolage Grotesque', fontSize: 30 * scale, fontWeight: 600, letterSpacing: 2, color: color('paperMuted') }} />
+          <Words segments={exemple.titre} mark={false} style={{ marginTop: 14 * scale, fontWeight: 600, fontSize: 54 * scale, lineHeight: 1.14, letterSpacing: -0.6 }} />
+          <Words segments={exemple.texte} mark={false} style={{ marginTop: 20 * scale, fontSize: 44 * scale, lineHeight: 1.38 }} />
         </Paper>
-        <Signature address={address} size={38 * scale} />
+        <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, marginTop: 'auto', paddingTop: 40 * scale, gap: 18 * scale }}>
+          <Words segments="La réponse :" style={{ fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.2, color: color('accentInk') }} />
+          <Marked text={name} size={Math.round(88 * scale)} />
+          <Words segments="L’explication en lien dans la bio" style={{ marginTop: 10 * scale, fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.25 }} />
+          <Words segments={address} style={{ fontSize: 32 * scale, fontWeight: 500, lineHeight: 1.25, color: color('muted') }} />
+        </div>
       </Frame>
     ),
   };
