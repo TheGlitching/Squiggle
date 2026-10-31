@@ -83,8 +83,8 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
 
 ## The forwarding address
 
-A reader forwards an e-mail to `verifier@squiggle.fr` and gets the report's summary and
-link back by e-mail (`server/src/mail/inbound.ts`). Cloudflare Email Routing hands the
+A reader forwards an e-mail to `verifier@squiggle.fr` and gets the report's essentials and
+link back by e-mail (`server/src/mail/inbound.ts`, rendered by `server/src/mail/reply.ts`). Cloudflare Email Routing hands the
 message to the Worker's `email()` handler; the audit runs there, the research and the
 reply run from the queue above, and the reply is sent through Brevo from
 `BREVO_FROM_ADDRESS`. Only a verified account's address is answered, and only when

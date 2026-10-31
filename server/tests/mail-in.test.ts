@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { articleTextHash, plainTextBlocks } from '@squiggle/shared';
+import { articleTextHash, plainTextBlocks, type AnalysisReport } from '@squiggle/shared';
 
 import { magicLogin, makeTestEnv, StubLlm, type TestEnv } from './helpers';
 import { mailServicesOf } from '../src/index';
@@ -25,6 +25,7 @@ import {
   type MailJob,
 } from '../src/mail/inbound';
 import { firstLink, forwardedArticle } from '../src/mail/forwarded';
+import { renderMailHtml, renderMailText } from '../src/mail/reply';
 import { sanitizeNext } from '../src/auth/next';
 
 const READER = 'marie.dupont@gmail.com';
@@ -197,6 +198,9 @@ describe('a reader’s forward', () => {
     // the same blocks a paste of that text on the site gives.
     const fingerprint = await articleTextHash(await analysedBlocks());
     expect(reply.html).toContain(`href="https://squiggle.fr/analyser?rapport=${fingerprint}"`);
+    // The plain-text part says the same, with the link spelled out.
+    expect(reply.text).toMatch(/^RAPPORT SQUIGGLE\nEmploi : la baisse\n\n\d+\/100 - /);
+    expect(reply.text).toContain(`Voir le rapport complet : https://squiggle.fr/analyser?rapport=${fingerprint}`);
 
     // The report is filed and opens on the reader's session, at no credit.
     const { sessionCookie } = await magicLogin(env, READER);
@@ -407,5 +411,41 @@ describe('the reply’s link', () => {
     const s = { ...mailServicesOf(env.services), llm: undefined };
     expect(await receiveEmail(s, inbound(gmailForward()))).toBe('unconfigured');
     expect(env.email.sent).toHaveLength(1);
+  });
+});
+
+describe('the reply’s body', () => {
+  const report = (summary: string, textLengthChars: number) =>
+    ({
+      score: 58,
+      scoreBand: 'problematique',
+      summary,
+      findings: [
+        { id: 'f1', category: 'cadrage', severity: 1, label: 'Mot chargé', quote: 'un désastre', explanation: 'Le mot juge.' },
+        { id: 'f2', category: 'affirmation-non-etayee', severity: 3, label: 'Chiffre sans source', quote: '<b>12 %</b>', explanation: 'D’où ?' },
+        { id: 'f3', category: 'point-fort', severity: 1, label: 'Citation attribuée', quote: '', explanation: 'La ministre est nommée.' },
+      ],
+      claims: [{ verification: 'douteuse' }],
+      research: { performed: true, queries: [], withdrawn: [] },
+      meta: { textLengthChars },
+    }) as unknown as AnalysisReport;
+
+  it('puts the most severe passage first, escapes what the article wrote, and keeps the strength apart', () => {
+    const content = { heading: 'Emploi', report: report('Synthèse.', 5000) };
+    const html = renderMailHtml(content);
+    expect(html).toContain('&#60;b&#62;12 %&#60;/b&#62;');
+    expect(html).not.toContain('<b>12 %');
+    expect(html.indexOf('Chiffre sans source')).toBeLessThan(html.indexOf('Mot chargé'));
+    expect(html.indexOf('Mot chargé')).toBeLessThan(html.indexOf('Citation attribuée'));
+    expect(renderMailText(content)).toContain('58/100 - Article problématique\n');
+    expect(renderMailText(content)).toContain('Affirmations : 1 douteuse.');
+  });
+
+  it('reads a short message’s four lines as four answers', () => {
+    const summary = "De quoi parle-t-on : un rappel.\nQui l'affirme : personne.\nCe qu'on en sait : rien.\nCe qui manque : une source.";
+    const content = { heading: 'Chaîne', report: report(summary, 300) };
+    expect(renderMailText(content)).toContain('58/100 - Message problématique\n');
+    expect(renderMailText(content)).toContain('Qui l’affirme : personne.\nCe qu’on en sait : rien.');
+    expect(renderMailHtml(content)).toContain('>Ce qui manque</p>');
   });
 });

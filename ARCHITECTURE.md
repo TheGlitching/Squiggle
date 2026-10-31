@@ -77,8 +77,10 @@ DKIM or SPF aligned with the From domain), takes the forwarded text out of the m
 the same words share one report), and runs the audit in process. The research, the
 finalize and the reply run from a Cloudflare Queue, which carries only the run's id: a
 queue consumer has fifteen minutes, which an e-mail event is not documented to give. The
-reply goes through Brevo and links to `/analyser?rapport=<fingerprint>`, which opens the
-cached report on the reader's session.
+reply goes through Brevo, as HTML and plain text from one template (`reply.ts`): the
+mark, the summary, the most severe passages, a strength and the source checks, with a
+button to `/analyser?rapport=<fingerprint>`, which opens the cached report on the
+reader's session.
 
 ```
 +-----------------------------+
