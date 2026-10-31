@@ -1,0 +1,10 @@
+[Unit]
+Description=Squiggle, contrôle quotidien de la routine de contenu
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/contenu/bin/contenu quotidien
+TimeoutStartSec=2h

@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@squiggle/shared": [
+        "../../shared/src/index.ts"
+      ],
+      "@squiggle/shared/*": [
+        "../../shared/*"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "../../web/src/vite-env.d.ts"
+  ]
+}

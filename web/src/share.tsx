@@ -423,19 +423,19 @@ function Paper({ children, glass = false, top }: { children: ReactNode; glass?: 
  * A slide: the site's dark ground, and only the page number in its corner, so
  * a reader swiping through knows where they are.
  */
-function Frame({ page, children }: { page: string; children: ReactNode }) {
+function Frame({ page, children, height = SLIDE_HEIGHT, inset = CAPTION_BAND }: { page: string; children: ReactNode; height?: number; inset?: number }) {
   return (
     <div
       style={{
         width: SLIDE_WIDTH,
-        height: SLIDE_HEIGHT,
+        height,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
         background: color('background'),
         color: color('foreground'),
         fontFamily: 'Bricolage Grotesque',
-        padding: `${CAPTION_BAND}px ${PAGE_MARGIN}px`,
+        padding: `${inset}px ${PAGE_MARGIN}px`,
       }}
     >
       {page ? (
@@ -533,12 +533,12 @@ interface Draft {
 const SCALES = [1, 0.96, 0.92, 0.88, 0.84, 0.8, 0.76];
 const FIGURE_SCALES = Array.from({ length: 16 }, (_, index) => 1 - index * 0.03);
 
-async function settle(draft: Draft, where: string): Promise<string> {
+async function settle(draft: Draft, where: string, height = SLIDE_HEIGHT, inset = CAPTION_BAND): Promise<string> {
   // The frame's padding box, give or take the half space each line of words starts with (16 px for the cover's name).
   const side = PAGE_MARGIN - 20;
-  const area = { left: side, top: CAPTION_BAND, width: SLIDE_WIDTH - 2 * side, height: SLIDE_HEIGHT - 2 * CAPTION_BAND };
+  const area = { left: side, top: inset, width: SLIDE_WIDTH - 2 * side, height: height - 2 * inset };
   const attempt = async (scale: number, figure: number) => {
-    const { svg, nodes } = await layout(draft.draw(scale, figure), { width: SLIDE_WIDTH, height: SLIDE_HEIGHT });
+    const { svg, nodes } = await layout(draft.draw(scale, figure), { width: SLIDE_WIDTH, height });
     return { svg, problem: misfit(nodes, area) };
   };
   let problem = '';
@@ -602,10 +602,11 @@ function exampleDrafts(exemple: Notion['exemple'], page: (index: number) => stri
   const titled = exemple.titre.some((part) => typeof part !== 'string');
   return [
     {
-      alt: `Lisez ceci. Quelque chose vous gêne ? ${exampleAlt(exemple)}`,
+      alt: `Lisez ceci. Un détail vous gêne ? ${exampleAlt(exemple)}`,
       draw: (scale) => (
         <Frame page={page(1)}>
-          <Heading text="Lisez ceci. Quelque chose vous gêne ?" size={64 * scale} />
+          {/* Not « Quelque chose » : Bricolage's Q trails a tail that reads, that large, as an underline. */}
+          <Heading text="Lisez ceci. Un détail vous gêne ?" size={64 * scale} />
           <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}>
             <Paper top={40 * scale}>
               <Words
@@ -756,4 +757,50 @@ export async function socialSlides(source: SocialSource): Promise<SocialSlide[]>
       png: png(await settle(draft, `${socialPath(source)}/${index + 1}.png`), SLIDE_WIDTH),
     })),
   );
+}
+
+/**
+ * The story that goes with a post on Instagram and Facebook: 1080 x 1920 (9:16),
+ * understood alone in three seconds, without the carousel. A question; the
+ * made-up article itself, title and text, on its paper like a press cutting;
+ * then the answer, the notion's name marked as a passage, and where to read
+ * the explanation. The notion's drawing stays, small. The same frame, fonts and
+ * overflow check as the slides; nothing is drawn where Instagram lays its own
+ * bar (top) and reply field (bottom).
+ */
+export const STORY_HEIGHT = 1920;
+const STORY_INSET = 260;
+
+/** Where the build writes a story: `/og/social/faux-dilemme/story.png`, with `story.json` for its text. */
+export const storyPath = (source: SocialSource) => `${socialPath(source)}/story.png`;
+
+export async function socialStory(source: SocialSource): Promise<SocialSlide> {
+  const notion = 'nom' in source;
+  const name = notion ? source.nom : source.titreCourt;
+  const exemple = exampleOf(source);
+  const address = `squiggle.fr/${notion ? 'glossaire' : 'blog'}/${source.slug}`;
+  const draft: Draft = {
+    alt: `Où est le piège ? ${exampleAlt(exemple)} La réponse : ${ended(name)} L’explication : ${address}, lien dans la bio.`,
+    yields: true,
+    draw: (scale, figure) => (
+      <Frame page="" height={STORY_HEIGHT} inset={STORY_INSET}>
+        <div style={{ display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+          <Figure figure={<CoverFigure slug={source.slug} />} width={420 * figure} />
+        </div>
+        <Heading text="Où est le piège ?" size={72 * scale} />
+        <Paper top={30 * scale}>
+          <Words segments={exemple.rubrique} mark={false} style={{ fontFamily: 'Bricolage Grotesque', fontSize: 30 * scale, fontWeight: 600, letterSpacing: 2, color: color('paperMuted') }} />
+          <Words segments={exemple.titre} mark={false} style={{ marginTop: 14 * scale, fontWeight: 600, fontSize: 54 * scale, lineHeight: 1.14, letterSpacing: -0.6 }} />
+          <Words segments={exemple.texte} mark={false} style={{ marginTop: 20 * scale, fontSize: 44 * scale, lineHeight: 1.38 }} />
+        </Paper>
+        <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, marginTop: 'auto', paddingTop: 40 * scale, gap: 18 * scale }}>
+          <Words segments="La réponse :" style={{ fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.2, color: color('accentInk') }} />
+          <Marked text={name} size={Math.round(88 * scale)} />
+          <Words segments="L’explication en lien dans la bio" style={{ marginTop: 10 * scale, fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.25 }} />
+          <Words segments={address} style={{ fontSize: 32 * scale, fontWeight: 500, lineHeight: 1.25, color: color('muted') }} />
+        </div>
+      </Frame>
+    ),
+  };
+  return { alt: draft.alt, png: png(await settle(draft, storyPath(source), STORY_HEIGHT, STORY_INSET), SLIDE_WIDTH) };
 }

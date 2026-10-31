@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { NOTIONS } from '../src/glossaire';
 import { PUBLIC_PAGES } from '../src/seo';
-import { SHARE_HEIGHT, SHARE_WIDTH, SLIDE_HEIGHT, SLIDE_WIDTH, SOCIAL_SOURCES, shareImage, socialSlides } from '../src/share';
+import { SHARE_HEIGHT, SHARE_WIDTH, SLIDE_HEIGHT, SLIDE_WIDTH, SOCIAL_SOURCES, STORY_HEIGHT, shareImage, socialSlides, socialStory } from '../src/share';
 
 const size = (png: Buffer) => [png.readUInt32BE(16), png.readUInt32BE(20)];
 
@@ -60,5 +60,33 @@ describe('social carousels', () => {
     await expect(socialSlides(long)).rejects.toThrow(/does not fit at any size a phone can read/);
     const word = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, texte: ['Anticonstitutionnellementanticonstitutionnellement'] } };
     await expect(socialSlides(word)).rejects.toThrow(/leaves its area/);
+  });
+});
+
+describe('stories', () => {
+  // Like the slides, drawing them all is the overflow check.
+  it('draws one story per carousel at 1080 x 1920, under 1 MB, with its alternative text', async () => {
+    for (const source of SOCIAL_SOURCES) {
+      const story = await socialStory(source);
+      expect(size(story.png), source.slug).toEqual([SLIDE_WIDTH, STORY_HEIGHT]);
+      expect(story.png.length, source.slug).toBeLessThan(1_000_000);
+      expect(story.alt, source.slug).toContain('lien dans la bio');
+    }
+  }, 180_000);
+
+  it('shows the example itself, title and text word for word, then names the trap', async () => {
+    const item = NOTIONS[0];
+    const plain = (segments: typeof item.exemple.titre) => segments.map((part) => (typeof part === 'string' ? part : part[0])).join('');
+    const { alt } = await socialStory(item);
+    expect(alt).toContain(plain(item.exemple.titre));
+    expect(alt).toContain(plain(item.exemple.texte));
+    expect(alt).toContain(`La réponse : ${item.nom}`);
+  });
+
+  it('refuses a hook that would not fit rather than cut it', async () => {
+    const word = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, titre: ['Anticonstitutionnellementanticonstitutionnellement'] } };
+    await expect(socialStory(word)).rejects.toThrow(/leaves its area/);
+    const long = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, texte: [NOTIONS[0].exemple.lecture.repeat(4)] } };
+    await expect(socialStory(long)).rejects.toThrow(/does not fit at any size a phone can read/);
   });
 });

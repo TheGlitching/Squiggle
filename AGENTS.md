@@ -13,6 +13,7 @@ src/      the extension (Chrome + Firefox MV3)
 shared/   the analysis engine, the provider clients, the request-signing protocol
 server/   the hosted backend (Cloudflare Workers + Neon Postgres)
 web/      the public web app (Vite + React): sign-in, subscription, extension bridge
+tools/contenu/  the weekly content routine, run on the Postiz VPS (its README)
 ```
 
 `shared/` is not a convenience directory. Anything imported by **both** the extension

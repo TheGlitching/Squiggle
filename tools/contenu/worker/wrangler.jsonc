@@ -1,0 +1,15 @@
+// The reply address of the content routine: Cloudflare Email Routing sends
+// `routine@squiggle.fr` to this Worker (see ../README.md, « Les réponses par e-mail »).
+// Deployed by hand, once, after review: `npx wrangler deploy -c tools/contenu/worker/wrangler.jsonc`.
+{
+  "name": "squiggle-routine-reponses",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "kv_namespaces": [
+    // Created with `npx wrangler kv namespace create routine-reponses`; its id goes here
+    // and, as CF_KV_REPONSES, in ~/contenu/.env on the VPS.
+    { "binding": "REPONSES", "id": "PENDING_KV_NAMESPACE_ID" }
+  ],
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Squiggle, contrôle quotidien à 7 h, heure de Paris
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Europe/Paris
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
