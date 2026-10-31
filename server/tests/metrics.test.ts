@@ -1,5 +1,5 @@
 /**
- * The launch metrics: aggregate, counts only, behind the admin token.
+ * The launch metrics: aggregate, counts only, behind the admin or the read-only metrics token.
  *
  * Driven through the worker like every other suite, so the counters are fed by
  * the real stage handlers and the answer is read the way the owner reads it.
@@ -82,6 +82,42 @@ describe('GET /admin/metrics', () => {
     const open = makeTestEnv();
     const res = await open.handler(new Request(`${open.webAppOrigin}/admin/metrics`, { headers: ADMIN }));
     expect(res.status).toBe(401);
+  });
+
+  it('accepts the read-only metrics token, which opens nothing else', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret', metricsToken: 'metrics-secret' });
+    let migrations = 0;
+    env.services.runMigrations = async () => {
+      migrations++;
+      return [];
+    };
+    const reader = { authorization: 'Bearer metrics-secret' };
+
+    const read = await env.handler(new Request(`${env.webAppOrigin}/admin/metrics`, { headers: reader }));
+    expect(read.status).toBe(200);
+    // The admin token still reads the figures beside it.
+    expect((await metrics(env)).status).toBe(200);
+
+    for (const headers of [{ authorization: 'Bearer metrics-secre' }, { authorization: 'Bearer metrics-secretx' }]) {
+      const res = await env.handler(new Request(`${env.webAppOrigin}/admin/metrics`, { headers }));
+      expect(res.status).toBe(401);
+    }
+
+    const migrate = await env.handler(
+      new Request(`${env.webAppOrigin}/admin/migrate`, { method: 'POST', headers: reader }),
+    );
+    expect(migrate.status).toBe(401);
+    expect(migrations).toBe(0);
+    // The owner's page answers to a session, never to a bearer token.
+    const tableau = await env.handler(new Request(`${env.webAppOrigin}/web/tableau`, { headers: reader }));
+    expect(tableau.status).toBe(404);
+
+    // No metrics token configured: an empty bearer is refused, never matched.
+    const unset = makeTestEnv({ adminToken: 'admin-secret' });
+    for (const headers of [{ authorization: 'Bearer ' }, { authorization: 'Bearer' }, reader]) {
+      const res = await unset.handler(new Request(`${unset.webAppOrigin}/admin/metrics`, { headers }));
+      expect(res.status).toBe(401);
+    }
   });
 
   it('refuses a malformed window or cost', async () => {

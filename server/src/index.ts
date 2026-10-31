@@ -51,7 +51,7 @@
  *   POST   /web/transcribe             (session) a recording's text, 15 minutes at most, within the daily allowances
  *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
  *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
- *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
+ *   GET    /admin/metrics              (admin or metrics token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
  *
  * Besides HTTP, the Worker receives the mail Cloudflare Email Routing hands it
@@ -153,6 +153,12 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
   /**
+   * Read-only bearer token for `GET /admin/metrics` and nothing else, so a
+   * machine that only reads the figures never holds the right to migrate.
+   * Unset or empty, it is refused.
+   */
+  METRICS_TOKEN?: string;
+  /**
    * Comma-separated addresses whose web session may read the metrics page
    * (`/tableau`). Unset or empty, no one can.
    */
@@ -193,6 +199,8 @@ export interface Services {
   googleClientSecret?: string;
   fetchImpl?: FetchLike;
   adminToken?: string;
+  /** Accepted by `GET /admin/metrics` only (`METRICS_TOKEN`). */
+  metricsToken?: string;
   /** Lower-cased addresses allowed on `/web/tableau` (`OWNER_EMAILS`). */
   ownerEmails?: string[];
   /**
@@ -617,12 +625,13 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
   }
 
   if (path === '/admin/metrics' && method === 'GET') {
-    if (!(await adminAuthorized(req, s))) return finish(apiError('invalid_token', 'Invalid admin token.'));
+    const authorized = (await bearerMatches(req, s.adminToken)) || (await bearerMatches(req, s.metricsToken));
+    if (!authorized) return finish(apiError('invalid_token', 'Invalid admin token.'));
     return metricsAnswer(url, s);
   }
 
   if (path === '/admin/migrate' && method === 'POST') {
-    if (!(await adminAuthorized(req, s))) return finish(apiError('invalid_token', 'Invalid admin token.'));
+    if (!(await bearerMatches(req, s.adminToken))) return finish(apiError('invalid_token', 'Invalid admin token.'));
     if (!s.runMigrations) {
       return finish(apiError('internal', 'Migrations are unavailable in this environment.'));
     }
@@ -658,12 +667,12 @@ async function metricsAnswer(url: URL, s: Services): Promise<Response> {
 
 /**
  * Constant-time: a plain `!==` short-circuits at the first differing byte,
- * which lets an attacker recover the admin token one character at a time.
+ * which lets an attacker recover a token one character at a time.
  */
-async function adminAuthorized(req: Request, s: Services): Promise<boolean> {
+async function bearerMatches(req: Request, token: string | undefined): Promise<boolean> {
   const header = req.headers.get('authorization') ?? '';
-  const expected = s.adminToken ? `Bearer ${s.adminToken}` : '';
-  return Boolean(s.adminToken) && (await secureEquals(header, expected));
+  const expected = token ? `Bearer ${token}` : '';
+  return Boolean(token) && (await secureEquals(header, expected));
 }
 
 const DEFAULT_METRICS_WEEKS = 4;
@@ -1023,6 +1032,7 @@ function servicesFromEnv(env: Env): Services {
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     adminToken: env.ADMIN_TOKEN,
+    metricsToken: env.METRICS_TOKEN,
     ownerEmails: ownerEmailsOf(env.OWNER_EMAILS),
     llm: hostedLlm ? () => hostedLlm : undefined,
     promptVersion: PROMPT_VERSION,
