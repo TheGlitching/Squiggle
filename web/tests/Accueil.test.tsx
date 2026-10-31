@@ -171,6 +171,12 @@ describe('Accueil', () => {
     }
   });
 
+  it('leads from the example to the glossary that names its reasons', () => {
+    home();
+    const example = within(screen.getByRole('region', { name: /un passage surligné/ }));
+    expect(example.getByRole('link', { name: 'Le glossaire de l’esprit critique' })).toHaveAttribute('href', '/glossaire');
+  });
+
   it('draws the path of an analysis as a sequence, with what passes between the steps', () => {
     home();
     const steps = within(region('Comment ça marche').getByRole('list'));
