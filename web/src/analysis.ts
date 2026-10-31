@@ -11,7 +11,7 @@ import type { AnalysisReport, TextBlock } from '../../shared/src/engine/types';
 import { API_BASE } from './api';
 import { FREE_ANALYSES } from './offer';
 import { readPaste, webAddress, type PastedArticle } from './paste';
-import type { Start } from './transcript';
+import type { Start } from '../../shared/src/extract/transcript';
 
 export interface Progress {
   message: string;

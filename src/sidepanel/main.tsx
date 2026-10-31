@@ -83,6 +83,12 @@ function SidepanelApp() {
   // The address shown in the tracked tab, when the browser lets the panel read
   // it: it decides whether the button offers an article or a video.
   const [pageUrl, setPageUrl] = useState<string | undefined>(undefined);
+  /**
+   * On a podcast episode's page: the episode's title once its published
+   * transcript is found, or the sites whose feed the reader must first let
+   * the extension read to look for it.
+   */
+  const [podcastOffer, setPodcastOffer] = useState<{ title: string } | { access: string } | null>(null);
   const [progress, setProgress] = useState<ProgressState>(IDLE_PROGRESS);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<FilterCategory>('all');
@@ -424,7 +430,44 @@ function SidepanelApp() {
     });
   }, [pageUrl, tabId, overPage]);
 
-  const runAnalysis = useCallback(async () => {
+  // An episode's page: its podcast may publish the transcript, which says more than the page.
+  useEffect(() => {
+    setPodcastOffer(null);
+    if (tabId === null || !pageUrl || isVideoPage || isPdf || !/^https?:/.test(pageUrl)) return;
+    let live = true;
+    bus
+      .callRPC('PODCAST_PROBE', { tabId })
+      .then((answer) => {
+        const { available, title, access } = answer as { available: boolean; title?: string; access?: string[] };
+        if (!live) return;
+        if (available) setPodcastOffer({ title: title || 'cet épisode' });
+        // The first feed the browser would not let it read: one site asked for at a time.
+        else if (access?.length) setPodcastOffer({ access: access[0] });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [bus, tabId, pageUrl, isVideoPage, isPdf]);
+
+  /** The reader lets the extension read the podcast's feed, then the transcript is looked for and analysed. */
+  const unlockPodcast = useCallback(
+    async (feed: string) => {
+      // First, while the click still counts as one: the browser asks only then.
+      if (!(await requestSiteAccess(feed)) || tabId === null) return;
+      const answer = (await bus.callRPC('PODCAST_PROBE', { tabId })) as { available: boolean; title?: string };
+      if (answer.available) {
+        setPodcastOffer({ title: answer.title || 'cet épisode' });
+        void runAnalysisRef.current?.(true);
+      } else {
+        setPodcastOffer(null);
+        setError('Le flux de ce podcast ne publie pas de transcription pour cet épisode.');
+      }
+    },
+    [bus, tabId]
+  );
+
+  const runAnalysis = useCallback(async (podcast = false) => {
     // The panel is driven by live events (`ANALYSIS_PROGRESS` / `ANALYSIS_COMPLETE`
     // / `ANALYSIS_ERROR`) - the background streams progress and dispatches the
     // terminal outcome the moment it lands. The RPC here only *triggers* the run:
@@ -440,7 +483,11 @@ function SidepanelApp() {
     setVideoReport(null);
     setProgress({
       status: 'extracting',
-      message: isVideoPage ? 'Lecture des sous-titres de la vidéo…' : 'Extraction de l’article…',
+      message: isVideoPage
+        ? 'Lecture des sous-titres de la vidéo…'
+        : podcast
+        ? 'Lecture de la transcription publiée par le podcast…'
+        : 'Extraction de l’article…',
       progress: 5,
       notes: [],
     });
@@ -457,7 +504,7 @@ function SidepanelApp() {
     }
 
     try {
-      const response = (await bus.callRPC('TRIGGER_ANALYSIS', { tabId: tabId ?? undefined })) as {
+      const response = (await bus.callRPC('TRIGGER_ANALYSIS', { tabId: tabId ?? undefined, podcast })) as {
         success: boolean;
         result?: AnalysisResult;
         error?: string;
@@ -478,6 +525,9 @@ function SidepanelApp() {
       setProgress({ status: 'error', message, progress: 0, notes: [] });
     }
   }, [bus, tabId, isVideoPage, overPage]);
+
+  const runAnalysisRef = useRef(runAnalysis);
+  runAnalysisRef.current = runAnalysis;
 
   const selectFinding = useCallback(
     (id: string | null) => {
@@ -589,7 +639,7 @@ function SidepanelApp() {
         <button
           type="button"
           data-tour="run-analysis"
-          onClick={isPdf ? openPdf : runAnalysis}
+          onClick={isPdf ? openPdf : () => void runAnalysis()}
           disabled={busy || !canRun}
           className={`w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-50 ${
             canRun
@@ -614,6 +664,35 @@ function SidepanelApp() {
             Un message ou une publication plutôt que l’article ? Sélectionnez son texte dans la page,
             puis lancez l’analyse : Squiggle lira ce passage seul.
           </p>
+        )}
+
+        {/* The podcast's own transcript is what was said; the page around it is often a summary. */}
+        {podcastOffer && !report && !busy && canRun && (
+          <div className="-mt-2 space-y-2 rounded-xl border border-line bg-panel p-3">
+            {'title' in podcastOffer ? (
+              <p className="text-xs leading-relaxed text-muted">
+                Ce podcast publie la transcription de l’épisode « {podcastOffer.title} ». Squiggle peut
+                l’analyser à la place de la page : elle est lue dans votre navigateur, depuis le flux du podcast.
+              </p>
+            ) : (
+              <p className="text-xs leading-relaxed text-muted">
+                Cette page est un épisode de podcast, dont le flux publie peut-être la transcription. Pour la
+                chercher, Squiggle doit pouvoir lire ce flux, sur {new URL(podcastOffer.access).host} :
+                votre navigateur vous demandera de l’autoriser. Squiggle n’y lit que le flux.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                'title' in podcastOffer ? void runAnalysis(true) : void unlockPodcast(podcastOffer.access)
+              }
+              className="w-full rounded-xl border border-line px-3 py-2.5 text-sm font-semibold text-ink hover:bg-panel-muted"
+            >
+              {'title' in podcastOffer
+                ? 'Analyser la transcription de l’épisode'
+                : 'Chercher et analyser la transcription'}
+            </button>
+          </div>
         )}
 
         {/* Most readers have already watched the video and do not want to again:

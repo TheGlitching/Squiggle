@@ -8,7 +8,8 @@
  * browser fetching the sources an article cites (a hosted analysis does that on
  * the server). Reading a PDF needs its site's pages, asked for that site alone
  * when the reader opens one (`requestSiteAccess`). The manifest lists the same patterns under
- * `optional_host_permissions`; a test keeps the two in step.
+ * `optional_host_permissions`; a test keeps the two in step. Reading a
+ * podcast's feed asks the same way, for the one site that serves it.
  */
 export const ALL_SITES = ['https://*/*', 'http://*/*'];
 
@@ -43,8 +44,18 @@ export async function requestAllSitesAccess(): Promise<boolean> {
   }
 }
 
+/** Whether the extension may read `url`'s site, by the reader's grant of it or of every site. */
+export async function hasSiteAccess(url: string): Promise<boolean> {
+  try {
+    return (await api()?.contains({ origins: [`${new URL(url).origin}/*`] })) ?? false;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * One site's pages, for the PDF page to fetch a PDF from it (`src/pdf`). Must
+ * One site's pages, for the PDF page to fetch a PDF from it (`src/pdf`), or for
+ * the panel to read a podcast's feed (`src/podcast`). Must
  * be called from a user gesture, before any await, like the request above.
  */
 export async function requestSiteAccess(address: string): Promise<boolean> {

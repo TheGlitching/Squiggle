@@ -40,6 +40,20 @@ export const RATE_WINDOW_MS = 60 * 60 * 1000;
 export const ANON_RATE_SCOPE_PREFIX = 'anon:';
 
 /**
+ * The minutes of sound transcribed in a UTC day count under this prefix,
+ * one row per account and one for the whole site (key `all`), in seconds.
+ * Like the visitors' allowance, a row lives a day, then the sweep drops it.
+ */
+export const TRANSCRIPTION_RATE_SCOPE_PREFIX = 'transcribe:';
+
+/**
+ * The sound one account may have transcribed in a UTC day: four analyses of
+ * fifteen minutes. The site's own daily allowance (`TRANSCRIBE_DAILY_MINUTES`)
+ * is the spending cap; this keeps one account from taking all of it.
+ */
+export const ACCOUNT_TRANSCRIPTION_SECONDS_PER_DAY = 60 * 60;
+
+/**
  * How long the fingerprint of a visitor's address is kept after their one
  * analysis without an account: the SHA-256 of the IP, never the IP, and the
  * time of the analysis, nothing else. A refused attempt does not extend it.

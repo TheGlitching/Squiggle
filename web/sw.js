@@ -26,9 +26,10 @@ const SHARE_PATH = '/analyser';
 const SHARE_CACHE = 'squiggle-partage';
 
 /**
- * A share, read here and never sent on: the screenshots or the PDF wait in
- * SHARE_CACHE for the page to take them (`takeSharedCaptures` in
- * src/captures.ts), and the
+ * A share, read here and never sent on: the screenshots or the PDF, or a
+ * recording, wait in SHARE_CACHE for the page to take them
+ * (`takeSharedCaptures` in src/captures.ts, `takeSharedMedia` in
+ * src/media.ts), and the
  * title, text and address go into the query string of the page it opens, as a
  * share by GET did, which the navigation below answers with the bare shell.
  */
@@ -46,8 +47,16 @@ async function receiveShare(request) {
         typeof file !== 'string' &&
         (file.type.startsWith('image/') || file.type === 'application/pdf' || /\.pdf$/i.test(file.name)),
     );
+  // A recording to transcribe (`takeSharedMedia` in src/media.ts): one file, alone.
+  const media = form
+    .getAll('media')
+    .find((file) => typeof file !== 'string' && (file.type.startsWith('audio/') || file.type.startsWith('video/')));
   await caches.delete(SHARE_CACHE);
-  if (files.length) {
+  if (media) {
+    const cache = await caches.open(SHARE_CACHE);
+    await cache.put('/partage/media', new Response(media, { headers: { 'content-type': media.type } }));
+    params.set('media', '1');
+  } else if (files.length) {
     const cache = await caches.open(SHARE_CACHE);
     await Promise.all(
       files.map((file, index) =>

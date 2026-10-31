@@ -34,3 +34,25 @@ export const HOSTED_ANALYSIS = {
    */
   webSearch: { engine: 'parallel', name: 'Parallel Web Systems', country: 'États-Unis' },
 } as const;
+
+/**
+ * What the sound of a recording sent from the site is transcribed by, before
+ * its text is analysed like a pasted one. The server sends `model` to
+ * OpenRouter's speech-to-text endpoint, pinned to `host` alone and to its
+ * zero-retention endpoint, and the public pages name the same host; the file
+ * is held in memory for that one call and never written anywhere.
+ *
+ * `maxSeconds` is the most one transcription covers, hence one analysis: a
+ * longer recording is analysed fifteen minutes at a time. `usdPerMinute` is
+ * OpenRouter's catalogue price for `model` (checked on 31 October 2026), which
+ * is what the owner's page multiplies the transcribed minutes by.
+ */
+export const HOSTED_TRANSCRIPTION = {
+  model: 'mistralai/voxtral-mini-transcribe-3-0',
+  modelLabel: 'Voxtral Mini Transcribe 3',
+  host: { slug: 'mistral', name: 'Mistral AI', country: 'France' },
+  usdPerMinute: 0.0035,
+  maxSeconds: 15 * 60,
+  /** The one sound format the site sends and the server accepts (`wav.ts`): 16-bit PCM, mono, at this rate. */
+  sampleRate: 16_000,
+} as const;

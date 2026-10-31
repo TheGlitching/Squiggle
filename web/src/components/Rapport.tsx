@@ -26,7 +26,7 @@ import { glossaryLink } from '../glossaire';
 import { locateFindings, passageTone, type Segment } from '../report';
 import { Link } from '../router';
 import { PRIMARY_BUTTON } from './Landing';
-import { timeAt, videoTime, type Start } from '../transcript';
+import { timeAt, videoTime, type Start } from '../../../shared/src/extract/transcript';
 
 const VERIFICATION = Object.fromEntries(VERIFICATION_STATES.map((v) => [v.state, v]));
 
@@ -167,7 +167,7 @@ function FindingCard({
       </blockquote>
       {at !== undefined ? (
         <p className="mt-2 mb-0 text-sm text-muted">
-          À <span className="tabular-nums">{videoTime(at)}</span> dans la vidéo
+          À <span className="tabular-nums">{videoTime(at)}</span> dans l’enregistrement
         </p>
       ) : null}
       <p className="mt-3 mb-0 text-base leading-relaxed">{finding.explanation}</p>

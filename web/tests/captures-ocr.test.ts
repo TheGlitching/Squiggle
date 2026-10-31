@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { linesOf, stitchCaptures } from '../src/captures';
 import { pasteProblem } from '../src/paste';
-import { readTranscript } from '../src/transcript';
+import { readTranscript } from '../../shared/src/extract/transcript';
 
 const MODEL = resolve(__dirname, '../../node_modules/@tesseract.js-data/fra/4.0.0_best_int');
 

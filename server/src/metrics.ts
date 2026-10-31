@@ -17,6 +17,8 @@
  * ask for `?weeks=1` to read them over the last week.
  */
 import type { Db, MetricName } from './db/types';
+import { HOSTED_TRANSCRIPTION } from '@squiggle/shared';
+
 import { TRIAL_ANALYSES } from './billing/quota';
 import { logEvent } from './lib/log';
 
@@ -60,6 +62,12 @@ export interface Metrics {
     sourceCheck: ReturnType<typeof stage>;
   };
   analyses: { finalized: number; costPerAnalysisUsd: number | null };
+  /**
+   * Recordings transcribed from the site: how many, how many minutes of sound,
+   * and what those minutes cost at the catalogue price, beside the daily cap
+   * that bounds that cost. Refusals by the cap are in `funnel.refused`.
+   */
+  transcription: { count: number; failed: number; minutes: number; costUsd: number; dailyCapMinutes: number };
   /** Visits themselves are read in Cloudflare Web Analytics. */
   audience: {
     campaigns: Record<string, number>;
@@ -96,12 +104,14 @@ export interface Metrics {
  * @param providerCostUsd what the provider invoiced over the same window, if the
  *   caller has it. The server cannot know it, so the cost per analysis is only
  *   computed when it is supplied.
+ * @param transcriptionDailyMinutes the deployment's transcription cap, shown beside what it bounds.
  */
 export async function collectLaunchMetrics(
   db: Db,
   now: number,
   weeks: number,
   providerCostUsd?: number,
+  transcriptionDailyMinutes = 0,
 ): Promise<Metrics> {
   const raw = await db.collectMetrics({ now, weeks, trialAnalyses: TRIAL_ANALYSES });
   const c = raw.counters;
@@ -144,6 +154,13 @@ export async function collectLaunchMetrics(
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },
     analyses,
+    transcription: {
+      count: c.transcription,
+      failed: c.transcription_failed,
+      minutes: Math.round((c.transcription_seconds / 60) * 10) / 10,
+      costUsd: Math.round((c.transcription_seconds / 60) * HOSTED_TRANSCRIPTION.usdPerMinute * 10000) / 10000,
+      dailyCapMinutes: transcriptionDailyMinutes,
+    },
     audience: {
       campaigns,
       clicks: family(c, 'click_'),
@@ -183,9 +200,9 @@ export async function collectLaunchMetrics(
  * triggered it: a metric is not worth a reader's analysis, so a failed write is
  * logged by name and swallowed.
  */
-export async function countMetric(db: Db, name: MetricName, now: number, requestId: string): Promise<void> {
+export async function countMetric(db: Db, name: MetricName, now: number, requestId: string, by = 1): Promise<void> {
   try {
-    await db.bumpMetric(name, now);
+    await db.bumpMetric(name, now, by);
   } catch {
     logEvent({ event: 'metric_failed', requestId, scope: name });
   }

@@ -1,5 +1,8 @@
 /**
- * A video's transcript, pasted in place of an article.
+ * A spoken text's transcript, read in place of an article: a video's,
+ * pasted on the site; a recording's, written by the transcription of a file
+ * sent from the site; a podcast episode's, published in its feed and read by
+ * the extension in the reader's browser.
  *
  * YouTube's "Afficher la transcription" copies as a timestamp line then a line
  * of speech, sometimes with the timestamp spelled out again for screen readers

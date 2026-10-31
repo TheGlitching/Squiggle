@@ -35,7 +35,7 @@ export class ApiError extends Error {
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body !== undefined) headers.set('content-type', 'application/json');
+  if (init.body !== undefined && !headers.has('content-type')) headers.set('content-type', 'application/json');
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
 
   interface Payload {
@@ -63,6 +63,23 @@ export async function getAccount(): Promise<Account | null> {
     if (err instanceof ApiError && err.code === 'invalid_session') return null;
     throw err;
   }
+}
+
+/** A stretch of speech and the second it starts at, in the sound sent. */
+export interface Segment {
+  start: number;
+  text: string;
+}
+
+/**
+ * The text of a recording's sound, in the one format the server accepts
+ * (`shared/src/hosted/wav.ts`). Neither the sound nor the text is kept there.
+ */
+export function transcribe(
+  wav: Blob,
+  signal?: AbortSignal,
+): Promise<{ text: string; segments: Segment[]; seconds: number }> {
+  return call('/web/transcribe', { method: 'POST', body: wav, headers: { 'content-type': 'audio/wav' }, signal });
 }
 
 /** `next` is only a request: the server keeps it if it is an internal destination it allows. */
@@ -211,6 +228,8 @@ export interface OwnerMetrics {
     aiCost: { finalized: number; costPerAnalysisUsd: number | null };
     activeAccounts: number;
   };
+  /** Absent from a server older than transcription. */
+  transcription?: { count: number; failed: number; minutes: number; costUsd: number; dailyCapMinutes: number };
 }
 
 /** The owner's metrics, or null for anyone else: the server answers them as it answers an unknown address. */
