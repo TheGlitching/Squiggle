@@ -44,7 +44,7 @@ const NAMED: RegExp[] = [
 ];
 
 /** Capitals that are not someone's acronym. */
-const ALLOWED_ACRONYMS = new Set(['PDF', 'IA', 'QR']);
+const ALLOWED_ACRONYMS = new Set(['PDF', 'IA', 'QR', 'USB']);
 
 const RATING: RegExp[] = [
   /\d+\s*\/\s*\d+/,

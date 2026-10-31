@@ -5,7 +5,7 @@
  * check is replaced by sentences the program writes itself.
  */
 import type { Ctx } from './context';
-import { numbersIn } from './filter';
+import { numbersIn, typography } from './filter';
 import { askJson } from './llm';
 import { consigne } from './memory';
 import type { Decision, ReportInput, Summary } from './report';
@@ -62,8 +62,8 @@ export async function summarize(ctx: Ctx, input: ReportInput, decisions: Decisio
   }).catch(() => null);
   if (!answer) return null;
   const summary: Summary = {
-    essentiel: Array.isArray(answer.essentiel) ? answer.essentiel.map(String).filter((s) => s.trim()) : [],
-    lecture: typeof answer.lecture === 'string' ? answer.lecture : '',
+    essentiel: Array.isArray(answer.essentiel) ? answer.essentiel.map((s) => typography(String(s))).filter((s) => s.trim()) : [],
+    lecture: typeof answer.lecture === 'string' ? typography(answer.lecture) : '',
   };
   const problem = checkSummary(summary, data);
   if (problem) {
