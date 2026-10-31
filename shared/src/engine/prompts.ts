@@ -9,7 +9,7 @@ import { isVideoTranscriptUrl } from './video';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.3.0';
+export const PROMPT_VERSION = '1.4.0';
 
 /**
  * Output ceiling of the audit, reasoning included. A reasoning model thinks
@@ -499,6 +499,51 @@ FORMAT JSON STRICT ATTENDU :
     }
   ]
 }`;
+}
+
+/**
+ * The critique: a second reader of the audit's findings, before any of them is
+ * researched or shown (`critique.ts`). One call over the whole report is the
+ * cheapest place to catch what the audit's relevance rules still let through,
+ * a named source read as no source or a quoted person's words held against the
+ * article, because a withdrawn finding is also a web search not paid for.
+ *
+ * Its opinion-piece rule says what rule 5 of `RELEVANCE_RULES` says: declared
+ * opinion is no defect, its devices always are. An earlier wording that only
+ * excused « une opinion assumée dans une tribune signée » had it withdraw the
+ * imputed motives and loaded words of an activist press release. And it never
+ * withdraws a checkable fact on its own memory: that is the research stage's
+ * question, and an earlier rule against « une contradiction de fait fondée sur
+ * ta seule mémoire » had it withdraw two false dates and figures before any
+ * search could catch them.
+ */
+export const CRITIQUE_SYSTEM_PROMPT = `Tu es le relecteur critique du moteur Squiggle. Un premier analyste a produit des constats sur un texte destiné au LECTEUR. Ton travail est de retirer les constats injustes et de recalibrer la sévérité, sans jamais en ajouter un qui ne soit pas évident.
+Pour chaque constat, décide :
+- "garder" : il relève un vrai défaut du texte, bien cité, à la bonne sévérité ;
+- "ajuster" : défaut réel mais sévérité mal calibrée (donne "severity") ;
+- "retirer" : faux, injuste ou pinailleur. Retire notamment : une information attribuée à une source identifiable (institution, communiqué, étude nommée, personne nommée) qualifiée de non sourcée faute de lien ; un propos d'une personne citée reproché à l'article alors que l'auteur ne le reprend pas à son compte ; un fait scientifique établi ou notoire réclamé en source ; une exigence d'enquête appliquée à une brève, une interview ou une vulgarisation ; le seul fait qu'une tribune, un communiqué ou un texte militant exprime une opinion annoncée comme telle ; l'orthographe d'une transcription automatique.
+Un constat 'affirmation-non-etayee' sur un fait vérifiable (chiffre, date, événement) se garde, que tu croies ce fait exact ou faux : une recherche web le vérifiera après toi. Ne le retire que pour l'une des raisons ci-dessus, jamais d'après ta mémoire.
+Dans une tribune, un communiqué ou un texte militant, les procédés restent toujours des défauts : un constat qui relève un faux dilemme, un homme de paille, une attaque ad hominem, une pente glissante, un procès d'intention, un appel à la peur, un vocabulaire chargé ou un fait non étayé se garde ou s'ajuste, il ne se retire jamais au motif que le texte est une opinion.
+Sévérité : 3 = peut tromper le lecteur sur l'essentiel ; 2 = défaut réel sur un point secondaire ; 1 = réserve mineure utile.
+Si un défaut grave et évident (sophisme qui porte la conclusion, chiffre central sans source, titre contredit par le texte) n'a été relevé par aucun constat, ajoute-le dans "ajouts" avec une citation copiée caractère pour caractère du texte.
+Les points forts ("point-fort") sont toujours gardés.
+Réponds UNIQUEMENT en JSON : {"decisions":[{"n":1,"action":"garder|ajuster|retirer","severity":2,"raison":"..."}],"ajouts":[{"blockId":"b1","quote":"...","category":"sophisme|affirmation-non-etayee|surinterpretation|source-absente|cadrage","severity":2,"label":"...","explanation":"...","checkableClaim":""}]}`;
+
+/** The critique's user prompt: the text by block, its links, and the audit's findings numbered from 1. */
+export function buildCritiqueUserPrompt(
+  input: AnalysisInput,
+  findings: ReadonlyArray<{ blockId: string; category: string; severity: number; quote: string; label: string; explanation: string }>,
+  citedSources: ReadonlyArray<{ href: string; text: string; blockId?: string }> = []
+): string {
+  const links = citedSources.length
+    ? `LIENS DU TEXTE : ${citedSources.map((s) => `[${s.blockId ?? '?'}] « ${s.text} » -> ${s.href}`).join(' ; ')}\n`
+    : '';
+  const nature = isVideoTranscriptUrl(input.url) ? "NATURE : transcription automatique des sous-titres d'une vidéo.\n" : '';
+  const text = input.blocks.map((b) => `[${b.id}] ${b.text}`).join('\n');
+  const list = findings
+    .map((f, i) => `${i + 1}. [${f.blockId}] [${f.category}, sévérité ${f.severity}] « ${f.quote} » - ${f.label} : ${f.explanation}`)
+    .join('\n');
+  return `TEXTE : ${input.title}\nURL : ${input.url}\n${links}${nature}\n${text}\n\nCONSTATS DU PREMIER ANALYSTE :\n${list}`;
 }
 
 /** The audit's system prompt for this text: a short message's own, or the article's. */

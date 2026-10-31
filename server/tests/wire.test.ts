@@ -118,7 +118,7 @@ describe('extension client against the real server', () => {
       .catch((e: unknown) => e);
     expect((res as HostedApiError).code).toBe('article_too_long');
     expect((res as HostedApiError).message).toBe((err as HostedApiError).message);
-    expect(env.llm.calls).toEqual({ complete: 0, grounded: 0 });
+    expect(env.llm.calls).toEqual({ complete: 0, grounded: 0, critique: 0 });
   });
 
   it('takes the cache hit without sending the article or spending a credit', async () => {
