@@ -351,7 +351,7 @@ function postCard(x: PostRow): string {
     : '';
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;background:${C.paper};border-radius:10px;border:1px solid ${C.paperEdge}"><tr><td style="padding:14px 16px">
 <div style="font:700 15px/1.4 ${SANS};color:${C.paperInk}"><span style="display:inline-block;min-width:22px;padding:1px 6px;margin-right:8px;border-radius:6px;background:${C.paperInk};color:${C.paper};text-align:center">${x.num}</span><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${NETWORK_DOT[x.network]};margin-right:6px"></span>${esc(NETWORK_NAME[x.network])}<span style="font-weight:400;color:${C.paperMuted}"> · ${esc(parisHour(x.slot_at))}</span></div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr><td valign="top" style="font:400 16px/1.5 ${SERIF};color:${C.paperInk}">${esc(x.text).replace(/\n/g, '<br>')}</td>${thumb}</tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr><td valign="top" style="font:400 16px/1.5 ${SERIF};color:${C.paperInk};overflow-wrap:anywhere;word-break:break-word">${esc(x.text).replace(/\n/g, '<br>')}</td>${thumb}</tr></table>
 <div style="margin-top:10px;font:400 13px/1.4 ${SANS};color:${C.paperMuted}">${esc(cap(PILLAR_NAME[x.pillar] ?? x.pillar))} : ${esc(x.source_title ?? x.source_id)}</div>
 </td></tr></table>`;
 }
@@ -439,7 +439,7 @@ function shell(subject: string, parts: string[]): string {
 </style></head>
 <body class="bg" style="margin:0;padding:0;background:${C.bg}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" style="background:${C.bg}"><tr><td align="center" style="padding:24px 16px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px"><tr><td align="left" style="text-align:left">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;table-layout:fixed"><tr><td align="left" style="text-align:left;overflow-wrap:anywhere;word-break:break-word">
 ${parts.join('\n')}
 </td></tr></table>
 </td></tr></table>

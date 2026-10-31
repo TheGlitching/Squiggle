@@ -32,8 +32,17 @@ export interface Ask {
   user: string;
   /** Images the model looks at, by public address. */
   images?: string[];
+  /** The output ceiling, reasoning included; the default leaves the reasoning room. */
   maxTokens?: number;
 }
+
+/**
+ * Even at `low` effort the model sometimes reasons for thousands of tokens, and
+ * the reasoning counts against the ceiling: a low ceiling cut a third of the
+ * posts short in the dry runs. Output costs 0.50 $ a million tokens, so room
+ * is cheap.
+ */
+const MIN_TOKENS = 8000;
 
 export function runCost(ctx: Pick<Ctx, 'db' | 'runId'>): number {
   return ctx.db.get<{ usd: number | null }>("SELECT SUM(usd) AS usd FROM spend WHERE service = 'openrouter' AND run_id = ?", ctx.runId)?.usd ?? 0;
@@ -47,8 +56,19 @@ export async function monthlySpend(ctx: Pick<Ctx, 'fetch' | 'secrets'>): Promise
   return { used: key.data.usage_monthly ?? key.data.usage, limit: key.data.limit };
 }
 
-/** One call, answered in JSON. Throws `BudgetExceeded` rather than spend past a cap. */
+/** One call, answered in JSON. Throws `BudgetExceeded` rather than spend past a cap. An answer cut short is asked once more. */
 export async function askJson<T>(ctx: Ctx, ask: Ask): Promise<T> {
+  try {
+    return await askOnce<T>(ctx, ask);
+  } catch (error) {
+    if (error instanceof Truncated) return askOnce<T>(ctx, ask);
+    throw error;
+  }
+}
+
+class Truncated extends Error {}
+
+async function askOnce<T>(ctx: Ctx, ask: Ask): Promise<T> {
   if (runCost(ctx) >= CAPS.openrouterPerRun) throw new BudgetExceeded(`plafond par exécution atteint (${CAPS.openrouterPerRun} $)`);
   const monthStarted = ctx.db.getKv<{ checkedAt: string; used: number }>('openrouter_month');
   if (!monthStarted || Date.now() - Date.parse(monthStarted.checkedAt) > 3_600_000) {
@@ -67,7 +87,7 @@ export async function askJson<T>(ctx: Ctx, ask: Ask): Promise<T> {
       { role: 'user', content },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: ask.maxTokens ?? 2000,
+    max_tokens: Math.max(ask.maxTokens ?? 0, MIN_TOKENS),
     temperature: 0.4,
     // As on the server: left at its default `high` effort, the model spends the output
     // ceiling thinking and stops mid-answer. A host that would ignore it is skipped,
@@ -94,7 +114,7 @@ export async function askJson<T>(ctx: Ctx, ask: Ask): Promise<T> {
     ctx.runId,
   );
   const text = answer.choices[0]?.message.content ?? '';
-  if (answer.choices[0]?.finish_reason === 'length') throw new Error(`${ask.purpose} : réponse coupée par la limite de longueur`);
+  if (answer.choices[0]?.finish_reason === 'length') throw new Truncated(`${ask.purpose} : réponse coupée par la limite de longueur`);
   return parseJson<T>(text, ask.purpose);
 }
 
