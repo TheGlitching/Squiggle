@@ -18,10 +18,11 @@ import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import satori, { type SatoriNode } from 'satori';
 
-import { PUBLISHED, dateLongue, type Article, type Texte } from './blog';
-import { ClassFigure, GuideFigure, HeroFigure, StepFigure, squiggle } from './components/Iso';
+import { PUBLISHED, type Article, type Texte } from './blog';
+import { AMBER, AMBER_SIDE, CoverFigure } from './components/CoverFigures';
+import { ClassFigure, GuideFigure, StepFigure, squiggle } from './components/Iso';
 import { SEVERITY_COLORS } from './demo';
-import { NOTIONS, famille, typo, type Notion, type Segments } from './glossaire';
+import { NOTIONS, typo, type Notion, type Segments } from './glossaire';
 import type { PublicPage, ShareCard } from './seo';
 
 export const SHARE_WIDTH = 1200;
@@ -43,6 +44,11 @@ const ISO_STYLE = `
   .iso-solid { fill: #17171a; stroke: #55555d; }
   .iso-solid-side { fill: #0f0f11; stroke: #55555d; }
   .iso-glass { fill: ${color('accent')}; fill-opacity: 0.1; stroke: ${color('accent')}; }
+  .iso-warn { fill: ${AMBER}; stroke: ${SEVERITY_COLORS.warning.text}; }
+  .iso-warn-side { fill: ${AMBER_SIDE}; stroke: ${SEVERITY_COLORS.warning.text}; }
+  .iso-accent { fill: ${color('accent')}; stroke: ${color('accentHover')}; }
+  .iso-accent-side { fill: #5b3aa8; stroke: ${color('accentHover')}; }
+  .iso-ghost { fill: none; stroke: ${color('accentInk')}; stroke-dasharray: 5 5; stroke-width: 1.5; }
   .iso-line { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; }
 `;
 
@@ -276,8 +282,8 @@ export interface SocialSlide {
 }
 
 const PAGE_MARGIN = 72;
-/** The four captions sit in this band; the slide's own content stays inside it. */
-const CAPTION_BAND = 128;
+/** The page number sits in the bottom band; the slide's own content stays inside it. */
+const CAPTION_BAND = 112;
 const PASSAGE = SEVERITY_COLORS.warning;
 
 type Run = { text: string; marked: boolean; joined?: boolean };
@@ -306,7 +312,7 @@ function words(segments: Segments): Run[][] {
  * not by looking at the image (`misfit`). Half a space on each side of a word
  * makes the space between two, so a marked passage reads as one mark per line.
  */
-function Words({ segments, style }: { segments: Segments | string; style: CSSProperties }) {
+function Words({ segments, style, mark = true }: { segments: Segments | string; style: CSSProperties; mark?: boolean }) {
   const list = words(typeof segments === 'string' ? [segments] : segments);
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -0.13em', flexShrink: 0, ...style }}>
@@ -321,7 +327,7 @@ function Words({ segments, style }: { segments: Segments | string; style: CSSPro
                 paddingLeft: at === 0 ? '0.13em' : run.joined ? '0.26em' : 0,
                 paddingRight: at === word.length - 1 ? '0.13em' : 0,
                 // The passage, as the glossary page marks it on its paper (`.hero-hl`).
-                ...(run.marked ? { background: solid(PASSAGE.tint, color('paper')), borderBottom: `3px solid ${PASSAGE.color}` } : {}),
+                ...(run.marked && mark ? { background: solid(PASSAGE.tint, color('paper')), borderBottom: `3px solid ${PASSAGE.color}` } : {}),
               }}
             >
               {run.text}
@@ -413,47 +419,11 @@ function Paper({ children, glass = false, top }: { children: ReactNode; glass?: 
   );
 }
 
-/** The line above the article's title, as the glossary page writes it. */
-function Rubrique({ exemple, scale }: { exemple: Notion['exemple']; scale: number }) {
-  return (
-    <Words
-      segments={`${exemple.rubrique}, un article inventé`}
-      style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 500, fontSize: 30 * scale, lineHeight: 1.3, color: color('paperMuted') }}
-    />
-  );
-}
-
-
-/** What the four corners say, as a caption band in small capitals. */
-interface Corners {
-  topLeft: string;
-  topRight: string;
-  bottomLeft: string;
-  bottomRight: string;
-}
-
-function Caption({ text, at }: { text: string; at: CSSProperties }) {
-  return (
-    <div
-      data-caption=""
-      style={{
-        position: 'absolute',
-        display: 'flex',
-        ...at,
-        fontSize: 24,
-        fontWeight: 500,
-        letterSpacing: 2.4,
-        textTransform: 'uppercase',
-        color: color('muted'),
-      }}
-    >
-      {text}
-    </div>
-  );
-}
-
-function Frame({ corners, children }: { corners: Corners; children: ReactNode }) {
-  const edge = PAGE_MARGIN - 8;
+/**
+ * A slide: the site's dark ground, and only the page number in its corner, so
+ * a reader swiping through knows where they are.
+ */
+function Frame({ page, children }: { page: string; children: ReactNode }) {
   return (
     <div
       style={{
@@ -468,10 +438,14 @@ function Frame({ corners, children }: { corners: Corners; children: ReactNode })
         padding: `${CAPTION_BAND}px ${PAGE_MARGIN}px`,
       }}
     >
-      <Caption text={corners.topLeft} at={{ top: 52, left: edge }} />
-      <Caption text={corners.topRight} at={{ top: 52, right: edge }} />
-      <Caption text={corners.bottomLeft} at={{ bottom: 52, left: edge }} />
-      <Caption text={corners.bottomRight} at={{ bottom: 52, right: edge }} />
+      {page ? (
+        <div
+          data-caption=""
+          style={{ position: 'absolute', display: 'flex', bottom: 52, right: PAGE_MARGIN - 8, fontSize: 26, fontWeight: 500, letterSpacing: 1, color: color('muted') }}
+        >
+          {page}
+        </div>
+      ) : null}
       {children}
     </div>
   );
@@ -596,8 +570,7 @@ async function settle(draft: Draft, where: string): Promise<string> {
 const plain = (segments: Segments) => segments.map((part) => (typeof part === 'string' ? part : part[0])).join('');
 /** A title as a sentence of the alternative text: `Faut-il acheter de l’or ?` keeps its own ending. */
 const ended = (text: string) => (/[.?!…»]$/.test(text) ? text : `${text}.`);
-const exampleAlt = (exemple: Notion['exemple']) =>
-  `${exemple.rubrique}, un article inventé. ${ended(plain(exemple.titre))} ${plain(exemple.texte)}`;
+const exampleAlt = (exemple: Notion['exemple']) => `${ended(plain(exemple.titre))} ${plain(exemple.texte)}`;
 
 /** The made-up article a carousel is drawn around: an article's first one. */
 function exampleOf(source: SocialSource): Notion['exemple'] {
@@ -620,41 +593,44 @@ const passages = (exemple: Notion['exemple']): Segments[] =>
     }),
   );
 
-/** The two slides about the example: the article on its paper, then the glass on its passage and what is wrong. */
-function exampleDrafts(exemple: Notion['exemple'], corners: (index: number) => Corners): Draft[] {
+/**
+ * The two slides about the example. First the article as one reads it, nothing
+ * marked, for the reader to find the trap; then the reveal: the passage under
+ * Squiggle's glass, and what is wrong with it.
+ */
+function exampleDrafts(exemple: Notion['exemple'], page: (index: number) => string): Draft[] {
   const titled = exemple.titre.some((part) => typeof part !== 'string');
   return [
     {
-      alt: exampleAlt(exemple),
+      alt: `Lisez ceci. Quelque chose vous gêne ? ${exampleAlt(exemple)}`,
       draw: (scale) => (
-        <Frame corners={corners(1)}>
-          <Heading text="Sur un article d’exemple" size={64 * scale} />
+        <Frame page={page(1)}>
+          <Heading text="Lisez ceci. Quelque chose vous gêne ?" size={64 * scale} />
           <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}>
             <Paper top={40 * scale}>
-              <Rubrique exemple={exemple} scale={scale} />
               <Words
                 segments={exemple.titre}
-                style={{ marginTop: 14 * scale, fontWeight: 600, fontSize: 70 * scale, lineHeight: 1.14, rowGap: 6, letterSpacing: -0.8 }}
+                mark={false}
+                style={{ fontWeight: 600, fontSize: 70 * scale, lineHeight: 1.14, letterSpacing: -0.8 }}
               />
-              <Words segments={exemple.texte} style={{ marginTop: 26 * scale, fontSize: 58 * scale, lineHeight: 1.42 }} />
+              <Words segments={exemple.texte} mark={false} style={{ marginTop: 26 * scale, fontSize: 58 * scale, lineHeight: 1.42 }} />
             </Paper>
           </div>
         </Frame>
       ),
     },
     {
-      alt: `Ce qui cloche. ${passages(exemple).map((passage) => `« ${plain(passage)} »`).join(' ')} ${exemple.lecture}`,
+      alt: `Le piège. ${passages(exemple).map((passage) => `« ${plain(passage)} »`).join(' ')} ${exemple.lecture}`,
       draw: (scale) => (
-        <Frame corners={corners(2)}>
-          <Heading text="Ce qui cloche" size={64 * scale} />
+        <Frame page={page(2)}>
+          <Heading text="Le piège" size={64 * scale} />
           <Paper glass top={60 * scale}>
-            <Rubrique exemple={exemple} scale={scale} />
             {passages(exemple).map((passage, index) => (
               <Words
                 key={index}
                 segments={passage}
                 style={{
-                  marginTop: 14 * scale,
+                  marginTop: index === 0 ? 0 : 14 * scale,
                   fontSize: (index === 0 && titled ? 56 : 50) * scale,
                   fontWeight: index === 0 && titled ? 600 : 400,
                   lineHeight: 1.4,
@@ -673,50 +649,43 @@ function exampleDrafts(exemple: Notion['exemple'], corners: (index: number) => C
 }
 
 /**
- * The cover: a surtitle, the title, and the site's drawing of the article under
- * Squiggle's glass, its lines drawn, not written. A cover that needs room takes
- * it from the drawing first, then from its title.
+ * The cover: a line for any reader, the title, and the notion's own scene
+ * (`CoverFigure`). A cover that needs room takes it from the drawing first, then
+ * from its title.
  */
-function coverDraft({ alt, kicker, title, corners }: { alt: string; kicker: string; title: (scale: number) => ReactNode; corners: Corners }): Draft {
+function coverDraft({ alt, slug, kicker, title }: { alt: string; slug: string; kicker: string; title: (scale: number) => ReactNode }): Draft {
   return {
     alt,
     yields: true,
     draw: (scale, figure) => (
-      <Frame corners={corners}>
+      <Frame page="">
         <Words segments={kicker} style={{ fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.2, color: color('accentInk') }} />
         <div style={{ display: 'flex', flexDirection: 'column', marginTop: 34 * scale, flexShrink: 0 }}>{title(scale)}</div>
         <div style={{ display: 'flex', marginTop: 'auto', paddingTop: 40, justifyContent: 'center' }}>
-          <Figure figure={<HeroFigure pins={false} />} width={900 * figure} />
+          <Figure figure={<CoverFigure slug={slug} />} width={960 * figure} />
         </div>
       </Frame>
     ),
   };
 }
 
-/** A notion's carousel: its name, its example, what is wrong with it, how to spot it, and a question for any reader to try. */
+/** A notion's carousel: its name, its example, the trap in it, how to spot it, and a question for any reader to try. */
 function notionDrafts(item: Notion): Draft[] {
-  const number = `Fiche ${String(NOTIONS.indexOf(item) + 1).padStart(2, '0')}`;
-  const family = famille(item.famille).titre;
   const address = `squiggle.fr/glossaire/${item.slug}`;
-  const corners = (index: number): Corners => ({
-    topLeft: number,
-    topRight: index === 0 ? 'Glossaire de l’esprit critique' : family,
-    // The last slide signs with the address itself.
-    bottomLeft: index === 4 ? '' : address,
-    bottomRight: `${index + 1}/5`,
-  });
+  const page = (index: number) => `${index + 1}/5`;
+  const kicker = 'Un piège à repérer quand on lit';
   return [
     coverDraft({
-      alt: `${ended(item.nom)} ${family}. Glossaire de l’esprit critique de Squiggle.`,
-      kicker: family,
+      alt: `${ended(item.nom)} ${kicker}.`,
+      slug: item.slug,
+      kicker,
       title: (scale) => <Marked text={item.nom} size={Math.round(124 * scale)} />,
-      corners: corners(0),
     }),
-    ...exampleDrafts(item.exemple, corners),
+    ...exampleDrafts(item.exemple, page),
     {
       alt: `Comment le repérer. ${item.reperer.join(' ')}`,
       draw: (scale) => (
-        <Frame corners={corners(3)}>
+        <Frame page={page(3)}>
           <Heading text="Comment le repérer" size={64 * scale} />
           <Points points={item.reperer} numbered={false} size={60 * scale} top={64 * scale} />
         </Frame>
@@ -725,7 +694,7 @@ function notionDrafts(item: Notion): Draft[] {
     {
       alt: `À vous de jouer. ${item.question} ${address}`,
       draw: (scale) => (
-        <Frame corners={corners(4)}>
+        <Frame page={page(4)}>
           {/* The glossary's question is asked of any reader: the classroom is one audience among others. */}
           <Heading text="À vous de jouer" size={64 * scale} />
           <Words
@@ -741,7 +710,7 @@ function notionDrafts(item: Notion): Draft[] {
 
 const text = (run: Texte) => (typeof run === 'string' ? run : run.map((part) => (typeof part === 'string' ? part : part.texte)).join(''));
 
-/** An article's carousel: its title, its example and what is wrong with it, then each of its lists of steps. */
+/** An article's carousel: its title, its example and the trap in it, then each of its lists of steps. */
 function articleDrafts(item: Article): Draft[] {
   const steps = item.corps.flatMap((bloc, index) => {
     if (!('etapes' in bloc)) return [];
@@ -753,23 +722,18 @@ function articleDrafts(item: Article): Draft[] {
   });
   const total = 3 + steps.length;
   const address = `squiggle.fr/blog/${item.slug}`;
-  const corners = (index: number): Corners => ({
-    topLeft: 'Blog',
-    topRight: dateLongue(item.publie),
-    bottomLeft: index === total - 1 ? '' : address,
-    bottomRight: `${index + 1}/${total}`,
-  });
+  const page = (index: number) => `${index + 1}/${total}`;
   const title = (scale: number) => (
     <Words segments={item.titre} style={{ fontSize: 84 * scale, fontWeight: 600, lineHeight: 1.06, letterSpacing: -2.1 * scale }} />
   );
   return [
-    coverDraft({ alt: `${ended(item.titre)} Le blog de Squiggle.`, kicker: 'Une méthode de lecture', title, corners: corners(0) }),
-    ...exampleDrafts(exampleOf(item), corners),
+    coverDraft({ alt: `${ended(item.titre)} Une méthode de lecture.`, slug: item.slug, kicker: 'Une méthode de lecture', title }),
+    ...exampleDrafts(exampleOf(item), page),
     ...steps.map(
       ({ heading, points }, index): Draft => ({
         alt: `${ended(heading)} ${points.map((point, at) => `${at + 1}. ${point}`).join(' ')}${index === steps.length - 1 ? ` ${address}` : ''}`,
         draw: (scale) => (
-          <Frame corners={corners(3 + index)}>
+          <Frame page={page(3 + index)}>
             <Heading text={heading} size={64 * scale} />
             <Points points={points} numbered size={60 * scale} top={64 * scale} />
             {index === steps.length - 1 ? <Signature address={address} size={40 * scale} /> : null}
