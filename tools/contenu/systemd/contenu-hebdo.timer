@@ -1,0 +1,9 @@
+[Unit]
+Description=Squiggle, routine de contenu chaque lundi à 5 h, heure de Paris
+
+[Timer]
+OnCalendar=Mon *-*-* 05:00:00 Europe/Paris
+Persistent=true
+
+[Install]
+WantedBy=timers.target

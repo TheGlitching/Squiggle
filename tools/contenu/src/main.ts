@@ -59,7 +59,14 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const unlock = lock(p.data);
+  let unlock: () => void;
+  try {
+    unlock = lock(p.data);
+  } catch (error) {
+    // Monday's run can still be going at 7:00: the daily check simply waits for tomorrow.
+    console.error((error as Error).message);
+    return command === 'quotidien' ? 0 : 1;
+  }
   const started = new Date();
   const runId = db.run('INSERT INTO runs (kind, started) VALUES (?, ?)', dry ? `${command}-a-blanc` : command, started.toISOString());
   const ctx: Ctx = { db, secrets: secrets(), paths: p, dry, now: started, runId, steps: [], fetch: globalThis.fetch, log: (line) => console.log(line) };

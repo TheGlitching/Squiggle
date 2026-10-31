@@ -12,11 +12,10 @@ export const REPO = 'TheGlitching/Squiggle';
 export const REPO_URL = `https://github.com/${REPO}`;
 export const MODEL = 'deepseek/deepseek-v4.1-flash';
 
-/** Where the weekly report goes, and the only senders whose replies are read (`worker/`). */
+/** Where the weekly report goes, and who it comes from. */
 export const REPORT_TO = 'contact@squiggle.fr';
 export const REPORT_FROM = 'no-reply@squiggle.fr';
-export const REPLY_TO = 'routine@squiggle.fr';
-export const OWNER_SENDERS = ['denfonteneau@gmail.com', 'contact@squiggle.fr'];
+export { OWNER_SENDERS, REPLY_TO } from './owners';
 
 /** The networks connected in Postiz, by Postiz's `identifier`. */
 export const NETWORKS = ['bluesky', 'threads', 'facebook', 'instagram', 'x'] as const;

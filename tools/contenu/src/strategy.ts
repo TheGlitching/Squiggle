@@ -66,6 +66,8 @@ export interface Facts {
   site: { analysesFromBlog: number; analysesFromGlossary: number; newAccounts: number; paying: number } | null;
   tests: Array<{ network: Network; kind: string; value: string; hypothesis: string; start: string; end: string; week: number; verdict: Verdict | null }>;
   weeksOfData: number;
+  /** The decision rules' thresholds, so the note may name them. */
+  rules: { minVisits: number; winPct: number; testWeeks: number; judgeWeeks: number; reviewWeeks: number; minimalPct: number; keepPct: number };
   shares12w: ReturnType<typeof networkShares> | null;
 }
 
@@ -150,6 +152,7 @@ export function computeFacts(ctx: Ctx, current: Week): Facts {
       : null,
     tests,
     weeksOfData,
+    rules: { minVisits: MIN_VISITS, winPct: Math.round((WIN_RATIO - 1) * 100), testWeeks: TEST_WEEKS, judgeWeeks: 8, reviewWeeks: 12, minimalPct: 5, keepPct: 10 },
     shares12w: twelve ? networkShares(twelve) : null,
   };
 }

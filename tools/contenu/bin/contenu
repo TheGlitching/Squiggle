@@ -1,0 +1,44 @@
+#!/bin/sh
+# Runs the content routine on the VPS: `contenu <command> [--a-blanc]`.
+#
+# The routine runs from a clone of the repository at the tip of its branch, in a
+# throwaway Node container, so the VPS needs no Node of its own and Postiz's
+# environment is never touched. The container sees only the routine's folder,
+# runs as the `ubuntu` user, and shares the host network to reach Postiz on
+# 127.0.0.1. Secrets come from ~/contenu/.env, read here and passed by name.
+set -eu
+
+CONTENU_HOME=${CONTENU_HOME:-$HOME/contenu}
+DEPOT=$CONTENU_HOME/depot
+BRANCH=${CONTENU_BRANCH:-main}
+NODE_IMAGE=node:24.11.0-slim
+SECRETS="POSTIZ_API_KEY POSTIZ_API_URL CF_API_TOKEN CF_ACCOUNT_ID CF_KV_REPONSES SQUIGGLE_METRICS_TOKEN OPENROUTER_API_KEY BREVO_API_KEY GITHUB_TOKEN GSC_CREDENTIALS GSC_SITE"
+
+if [ ! -d "$DEPOT/.git" ]; then
+  git clone -q --branch "$BRANCH" https://github.com/TheGlitching/Squiggle.git "$DEPOT"
+fi
+git -C "$DEPOT" fetch -q origin "$BRANCH"
+git -C "$DEPOT" checkout -q -B "$BRANCH" "origin/$BRANCH"
+
+set -a
+. "$CONTENU_HOME/.env"
+set +a
+
+run() {
+  env_args=""
+  for name in $SECRETS; do env_args="$env_args -e $name"; done
+  # shellcheck disable=SC2086
+  docker run --rm --network host --user "$(id -u):$(id -g)" \
+    -v "$CONTENU_HOME:$CONTENU_HOME" -w "$DEPOT" \
+    -e HOME=/tmp -e TZ=Europe/Paris -e CONTENU_DONNEES="$CONTENU_HOME/donnees" -e CONTENU_DEPOT="$DEPOT" \
+    $env_args "$NODE_IMAGE" "$@"
+}
+
+# The routine's own dependencies only (esbuild, zod, postal-mime), reinstalled when the lockfile changes.
+stamp=$(sha256sum "$DEPOT/package-lock.json" | cut -c1-16)
+if [ "$(cat "$CONTENU_HOME/.npm-stamp" 2>/dev/null)" != "$stamp" ]; then
+  run npm ci --omit=dev --workspace=@squiggle/contenu --include-workspace-root=false --no-audit --no-fund --loglevel=error
+  echo "$stamp" > "$CONTENU_HOME/.npm-stamp"
+fi
+
+run sh -c 'node tools/contenu/build.mjs && exec node --disable-warning=ExperimentalWarning tools/contenu/dist/contenu.mjs "$@"' contenu "$@"
