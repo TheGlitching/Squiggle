@@ -125,7 +125,7 @@ export function RunScene({ step }: { step: RunStep }) {
   const [fx, fy] = v.P(76, body[1][0] + 2, Z);
 
   return (
-    <svg viewBox="0 4 254 218" className="block h-auto w-full overflow-visible" aria-hidden="true">
+    <svg viewBox="0 0 320 222" className="block h-auto w-full overflow-visible" aria-hidden="true">
       <Box v={v} at={[0, 0, 0]} size={[W, D, 2]} r={3} face="iso-paper" edge="iso-paper-edge" />
       <g transform={v.top(0, 0, 2)}>
         <rect x={14} y={14} width={70} height={9} rx={2} fill="var(--paper-ink)" />
@@ -230,7 +230,7 @@ export function RunProgress({ stage, message }: { stage: PipelineStage | undefin
   return (
     <div className="space-y-4 rounded-xl border border-line bg-panel p-4">
       {/* Remounted on each stage, so the new loop starts from its beginning. */}
-      <div key={step} className="run-scene mx-auto w-full max-w-60">
+      <div key={step} className="run-scene mx-auto w-full max-w-72">
         <RunScene step={step} />
       </div>
       <ol className="space-y-2.5">
