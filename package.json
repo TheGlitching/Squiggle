@@ -16,7 +16,8 @@
   "workspaces": [
     "shared",
     "server",
-    "web"
+    "web",
+    "tools/contenu"
   ],
   "scripts": {
     "dev": "vite",
@@ -27,9 +28,9 @@
     "build:firefox": "TARGET=firefox vite build && node scripts/build-content-script.mjs dist/firefox",
     "build:all": "npm run build:chrome && npm run build:firefox && npm run build:web",
     "preview": "vite preview",
-    "test": "vitest run && npm run test -w @squiggle/server && npm run test -w @squiggle/web",
+    "test": "vitest run && npm run test -w @squiggle/server && npm run test -w @squiggle/web && npm run test -w @squiggle/contenu",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server && npm run typecheck -w @squiggle/web",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @squiggle/server && npm run typecheck -w @squiggle/web && npm run typecheck -w @squiggle/contenu",
     "package": "npm run build:all && node scripts/package.mjs",
     "package:source": "mkdir -p packages && git archive --format=zip --prefix=squiggle-source/ -o packages/squiggle-source-$npm_package_version.zip HEAD",
     "deploy:staging": "npm run build:web && npm run deploy -w @squiggle/server -- staging",

@@ -1,0 +1,11 @@
+[Unit]
+Description=Squiggle, routine de contenu du lundi
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/contenu/bin/contenu hebdo
+# Postiz's hourly quota can make the run wait for the hour to roll.
+TimeoutStartSec=4h

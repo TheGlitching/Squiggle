@@ -1,0 +1,18 @@
+#!/bin/sh
+# Installs the routine on the VPS, from the clone: the runner beside the data,
+# and the two systemd timers, left disabled. Enabling them is a separate,
+# deliberate step: `sudo systemctl enable --now contenu-quotidien.timer contenu-hebdo.timer`.
+#
+# The runner is copied out of the clone because it updates the clone itself,
+# and a shell script must not be rewritten while it runs.
+set -eu
+
+CONTENU_HOME=${CONTENU_HOME:-$HOME/contenu}
+here=$(cd "$(dirname "$0")/.." && pwd)
+
+mkdir -p "$CONTENU_HOME/bin" "$CONTENU_HOME/donnees"
+chmod 700 "$CONTENU_HOME/donnees"
+install -m 755 "$here/bin/contenu" "$CONTENU_HOME/bin/contenu"
+sudo install -m 644 "$here"/systemd/contenu-*.service "$here"/systemd/contenu-*.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+systemctl list-unit-files 'contenu-*' --no-pager
