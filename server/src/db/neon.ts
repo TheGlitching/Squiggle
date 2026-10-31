@@ -18,6 +18,7 @@ import { randomToken } from '@squiggle/shared';
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
 import {
   ANON_RATE_SCOPE_PREFIX,
+  TRANSCRIPTION_RATE_SCOPE_PREFIX,
   DAY_MS,
   RATE_WINDOW_MS,
   REPORT_MAX_BYTES,
@@ -498,12 +499,13 @@ export class NeonDb implements Db {
 
   async recordAndCheckRate(args: RateCheckArgs): Promise<RateCheckResult> {
     const windowStart = Math.floor(args.now / args.windowMs) * args.windowMs;
+    const amount = args.amount ?? 1;
     // Atomic increment: concurrent callers each see a distinct count, so the
     // limit can never be exceeded by a race.
     const rows = await this.q`
       INSERT INTO rate_limits (scope, key, window_start, count)
-      VALUES (${args.scope}, ${args.key}, ${windowStart}, 1)
-      ON CONFLICT (scope, key, window_start) DO UPDATE SET count = rate_limits.count + 1
+      VALUES (${args.scope}, ${args.key}, ${windowStart}, ${amount})
+      ON CONFLICT (scope, key, window_start) DO UPDATE SET count = rate_limits.count + ${amount}
       RETURNING count
     `;
     const count = num(rows[0].count);
@@ -513,7 +515,7 @@ export class NeonDb implements Db {
   async releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void> {
     const windowStart = Math.floor(args.now / args.windowMs) * args.windowMs;
     await this.q`
-      UPDATE rate_limits SET count = count - 1
+      UPDATE rate_limits SET count = GREATEST(0, count - ${args.amount ?? 1})
       WHERE scope = ${args.scope} AND key = ${args.key} AND window_start = ${windowStart} AND count > 0
     `;
   }
@@ -719,10 +721,10 @@ export class NeonDb implements Db {
     return rows.length > 0;
   }
 
-  async bumpMetric(name: MetricName, now: number): Promise<void> {
+  async bumpMetric(name: MetricName, now: number, by = 1): Promise<void> {
     await this.q`
-      INSERT INTO metric_counters (day, name, count) VALUES (${utcDayOf(now)}, ${name}, 1)
-      ON CONFLICT (day, name) DO UPDATE SET count = metric_counters.count + 1
+      INSERT INTO metric_counters (day, name, count) VALUES (${utcDayOf(now)}, ${name}, ${by})
+      ON CONFLICT (day, name) DO UPDATE SET count = metric_counters.count + ${by}
     `;
   }
 
@@ -808,7 +810,7 @@ export class NeonDb implements Db {
       this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs} RETURNING 1`,
       this.q`
         DELETE FROM rate_limits
-        WHERE window_start <= CASE WHEN scope LIKE ${`${ANON_RATE_SCOPE_PREFIX}%`} THEN ${now - DAY_MS}::bigint ELSE ${now - RATE_WINDOW_MS}::bigint END
+        WHERE window_start <= CASE WHEN scope LIKE ${`${ANON_RATE_SCOPE_PREFIX}%`} OR scope LIKE ${`${TRANSCRIPTION_RATE_SCOPE_PREFIX}%`} THEN ${now - DAY_MS}::bigint ELSE ${now - RATE_WINDOW_MS}::bigint END
         RETURNING 1
       `,
       this.q`DELETE FROM visitor_uses WHERE used_at <= ${now - VISITOR_USE_RETENTION_MS} RETURNING 1`,

@@ -19,7 +19,15 @@ import type { AnalysisResult } from '@squiggle/shared';
 import { findingsToHighlightTargets, textBlockToEngineBlock } from '../adapters/findingAdapters';
 import type { ExtractedArticle } from '../content/types';
 import type { FcRpcMap } from '../messaging/protocol';
+import {
+  probePodcastPage,
+  transcriptCues,
+  transcriptInFeed,
+  type PodcastPage,
+  type PublishedTranscript,
+} from '../podcast/transcript';
 import { recordFinalizedAnalysis } from '../review/reviewPrompt';
+import { hasSiteAccess } from '../permissions/siteAccess';
 import {
   captureYoutubeCaptions,
   cuesToBlocks,
@@ -47,6 +55,9 @@ const VIDEO_AD_WAIT_MS = 180_000;
 const VIDEO_RETRY_MS = 2_000;
 
 /** A transcript, or the sentence telling the reader why there is none. */
+/** A feed or a transcript larger than this is not a podcast's: it is not read. */
+const PODCAST_MAX_BYTES = 20 * 1024 * 1024;
+
 type VideoRead =
   | { ok: true; blocks: TranscriptBlock[]; title: string; author: string; automatic: boolean }
   | { ok: false; error?: string };
@@ -95,6 +106,8 @@ export class BackgroundServiceWorker {
   private keyStorage: SecureKeyStorage;
   private activePipelines = new Map<number, AnalysisRunner>();
   private navigationAbortedTabIds = new Set<number>();
+  /** The published transcript found for the episode a tab shows, until the tab leaves it. */
+  private podcasts = new Map<number, { page: PodcastPage; transcript: PublishedTranscript }>();
   private tabListenerCleanups: Array<() => void> = [];
 
   constructor(options?: BackgroundServiceWorkerOptions) {
@@ -189,6 +202,7 @@ export class BackgroundServiceWorker {
       UnifiedRuntime.onTabRemoved((tabId) => {
         this.stateManager.removeTabState(tabId);
         this.abortPipelineForTab(tabId);
+        this.podcasts.delete(tabId);
       })
     );
 
@@ -201,6 +215,7 @@ export class BackgroundServiceWorker {
         // any stored state or in-flight analysis was computed from.
         if (!changeInfo.url) return;
         this.abortPipelineForTab(tabId);
+        this.podcasts.delete(tabId);
         this.stateManager.updateTabState(tabId, {
           status: 'idle',
           progress: 0,
@@ -262,6 +277,13 @@ export class BackgroundServiceWorker {
       if (!targetTabId) throw new Error('No target tab specified or found');
 
       return await this.runAnalysisForTab(targetTabId, req);
+    });
+
+    // Whether the episode this tab shows has a transcript its podcast publishes.
+    this.bus.registerRPC<'PODCAST_PROBE', FcRpcMap>('PODCAST_PROBE', async (req) => {
+      const found = await this.findPodcastTranscript(req.tabId);
+      if (found && 'locked' in found) return { available: false, access: found.locked };
+      return { available: Boolean(found), title: found?.transcript.title };
     });
 
     // Cancel / Abort analysis on target tab
@@ -486,14 +508,82 @@ export class BackgroundServiceWorker {
   }
 
   /**
+   * The transcript the podcast publishes for the episode this tab shows (see
+   * `src/podcast/transcript.ts`), read from the reader's browser: the page's
+   * feed, then the episode in it. Many podcast hosts do not let a page of
+   * another site read their feed, an extension included: those feeds are
+   * answered as `locked`, and the panel asks the reader to let it read their site.
+   */
+  private async findPodcastTranscript(
+    tabId: number
+  ): Promise<{ page: PodcastPage; transcript: PublishedTranscript } | { locked: string[] } | null> {
+    const known = this.podcasts.get(tabId);
+    if (known) return known;
+    let page: PodcastPage | null | undefined;
+    try {
+      page = await UnifiedRuntime.runInPage(tabId, probePodcastPage, []);
+    } catch {
+      return null;
+    }
+    if (!page) return null;
+    const locked: string[] = [];
+    for (const feed of page.feeds) {
+      const body = await readPublicText(feed);
+      if (body === undefined && !(await hasSiteAccess(feed))) locked.push(feed);
+      const transcript = body ? transcriptInFeed(body, page) : null;
+      if (transcript) {
+        const found = { page, transcript };
+        this.podcasts.set(tabId, found);
+        return found;
+      }
+    }
+    return locked.length ? { locked } : null;
+  }
+
+  /**
    * Execute analysis pipeline for a given tab
    */
   public async runAnalysisForTab(
     tabId: number,
-    options?: { articleText?: string; articleTitle?: string; modelConfig?: any }
+    options?: { articleText?: string; articleTitle?: string; podcast?: boolean; modelConfig?: any }
   ): Promise<{ success: boolean; result?: AnalysisResult; error?: string }> {
     let articleText = options?.articleText;
     let articleTitle = options?.articleTitle;
+    const fail = (error: string) => {
+      this.stateManager.updateTabState(tabId, { status: 'error', error });
+      this.safeDispatch('ANALYSIS_ERROR', { tabId, error });
+      return { success: false, error };
+    };
+
+    // The transcript an episode's podcast publishes, when the reader chose it over the page.
+    let podcast: { url: string; blocks: TranscriptBlock[] } | undefined;
+    if (options?.podcast && !articleText) {
+      this.stateManager.updateTabState(tabId, { status: 'extracting', progress: 5, currentStep: 'Lecture de la transcription…' });
+      this.safeDispatch('ANALYSIS_PROGRESS', {
+        tabId,
+        status: 'extracting',
+        stage: 'extract',
+        message: 'Lecture de la transcription publiée par le podcast…',
+        progress: 5,
+      });
+      const lookup = await this.findPodcastTranscript(tabId);
+      const found = lookup && 'transcript' in lookup ? lookup : null;
+      const body = found ? await readPublicText(found.transcript.url) : null;
+      const blocks = body ? cuesToBlocks(transcriptCues(body, found!.transcript.type)) : [];
+      if (!found || !blocks.length) {
+        return fail(
+          'La transcription de cet épisode n’a pas pu être lue. Le site du podcast ne la laisse peut-être pas lire ' +
+            'à une extension : autorisez l’accès à tous les sites dans les réglages, puis relancez.'
+        );
+      }
+      podcast = { url: found.page.url, blocks };
+      articleText = blocks.map((b) => b.text).join('\n\n');
+      articleTitle = found.transcript.title || found.page.title;
+      const words = articleText.split(/\s+/).filter(Boolean).length;
+      if (words < MIN_ANALYSABLE_WORDS) {
+        return fail(`La transcription de cet épisode ne compte que ${words} mots : trop peu pour juger ce qui y est affirmé.`);
+      }
+    }
 
     // 1. If article not provided, read it from the page: a YouTube video's
     // captions, or the article through the content script.
@@ -647,6 +737,13 @@ export class BackgroundServiceWorker {
               // The cue times stay here: the analysis needs the text only.
               blocks: video.blocks.map(({ id, type, text, charStart }) => ({ id, type, text, charStart })),
             }
+          : podcast
+          ? {
+              text: articleText,
+              title: articleTitle,
+              url: podcast.url,
+              blocks: podcast.blocks.map(({ id, type, text, charStart }) => ({ id, type, text, charStart })),
+            }
           : {
               text: articleText,
               title: articleTitle,
@@ -676,7 +773,7 @@ export class BackgroundServiceWorker {
       // severities, snake_case categories). Posting raw engine Finding[] left
       // findingId undefined and every anchor silently failed. A video has no
       // text in the page to highlight.
-      if (!videoReport && result.findings && result.findings.length > 0) {
+      if (!videoReport && !podcast && result.findings && result.findings.length > 0) {
         try {
           await UnifiedRuntime.sendTabMessage(tabId, {
             type: 'FC_APPLY_HIGHLIGHTS',
@@ -753,3 +850,24 @@ if (typeof chrome !== 'undefined' && chrome?.runtime) {
 
 export { serviceWorkerInstance as serviceWorker };
 export * from './tabStateManager';
+
+/**
+ * A public file (a podcast's feed or transcript), read by the reader's browser
+ * without its cookies; null when it is missing or too large, undefined when
+ * the browser would not let the extension read it at all (no CORS, no access).
+ */
+async function readPublicText(url: string): Promise<string | null | undefined> {
+  let res: Response;
+  try {
+    res = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+  } catch {
+    return undefined;
+  }
+  try {
+    if (!res.ok || Number(res.headers.get('content-length') ?? 0) > PODCAST_MAX_BYTES) return null;
+    const text = await res.text();
+    return text.length > PODCAST_MAX_BYTES ? null : text;
+  } catch {
+    return null;
+  }
+}

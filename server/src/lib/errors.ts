@@ -36,6 +36,10 @@ export const ErrorCodes = {
   starts_exhausted: 'starts_exhausted',
   anon_used: 'anon_used',
   anon_closed: 'anon_closed',
+  media_unreadable: 'media_unreadable',
+  media_too_long: 'media_too_long',
+  transcription_limit: 'transcription_limit',
+  transcription_closed: 'transcription_closed',
   billing_unavailable: 'billing_unavailable',
   teacher_offer_closed: 'teacher_offer_closed',
   not_found: 'not_found',
@@ -86,6 +90,13 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   // daily allowance for visitors is. Either way the next step is an account.
   anon_used: 429,
   anon_closed: 429,
+  // A recording sent for transcription that is not in the one format the site
+  // writes, or longer than one analysis covers; then the account's or the
+  // site's daily minutes of sound, which together cap what transcription costs.
+  media_unreadable: 400,
+  media_too_long: 413,
+  transcription_limit: 429,
+  transcription_closed: 429,
   billing_unavailable: 502,
   teacher_offer_closed: 403,
   not_found: 404,

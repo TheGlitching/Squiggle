@@ -13,6 +13,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { getOwnerMetrics, messageForError, type OwnerMetrics } from '../api';
 import { FIELD, H3, PAGE, QUIET_LINK, TITLE } from '../components/Landing';
 import { Layout } from '../components/Layout';
+import { HOSTED_TRANSCRIPTION } from '../../../shared/src/hosted/disclosure';
+
+const TRANSCRIPTION_USD_PER_MINUTE = HOSTED_TRANSCRIPTION.usdPerMinute;
 
 const WINDOWS = [1, 4, 12] as const;
 
@@ -64,6 +67,8 @@ const LABELS: Record<string, string> = {
   subscription_required: 'Abonnement requis',
   anon_used: 'Sans compte : déjà faite',
   anon_closed: 'Sans compte : plafond du jour atteint',
+  transcription_limit: 'Transcription : minutes du compte épuisées',
+  transcription_closed: 'Transcription : plafond du site atteint',
 };
 
 // A figure the server left out reads as '-' rather than taking the whole page down.
@@ -189,6 +194,34 @@ function Figures({ m }: { m: OwnerMetrics }) {
           ]}
         />
       </Band>
+
+      {/* An older server leaves the band out rather than blanking the page. */}
+      {m.transcription ? (
+        <Band title="Transcription des enregistrements">
+          <Rows
+            title="Sur la période"
+            rows={[
+              ['Enregistrements transcrits', number(m.transcription.count)],
+              ['Minutes de son', number(m.transcription.minutes)],
+              ['Coût de la transcription', usd(m.transcription.costUsd)],
+              ['Échecs (non facturés)', number(m.transcription.failed)],
+            ]}
+          />
+          <Rows
+            title="Plafond de dépense"
+            rows={[
+              [
+                'Par jour, tous comptes',
+                m.transcription.dailyCapMinutes > 0
+                  ? `${number(m.transcription.dailyCapMinutes)} min · ${usd(m.transcription.dailyCapMinutes * TRANSCRIPTION_USD_PER_MINUTE)}`
+                  : 'fermée',
+              ],
+              ['Refus : plafond du site atteint', number(m.funnel.refused.transcription_closed)],
+              ['Refus : minutes du compte épuisées', number(m.funnel.refused.transcription_limit)],
+            ]}
+          />
+        </Band>
+      ) : null}
 
       <Band title="Santé">
         <Rows

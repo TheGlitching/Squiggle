@@ -367,6 +367,15 @@ export const METRIC_NAMES = [
   'refused_subscription_required',
   'refused_anon_used',
   'refused_anon_closed',
+  // Recordings sent from the site and transcribed, their seconds of sound
+  // (a sum, not a count: the transcription bill is that sum times the
+  // price), failed calls, and refusals by the account's or the site's
+  // daily allowance.
+  'transcription',
+  'transcription_seconds',
+  'transcription_failed',
+  'refused_transcription_limit',
+  'refused_transcription_closed',
 ] as const;
 export type MetricName = (typeof METRIC_NAMES)[number];
 
@@ -421,6 +430,8 @@ export interface RateCheckArgs {
   limit: number;
   windowMs: number;
   now: number;
+  /** What this use counts for, 1 by default: a transcription counts its seconds of sound. */
+  amount?: number;
 }
 
 export interface RateCheckResult {
@@ -535,7 +546,8 @@ export interface Db {
 
   /**
    * Take back one use counted in the current window of `scope` and `key`, for
-   * a use that ended up costing nothing. Never takes a count below zero.
+   * a use that ended up costing nothing (`amount` of them, 1 by default).
+   * Never takes a count below zero.
    */
   releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void>;
 
@@ -626,7 +638,7 @@ export interface Db {
   finalizeAnalysisRun(id: string, now: number): Promise<boolean>;
 
   /** Count one occurrence of a fixed event on the UTC day of `now`. */
-  bumpMetric(name: MetricName, now: number): Promise<void>;
+  bumpMetric(name: MetricName, now: number, by?: number): Promise<void>;
 
   /** The aggregate figures behind `GET /admin/metrics`. Counts only. */
   collectMetrics(args: CollectMetricsArgs): Promise<MetricsRaw>;

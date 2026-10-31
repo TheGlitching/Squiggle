@@ -62,6 +62,8 @@
         "BREVO_FROM_ADDRESS": "no-reply@squiggle.fr",
         "LLM_PROVIDER": "openrouter",
         "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
+        // The minutes of sound staging may have transcribed in a day (see production).
+        "TRANSCRIBE_DAILY_MINUTES": "60",
         // The Stripe test-mode price: staging never talks to live billing.
         "STRIPE_PRICE_ID": "PENDING_TEST_PRICE_ID",
         // The test-mode teacher coupon (see production). None exists yet, so
@@ -103,6 +105,10 @@
         // different report. OpenRouter ids are not predictable from the model
         // name, so this one is copied verbatim from the live catalogue.
         "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
+        // The spending cap of transcription: the minutes of sound the site may
+        // have transcribed in a UTC day, all accounts together. At 0.0035 $ a
+        // minute (HOSTED_TRANSCRIPTION), 600 minutes is 2.10 $ a day at most.
+        "TRANSCRIBE_DAILY_MINUTES": "600",
         // The recurring price the subscription is sold at. A `price_…` id is not
         // a secret (it is visible in any Checkout URL), but it is environment
         // specific, so it lives here rather than in code. Filled in from the

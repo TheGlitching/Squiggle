@@ -2,9 +2,10 @@ import { SquiggleMark } from '../components/Iso';
 import { Page } from '../components/Layout';
 import { Trajet } from '../components/Trajet';
 import { Link } from '../router';
-import { HOSTED_ANALYSIS } from '../../../shared/src/hosted/disclosure';
+import { HOSTED_ANALYSIS, HOSTED_TRANSCRIPTION } from '../../../shared/src/hosted/disclosure';
 
 const { inferenceHosts, webSearch } = HOSTED_ANALYSIS;
+const PART_MINUTES = HOSTED_TRANSCRIPTION.maxSeconds / 60;
 
 /**
  * Who runs the model and who runs the web searches, for the privacy policy,
@@ -14,6 +15,7 @@ const { inferenceHosts, webSearch } = HOSTED_ANALYSIS;
  */
 export const INFERENCE_HOSTS_LABEL = `Hébergeurs du modèle : ${inferenceHosts.map((host) => host.name).join(', ')}`;
 export const WEB_SEARCH_LABEL = `Recherche web : ${webSearch.name}`;
+export const TRANSCRIPTION_LABEL = `Transcription : ${HOSTED_TRANSCRIPTION.host.name}`;
 
 export const RETENTION = [
   [
@@ -30,6 +32,16 @@ export const RETENTION = [
     'Captures d’écran et PDF importés sur le site, partagés vers l’appli, ou lus par l’extension',
     'Votre appareil, qui en lit le texte ; aucune image, aucun fichier n’est envoyé',
     'Le temps de la lecture',
+  ],
+  [
+    'Enregistrement importé sur le site, ou partagé vers l’appli : vidéo, message vocal, épisode',
+    `Votre appareil, qui en extrait le son ; ${PART_MINUTES} minutes de son au plus traversent notre serveur vers la transcription, sans y être écrites`,
+    'Le temps de la transcription ; son texte, ensuite, comme un texte collé',
+  ],
+  [
+    'Minutes de son transcrites par votre compte dans la journée, pour le plafond quotidien',
+    'Base de données',
+    'Un jour',
   ],
   [
     'Séance du mode classe : l’article et sa préparation',
@@ -78,6 +90,11 @@ const SUBPROCESSORS = [
     'Fournisseur du modèle d’IA',
     'Exécution de l’analyse par un modèle d’IA, en Europe en priorité, aux États-Unis en secours',
     'Le texte de l’article et les extraits des sources citées, sans identité de lecteur',
+  ],
+  [
+    `${HOSTED_TRANSCRIPTION.host.name} (transcription)`,
+    `Transcription du son d’un enregistrement envoyé depuis le site, par un point d’accès qui ne conserve rien ; société établie en ${HOSTED_TRANSCRIPTION.host.country}`,
+    `Le son, ${PART_MINUTES} minutes au plus par analyse, sans identité de lecteur ; jamais l’image d’une vidéo`,
   ],
   [
     'Moteur de recherche web',
@@ -191,6 +208,15 @@ export function Transparence() {
               <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
                 Votre navigateur le lui fournit. Un article payant est donc analysé dans la limite de ce que vous lisez.
                 L’adresse indiquée à côté d’un texte collé n’est jamais visitée.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-display text-lg font-semibold">Un enregistrement est transcrit, puis oublié.</dt>
+              <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
+                Une vidéo, un message vocal ou un épisode importé sur le site reste sur votre appareil, qui en extrait le
+                son. Seul ce son, {PART_MINUTES} minutes au plus par analyse, part vers {HOSTED_TRANSCRIPTION.host.name}{' '}
+                pour être transcrit, par notre serveur, qui ne l’écrit nulle part. Ni le fichier ni sa transcription ne
+                sont gardés : le texte revient dans votre navigateur et suit ensuite le trajet d’un texte collé.
               </dd>
             </div>
             <div>

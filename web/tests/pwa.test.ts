@@ -150,6 +150,22 @@ describe('the service worker', () => {
     expect(worker.network.slice(before)).toEqual([]);
   });
 
+  it('keeps a shared recording on the device, alone, for the page to transcribe', async () => {
+    const worker = loadWorker();
+    await worker.lifecycle('install');
+    const before = worker.network.length;
+    const form = new FormData();
+    form.append('media', new File(['opus'], 'PTT-20261031.opus', { type: 'audio/ogg' }));
+    form.append('captures', new File(['image'], 'capture-1.png', { type: 'image/png' }));
+
+    const answer = (await worker.request('/analyser', { method: 'POST', mode: 'navigate', form })) as Response;
+    expect(answer.headers.get('location')).toBe('https://squiggle.fr/analyser?media=1');
+    expect([...(worker.stores.get('squiggle-partage') ?? new Map()).entries()]).toEqual([
+      ['/partage/media', 'audio/ogg opus'],
+    ]);
+    expect(worker.network.slice(before)).toEqual([]);
+  });
+
   it('turns a shared text into the page’s address, as a share by GET did', async () => {
     const worker = loadWorker();
     const form = new FormData();
@@ -211,12 +227,20 @@ describe('the manifest', () => {
     expect(pngSize('/icons/apple-touch-icon.png')).toEqual([180, 180]);
   });
 
-  it('receives a share on the analysis page, screenshots and PDF included, by a POST the worker keeps on the device', () => {
+  it('receives a share on the analysis page, screenshots, PDF and recordings included, by a POST the worker keeps on the device', () => {
     expect(manifest.share_target).toEqual({
       action: '/analyser',
       method: 'POST',
       enctype: 'multipart/form-data',
-      params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'captures', accept: ['image/*', 'application/pdf', '.pdf'] }] },
+      params: {
+        title: 'title',
+        text: 'text',
+        url: 'url',
+        files: [
+          { name: 'captures', accept: ['image/*', 'application/pdf', '.pdf'] },
+          { name: 'media', accept: ['audio/*', 'video/*'] },
+        ],
+      },
     });
   });
 

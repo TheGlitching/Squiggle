@@ -48,6 +48,7 @@
  *   POST   /web/anon/finalize
  *   GET    /web/anon/link              (no account) a link's report, if the extension already filed one
  *                                                from the page itself; 0 credits, nothing fetched
+ *   POST   /web/transcribe             (session) a recording's text, 15 minutes at most, within the daily allowances
  *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
  *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
  *   GET    /admin/metrics              (admin token) aggregate launch metrics, counts only
@@ -123,6 +124,8 @@ import { BrevoEmailSender } from './lib/brevo';
 import { apiError, errorResponse, type Outcome } from './lib/errors';
 import { HOSTED_ANALYSIS, isAudienceMetricName, sha256Hex } from '@squiggle/shared';
 import { migrate, type SqlQuery } from './migrations';
+import { openRouterTranscriber, type Transcriber } from './transcribe/openrouter';
+import { transcribeRecording } from './transcribe/transcribe';
 import { collectLaunchMetrics, countMetric } from './metrics';
 import { secureEquals } from './lib/secureCompare';
 import { MAIL_JOB_ATTEMPTS, receiveEmail, runMailJob, type MailJob, type MailQueue } from './mail/inbound';
@@ -172,6 +175,12 @@ export interface Env {
   GEMINI_MODEL?: string;
   /** The queue a forwarded message's analysis finishes on (`wrangler.jsonc` `queues`). */
   MAIL_QUEUE: Queue<MailJob>;
+  /**
+   * Non-secret: the minutes of sound the site may have transcribed in a UTC
+   * day, all accounts together, on `OPENROUTER_API_KEY`. The spending cap of
+   * transcription; unset, empty or 0, transcription is closed.
+   */
+  TRANSCRIBE_DAILY_MINUTES?: string;
 }
 
 export interface Services {
@@ -196,6 +205,10 @@ export interface Services {
   promptVersion?: string;
   /** Billing configuration. Absent on a server built without payments. */
   stripe?: StripeConfig;
+  /** Turns a recording's sound into text; absent, transcription is closed. A stub in tests. */
+  transcriber?: Transcriber;
+  /** The site's daily allowance of transcribed sound, in minutes (`TRANSCRIBE_DAILY_MINUTES`). */
+  transcriptionDailyMinutes?: number;
   /** Apply pending migrations; only present in the live (Neon) deployment. */
   runMigrations?: (now: number) => Promise<string[]>;
   /** Where a forwarded message's research and reply are queued (`mail/inbound.ts`). */
@@ -556,6 +569,24 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     return new Response(null, { status: 204 });
   }
 
+  if (path === '/web/transcribe' && method === 'POST') {
+    const user = await sessionUser({ db: s.db, clock: s.clock }, req);
+    if (!user) return finish(apiError('invalid_session', 'Connectez-vous d’abord.'));
+    return finish(
+      await transcribeRecording(
+        {
+          db: s.db,
+          clock: s.clock,
+          transcriber: s.transcriber,
+          dailyMinutes: s.transcriptionDailyMinutes ?? 0,
+          requestId,
+        },
+        user,
+        req,
+      ),
+    );
+  }
+
   if (path.startsWith('/web/account')) {
     return webAccountRoute(req, s, path, method, requestId);
   }
@@ -619,7 +650,10 @@ async function metricsAnswer(url: URL, s: Services): Promise<Response> {
   ) {
     return finish(apiError('invalid_payload', 'weeks is a whole number of weeks, costUsd a non-negative number.'));
   }
-  return finish({ ok: true, metrics: await collectLaunchMetrics(s.db, s.clock.now(), weeks, cost) });
+  return finish({
+    ok: true,
+    metrics: await collectLaunchMetrics(s.db, s.clock.now(), weeks, cost, s.transcriptionDailyMinutes ?? 0),
+  });
 }
 
 /**
@@ -992,6 +1026,10 @@ function servicesFromEnv(env: Env): Services {
     ownerEmails: ownerEmailsOf(env.OWNER_EMAILS),
     llm: hostedLlm ? () => hostedLlm : undefined,
     promptVersion: PROMPT_VERSION,
+    // Transcription runs on the same OpenRouter key as the analyses, whatever
+    // `LLM_PROVIDER` selects: only OpenRouter serves the model it names.
+    transcriber: env.OPENROUTER_API_KEY ? openRouterTranscriber(env.OPENROUTER_API_KEY) : undefined,
+    transcriptionDailyMinutes: Number(env.TRANSCRIBE_DAILY_MINUTES) || 0,
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY,
       priceId: env.STRIPE_PRICE_ID,

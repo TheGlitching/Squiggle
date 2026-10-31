@@ -12,6 +12,7 @@ import { randomToken } from '@squiggle/shared';
 import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
 import {
   ANON_RATE_SCOPE_PREFIX,
+  TRANSCRIPTION_RATE_SCOPE_PREFIX,
   DAY_MS,
   RATE_WINDOW_MS,
   REPORT_MAX_BYTES,
@@ -423,14 +424,14 @@ export class MemoryDb implements Db {
       entry = { scope: args.scope, count: 0, windowStart };
       this.rates.set(k, entry);
     }
-    entry.count += 1;
+    entry.count += args.amount ?? 1;
     return { allowed: entry.count <= args.limit, count: entry.count, windowStart };
   }
 
   async releaseRate(args: Omit<RateCheckArgs, 'limit'>): Promise<void> {
     const windowStart = Math.floor(args.now / args.windowMs) * args.windowMs;
     const entry = this.rates.get(`${args.scope}\u0000${args.key}\u0000${windowStart}`);
-    if (entry && entry.count > 0) entry.count -= 1;
+    if (entry) entry.count = Math.max(0, entry.count - (args.amount ?? 1));
   }
 
   async claimVisitorUse(ipHash: string, now: number, retentionMs: number): Promise<boolean> {
@@ -628,9 +629,9 @@ export class MemoryDb implements Db {
     return true;
   }
 
-  async bumpMetric(name: MetricName, now: number): Promise<void> {
+  async bumpMetric(name: MetricName, now: number, by = 1): Promise<void> {
     const key = `${utcDayOf(now)}:${name}`;
-    this.metrics.set(key, (this.metrics.get(key) ?? 0) + 1);
+    this.metrics.set(key, (this.metrics.get(key) ?? 0) + by);
   }
 
   async collectMetrics({ now, weeks, trialAnalyses }: CollectMetricsArgs): Promise<MetricsRaw> {
@@ -721,7 +722,15 @@ export class MemoryDb implements Db {
     sweep(this.runs, (r) => r.expiresAt <= now);
     const cutoff = now - usageLogRetentionMs;
     sweep(this.usageLog, (r) => r.createdAt <= cutoff);
-    sweep(this.rates, (r) => r.windowStart <= now - (r.scope.startsWith(ANON_RATE_SCOPE_PREFIX) ? DAY_MS : RATE_WINDOW_MS));
+    sweep(
+      this.rates,
+      (r) =>
+        r.windowStart <=
+        now -
+          (r.scope.startsWith(ANON_RATE_SCOPE_PREFIX) || r.scope.startsWith(TRANSCRIPTION_RATE_SCOPE_PREFIX)
+            ? DAY_MS
+            : RATE_WINDOW_MS),
+    );
     sweep(this.visitorUses, (r) => r.usedAt <= now - VISITOR_USE_RETENTION_MS);
     return removed;
   }

@@ -23,7 +23,10 @@
       "title": "title",
       "text": "text",
       "url": "url",
-      "files": [{ "name": "captures", "accept": ["image/*", "application/pdf", ".pdf"] }]
+      "files": [
+        { "name": "captures", "accept": ["image/*", "application/pdf", ".pdf"] },
+        { "name": "media", "accept": ["audio/*", "video/*"] }
+      ]
     }
   }
 }

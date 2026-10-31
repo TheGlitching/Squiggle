@@ -17,7 +17,7 @@ import type { ReactNode } from 'react';
 import { CONTACT_EMAIL, CONTACT_URL, Page } from '../components/Layout';
 import { FREE_ANALYSES, MONTHLY_ANALYSES, PRICE_MONTHLY, VAT_NOTE } from '../offer';
 import { Link } from '../router';
-import { INFERENCE_HOSTS_LABEL, RETENTION, WEB_SEARCH_LABEL } from './Transparence';
+import { INFERENCE_HOSTS_LABEL, RETENTION, TRANSCRIPTION_LABEL, WEB_SEARCH_LABEL } from './Transparence';
 
 const UPDATED = '27 octobre 2026';
 
@@ -302,6 +302,11 @@ const TRANSFERS = [
     'États-Unis',
     'Engagements d’OpenRouter envers ses fournisseurs ; seules les requêtes de recherche sont transmises, jamais l’article ni une identité',
   ],
+  [
+    TRANSCRIPTION_LABEL,
+    'France (Union européenne)',
+    'Point d’accès sans conservation, par OpenRouter ; aucune identité de lecteur n’est transmise',
+  ],
   ['Cloudflare, Inc. (hébergement, réception des e-mails transférés, mesure d’audience)', 'États-Unis et réseau mondial', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Stripe (paiement)', 'Irlande, et États-Unis pour Stripe, Inc.', 'Data Privacy Framework UE-États-Unis et clauses contractuelles types'],
   ['Google (connexion, si vous la choisissez)', 'États-Unis', 'Data Privacy Framework UE-États-Unis'],
@@ -391,6 +396,19 @@ export function Confidentialite() {
           et le fichier n’est jamais envoyé. L’extension le reprend à l’adresse que votre onglet affiche, avec votre
           propre navigateur ; pour cela, elle vous demande l’accès à ce seul site, que vous pouvez refuser en choisissant
           le fichier vous-même.
+        </p>
+        <p>
+          Un enregistrement que vous importez sur le site, ou partagez vers son appli (une vidéo, un message vocal, un
+          épisode de podcast), reste sur votre appareil, qui en extrait le son. Ce son, quinze minutes au plus par
+          analyse, passe par notre serveur, qui ne l’écrit nulle part, vers Mistral AI qui le transcrit sans le
+          conserver ; le texte revient dans votre navigateur et suit ensuite le trajet d’un texte collé. Une voix
+          enregistrée peut être celle d’un tiers : n’importez que ce que vous avez le droit d’écouter. Votre compte
+          garde, pour la journée seulement, le nombre de minutes transcrites, qui ont un plafond quotidien.
+        </p>
+        <p>
+          La transcription qu’un podcast publie lui-même pour un épisode est lue par l’extension dans votre
+          navigateur, depuis le flux du podcast, puis traitée exactement comme un article : notre serveur ne va
+          chercher ni le flux, ni la transcription, ni l’épisode.
         </p>
         <Table head={['Finalité', 'Base légale (RGPD)']} rows={PROCESSING} />
         <p>Aucune donnée n’est vendue, utilisée pour de la publicité, pour un profilage, ni pour entraîner un modèle.</p>

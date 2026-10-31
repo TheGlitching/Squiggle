@@ -25,6 +25,9 @@
  * device and lands in the form to be checked before anything is analysed
  * (`captures.ts`). A PDF, imported or shared, is read the same way, on the
  * device (`pdf.ts`); one too long for an analysis is read a range of pages at a time.
+ * (`captures.ts`). A recording (a saved video, a voice message, an episode)
+ * is transcribed, fifteen minutes per analysis, and its text lands in the
+ * field the same way, with the time of each passage (`media.ts`).
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react';
 
@@ -42,8 +45,19 @@ import {
   type AnalysisFailure,
   type Progress,
 } from '../analysis';
-import { getAccount, type Account } from '../api';
+import { ApiError, getAccount, messageForError, transcribe, type Account } from '../api';
 import { MAX_CAPTURES, readCaptures, takeSharedCaptures } from '../captures';
+import {
+  isMedia,
+  MAX_MEDIA_BYTES,
+  MAX_MEDIA_SECONDS,
+  mediaDuration,
+  partsOf,
+  partSpan,
+  soundPart,
+  takeSharedMedia,
+  transcriptText,
+} from '../media';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
 import { RunScene, type RunStep } from '../components/Iso';
@@ -75,7 +89,7 @@ import { APP_VALUE, FAVORI_PARAM, FAVORI_VALUE, SHORTCUT_VALUE } from '../favori
 import { browserLink, currentPhoneOs, type PhoneOs } from '../phone';
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
-import { readTranscript, type Start } from '../transcript';
+import { readTranscript, type Start } from '../../../shared/src/extract/transcript';
 import { describeAccount, type AccountView } from '../usage';
 
 const SIGN_IN = '/connexion?next=/analyser';
@@ -212,6 +226,31 @@ const AUTO_ENTRIES = new Map<string | null, AudienceMetricName>([
   [APP_VALUE, 'entry_app_text'],
 ]);
 
+const MEDIA_NEEDS_ACCOUNT =
+  'La transcription d’un enregistrement demande un compte : connectez-vous, puis importez-le à nouveau.';
+const MEDIA_NO_ANALYSIS = 'Il ne vous reste pas d’analyse : la transcription attendra la prochaine.';
+const MEDIA_NOT_MEDIA = 'Ce fichier n’est ni un son ni une vidéo. Importez un message vocal, une vidéo ou un épisode.';
+const MEDIA_TOO_HEAVY = `Ce fichier dépasse ${MAX_MEDIA_BYTES / 1024 / 1024} Mo : ce navigateur ne pourrait pas en lire le son.`;
+const MEDIA_TOO_LONG = `Cet enregistrement dure plus de ${MAX_MEDIA_SECONDS / 3600} heures : Squiggle ne lit pas aussi long.`;
+const MEDIA_UNREADABLE =
+  'Le son de ce fichier n’a pas pu être lu sur cet appareil. Essayez un autre format, ou un navigateur récent.';
+const MEDIA_SILENT = 'Aucune parole n’a été reconnue dans cet enregistrement.';
+const MEDIA_LOST = 'L’enregistrement partagé n’a pas été retrouvé. Importez-le ici.';
+
+function minutes(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return m ? `${m} min${s ? ` ${s} s` : ''}` : `${s} s`;
+}
+
+const MEDIA_READ = (seconds: number, part: number, total: number) =>
+  `Transcription de ${minutes(seconds)}${
+    total > 1 ? `, partie ${part + 1} sur ${total}` : ''
+  }. Relisez-la avant de lancer l’analyse : un nom propre peut être mal entendu. Le fichier n’a été gardé nulle part.`;
+
+/** A recording kept on this device while it has parts left to analyse. */
+type Recording = { file: Blob; seconds: number; part: number };
+
 /** The bookmark's analysis, from the moment the page opens. */
 const AUTO_START: Progress = { message: 'Analyse lancée automatiquement…', percent: 2 };
 
@@ -316,6 +355,16 @@ function AnalyserPage() {
   const textArea = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
+  /** What the transcription of a recording is doing, while it does it. */
+  const [transcribing, setTranscribing] = useState<string | null>(null);
+  /** A recording longer than one part, waiting for the reader to pick one. */
+  const [choosing, setChoosing] = useState<Omit<Recording, 'part'> | null>(null);
+  /** The recording whose part was just transcribed, while it has more. */
+  const [recording, setRecording] = useState<Recording | null>(null);
+  const [sharedMedia, setSharedMedia] = useState<Blob | null | undefined>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('media') === '1' ? undefined : null,
+  );
+  const mediaInput = useRef<HTMLInputElement>(null);
   const reportTop = useRef<HTMLHeadingElement>(null);
 
   // The shared text is in the form now; it does not stay in the address bar or the history.
@@ -371,6 +420,25 @@ function AnalyserPage() {
     // Once, for the share the page opened with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A recording shared to the installed app, taken at once; transcribed once the account is known.
+  useEffect(() => {
+    if (sharedMedia !== undefined) return;
+    takeSharedMedia().then((file) => {
+      if (!file) setNotice(MEDIA_LOST);
+      setSharedMedia(file);
+    });
+    // Once, for the share the page opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!sharedMedia || account === undefined) return;
+    setSharedMedia(null);
+    void importMedia(sharedMedia);
+    // Once, when both the recording and the account are there.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedMedia, account]);
 
   // An account that cannot be checked leaves the visitor's analysis, which
   // needs none: the page never ends on a retry with nothing else to do.
@@ -650,6 +718,76 @@ function AnalyserPage() {
     if (files.length) void importCaptures(files, 'import_screenshots');
   }
 
+  /**
+   * A recording, into the text field: its sound is read on this device, one
+   * part of fifteen minutes at most is sent for transcription, and the text
+   * comes back with its times for the reader to check. A longer recording
+   * asks which part first; the next ones are offered under the report.
+   */
+  async function importMedia(file: Blob) {
+    setFailure(null);
+    setShowProblem(false);
+    setChoosing(null);
+    setRecording(null);
+    if (!isMedia(file)) return setNotice(MEDIA_NOT_MEDIA);
+    if (account === null) return setNotice(MEDIA_NEEDS_ACCOUNT);
+    if (view && !view.canAnalyse) return setNotice(MEDIA_NO_ANALYSIS);
+    if (file.size > MAX_MEDIA_BYTES) return setNotice(MEDIA_TOO_HEAVY);
+    setNotice(null);
+    const seconds = await mediaDuration(file);
+    if (seconds !== null && seconds > MAX_MEDIA_SECONDS) return setNotice(MEDIA_TOO_LONG);
+    if (seconds !== null && partsOf(seconds) > 1) return setChoosing({ file, seconds });
+    await transcribePart(file, 0);
+  }
+
+  async function transcribePart(file: Blob, part: number) {
+    setChoosing(null);
+    setNotice(null);
+    const abort = new AbortController();
+    controller.current = abort;
+    setTranscribing('Lecture du son, sur cet appareil…');
+    try {
+      let sound: Awaited<ReturnType<typeof soundPart>>;
+      try {
+        sound = await soundPart(file, part);
+      } catch {
+        return setNotice(MEDIA_UNREADABLE);
+      }
+      if (abort.signal.aborted) return setNotice('Transcription annulée.');
+      const total = partsOf(sound.seconds);
+      setTranscribing(
+        `Transcription${total > 1 ? ` de la partie ${part + 1} sur ${total}` : ''}… Comptez une minute environ.`,
+      );
+      const result = await transcribe(sound.wav, abort.signal);
+      setRecording(part + 1 < total ? { file, seconds: sound.seconds, part } : null);
+      const text = transcriptText(result.text, result.segments, part);
+      if (!text.trim()) return setNotice(MEDIA_SILENT);
+      setArticle((current) => ({ ...current, text }));
+      setNotice(MEDIA_READ(result.seconds, part, total));
+      textArea.current?.focus();
+    } catch (err) {
+      setNotice(abort.signal.aborted ? 'Transcription annulée.' : err instanceof ApiError ? messageForError(err) : MEDIA_UNREADABLE);
+    } finally {
+      controller.current = null;
+      setTranscribing(null);
+    }
+  }
+
+  function pickMedia(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) void importMedia(file);
+  }
+
+  /** Under a part's report: the next part of the same recording, in place of this text. */
+  function nextPart() {
+    if (!recording) return;
+    const { file, part } = recording;
+    setArticle(EMPTY_ARTICLE);
+    setPhase({ kind: 'edit' });
+    void transcribePart(file, part + 1);
+  }
+
   async function run(article: PastedArticle, progress: Progress = { message: 'Préparation de l’analyse…', percent: 2 }) {
     // One analysis per page: a second start would only race the first.
     if (controller.current) return;
@@ -709,6 +847,8 @@ function AnalyserPage() {
     setLongPdf(null);
     setPhase({ kind: 'edit' });
     setShowProblem(false);
+    setRecording(null);
+    setChoosing(null);
   }
 
   if (phase.kind === 'done' && phase.mailed) {
@@ -767,6 +907,11 @@ function AnalyserPage() {
           <button type="button" onClick={() => setPhase({ kind: 'edit' })} className={QUIET_LINK}>
             Modifier le texte
           </button>
+          {recording ? (
+            <button type="button" onClick={nextPart} className={QUIET_LINK}>
+              Transcrire la suite ({partSpan(recording.part + 1, recording.seconds)})
+            </button>
+          ) : null}
           <button type="button" onClick={startOver} className={QUIET_LINK}>
             Analyser un autre article
           </button>
@@ -818,7 +963,7 @@ function AnalyserPage() {
                 <label htmlFor="texte" className="text-base font-medium">
                   Texte de l’article ou du message
                 </label>
-                {!running && !reading && (article.text || article.title || article.source) ? (
+                {!running && !reading && !transcribing && (article.text || article.title || article.source) ? (
                   <div className="-my-2 -mr-2 flex gap-2">
                     {article.text ? (
                       <button type="button" onClick={appendCopied} className={TEXT_BUTTON}>
@@ -848,8 +993,24 @@ function AnalyserPage() {
                 onChange={pickPdf}
                 data-testid="pdf"
               />
+              <input
+                ref={mediaInput}
+                type="file"
+                accept="audio/*,video/*"
+                hidden
+                onChange={pickMedia}
+                data-testid="media"
+              />
               {reading ? (
                 <ReadingPanel reading={reading} onCancel={() => controller.current?.abort()} />
+              ) : transcribing ? (
+                <TranscribingPanel message={transcribing} onCancel={() => controller.current?.abort()} />
+              ) : choosing ? (
+                <PartChooser
+                  seconds={choosing.seconds}
+                  onPick={(part) => void transcribePart(choosing.file, part)}
+                  onCancel={() => setChoosing(null)}
+                />
               ) : !running && !article.text ? (
                 <div className="mt-3">
                   <div className="flex flex-wrap gap-3">
@@ -870,12 +1031,23 @@ function AnalyserPage() {
                     >
                       Importer un PDF
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => mediaInput.current?.click()}
+                      className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
+                    >
+                      Importer un son ou une vidéo
+                    </button>
                   </div>
                   <p className="mt-2 mb-0 text-sm text-muted">
                     Une appli qui empêche de copier ? Faites des captures d’écran en descendant dans l’article, en
                     gardant quelques lignes d’une capture à l’autre, puis importez-les. Un rapport ou un tract en
                     PDF ? Importez le fichier. Le texte est lu sur cet appareil : aucune image, aucun fichier n’est
                     envoyé.
+                  </p>
+                  <p className="mt-2 mb-0 text-sm text-muted">
+                    Une vidéo enregistrée, un message vocal, un épisode de podcast ? Importez le fichier : Squiggle en
+                    transcrit la parole, quinze minutes par analyse, puis l’oublie. Il faut un compte.
                   </p>
                 </div>
               ) : null}
@@ -897,7 +1069,7 @@ function AnalyserPage() {
                 value={article.text}
                 onChange={(event) => edit('text', event.target.value)}
                 onPaste={pasteMarkup}
-                readOnly={reading !== null}
+                readOnly={reading !== null || transcribing !== null}
                 rows={12}
                 spellCheck={false}
                 aria-describedby="texte-aide"
@@ -1384,6 +1556,57 @@ function PdfPages({ pdf, onKeep }: { pdf: LongPdf; onKeep: (from: number, to: nu
       <button type="button" onClick={() => onKeep(from, to)} disabled={!changed} className={SECONDARY_BUTTON}>
         Garder ces pages
       </button>
+    </div>
+  );
+}
+
+function TranscribingPanel({ message, onCancel }: { message: string; onCancel: () => void }) {
+  return (
+    <div role="status" className="mt-3 grid gap-3 rounded-control border border-border bg-surface p-4">
+      <p className="m-0 text-base">{message}</p>
+      <p className="m-0 text-sm text-muted">
+        Seul le son part, vers Mistral AI qui le transcrit ; ni le fichier ni le texte ne sont gardés.
+      </p>
+      <button type="button" onClick={onCancel} className={`${SECONDARY_BUTTON} justify-self-start`}>
+        Annuler
+      </button>
+    </div>
+  );
+}
+
+/** A recording longer than one analysis: which fifteen minutes first. */
+function PartChooser({
+  seconds,
+  onPick,
+  onCancel,
+}: {
+  seconds: number;
+  onPick: (part: number) => void;
+  onCancel: () => void;
+}) {
+  const [part, setPart] = useState(0);
+  const total = partsOf(seconds);
+  return (
+    <div className="mt-3 grid gap-3 rounded-control border border-border bg-surface p-4">
+      <label htmlFor="partie" className="m-0 text-base">
+        Cet enregistrement dure {minutes(seconds)} : une analyse en couvre quinze minutes. Quelle partie d’abord ?
+      </label>
+      <select id="partie" value={part} onChange={(event) => setPart(Number(event.target.value))} className={FIELD}>
+        {Array.from({ length: total }, (_, i) => (
+          <option key={i} value={i}>
+            Partie {i + 1} sur {total} : {partSpan(i, seconds)}
+          </option>
+        ))}
+      </select>
+      <p className="m-0 text-sm text-muted">Les suivantes vous seront proposées sous le rapport, une analyse chacune.</p>
+      <div className="flex flex-wrap gap-3">
+        <button type="button" onClick={() => onPick(part)} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+          Transcrire cette partie
+        </button>
+        <button type="button" onClick={onCancel} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+          Annuler
+        </button>
+      </div>
     </div>
   );
 }
