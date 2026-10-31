@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "private": true,
   "description": "Squiggle's public web app: sign-in, subscription, quota, transparency, and the extension bridge. French only, no tracker.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
