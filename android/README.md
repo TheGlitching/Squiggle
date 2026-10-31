@@ -30,11 +30,11 @@ in the same package (`fr.squiggle.app`). Not published on any store yet.
   to the site's service worker, which keeps them on the phone for the page to
   read, as a share to the installed web app does. Until the app has opened the
   site once, the worker is not there yet, so the first share opens the page
-  with its "Importer des captures" instead of posting the images.
+  with its "Importer un fichier" instead of posting the images.
 - **A PDF** takes the same way as screenshots: the page reads its text on the
   phone with pdf.js (`web/src/pdf.ts`), and a scanned PDF's pages with the
   screenshots' OCR. Before the site's first opening, the page offers its
-  "Importer un PDF".
+  "Importer un fichier".
 
 The paper's page is shown as it is, the text is never kept, and our server
 never fetches the article: the same invariants as the extension and the bookmark.
