@@ -101,7 +101,7 @@ describe('a published article, for search engines and feed readers', () => {
   it('has its page, with an Article schema written by Squiggle and the notions it is about', () => {
     expect(index.path).toBe('/blog');
     expect(page.path).toBe(blogPath(item.slug));
-    const data = JSON.parse(headFor(page).match(/ld\+json">(.+)<\/script>/)![1]);
+    const [data, trail] = JSON.parse(headFor(page).match(/ld\+json">(.+)<\/script>/)![1])['@graph'];
     expect(data).toMatchObject({
       '@type': 'Article',
       headline: item.titre,
@@ -113,6 +113,14 @@ describe('a published article, for search engines and feed readers', () => {
       inLanguage: 'fr',
     });
     expect(data.about.map((term: { url: string }) => term.url)).toEqual(item.notions.map((slug) => `${ORIGIN}/glossaire/${slug}`));
+    // The trail the page shows above its title, ending on the article itself.
+    expect(trail).toEqual({
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Blog', item: `${ORIGIN}/blog` },
+        { '@type': 'ListItem', position: 2, name: item.titre },
+      ],
+    });
     expect(page.share).toMatchObject({ title: item.titre });
     expect(headFor(page)).toContain(`<link rel="alternate" type="application/rss+xml" title="Le blog de Squiggle" href="${ORIGIN}/blog/rss.xml" />`);
   });
