@@ -1298,22 +1298,22 @@ function Aside() {
 }
 
 /**
- * The stages the server really runs, in order, each with what it does. A
- * stage the text does not need (no fact to look up) passes as quickly as it
- * runs: the page follows the server, it never paces itself.
+ * The stages the server really runs, in order, each with what it does: the
+ * same three, under the same names, as the extension's panel
+ * (`src/ui/components/RunScene.tsx`). A stage the text does not need (no fact
+ * to look up) passes as quickly as it runs: the page follows the server, it
+ * never paces itself.
  */
 const STAGES: Array<[RunStep, string, string]> = [
   ['lecture', 'Lecture', 'Le texte est relu en entier, contre les cinq domaines de la grille.'],
-  ['recherche', 'Recherche des sources', 'Chaque fait vérifiable est cherché sur le web.'],
-  ['verification', 'Vérification', 'Les objections sont confrontées à ce qui a été trouvé, la note recalculée.'],
-  ['rapport', 'Rapport', 'Le rapport est mis en forme.'],
+  ['recherche', 'Recherche des sources', 'Chaque fait vérifiable est cherché sur le web, chaque source citée est lue.'],
+  ['verification', 'Vérification et note', 'Les objections sont confrontées à ce qui a été trouvé, la note recalculée.'],
 ];
 
-/** The server's stage, as one of the four. The cache lookup before the reading counts as the reading's start. */
+/** The server's stage, as one of the three. The cache lookup before the reading counts as the reading's start. */
 function stepOf(stage: Progress['stage']): number {
   if (stage === 'parsing_response' || stage === 'researching') return 1;
-  if (stage === 'scoring') return 2;
-  if (stage === 'storing' || stage === 'success') return 3;
+  if (stage === 'scoring' || stage === 'storing' || stage === 'success') return 2;
   return 0;
 }
 

@@ -7,7 +7,7 @@
  * (`.run-*` in `src/index.css`).
  *
  * It mirrors `RunScene` in `web/src/components/Iso.tsx` (the web app's loading
- * scene) at the extension's scale; change the two together.
+ * scene), stages and frames included; change the two together.
  */
 import type { CSSProperties } from 'react';
 import type { PipelineStage } from '@squiggle/shared';
@@ -109,6 +109,14 @@ const articleLines = (top: number, step: number, count: number, left: number, wi
     (_, i) => [top + i * step, left, left + (short.includes(i) ? width * 0.62 : width - (i % 3) * 6)] as const,
   );
 
+/**
+ * Each stage's frame, so what it draws sits in the middle of its box: the
+ * reading has only the article, the later stages add the two pages to its right.
+ */
+function frameOf(step: RunStep): string {
+  return step === 'lecture' ? '-33 -18 320 222' : '0 0 320 222';
+}
+
 export function RunScene({ step }: { step: RunStep }) {
   const v = iso(140, 40);
   const W = 120;
@@ -125,7 +133,7 @@ export function RunScene({ step }: { step: RunStep }) {
   const [fx, fy] = v.P(76, body[1][0] + 2, Z);
 
   return (
-    <svg viewBox="0 0 320 222" className="block h-auto w-full overflow-visible" aria-hidden="true">
+    <svg viewBox={frameOf(step)} className="block h-auto w-full overflow-visible" aria-hidden="true">
       <Box v={v} at={[0, 0, 0]} size={[W, D, 2]} r={3} face="iso-paper" edge="iso-paper-edge" />
       <g transform={v.top(0, 0, 2)}>
         <rect x={14} y={14} width={70} height={9} rx={2} fill="var(--paper-ink)" />
