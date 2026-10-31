@@ -544,10 +544,11 @@ export class BackgroundServiceWorker {
           'd’accueil ou une liste de résultats, il n’y a rien à évaluer. Ouvrez ' +
           'l’article lui-même.'
         : 'Impossible de lire cette page. Le navigateur interdit aux extensions ' +
-          'd’accéder à certaines pages (ses réglages, un PDF, la galerie ' +
-          'd’extensions). Sur un site de presse, cliquez sur l’icône Squiggle depuis la ' +
-          'page de l’article, ou autorisez l’accès à tous les sites dans les réglages, ' +
-          'puis relancez.';
+          'd’accéder à certaines pages (ses réglages, la galerie d’extensions). Sur un ' +
+          'site de presse, cliquez sur l’icône Squiggle depuis la page de l’article, ou ' +
+          'autorisez l’accès à tous les sites dans les réglages, puis relancez. Un PDF ' +
+          'dont l’adresse ne finit pas par .pdf : enregistrez-le, puis ouvrez le fichier ' +
+          'enregistré dans le navigateur, où Squiggle propose « Analyser ce PDF ».';
       this.stateManager.updateTabState(tabId, { status: 'error', error: err });
       return { success: false, error: err };
     }

@@ -381,6 +381,13 @@ export function Confidentialite() {
           lecteur de YouTube les charge pour vous : ce texte est ensuite traité exactement comme un article. Notre serveur
           ne va jamais chercher la vidéo ni ses sous-titres, et aucune API de YouTube n’est appelée.
         </p>
+        <p>
+          Un PDF, importé sur le site, partagé vers l’appli ou ouvert dans votre navigateur avec l’extension (« Analyser
+          ce PDF »), est lu sur votre appareil : seul son texte part à l’analyse, traité exactement comme un texte collé,
+          et le fichier n’est jamais envoyé. L’extension le reprend à l’adresse que votre onglet affiche, avec votre
+          propre navigateur ; pour cela, elle vous demande l’accès à ce seul site, que vous pouvez refuser en choisissant
+          le fichier vous-même.
+        </p>
         <Table head={['Finalité', 'Base légale (RGPD)']} rows={PROCESSING} />
         <p>Aucune donnée n’est vendue, utilisée pour de la publicité, pour un profilage, ni pour entraîner un modèle.</p>
       </Article>

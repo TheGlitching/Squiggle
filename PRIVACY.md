@@ -201,6 +201,7 @@ raconte.
 | Texte de l'article, lu par l'extension ou collé sur le site | mémoire, le temps de l'appel d'audit | **jamais écrit** |
 | Texte collé sur le site, avant l'analyse | **votre navigateur** (stockage local du site), jamais notre serveur | jusqu'à ce que vous l'effaciez |
 | Captures d'écran importées sur le site, ou partagées vers l'appli installée | **votre appareil** : leur texte y est lu, et seul ce texte part à l'analyse, comme un texte collé ; **aucune image n'est envoyée** | le temps de la lecture ; une capture partagée attend la page dans le cache du site, qui la vide dès qu'elle l'a prise |
+| PDF importés sur le site, partagés vers l'appli installée, ou lus par l'extension (« Analyser ce PDF ») | **votre appareil** : son texte y est lu (celui d'un PDF scanné, par la lecture des captures), et seul ce texte part à l'analyse ; **le fichier n'est jamais envoyé**. L'extension le reprend à l'adresse de votre onglet, depuis votre navigateur | le temps de la lecture ; un PDF partagé attend la page dans le cache du site, qui le vide dès qu'il l'a pris |
 | Séance du mode classe : l'article, le rapport, l'ordre de révélation et vos remarques | **l'onglet de votre navigateur** (stockage de session), et le fichier de séance que vous téléchargez ; jamais notre serveur | jusqu'à la fermeture de l'onglet ; le fichier, tant que vous le gardez |
 | Fichiers du site installé sur l'écran d'accueil | votre navigateur | jusqu'à la version suivante du site ; **jamais une réponse de compte ou d'analyse** |
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
@@ -328,6 +329,9 @@ pas ce signalement : elle n'envoie toujours rien à notre serveur.
   l'installation. Vous pouvez l'accorder dans les réglages (« Accès aux sites ») et le
   retirer au même endroit. Il permet d'analyser une page après avoir changé de site sans
   recliquer sur l'icône et, avec votre propre clé, de lire les sources que l'article cite.
+  « Analyser ce PDF » demande le même accès pour **le seul site** du PDF ouvert, au moment
+  du clic : l'extension y reprend le fichier pour le lire dans votre navigateur. Refusé, elle
+  vous propose de choisir le fichier vous-même.
 
 Aucun script n'est déclaré pour s'exécuter sur les pages : le lecteur d'article n'est
 inséré que dans l'onglet où vous lancez l'analyse.

@@ -21,13 +21,14 @@ const CACHE = `squiggle-shell-${VERSION}`;
 /** The paths the Worker answers (`assets.run_worker_first` in server/wrangler.jsonc). */
 const SERVER_PATHS = ['/health', '/auth/*', '/v1/*', '/web/*', '/webhooks/*', '/admin/*'];
 
-/** Where the share sheet posts (`share_target.action`), and where shared screenshots wait for the page. */
+/** Where the share sheet posts (`share_target.action`), and where shared files wait for the page. */
 const SHARE_PATH = '/analyser';
 const SHARE_CACHE = 'squiggle-partage';
 
 /**
- * A share, read here and never sent on: the screenshots wait in SHARE_CACHE
- * for the page to take them (`takeSharedCaptures` in src/captures.ts), and the
+ * A share, read here and never sent on: the screenshots or the PDF wait in
+ * SHARE_CACHE for the page to take them (`takeSharedCaptures` in
+ * src/captures.ts), and the
  * title, text and address go into the query string of the page it opens, as a
  * share by GET did, which the navigation below answers with the bare shell.
  */
@@ -38,16 +39,22 @@ async function receiveShare(request) {
     const value = form.get(name);
     if (typeof value === 'string' && value.trim()) params.set(name, value);
   }
-  const images = form.getAll('captures').filter((file) => typeof file !== 'string' && file.type.startsWith('image/'));
+  const files = form
+    .getAll('captures')
+    .filter(
+      (file) =>
+        typeof file !== 'string' &&
+        (file.type.startsWith('image/') || file.type === 'application/pdf' || /\.pdf$/i.test(file.name)),
+    );
   await caches.delete(SHARE_CACHE);
-  if (images.length) {
+  if (files.length) {
     const cache = await caches.open(SHARE_CACHE);
     await Promise.all(
-      images.map((image, index) =>
-        cache.put(`/partage/${index}`, new Response(image, { headers: { 'content-type': image.type } })),
+      files.map((file, index) =>
+        cache.put(`/partage/${index}`, new Response(file, { headers: { 'content-type': file.type || 'application/pdf' } })),
       ),
     );
-    params.set('captures', String(images.length));
+    params.set('captures', String(files.length));
   }
   const query = params.toString();
   return Response.redirect(new URL(query ? `${SHARE_PATH}?${query}` : SHARE_PATH, self.location.origin).href, 303);
