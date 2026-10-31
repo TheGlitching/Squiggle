@@ -12,7 +12,7 @@ import type { TextBlock } from '../../shared/src/engine/types';
 import { MAX_MESSAGE_CHARS, MIN_MESSAGE_CHARS } from '../../shared/src/engine/message';
 import { articleLength, MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 import { blockWriter, plainTextBlocks, splitLongLine } from '../../shared/src/hosted/pastedText';
-import { readTranscript, timeAt, type Start } from './transcript';
+import { readTranscript, timeAt, type Start } from '../../shared/src/extract/transcript';
 
 /**
  * Below this, the paste claims nothing. A short text is analysed as a message

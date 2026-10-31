@@ -105,6 +105,8 @@ const ORIGIN_REQUIRED: ReadonlyArray<{ method: string; path: string }> = [
   { method: 'POST', path: '/web/anon/research' },
   { method: 'POST', path: '/web/anon/source-check' },
   { method: 'POST', path: '/web/anon/finalize' },
+  // A recording's transcription spends the site's money on the reader's cookie.
+  { method: 'POST', path: '/web/transcribe' },
 ];
 
 export function originRequired(method: string, path: string): boolean {

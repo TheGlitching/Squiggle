@@ -26,7 +26,7 @@ import { glossaryLink } from '../glossaire';
 import { locateFindings, passageTone, type Segment } from '../report';
 import { Link } from '../router';
 import { PRIMARY_BUTTON } from './Landing';
-import { timeAt, videoTime, type Start } from '../transcript';
+import { timeAt, videoTime, type Start } from '../../../shared/src/extract/transcript';
 
 const VERIFICATION = Object.fromEntries(VERIFICATION_STATES.map((v) => [v.state, v]));
 

@@ -17,6 +17,7 @@ import type { Account } from '../src/api';
 import { loadSeance, saveSeance } from '../src/classe';
 import { readCaptures, takeSharedCaptures } from '../src/captures';
 import { readPdfFile } from '../src/pdf';
+import { mediaDuration, soundPart, takeSharedMedia } from '../src/media';
 import { pageFragment } from '../src/favori/payload';
 import { loadDraft, saveDraft } from '../src/paste';
 import { Analyser } from '../src/pages/Analyser';
@@ -32,6 +33,14 @@ vi.mock('../src/captures', async (actual) => ({
 vi.mock('../src/pdf', async (actual) => ({
   ...(await actual<typeof import('../src/pdf')>()),
   readPdfFile: vi.fn(),
+}));
+
+// Decoding needs a real browser's audio stack; here it is the page around it.
+vi.mock('../src/media', async (actual) => ({
+  ...(await actual<typeof import('../src/media')>()),
+  mediaDuration: vi.fn(),
+  soundPart: vi.fn(),
+  takeSharedMedia: vi.fn(),
 }));
 
 const TEXT = [
@@ -93,6 +102,7 @@ function serve(
     hit?: boolean;
     link?: boolean;
     finalize?: AnalysisReport;
+    transcribe?: () => Response;
   } = {},
 ) {
   const seen: Seen[] = [];
@@ -119,6 +129,7 @@ function serve(
       if (stage === 'check') return jsonResponse(stages.hit ? { ok: true, hit: true, report: REPORT } : { ok: true, hit: false });
       if (stage === 'audit') return stages.audit?.() ?? jsonResponse({ ok: true, runId: 'r1', report: REPORT, researchable: [] });
       if (stage === 'finalize') return jsonResponse({ ok: true, report: stages.finalize ?? REPORT, cached: true });
+      if (path === '/web/transcribe') return stages.transcribe?.() ?? jsonResponse({ ok: false, error: 'not_found' }, 404);
       if (path === '/web/account/checkout') return jsonResponse({ ok: true, url: 'https://checkout.stripe.example/cs_1' });
       return jsonResponse({ ok: false, error: 'not_found' }, 404);
     }),
@@ -1115,5 +1126,111 @@ describe('Analyser, from a PDF', () => {
     expect(readCaptures).not.toHaveBeenCalled();
     expect(window.location.search).toBe('');
     expect(counted(seen)).toEqual(['share_pdf']);
+  });
+});
+
+describe('Analyser, from a recording', () => {
+  const recording = (type = 'audio/ogg') => new File(['son'], 'PTT-20261031.opus', { type });
+  const transcribed = (seconds: number) => () =>
+    jsonResponse({
+      ok: true,
+      seconds,
+      text: TEXT,
+      segments: TEXT.split('\n\n').map((text, i) => ({ start: i * 20, text })),
+    });
+  const sent = (seen: Seen[]) => seen.filter((s) => s.url === '/web/transcribe');
+
+  beforeEach(() => {
+    vi.mocked(mediaDuration).mockReset();
+    vi.mocked(soundPart).mockReset();
+    vi.mocked(takeSharedMedia).mockReset();
+    vi.mocked(soundPart).mockImplementation(async () => ({ wav: new Blob(['wav'], { type: 'audio/wav' }), seconds: 90 }));
+  });
+
+  it('transcribes a short recording into the form, timed, for the reader to check before the analysis', async () => {
+    const seen = serve(account(), { transcribe: transcribed(90) });
+    vi.mocked(mediaDuration).mockResolvedValue(90);
+    render(<Analyser />);
+    await analyseButton();
+    await userEvent.upload(screen.getByTestId('media'), recording());
+
+    expect(await screen.findByText(/Transcription de 1 min 30 s\. Relisez-la/)).toBeInTheDocument();
+    const field = screen.getByLabelText('Texte de l’article ou du message') as HTMLTextAreaElement;
+    expect(field.value.split('\n')[1]).toBe('0:20 Selon un expert, la fréquentation aurait chuté de 30 % dès le premier mois.');
+    expect(screen.getByText(/Transcription reconnue/)).toBeInTheDocument();
+    expect(vi.mocked(soundPart).mock.calls[0][1]).toBe(0);
+    expect(sent(seen)).toHaveLength(1);
+    expect(sent(seen)[0].method).toBe('POST');
+    expect(seen.some((s) => s.url.startsWith('/web/analyze/'))).toBe(false);
+
+    fireEvent.click(await analyseButton());
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Transcrire la suite/ })).not.toBeInTheDocument();
+  });
+
+  it('asks which fifteen minutes of a longer one first, and offers the next under the report', async () => {
+    const seen = serve(account(), { transcribe: transcribed(900) });
+    vi.mocked(mediaDuration).mockResolvedValue(2000);
+    vi.mocked(soundPart).mockImplementation(async () => ({ wav: new Blob(['wav']), seconds: 2000 }));
+    render(<Analyser />);
+    await analyseButton();
+    await userEvent.upload(screen.getByTestId('media'), recording('video/mp4'));
+
+    const choice = await screen.findByLabelText(/Cet enregistrement dure 33 min 20 s/);
+    expect([...(choice as HTMLSelectElement).options].map((o) => o.text)).toEqual([
+      'Partie 1 sur 3 : 0:00 à 15:00',
+      'Partie 2 sur 3 : 15:00 à 30:00',
+      'Partie 3 sur 3 : 30:00 à 33:20',
+    ]);
+    expect(sent(seen)).toHaveLength(0);
+    fireEvent.change(choice, { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Transcrire cette partie' }));
+
+    expect(await screen.findByText(/partie 2 sur 3/)).toBeInTheDocument();
+    // The times are the recording's, not the part's.
+    expect((screen.getByLabelText('Texte de l’article ou du message') as HTMLTextAreaElement).value).toMatch(/^15:00 Depuis la rentrée/);
+
+    fireEvent.click(await analyseButton());
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcrire la suite (30:00 à 33:20)' }));
+    expect(await screen.findByText(/partie 3 sur 3/)).toBeInTheDocument();
+    expect(vi.mocked(soundPart).mock.calls.map((call) => call[1])).toEqual([1, 2]);
+    expect(sent(seen)).toHaveLength(2);
+  });
+
+  it('sends nothing without an account, or for a file that is not a recording', async () => {
+    const seen = serve(null);
+    render(<Analyser />);
+    await analyseButton();
+    await userEvent.upload(screen.getByTestId('media'), recording());
+    expect(await screen.findByText(/La transcription d’un enregistrement demande un compte/)).toBeInTheDocument();
+    expect(soundPart).not.toHaveBeenCalled();
+    expect(sent(seen)).toHaveLength(0);
+  });
+
+  it('says what the server refused, and what this device could not read', async () => {
+    serve(account(), {
+      transcribe: () => jsonResponse({ ok: false, error: 'transcription_closed', message: 'Squiggle a transcrit aujourd’hui tout ce qu’il peut en un jour.' }, 429),
+    });
+    vi.mocked(mediaDuration).mockResolvedValue(30);
+    render(<Analyser />);
+    await analyseButton();
+    await userEvent.upload(screen.getByTestId('media'), recording());
+    expect(await screen.findByText(/tout ce qu’il peut en un jour/)).toBeInTheDocument();
+
+    vi.mocked(soundPart).mockRejectedValueOnce(new DOMException('decode', 'EncodingError'));
+    await userEvent.upload(screen.getByTestId('media'), recording());
+    expect(await screen.findByText(/Le son de ce fichier n’a pas pu être lu sur cet appareil/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
+  });
+
+  it('transcribes a recording shared to the installed app once the account is known', async () => {
+    const seen = serve(account(), { transcribe: transcribed(90) });
+    vi.mocked(takeSharedMedia).mockResolvedValue(recording());
+    vi.mocked(mediaDuration).mockResolvedValue(90);
+    at('/analyser?media=1');
+    render(<Analyser />);
+    expect(await screen.findByText(/Transcription de 1 min 30 s/)).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+    expect(sent(seen)).toHaveLength(1);
   });
 });

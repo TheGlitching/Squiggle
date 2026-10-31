@@ -11,6 +11,7 @@
  * import site.
  */
 export * from './engine';
+export * from './extract/transcript';
 export * from './client/base';
 export * from './client/gemini';
 export * from './client/openai';
@@ -24,4 +25,5 @@ export * from './hosted/limits';
 export * from './hosted/offer';
 export * from './hosted/pastedText';
 export * from './hosted/textHash';
+export * from './hosted/wav';
 export * from './stores';

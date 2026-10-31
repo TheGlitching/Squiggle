@@ -29,7 +29,7 @@ const METRICS: OwnerMetrics = {
     checkout: {},
     runsStarted: { session: 12, anon: 6 },
     finalized: { session: 11, anon: 5 },
-    refused: { anon_closed: 2 },
+    refused: { anon_closed: 2, transcription_closed: 3 },
     reportsWithheld: 4,
   },
   headline: {
@@ -40,6 +40,7 @@ const METRICS: OwnerMetrics = {
     aiCost: { finalized: 11, costPerAnalysisUsd: null },
     activeAccounts: 9,
   },
+  transcription: { count: 14, failed: 1, minutes: 62.5, costUsd: 0.2188, dailyCapMinutes: 600 },
 };
 
 describe('/tableau', () => {
@@ -87,6 +88,14 @@ describe('/tableau', () => {
     expect(anon).toHaveTextContent('Comptes créés ensuite1');
     expect(anon).toHaveTextContent('dont depuis un rapport flouté1');
     expect(document.title).toBe('Tableau de bord - Squiggle');
+    // What transcription cost, beside the cap that bounds it.
+    const spent = screen.getByRole('heading', { name: 'Sur la période' }).nextElementSibling as HTMLElement;
+    expect(spent).toHaveTextContent('Enregistrements transcrits14');
+    expect(spent).toHaveTextContent('Minutes de son62,5');
+    expect(spent).toHaveTextContent(/Coût de la transcription0,2188\s\$US/);
+    const cap = screen.getByRole('heading', { name: 'Plafond de dépense' }).nextElementSibling as HTMLElement;
+    expect(cap).toHaveTextContent(/Par jour, tous comptes600 min · 2,10?\s\$US/);
+    expect(cap).toHaveTextContent('Refus : plafond du site atteint3');
 
     await userEvent.click(screen.getByRole('button', { name: '4 sem.' }));
     await waitFor(() => expect(calls.at(-1)?.url).toBe('/web/tableau?weeks=4'));

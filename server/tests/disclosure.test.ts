@@ -85,4 +85,11 @@ describe('hosted disclosure', () => {
       expect(config.env[env].vars.OPENROUTER_MODEL, env).toBe(HOSTED_ANALYSIS.model);
     }
   });
+
+  it('caps transcription in every environment', () => {
+    const config = parseJsonc(readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+    for (const env of ['staging', 'production']) {
+      expect(Number(config.env[env].vars.TRANSCRIBE_DAILY_MINUTES), env).toBeGreaterThan(0);
+    }
+  });
 });

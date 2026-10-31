@@ -55,6 +55,22 @@ sous-titres**. Le titre de la vidéo, le nom de la chaîne et son adresse accomp
 texte, comme le titre et l'adresse d'un article ; le rapport en garde des extraits, jamais
 la transcription entière.
 
+**Un enregistrement** (une vidéo enregistrée, un message vocal, un épisode de podcast),
+importé sur le site ou partagé vers son appli, demande un compte. Le fichier reste sur
+votre appareil, qui en extrait le son ; l'image d'une vidéo ne part jamais. Ce son,
+quinze minutes au plus par analyse (au-delà, une analyse par tranche de quinze minutes),
+passe par notre serveur, qui le garde en mémoire le temps d'un appel et ne l'écrit nulle
+part, vers **Mistral AI** (modèle `mistralai/voxtral-mini-transcribe-3-0`, Voxtral Mini
+Transcribe 3), par OpenRouter, sur un point d'accès sans conservation. La transcription
+revient dans votre navigateur, où vous la relisez, puis suit le trajet d'un texte collé.
+**Ni le fichier ni sa transcription ne sont gardés.** Une voix enregistrée peut être celle
+d'un tiers : n'importez que ce que vous avez le droit d'écouter.
+
+**La transcription qu'un podcast publie lui-même** pour un épisode (balise
+`podcast:transcript` de son flux) est lue par l'extension dans votre navigateur, quand
+vous lancez l'analyse depuis la page de l'épisode, puis traitée exactement comme un
+article. Notre serveur ne va chercher ni le flux, ni la transcription, ni l'épisode.
+
 ---
 
 # 1. Mode « clé personnelle » (BYOK)
@@ -221,6 +237,8 @@ raconte.
 | Texte collé sur le site, avant l'analyse | **votre navigateur** (stockage local du site), jamais notre serveur | jusqu'à ce que vous l'effaciez |
 | Captures d'écran importées sur le site, ou partagées vers l'appli installée | **votre appareil** : leur texte y est lu, et seul ce texte part à l'analyse, comme un texte collé ; **aucune image n'est envoyée** | le temps de la lecture ; une capture partagée attend la page dans le cache du site, qui la vide dès qu'elle l'a prise |
 | PDF importés sur le site, partagés vers l'appli installée, ou lus par l'extension (« Analyser ce PDF ») | **votre appareil** : son texte y est lu (celui d'un PDF scanné, par la lecture des captures), et seul ce texte part à l'analyse ; **le fichier n'est jamais envoyé**. L'extension le reprend à l'adresse de votre onglet, depuis votre navigateur | le temps de la lecture ; un PDF partagé attend la page dans le cache du site, qui le vide dès qu'il l'a pris |
+| Enregistrement importé sur le site, ou partagé vers l'appli installée (vidéo, message vocal, épisode) | **votre appareil**, qui en extrait le son ; ce son, quinze minutes au plus, traverse notre serveur vers la transcription **sans y être écrit** | le temps de la transcription ; un enregistrement partagé attend la page dans le cache du site, qui la vide dès qu'elle l'a pris |
+| Minutes de son transcrites par compte et pour tout le site, dans la journée (plafond de dépense) | base de données | un jour |
 | Séance du mode classe : l'article, le rapport, l'ordre de révélation et vos remarques | **l'onglet de votre navigateur** (stockage de session), et le fichier de séance que vous téléchargez ; jamais notre serveur | jusqu'à la fermeture de l'onglet ; le fichier, tant que vous le gardez |
 | Fichiers du site installé sur l'écran d'accueil | votre navigateur | jusqu'à la version suivante du site ; **jamais une réponse de compte ou d'analyse** |
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
@@ -278,6 +296,7 @@ pas ce signalement : elle n'envoie toujours rien à notre serveur.
 |---|---|---|
 | **OpenRouter** (États-Unis) | passerelle d'analyse, fournisseur par défaut : transmet chaque requête à l'hébergeur d'inférence | le texte de l'article et les extraits des sources citées |
 | **Hébergeurs d'inférence** : Nebius (Pays-Bas) en priorité, DeepInfra, CoreWeave et Together AI (États-Unis) en secours ; modèle `deepseek/deepseek-v4.1-flash`, DeepSeek V4.1 Flash | exécution du modèle à poids ouverts, sans conservation des requêtes | idem, sans identité de lecteur |
+| **Mistral AI** (France), via OpenRouter, point d'accès sans conservation ; modèle `mistralai/voxtral-mini-transcribe-3-0` | transcription du son d'un enregistrement envoyé depuis le site | le son, quinze minutes au plus par analyse, sans identité de lecteur ; jamais l'image d'une vidéo |
 | **Parallel Web Systems** (États-Unis), via OpenRouter | moteur de la recherche web de l'étape de vérification | les requêtes de recherche rédigées par le modèle, jamais l'article ni une identité de lecteur |
 | **Google** (Gemini) | analyse, seulement quand le fournisseur configuré est Gemini, ce qui n'est pas le cas aujourd'hui ; ses serveurs ne sont pas tous en Europe | idem |
 | **Google** (connexion) | authentification, si vous choisissez « se connecter avec Google » | votre identité Google |

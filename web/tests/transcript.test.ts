@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { MIN_TEXT_CHARS, pastedChars, pasteProblem, readPaste } from '../src/paste';
-import { readTranscript, timeAt, videoTime } from '../src/transcript';
+import { readTranscript, timeAt, videoTime } from '../../shared/src/extract/transcript';
 
 const fixture = (name: string) => readFileSync(join(__dirname, 'transcripts', name), 'utf8');
 

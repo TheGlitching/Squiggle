@@ -42,9 +42,11 @@ import com.google.androidbrowserhelper.trusted.TwaLauncher
  * Activity: a text in the address's fragment, which /analyser analyses at once
  * as a short message or an article (or says why it cannot, for a text too short
  * to claim anything), and
- * screenshots or a PDF through the site's share target (`share_target` in
+ * screenshots, a PDF or a recording (a saved video, a voice message, an
+ * episode) through the site's share target (`share_target` in
  * `web/public/manifest.webmanifest`), whose service worker keeps them on the
- * phone for the page to read there (`web/src/captures.ts`, `web/src/pdf.ts`).
+ * phone for the page to read or transcribe there (`web/src/captures.ts`,
+ * `web/src/pdf.ts`, `web/src/media.ts`).
  * A text that carries a link but more around it than a headline (a WhatsApp
  * chain, a post) goes there too: it is a message, not an article to open.
  */
@@ -119,7 +121,8 @@ class LectureActivity : Activity() {
     private fun open(intent: Intent) {
         handler.removeCallbacksAndMessages(null)
         val type = intent.type.orEmpty()
-        if (type.startsWith("image/") || type == PDF) {
+        val recording = type.startsWith("audio/") || type.startsWith("video/")
+        if (type.startsWith("image/") || type == PDF || recording) {
             val files = sharedStreams(intent)
             if (files.isEmpty()) return say(R.string.empty_share)
             // The share target is the site's service worker, which the browser only has once
@@ -131,7 +134,7 @@ class LectureActivity : Activity() {
             if (prefs.getBoolean(SITE_OPENED, false)) {
                 openReport(Uri.parse("$ORIGIN/analyser"), ShareData(null, null, files))
             } else {
-                openReport(Uri.parse("$ORIGIN/analyser?captures=${files.size}"))
+                openReport(Uri.parse(if (recording) "$ORIGIN/analyser?media=1" else "$ORIGIN/analyser?captures=${files.size}"))
             }
             finish()
             return
@@ -229,7 +232,14 @@ class LectureActivity : Activity() {
             "$ORIGIN/analyser",
             ShareTarget.METHOD_POST,
             ShareTarget.ENCODING_TYPE_MULTIPART,
-            ShareTarget.Params("title", "text", listOf(ShareTarget.FileFormField("captures", listOf("image/*", PDF, ".pdf")))),
+            ShareTarget.Params(
+                "title",
+                "text",
+                listOf(
+                    ShareTarget.FileFormField("captures", listOf("image/*", PDF, ".pdf")),
+                    ShareTarget.FileFormField("media", listOf("audio/*", "video/*")),
+                ),
+            ),
         )
         private val LINK = Regex("""https?://\S+""")
         private val YOUTUBE = Regex("""(^|\.)(youtube\.com|youtu\.be)$""")
