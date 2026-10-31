@@ -14,7 +14,7 @@ import { Enseignants } from './pages/Enseignants';
 import { Favori, FavoriEssai, favoriTried } from './pages/Favori';
 import { Corrige, Fiche } from './pages/Feuilles';
 import { ArticlePage, Blog } from './pages/Blog';
-import { Glossaire, NotionPage } from './pages/Glossaire';
+import { Exercices, Glossaire, NotionPage } from './pages/Glossaire';
 import { FicheActivite, GrilleLecture } from './pages/Kit';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
 import { Pilotage } from './pages/Pilotage';
@@ -106,6 +106,9 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/enseignants/grille-lecture':
       page = <GrilleLecture />;
+      break;
+    case '/enseignants/exercices':
+      page = <Exercices />;
       break;
     case '/classe':
       page = <Classe />;

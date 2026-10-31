@@ -526,6 +526,13 @@ export function Accueil() {
         intro="Le rapport donne sa raison, à côté."
       >
         <Exemple />
+        <p className={`mt-10 mb-0 ${BODY} ${MEASURE}`}>
+          Chaque raison porte un nom, du faux dilemme au chiffre sans origine.{' '}
+          <Link to="/glossaire" className={INLINE_LINK}>
+            Le glossaire de l’esprit critique
+          </Link>{' '}
+          les explique un par un, exemples à l’appui.
+        </p>
       </Section>
 
       {/* How a report is made: the four drawings carry it, a line each. */}

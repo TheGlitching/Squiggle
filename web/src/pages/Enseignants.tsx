@@ -16,6 +16,7 @@ import {
 } from '../components/Landing';
 import { CONTACT_EMAIL, CONTACT_URL } from '../components/Layout';
 import { count } from '../count';
+import { FAMILLES, NOTIONS, glossaryPath } from '../glossaire';
 import { ModeEmploi } from '../components/ModeEmploi';
 import { MONTHLY_ANALYSES, SUBSCRIBE_LABEL } from '../offer';
 import { Link } from '../router';
@@ -302,6 +303,38 @@ export function Enseignants() {
         intro="Essayez-le comme vos élèves, sur un article d’exemple : marquez d’abord ce qui vous paraît fragile, puis révélez l’analyse. En classe, le mode classe fait la même chose au tableau, sur votre article."
       >
         <Exercice />
+      </Section>
+
+      <Section
+        id="glossaire"
+        title={`${NOTIONS.length} notions, chacune avec sa question pour la classe`}
+        intro="Ce que nomment les rapports Squiggle, une fiche par notion : une définition simple, un exemple sur un article inventé, les signes qui la trahissent et une question pour en parler en classe."
+      >
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+          {FAMILLES.map(({ id, titre }) => (
+            <div key={id}>
+              {/* Two lines for every title in a row, so the four lists start level. */}
+              <h3 className={`${H3} lg:min-h-[2lh]`}>{titre}</h3>
+              <ul className="mt-4 mb-0 grid list-none gap-1 p-0 text-lg">
+                {NOTIONS.filter((item) => item.famille === id).map((item) => (
+                  <li key={item.slug}>
+                    <Link to={glossaryPath(item.slug)} className={QUIET_LINK}>
+                      {item.nom}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <Link to="/enseignants/exercices" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+            Toutes les questions sur une page
+          </Link>
+          <Link to="/glossaire" className={QUIET_LINK}>
+            Le glossaire de l’esprit critique
+          </Link>
+        </div>
       </Section>
 
       <Section id="cadre" title="Un outil que l’on peut montrer en classe">

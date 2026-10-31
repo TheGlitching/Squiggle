@@ -7,6 +7,7 @@ import type { Account } from '../src/api';
 import { App } from '../src/App';
 import { CONTACT_URL } from '../src/components/Layout';
 import { EXAMPLES } from '../src/demo';
+import { NOTIONS } from '../src/glossaire';
 import { Enseignants, TEACHER_REQUEST_URL } from '../src/pages/Enseignants';
 import { account, installFetch, jsonResponse } from './helpers';
 
@@ -188,6 +189,15 @@ describe('Enseignants', () => {
     const guide = region('Une séance, pas à pas');
     expect(guide.getByRole('link', { name: 'La fiche d’activité (deux pages)' })).toHaveAttribute('href', '/enseignants/fiche-activite');
     expect(guide.getByRole('link', { name: 'La grille de lecture des élèves' })).toHaveAttribute('href', '/enseignants/grille-lecture');
+  });
+
+  it('links every notion of the glossary, and the page of their classroom questions', () => {
+    render(<Enseignants />);
+    const glossary = region(`${NOTIONS.length} notions, chacune avec sa question pour la classe`);
+    for (const item of NOTIONS) {
+      expect(glossary.getByRole('link', { name: item.nom })).toHaveAttribute('href', `/glossaire/${item.slug}`);
+    }
+    expect(glossary.getByRole('link', { name: 'Toutes les questions sur une page' })).toHaveAttribute('href', '/enseignants/exercices');
   });
 });
 
