@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "private": true,
   "description": "Squiggle hosted backend — a Cloudflare Workers service: authentication (magic link, Google OAuth, signed extension tokens), the analysis stage endpoints, quotas, billing, and the shared report cache, on Neon Postgres.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {

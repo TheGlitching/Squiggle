@@ -239,7 +239,7 @@ export function FicheActivite() {
 
       <Sheet
         name="Fiche d’activité, page 2"
-        foot={[`Squiggle · squiggle.fr · ${CONTACT_EMAIL} · code source public sous licence MIT`, '2 / 2']}
+        foot={[`Squiggle · squiggle.fr · ${CONTACT_EMAIL} · code source public sous licence AGPL-3.0`, '2 / 2']}
       >
         <h3 className={H2}>Les cinq raisons de la fiche élève, et la question à poser</h3>
         <table className="w-full border-collapse">
