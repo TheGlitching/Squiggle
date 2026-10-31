@@ -333,7 +333,11 @@ describe('the counters the server bumps itself', () => {
       expect((await call(env, marie, '/v1/analyze/finalize', { runId: run.json.runId })).status).toBe(200);
     }
 
-    const prompts = env.llm.completeOptions.map((o) => [o.systemPrompt, ...o.messages.map((m) => m.content)].join('\n'));
+    // The video and the article are critiqued after their audit; the short message is not.
+    expect(env.llm.calls.critique).toBe(2);
+    const prompts = env.llm.completeOptions
+      .filter((o) => !o.systemPrompt?.includes('relecteur critique'))
+      .map((o) => [o.systemPrompt, ...o.messages.map((m) => m.content)].join('\n'));
     // However short, a video's transcript stays one.
     expect(prompts[0]).toContain('TRANSCRIPTION D\'UNE VIDÉO');
     expect(prompts[0]).not.toContain('MESSAGE COURT');

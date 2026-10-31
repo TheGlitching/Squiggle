@@ -234,7 +234,7 @@ The ordering here is the design, not an implementation detail. It exists because
 earlier arrangement produced a specific failure.
 
 ```
-extract -> audit -> research -> reconcile -> score
+extract -> audit -> critique -> research -> reconcile -> score
 ```
 
 1. **Extract** (`shared/src/extract/extractor.ts`) turns the page into ordered blocks with
@@ -244,6 +244,15 @@ extract -> audit -> research -> reconcile -> score
 2. **Audit** (`shared/src/engine/pipeline.ts`, `prompts.ts`) asks the model once, from the
    article alone, for domain marks and findings. Each finding quotes the text it is
    about and names a block.
+
+   A second call, the **critique** (`shared/src/engine/critique.ts`), rereads those
+   findings against the text and keeps, recalibrates or withdraws each one, before any
+   is researched: research can only settle a factual finding, so a wrong `cadrage` or
+   `source-absente` would otherwise reach the reader as the audit wrote it. It never
+   withdraws a checkable fact on its own memory (that is research's question), it is
+   not run on a short message, whose signs of caution are exactly what the article
+   rules would withdraw, and a failed or unreadable critique leaves the audit as it was.
+   On the hosted server it runs inside the `audit` stage.
 
 3. **Research** (`shared/src/engine/research.ts`) takes the audit's *own* factual findings
    and checks them against evidence. The claim under test is always **what the

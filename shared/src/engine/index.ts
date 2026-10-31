@@ -11,6 +11,7 @@ export * from './types';
 export * from './scoring';
 export * from './prompts';
 export * from './validator';
+export * from './critique';
 export * from './pipeline';
 export * from './research';
 export * from './sourceFetch';

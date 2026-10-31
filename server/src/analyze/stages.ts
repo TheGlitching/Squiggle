@@ -9,7 +9,8 @@
  *   check         cache lookup only — a hit costs 0 LLM calls and 0 credits,
  *                 and the article's text never leaves the reader's machine
  *                 (only its fingerprint does)
- *   audit         the article, once, in one strict-JSON call
+ *   audit         the article, once, in one strict-JSON call, then a critique
+ *                 of its findings (`critiqueReport`)
  *   research      one factual finding, checked against evidence
  *   source-check  one link the article cites, fetched and read
  *   finalize      pure code: reconcile, rescore, cache, consume the credit
@@ -47,6 +48,7 @@ import {
   auditSystemPrompt,
   buildFourchesCaudinesUserPrompt,
   computeFourchesCaudinesScore,
+  critiqueReport,
   isResearchableFinding,
   isShortMessage,
   isVideoTranscriptUrl,
@@ -102,11 +104,12 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * findings, reported as unverified.
  *
  * Together with the per-call caps below, they bound one analysis on the
- * production model to under 50 cents in the worst case, at the price of the
+ * production model to under 55 cents in the worst case, at the price of the
  * dearest hosts it is pinned to (Nebius, tried first, and Together AI, both
  * $0.30 / $1.20 per million tokens): under 45 cents when the hosts were
  * pinned, plus at most two audits of 100 000 characters answering in
- * `AUDIT_MAX_OUTPUT_TOKENS`, about 3 cents each;
+ * `AUDIT_MAX_OUTPUT_TOKENS`, about 3 cents each, and one critique, which
+ * rereads the same text and answers in `CRITIQUE_MAX_OUTPUT_TOKENS`, about 2 cents;
  * the arithmetic is in the pull requests that set the caps and pinned the
  * hosts. About 12 cents of it is web searches, at half a cent each, which is
  * why the search count is capped per finding; they are close to half the
@@ -445,6 +448,10 @@ export async function analyzeAudit(
     await releaseStart(s, reader, now);
     return apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
   }
+
+  // The critique rereads the findings before any is researched or cached. It
+  // never fails the run: a failed or unreadable critique leaves the audit as is.
+  audited = await critiqueReport({ client, input, report: audited, citedSources, articleSources: sourcesByBlock });
 
   const state: AnalysisRunState = {
     url: canonical,
