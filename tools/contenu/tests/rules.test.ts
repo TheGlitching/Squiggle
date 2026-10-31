@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { CALENDAR, REVIEW_DAYS, parisTime, resolvePillar, rotate, slotAt, weeksToFill } from '../src/calendar';
 import type { GscData, GscRow } from '../src/collect/gsc';
-import { Db } from '../src/db';
 import { impressionsWithoutClicks, unansweredQueries } from '../src/deep';
 import { firstWord } from '../src/inbox';
 import { addLesson, activeLessons, avoided } from '../src/memory';
+
+// The routine's database is Node's own SQLite (22.13 and later, the VPS runs 24).
+// Where Node is older, the tests that need it say so instead of failing to load.
+const sqlite = await import('node:sqlite').then(
+  () => true,
+  () => false,
+);
+const { Db } = sqlite ? await import('../src/db') : ({} as typeof import('../src/db'));
 import { acceptTest, judge, networkShares, unknownNumbers, type Facts, type Note } from '../src/strategy';
 
 describe('the calendar', () => {
@@ -63,7 +70,7 @@ describe('the decision rules', () => {
     expect(unknownNumbers({ ...note, marche_pas: [] }, facts)).toEqual([]);
   });
 
-  it('accepts one closed-list test per network, never a second while one runs', () => {
+  it.skipIf(!sqlite)('accepts one closed-list test per network, never a second while one runs', () => {
     const db = Db.memory();
     expect(acceptTest({ db }, { network: 'threads', kind: 'heure', value: '+60', hypothesis: 'le soir plus tard' })).toBe(true);
     expect(acceptTest({ db }, { network: 'threads', kind: 'pilier', value: 'x', hypothesis: 'h' })).toBe(false);
@@ -108,7 +115,7 @@ describe('what the owner says', () => {
     expect(firstWord('Ne stop pas tout, retire juste jeudi')).toBeNull();
   });
 
-  it('applies a writing lesson at once and only proposes a strategy one', () => {
+  it.skipIf(!sqlite)('applies a writing lesson at once and only proposes a strategy one', () => {
     const db = Db.memory();
     addLesson({ db }, { origin: 'test', kind: 'redaction', text: 'Poser la question avant l’exemple sur Threads.' });
     addLesson({ db }, { origin: 'test', kind: 'strategie', text: 'Deux publications de plus sur Bluesky.' });

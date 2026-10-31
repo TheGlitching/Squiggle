@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Squiggle's weekly content routine: reads the week's figures, keeps a strategy note, proposes one piece of substance as a pull request, fills the social queue four weeks ahead and drafts replies. Runs on the Postiz VPS.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "build": "node build.mjs",
     "test": "vitest run",
