@@ -190,8 +190,8 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
   const accepted = input.entering.filter((x) => x.status !== 'refuse' && x.num !== null).sort((a, b) => a.slot_at.localeCompare(b.slot_at));
   const refused = input.entering.filter((x) => x.status === 'refuse');
   const decisions = decisionsFor(input);
-  const monday = f ? new Date(`${f.week}T12:00:00Z`) : input.now;
-  const period = `du ${shortDay(new Date(monday.getTime() - 7 * 86_400_000).toISOString())} au ${shortDay(new Date(monday.getTime() - 86_400_000).toISOString())}`;
+  // The seven days the figures cover: from a week ago to yesterday.
+  const period = `du ${shortDay(new Date(input.now.getTime() - 7 * 86_400_000).toISOString())} au ${shortDay(new Date(input.now.getTime() - 86_400_000).toISOString())}`;
 
   const figures: ReportModel['figures'] = [];
   if (f?.networkVisits) figures.push({ label: 'Visites venues des réseaux', value: String(f.networkVisits.week), trend: trend(f.networkVisits.week, f.networkVisits.previous) });

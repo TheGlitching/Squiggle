@@ -6,7 +6,9 @@ queue four weeks ahead, drafts replies to comments, and e-mails a report to
 contact@squiggle.fr. A daily check watches for failures in between. The model is
 DeepSeek V4.1 Flash through OpenRouter, on a key capped at 5 $ a month.
 
-The editorial line the model reads is `consignes/ligne-editoriale.md`. Its rule 7 is
+The editorial line the model reads is `consignes/ligne-editoriale.md`. On the networks,
+as on the carousels, the example is shown as a passage to read and never announced as
+made up (nor passed off as real); the filter refuses either. Its rule 7 is
 the one exception to « nothing goes out without the owner »: a post that adapts a page
 already reviewed and online enters the queue at least three weeks before it goes out,
 the report shows it in full that Monday, and silence is consent.
@@ -43,8 +45,14 @@ Monday in order:
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),
    then a separate review that sees only the text, its source, its image and the
    editorial line. A refused post leaves its slot empty and is never rewritten.
-6. **Report** (`src/report.ts`): the figures, the note, the pull request, every post
-   entering the queue in full, the reply drafts, what was learned, health and spending.
+6. **Report** (`src/report.ts`, `src/summary.ts`): an HTML e-mail in the site's colours,
+   one column for a phone, with a plain-text version. It opens on three or four sentences
+   in plain French (the model's, checked: only computed numbers, no internal word) and on
+   what is expected of the owner, then the decisions, each with the answer to send; a few
+   figures with their trend; the week's piece of substance; every post entering the queue
+   as it will look, grouped by day, with its thumbnail and a short number; then replies,
+   lessons, refused posts, health and spending, one line each. It is also kept on the VPS
+   under `donnees/comptes-rendus/`.
 
 ## What it learns
 
@@ -58,7 +66,7 @@ the strategy is proposed. `contenu etat` lists them, `contenu lecon-retirer <id>
 
 | | |
 |---|---|
-| one post | delete it in Postiz, or reply to the report describing it |
+| one post | delete it in Postiz, or reply « retire 4 » with its number in the report |
 | one network | disable the channel in Postiz: the routine stops filling it |
 | everything | reply « stop » to any e-mail, or `contenu pause` on the VPS (`contenu reprendre`, or a reply « reprendre », to resume) |
 | everything, now | `contenu vider-la-file`: pauses and deletes every future post the routine scheduled |
@@ -100,8 +108,10 @@ The report's Reply-To is `routine@squiggle.fr`. That address is routed to the Wo
 `worker/`, which keeps only mail from the owner's addresses (`src/owners.ts`) that
 Cloudflare authenticated (the checks of `server/src/mail/authenticated.ts`), strips the
 quoted report and attachments, and files the text in a KV namespace. The daily check
-reads it through Cloudflare's API and classes it in a closed list (`src/inbox.ts`):
-« stop » and « reprendre » act the same day; removing a post, leaving a subject alone,
+reads it through Cloudflare's API (`src/inbox.ts`). Short answers are read without a
+model: « retire 4 » (several numbers allowed) removes those posts, « oui B » or « non B »
+answers decision B of the last report (« non » on a page to review closes it). The rest
+is classed in a closed list: « stop » and « reprendre » act the same day; removing a post, leaving a subject alone,
 one network less or more this week are applied and confirmed in the next report; a
 remark on the writing becomes a lesson; a request touching the strategy is restated
 and put back to the owner. The text is data: nothing else can happen.

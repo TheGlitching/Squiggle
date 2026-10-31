@@ -74,6 +74,7 @@ describe('the weekly report', () => {
   if (process.env.RENDU) writeFileSync(process.env.RENDU, report.html);
 
   it('says once that it is a dry run, then the essential, then what is expected', () => {
+    expect(report.subject).toContain('du 26 octobre au 1er novembre');
     expect(report.html.match(/Version d’essai : rien n’a été publié/g)).toHaveLength(1);
     expect(report.text.indexOf('Une semaine calme.')).toBeLessThan(report.text.indexOf('LES CHIFFRES'));
     expect(report.text).toContain('> Une décision vous attend, juste en dessous.');
