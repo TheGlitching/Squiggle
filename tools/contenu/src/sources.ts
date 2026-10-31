@@ -124,17 +124,24 @@ export async function pageSource(ctx: Pick<Ctx, 'fetch'>, path: string): Promise
 /**
  * The images a post on this source shows: the carousel's slides when the build
  * drew them (`/og/social/<slug>/slides.json`), else the page's share card,
- * else none. The alternative text always comes from the site, never the model.
+ * else none; and the story drawn beside the carousel (`story.json`), if any. The alternative text always comes from the site, never the model.
  */
-export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promise<{ slides: Image[]; card: Image | null }> {
+export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promise<{ slides: Image[]; card: Image | null; story: Image | null }> {
   const slug = source.path.split('/').pop();
   let slides: Image[] = [];
+  let story: Image | null = null;
   if (source.kind !== 'page' && slug) {
     try {
       const response = await ctx.fetch(`${ORIGIN}/og/social/${slug}/slides.json`, { signal: AbortSignal.timeout(20_000) });
       if (response.ok) {
         const list = (await response.json()) as Array<{ image: string; alt: string }>;
         slides = list.filter((s) => s.image?.startsWith('/og/social/') && s.alt).map((s) => ({ url: `${ORIGIN}${s.image}`, alt: s.alt }));
+      }
+      // The 9:16 story the build draws beside the carousel, with its own text.
+      const storyJson = await ctx.fetch(`${ORIGIN}/og/social/${slug}/story.json`, { signal: AbortSignal.timeout(20_000) });
+      if (storyJson.ok) {
+        const s = (await storyJson.json()) as { image: string; alt: string };
+        if (s.image?.startsWith('/og/social/') && s.alt) story = { url: `${ORIGIN}${s.image}`, alt: s.alt };
       }
     } catch {
       slides = [];
@@ -149,5 +156,5 @@ export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promis
     const alt = /<meta property="og:image:alt" content="([^"]+)"/.exec(html)?.[1];
     if (url?.startsWith(`${ORIGIN}/`) && alt) card = { url, alt: htmlText(`<body>${alt}</body>`).text };
   }
-  return { slides, card };
+  return { slides, card, story };
 }

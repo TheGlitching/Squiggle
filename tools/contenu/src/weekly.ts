@@ -8,7 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { weeksToFill } from './calendar';
+import { fillWindow, weeksToFill } from './calendar';
 import { collectAll } from './collect';
 import { gscPath } from './collect/gsc';
 import { NETWORKS } from './config';
@@ -18,7 +18,7 @@ import { weeklyDeep } from './deep';
 import { readOwnerMail } from './inbox';
 import { lessonsSince } from './memory';
 import { Postiz } from './postiz';
-import { draftMode, fillQueue, reconcile, reserve } from './posts';
+import { draftMode, fillQueue, reconcile, reserve, startedOn } from './posts';
 import { buildReport, decisionsFor, type ReportInput } from './report';
 import { summarize } from './summary';
 import { classifyComments, collectComments, commentsToRead, learnFromRemovals, learnFromReplies, signals } from './replies';
@@ -49,7 +49,7 @@ export async function weekly(ctx: Ctx): Promise<void> {
   const impressions = new Map((week.gsc?.pages28 ?? []).map((r) => [gscPath(r.keys[0]), r.impressions]));
   const weight = (id: string) => impressions.get(`/${id}`) ?? 0;
   const entering = isPaused ? [] : ((await step(ctx, 'rédaction des publications', () => fillQueue(ctx, weekGuidance(ctx), weight), (r) => `${r.filter((p) => p.status !== 'refuse').length} acceptées, ${r.filter((p) => p.status === 'refuse').length} refusées`)) ?? []);
-  if (strategy && !isPaused) startTests(ctx, strategy.newTests, weeksToFill(ctx.now, weekOf(ctx.now))[0]);
+  if (strategy && !isPaused) startTests(ctx, strategy.newTests, weeksToFill(ctx.now, weekOf(ctx.now), startedOn(ctx))[0]);
 
   const health = await step(ctx, 'état de la file et des réseaux', async () => {
     const integrations = await new Postiz(ctx).integrations();
@@ -77,6 +77,7 @@ export async function weekly(ctx: Ctx): Promise<void> {
     steps: ctx.steps,
     now: ctx.now,
     dry: ctx.dry,
+    ramping: fillWindow(ctx.now, startedOn(ctx)).ramping,
   };
   const summary = await step(ctx, 'résumé du compte rendu', () => summarize(ctx, input, decisionsFor(input)), (s) => (s ? 'écrit' : 'phrases du programme'));
   const report = buildReport(input, summary ?? null);
@@ -84,7 +85,13 @@ export async function weekly(ctx: Ctx): Promise<void> {
   const folder = join(ctx.paths.data, 'comptes-rendus');
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, `${weekOf(ctx.now)}${ctx.dry ? '-a-blanc' : ''}.html`), report.html);
-  await sendMail(ctx, report.subject, report.text, report.html);
+  // One report a week: a run started again the same week keeps its report on the server and sends nothing.
+  const sentFor = ctx.db.getKv<string>('compte_rendu_envoye');
+  if (sentFor === weekOf(ctx.now) && !ctx.dry) ctx.log('  compte rendu déjà envoyé cette semaine : gardé sur le serveur, pas renvoyé');
+  else {
+    await sendMail(ctx, report.subject, report.text, report.html);
+    ctx.db.setKv('compte_rendu_envoye', weekOf(ctx.now));
+  }
   // What « oui B » refers to, until the next report.
   ctx.db.setKv('decisions', report.decisions);
   for (const m of mail) ctx.db.run('UPDATE owner_mail SET reported = 1 WHERE key = ?', m.key);

@@ -50,9 +50,11 @@ export interface Media {
 }
 
 /** The settings each network's post needs (docs.postiz.com, providers). */
-function settings(network: Network): Record<string, unknown> {
+function settings(network: Network, story: boolean): Record<string, unknown> {
   if (network === 'x') return { __type: 'x', who_can_reply_post: 'everyone' };
-  if (network === 'instagram') return { __type: 'instagram', post_type: 'post' };
+  // Instagram and Facebook take `post_type: story` (checked in Postiz v2.25.3's own settings, not only its docs).
+  if (network === 'instagram') return { __type: 'instagram', post_type: story ? 'story' : 'post' };
+  if (network === 'facebook' && story) return { __type: 'facebook', post_type: 'story' };
   return { __type: network };
 }
 
@@ -115,7 +117,7 @@ export class Postiz {
    * One post on one network, in a request of its own: Postiz deletes a post
    * with its whole group, so a post the owner removes must be alone in its group.
    */
-  async create(post: { integrationId: string; network: Network; at: Date; text: string; images: Media[]; draft: boolean }): Promise<string> {
+  async create(post: { integrationId: string; network: Network; at: Date; text: string; images: Media[]; draft: boolean; story?: boolean }): Promise<string> {
     const body = {
       type: post.draft ? 'draft' : 'schedule',
       date: post.at.toISOString(),
@@ -125,7 +127,7 @@ export class Postiz {
         {
           integration: { id: post.integrationId },
           value: [{ content: post.text, image: post.images.map((m) => ({ id: m.id, path: m.path, alt: m.alt })) }],
-          settings: settings(post.network),
+          settings: settings(post.network, post.story === true),
         },
       ],
     };

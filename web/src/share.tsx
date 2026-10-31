@@ -423,19 +423,19 @@ function Paper({ children, glass = false, top }: { children: ReactNode; glass?: 
  * A slide: the site's dark ground, and only the page number in its corner, so
  * a reader swiping through knows where they are.
  */
-function Frame({ page, children }: { page: string; children: ReactNode }) {
+function Frame({ page, children, height = SLIDE_HEIGHT, inset = CAPTION_BAND }: { page: string; children: ReactNode; height?: number; inset?: number }) {
   return (
     <div
       style={{
         width: SLIDE_WIDTH,
-        height: SLIDE_HEIGHT,
+        height,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
         background: color('background'),
         color: color('foreground'),
         fontFamily: 'Bricolage Grotesque',
-        padding: `${CAPTION_BAND}px ${PAGE_MARGIN}px`,
+        padding: `${inset}px ${PAGE_MARGIN}px`,
       }}
     >
       {page ? (
@@ -533,12 +533,12 @@ interface Draft {
 const SCALES = [1, 0.96, 0.92, 0.88, 0.84, 0.8, 0.76];
 const FIGURE_SCALES = Array.from({ length: 16 }, (_, index) => 1 - index * 0.03);
 
-async function settle(draft: Draft, where: string): Promise<string> {
+async function settle(draft: Draft, where: string, height = SLIDE_HEIGHT, inset = CAPTION_BAND): Promise<string> {
   // The frame's padding box, give or take the half space each line of words starts with (16 px for the cover's name).
   const side = PAGE_MARGIN - 20;
-  const area = { left: side, top: CAPTION_BAND, width: SLIDE_WIDTH - 2 * side, height: SLIDE_HEIGHT - 2 * CAPTION_BAND };
+  const area = { left: side, top: inset, width: SLIDE_WIDTH - 2 * side, height: height - 2 * inset };
   const attempt = async (scale: number, figure: number) => {
-    const { svg, nodes } = await layout(draft.draw(scale, figure), { width: SLIDE_WIDTH, height: SLIDE_HEIGHT });
+    const { svg, nodes } = await layout(draft.draw(scale, figure), { width: SLIDE_WIDTH, height });
     return { svg, problem: misfit(nodes, area) };
   };
   let problem = '';
@@ -756,4 +756,45 @@ export async function socialSlides(source: SocialSource): Promise<SocialSlide[]>
       png: png(await settle(draft, `${socialPath(source)}/${index + 1}.png`), SLIDE_WIDTH),
     })),
   );
+}
+
+/**
+ * The story that goes with a post on Instagram and Facebook: 1080 x 1920 (9:16),
+ * the carousel's cover and a hook to read, the same frame, fonts and overflow
+ * check. Instagram lays its own bar over the top and its reply field over the
+ * bottom of a story, so nothing is drawn there.
+ */
+export const STORY_HEIGHT = 1920;
+const STORY_INSET = 300;
+
+/** Where the build writes a story: `/og/social/faux-dilemme/story.png`, with `story.json` for its text. */
+export const storyPath = (source: SocialSource) => `${socialPath(source)}/story.png`;
+
+export async function socialStory(source: SocialSource): Promise<SocialSlide> {
+  const notion = 'nom' in source;
+  const kicker = notion ? 'Un piège à repérer quand on lit' : 'Une méthode de lecture';
+  const name = notion ? source.nom : source.titreCourt;
+  const exemple = exampleOf(source);
+  const address = `squiggle.fr/${notion ? 'glossaire' : 'blog'}/${source.slug}`;
+  const draft: Draft = {
+    alt: `${ended(name)} ${kicker}. Lisez ceci : ${ended(plain(exemple.titre))} ${address}, lien dans la bio.`,
+    yields: true,
+    draw: (scale, figure) => (
+      <Frame page="" height={STORY_HEIGHT} inset={STORY_INSET}>
+        <Words segments={kicker} style={{ fontSize: 40 * scale, fontWeight: 500, lineHeight: 1.2, color: color('accentInk') }} />
+        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 30 * scale, flexShrink: 0 }}>
+          <Marked text={name} size={Math.round(112 * scale)} />
+        </div>
+        <div style={{ display: 'flex', marginTop: 36 * scale, justifyContent: 'center' }}>
+          <Figure figure={<CoverFigure slug={source.slug} />} width={760 * figure} />
+        </div>
+        <Heading text="Lisez ceci. Quelque chose vous gêne ?" size={46 * scale} />
+        <Paper top={24 * scale}>
+          <Words segments={exemple.titre} mark={false} style={{ fontWeight: 600, fontSize: 60 * scale, lineHeight: 1.16, letterSpacing: -0.6 }} />
+        </Paper>
+        <Signature address={address} size={38 * scale} />
+      </Frame>
+    ),
+  };
+  return { alt: draft.alt, png: png(await settle(draft, storyPath(source), STORY_HEIGHT, STORY_INSET), SLIDE_WIDTH) };
 }

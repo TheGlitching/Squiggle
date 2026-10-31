@@ -10,10 +10,10 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { CALENDAR, REVIEW_DAYS, resolvePillar, rotate, slotAt, weeksToFill, type Angle, type Pillar, type Slot, type Usage } from './calendar';
+import { CALENDAR, fillWindow, resolvePillar, rotate, slotAt, weeksToFill, type Angle, type Pillar, type Slot, type Usage } from './calendar';
 import { FRESH_NOTICE_HOURS, NETWORKS, ORIGIN, X_PRICES, type Network } from './config';
 import { addDays, day, weekOf, type Ctx } from './context';
-import { filterPost } from './filter';
+import { contentReasons, filterPost } from './filter';
 import { askJson, BudgetExceeded } from './llm';
 import { avoided, consigne, directives, lessonsBlock, networkDirective, type Directive } from './memory';
 import { Postiz, type Integration } from './postiz';
@@ -31,7 +31,8 @@ export interface PostRow {
   text: string;
   image_url: string | null;
   alt: string | null;
-  status: 'propose' | 'refuse' | 'programme' | 'brouillon_postiz' | 'retire' | 'publie' | 'echec' | 'rendu' | 'supprime';
+  /** `en_attente`: a launch post, held until the owner says « ok ». */
+  status: 'propose' | 'refuse' | 'en_attente' | 'programme' | 'brouillon_postiz' | 'retire' | 'publie' | 'echec' | 'rendu' | 'supprime';
   reason: string | null;
   postiz_id: string | null;
   created_at: string;
@@ -39,7 +40,7 @@ export interface PostRow {
 }
 
 /** The posts that count as being in the queue or out: what rotation and repeats are judged on. */
-const LIVE = "('propose', 'programme', 'brouillon_postiz', 'publie')";
+const LIVE = "('propose', 'en_attente', 'programme', 'brouillon_postiz', 'publie')";
 
 export function journal(ctx: Pick<Ctx, 'db'>, since: Date): PostRow[] {
   return ctx.db.all<PostRow>(`SELECT * FROM posts WHERE slot_at >= ? AND status IN ${LIVE} ORDER BY slot_at`, since.toISOString());
@@ -153,6 +154,7 @@ const ANGLE_BRIEF: Record<Angle, string> = {
   long: 'Angle « texte long » : trois à six phrases, l’exemple puis sa lecture, puis le lien.',
   carrousel: 'Légende d’un carrousel qui montre la fiche en images : deux ou trois phrases qui donnent envie de faire défiler, puis « Lien dans la bio ».',
   page: 'Ce que la page apporte au lecteur, en partant d’un exemple ou d’un geste qu’elle contient.',
+  story: 'Une story : l’image parle seule, sans légende.',
 };
 
 const LINK_RULE: Record<Network, (url: string) => string> = {
@@ -259,16 +261,43 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
     }
     drafts.push({ planned: p, text: filtered.text, images, status: 'propose', reason: null });
     others.push({ network: p.slot.network, text: filtered.text, day: day(p.at), sourceId: p.source.id });
+    // A post on Instagram or Facebook gets its story the same evening, when the build drew one.
+    const story = (p.slot.network === 'instagram' || p.slot.network === 'facebook') && p.source.kind !== 'page' ? (await imagesFor(ctx, p.source)).story : null;
+    if (story) drafts.push(await storyDraft(ctx, p, story));
   }
   return drafts;
 }
+
+/**
+ * The story that goes with a post: the build's 9:16 image, whose words are the
+ * site's own, so its text (the image's alternative text) passes the rules every
+ * text of Squiggle does, then the same separate review, image included.
+ */
+async function storyDraft(ctx: Ctx, p: Planned, story: Image): Promise<Draft> {
+  const at = new Date(p.at.getTime() + STORY_DELAY_HOURS * 3_600_000);
+  const planned: Planned = { ...p, at, angle: 'story', slot: { ...p.slot, angle: 'story' } };
+  const reasons = contentReasons(story.alt.replace(/squiggle\.fr\/\S+/g, ' '), p.source.text);
+  if (reasons.length) return { planned, text: story.alt, images: [story], status: 'refuse', reason: `filtre : ${reasons.join(' ; ')}` };
+  const verdict = await review(ctx, p.slot.network, `Story (une image plein écran, sans légende). Son texte : ${story.alt}`, p.source, [story]).catch((e: Error) => ({
+    conforme: false,
+    raison: `relecture impossible : ${e.message}`,
+  }));
+  return { planned, text: story.alt, images: [story], status: verdict.conforme ? 'propose' : 'refuse', reason: verdict.conforme ? null : `relecture : ${verdict.raison || 'non conforme'}` };
+}
+
+/** A story goes out the same day as its post, in the evening, when stories are watched. */
+const STORY_DELAY_HOURS = 2;
 
 export function draftMode(ctx: Pick<Ctx, 'db'>): boolean {
   return ctx.db.getKv<boolean>('mode_brouillon') === true;
 }
 
-/** Records every draft in the journal and, outside a dry run, schedules the accepted ones in Postiz. */
-export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integration[]): Promise<PostRow[]> {
+/**
+ * Records every draft in the journal and, outside a dry run, schedules the
+ * accepted ones in Postiz. With `hold`, accepted posts wait for the owner's
+ * approval instead (the launch), and Postiz is not called.
+ */
+export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integration[], hold = false): Promise<PostRow[]> {
   const postiz = new Postiz(ctx);
   const asDraft = draftMode(ctx);
   const rows: PostRow[] = [];
@@ -292,7 +321,8 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       created_at: new Date().toISOString(),
       num: null,
     };
-    if (d.status === 'propose' && !ctx.dry) {
+    if (d.status === 'propose' && hold) row.status = 'en_attente';
+    else if (d.status === 'propose' && !ctx.dry) {
       const integration = integrations.find((i) => i.identifier === p.slot.network && !i.disabled);
       if (!integration) {
         row.status = 'refuse';
@@ -301,7 +331,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
         try {
           const media = [];
           for (const image of d.images) media.push(await postiz.media(image.url, image.alt));
-          row.postiz_id = await postiz.create({ integrationId: integration.id, network: p.slot.network, at: p.at, text: d.text, images: media, draft: asDraft });
+          row.postiz_id = await postiz.create({ integrationId: integration.id, network: p.slot.network, at: p.at, text: d.text, images: media, draft: asDraft, story: p.angle === 'story' });
           row.status = asDraft ? 'brouillon_postiz' : 'programme';
           if (p.slot.network === 'x') ctx.db.run("INSERT INTO spend (at, service, usd, run_id) VALUES (?, 'x', ?, ?)", p.at.toISOString(), X_PRICES.post, ctx.runId);
         } catch (error) {
@@ -337,6 +367,21 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
   return rows;
 }
 
+/** Puts one held post into Postiz, at its time: what approving the launch does. */
+export async function publishHeld(ctx: Ctx, row: PostRow, integrations: Integration[]): Promise<PostRow> {
+  const integration = integrations.find((i) => i.identifier === row.network && !i.disabled);
+  if (!integration) throw new Error(`${row.network} est désactivé dans Postiz`);
+  const postiz = new Postiz(ctx);
+  const media = [];
+  const urls = row.image_url ? row.image_url.split(' ') : [];
+  const alts = row.alt ? row.alt.split(' | ') : [];
+  for (const [i, url] of urls.entries()) media.push(await postiz.media(url, alts[i] ?? ''));
+  const id = await postiz.create({ integrationId: integration.id, network: row.network, at: new Date(row.slot_at), text: row.text, images: media, draft: false, story: row.angle === 'story' });
+  ctx.db.run("UPDATE posts SET status = 'programme', postiz_id = ?, slot_at = ? WHERE id = ?", id, row.slot_at, row.id);
+  if (row.network === 'x') ctx.db.run("INSERT INTO spend (at, service, usd, run_id) VALUES (?, 'x', ?, ?)", row.slot_at, X_PRICES.post, ctx.runId);
+  return { ...row, status: 'programme', postiz_id: id };
+}
+
 /** The slots already held, by network and instant: our journal, and anything the owner scheduled by hand. */
 async function takenSlots(ctx: Ctx, from: Date, to: Date): Promise<Set<string>> {
   const taken = new Set(journal(ctx, from).map((p) => `${p.network}@${p.slot_at}`));
@@ -354,18 +399,25 @@ async function takenSlots(ctx: Ctx, from: Date, to: Date): Promise<Set<string>> 
   return taken;
 }
 
-/** Monday's step: fills every week far enough ahead, up to four weeks out. */
+/** The Monday the routine first filled the queue for real, which the start's ramp counts from. */
+export function startedOn(ctx: Pick<Ctx, 'db'>): string | null {
+  return ctx.db.getKv<string>('demarrage') ?? null;
+}
+
+/** Monday's step: fills the weeks the window allows (`fillWindow`), up to four weeks out. */
 export async function fillQueue(ctx: Ctx, thisWeek: string, weight: Weight): Promise<PostRow[]> {
-  const weeks = weeksToFill(ctx.now, weekOf(ctx.now));
+  const start = startedOn(ctx);
+  const weeks = weeksToFill(ctx.now, weekOf(ctx.now), start);
   if (weeks.length === 0) return [];
   const list = directives(ctx, ctx.now);
-  const taken = await takenSlots(ctx, addDays(ctx.now, REVIEW_DAYS - 1), addDays(new Date(`${weeks[weeks.length - 1]}T00:00:00Z`), 8));
+  const taken = await takenSlots(ctx, addDays(fillWindow(ctx.now, start).from, -1), addDays(new Date(`${weeks[weeks.length - 1]}T00:00:00Z`), 8));
   const integrations = await new Postiz(ctx).integrations();
   const rows: PostRow[] = [];
   for (const monday of weeks) {
     const planned = await planWeek(ctx, monday, taken, weight, list);
     rows.push(...(await schedule(ctx, await writePosts(ctx, planned, thisWeek), integrations)));
   }
+  if (!start && !ctx.dry && rows.some((r) => r.status !== 'refuse')) ctx.db.setKv('demarrage', weekOf(ctx.now));
   return rows;
 }
 

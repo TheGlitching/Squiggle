@@ -33,9 +33,19 @@ describe('the calendar', () => {
     expect(pillars.filter((p) => p === 'produit')).toHaveLength(1);
   });
 
-  it('only fills weeks at least three weeks out, up to four', () => {
+  it('starts with the next week, then fills one week further each Monday until four weeks out', () => {
+    const monday = (d: string) => new Date(`${d}T04:00:00Z`);
+    expect(weeksToFill(monday('2026-11-02'), '2026-11-02', null)).toEqual(['2026-11-09']);
+    // The weeks already filled are held in the journal and skipped: each Monday adds the last one.
+    expect(weeksToFill(monday('2026-11-09'), '2026-11-09', '2026-11-02')).toEqual(['2026-11-16', '2026-11-23']);
+    expect(weeksToFill(monday('2026-11-16'), '2026-11-16', '2026-11-02')).toEqual(['2026-11-23', '2026-11-30', '2026-12-07']);
+    // From the fourth Monday on, the steady state: weeks three and four out.
+    expect(weeksToFill(monday('2026-11-23'), '2026-11-23', '2026-11-02')).toEqual(['2026-12-14', '2026-12-21']);
+  });
+
+  it('only fills weeks at least three weeks out, up to four, once started', () => {
     const now = new Date('2026-11-02T04:00:00Z');
-    const weeks = weeksToFill(now, '2026-11-02');
+    const weeks = weeksToFill(now, '2026-11-02', '2026-10-05');
     expect(weeks).toEqual(['2026-11-23', '2026-11-30']);
     for (const w of weeks) for (const s of CALENDAR) expect(slotAt(w, s).getTime()).toBeGreaterThanOrEqual(now.getTime() + REVIEW_DAYS * 86_400_000);
   });

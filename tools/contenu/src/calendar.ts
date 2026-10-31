@@ -13,8 +13,8 @@ import type { Network } from './config';
 import { addDays, day } from './context';
 
 export type Pillar = 'notion' | 'fond' | 'produit' | 'classe';
-/** Which side of a notion a post shows (`blog-declinaison`): its example, how to spot it, its question; or the whole card. */
-export type Angle = 'exemple' | 'reperer' | 'question' | 'long' | 'carrousel' | 'page';
+/** Which side of a notion a post shows (`blog-declinaison`): its example, how to spot it, its question; the whole card; or the story that goes with a post. */
+export type Angle = 'exemple' | 'reperer' | 'question' | 'long' | 'carrousel' | 'page' | 'story';
 
 export interface Slot {
   network: Network;
@@ -60,13 +60,27 @@ export function parisTime(dayStr: string, time: string): Date {
   return new Date(guess.getTime() - offset * 60_000);
 }
 
-/** The Mondays whose slots may be filled now: from the first one far enough ahead, to four weeks out. */
-export function weeksToFill(now: Date, mondayOfThisWeek: string): string[] {
+/**
+ * The start (owner's decision): rather than leave the accounts empty for three
+ * weeks, the first Monday fills only the next week, two days ahead at the least,
+ * and each Monday after fills one week further, until the queue reaches four
+ * weeks and the three-week review window. `start` is the Monday the routine first
+ * filled the queue for real.
+ */
+export function fillWindow(now: Date, start: string | null): { from: Date; to: Date; ramping: boolean } {
+  const weeks = start ? Math.floor((now.getTime() - Date.parse(`${start}T00:00:00Z`)) / (7 * 86_400_000)) : 0;
+  if (weeks >= 3) return { from: addDays(now, REVIEW_DAYS), to: addDays(now, 29), ramping: false };
+  return { from: addDays(now, 2), to: addDays(now, 7 * (weeks + 1) + 2), ramping: true };
+}
+
+/** The Mondays whose slots may be filled now: those with a slot inside the window. */
+export function weeksToFill(now: Date, mondayOfThisWeek: string, start: string | null = null): string[] {
+  const { from, to } = fillWindow(now, start);
   const out: string[] = [];
   for (let w = 1; w <= 4; w += 1) {
     const monday = day(addDays(new Date(`${mondayOfThisWeek}T00:00:00Z`), 7 * w));
-    const first = Math.min(...CALENDAR.map((s) => slotAt(monday, s).getTime()));
-    if (first >= addDays(now, REVIEW_DAYS).getTime()) out.push(monday);
+    const times = CALENDAR.map((s) => slotAt(monday, s).getTime());
+    if (Math.min(...times) >= from.getTime() && Math.min(...times) < to.getTime()) out.push(monday);
   }
   return out;
 }

@@ -23,6 +23,7 @@ import { askJson } from './llm';
 import { addDirective, addLesson, consigne } from './memory';
 import { Postiz } from './postiz';
 import { GitHub } from './github';
+import { approveLaunch } from './launch';
 import type { PostRow } from './posts';
 import type { Decision } from './report';
 
@@ -147,17 +148,24 @@ async function apply(ctx: Ctx, text: string): Promise<{ category: MailCategory; 
  * do not match are left for the model to class.
  */
 export interface Commands {
+  /** « ok » to the launch, with the numbers set aside (« ok sauf 3 »). */
+  launch: { except: number[] } | null;
   retire: number[];
   answers: Array<{ yes: boolean; letter: string }>;
   rest: string;
 }
 
 export function parseCommands(text: string): Commands {
-  const out: Commands = { retire: [], answers: [], rest: '' };
+  const out: Commands = { launch: null, retire: [], answers: [], rest: '' };
   const rest: string[] = [];
   for (const raw of text.split('\n')) {
     const line = raw.trim();
     if (!line) continue;
+    const ok = /^(?:ok|d[’']accord|go|valid\w*)(?:\s+(?:pour\s+)?(?:le\s+)?lancement)?(?:\s*,?\s*sauf\s+(?:la\s+|le\s+|les\s+)?((?:\d+\s*(?:,|et|&)?\s*)+))?[.!]?$/iu.exec(line);
+    if (ok) {
+      out.launch = { except: (ok[1]?.match(/\d+/g) ?? []).map(Number) };
+      continue;
+    }
     const retire = /^(?:retir\w*|supprim\w*|enl[eè]v\w*)\s+(?:(?:la|le|les|publications?|n°|numéros?)\s*)*((?:\d+\s*(?:,|et|&)?\s*)+)[.!]?$/iu.exec(line);
     if (retire) {
       out.retire.push(...(retire[1].match(/\d+/g) ?? []).map(Number));
@@ -176,6 +184,7 @@ export function parseCommands(text: string): Commands {
 
 async function applyCommands(ctx: Ctx, c: Commands): Promise<string[]> {
   const outcomes: string[] = [];
+  if (c.launch) outcomes.push(`lancement : ${await approveLaunch(ctx, c.launch.except)}`);
   for (const num of c.retire) {
     const p = ctx.db.get<PostRow>("SELECT * FROM posts WHERE num = ? AND status IN ('programme', 'brouillon_postiz', 'propose') AND slot_at > ?", num, ctx.now.toISOString());
     if (!p) {

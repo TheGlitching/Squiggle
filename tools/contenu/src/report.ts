@@ -59,6 +59,8 @@ export interface ReportInput {
   steps: Step[];
   now: Date;
   dry: boolean;
+  /** The first weeks, when the queue is filled a week at a time with a short review window. */
+  ramping?: boolean;
 }
 
 export interface Summary {
@@ -257,7 +259,7 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
     article,
     queue: accepted.length
       ? {
-          intro: `${plural(accepted.length, 'publication')} entrent dans la file. Elles partiront du ${shortDay(accepted[0].slot_at)} au ${shortDay(accepted[accepted.length - 1].slot_at)}. Pour en retirer une, répondez « retire » et son numéro (par exemple « retire ${accepted[0].num} »), ou supprimez-la dans Postiz.`,
+          intro: `${plural(accepted.length, 'publication')} entrent dans la file. Elles partiront du ${shortDay(accepted[0].slot_at)} au ${shortDay(accepted[accepted.length - 1].slot_at)}. Pour en retirer une, répondez « retire » et son numéro (par exemple « retire ${accepted[0].num} »), ou supprimez-la dans Postiz.${input.ramping ? ' La routine démarre : la file se remplit une semaine à la fois, et le délai avant parution remonte chaque lundi jusqu’à quatre semaines.' : ''}`,
           days: byDay(accepted),
         }
       : null,
@@ -300,7 +302,7 @@ export function renderText(m: ReportModel): string {
     for (const day of m.queue.days) {
       out.push(`--- ${day.day} ---`);
       for (const x of day.posts) {
-        out.push('', `[${x.num}] ${NETWORK_NAME[x.network]}, ${parisHour(x.slot_at)}`, x.text);
+        out.push('', `[${x.num}] ${NETWORK_NAME[x.network]}${x.angle === 'story' ? ' story' : ''}, ${parisHour(x.slot_at)}`, x.text);
         const img = imagesLine(x);
         if (img) out.push(img);
       }
@@ -350,8 +352,8 @@ function postCard(x: PostRow): string {
       }</td>`
     : '';
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;background:${C.paper};border-radius:10px;border:1px solid ${C.paperEdge}"><tr><td style="padding:14px 16px">
-<div style="font:700 15px/1.4 ${SANS};color:${C.paperInk}"><span style="display:inline-block;min-width:22px;padding:1px 6px;margin-right:8px;border-radius:6px;background:${C.paperInk};color:${C.paper};text-align:center">${x.num}</span><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${NETWORK_DOT[x.network]};margin-right:6px"></span>${esc(NETWORK_NAME[x.network])}<span style="font-weight:400;color:${C.paperMuted}"> · ${esc(parisHour(x.slot_at))}</span></div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr><td valign="top" style="font:400 16px/1.5 ${SERIF};color:${C.paperInk};overflow-wrap:anywhere;word-break:break-word">${esc(x.text).replace(/\n/g, '<br>')}</td>${thumb}</tr></table>
+<div style="font:700 15px/1.4 ${SANS};color:${C.paperInk}"><span style="display:inline-block;min-width:22px;padding:1px 6px;margin-right:8px;border-radius:6px;background:${C.paperInk};color:${C.paper};text-align:center">${x.num}</span><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${NETWORK_DOT[x.network]};margin-right:6px"></span>${esc(NETWORK_NAME[x.network])}${x.angle === 'story' ? ' story' : ''}<span style="font-weight:400;color:${C.paperMuted}"> · ${esc(parisHour(x.slot_at))}</span></div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr><td valign="top" style="font:400 16px/1.5 ${SERIF};color:${C.paperInk};overflow-wrap:anywhere;word-break:break-word">${x.angle === 'story' ? `<span style="font:600 14px/1.4 ${SANS};color:${C.paperMuted}">Story, l’image seule. Ce qu’elle dit :</span><br>` : ''}${esc(x.text).replace(/\n/g, '<br>')}</td>${thumb}</tr></table>
 <div style="margin-top:10px;font:400 13px/1.4 ${SANS};color:${C.paperMuted}">${esc(cap(PILLAR_NAME[x.pillar] ?? x.pillar))} : ${esc(x.source_title ?? x.source_id)}</div>
 </td></tr></table>`;
 }
@@ -372,6 +374,7 @@ export function renderHtml(m: ReportModel, notice = false): string {
   if (m.banner) parts.push(`<div style="margin:0 0 20px;padding:12px 14px;border-radius:8px;background:#1f1608;border:1px solid #d97706;font:600 15px/1.45 ${SANS};color:#fbbf24">${esc(m.banner)}</div>`);
   if (notice) {
     parts.push(...m.essentiel.map((s) => para(s, 17)));
+    if (m.expectation) parts.push(`<div class="note" style="margin:16px 0 0;padding:12px 14px;border-radius:8px;background:${C.accentSoft};border-left:4px solid ${C.accent};font:600 16px/1.45 ${SANS};color:${C.accentInk}">${esc(m.expectation)}</div>`);
     for (const day of m.queue?.days ?? []) parts.push(`<div class="fg" style="margin:22px 0 10px;font:700 17px/1.3 ${SANS};color:${C.fg}">${esc(day.day)}</div>`, ...day.posts.map(postCard));
     return shell(m.subject, parts);
   }
@@ -444,6 +447,45 @@ ${parts.join('\n')}
 </td></tr></table>
 </td></tr></table>
 </body></html>`;
+}
+
+/** The launch e-mail: the first posts, each to read, none scheduled until the owner says « ok ». */
+export function buildLaunch(posts: PostRow[], dry: boolean): { subject: string; text: string; html: string } {
+  const held = posts.filter((x) => x.status === 'en_attente').sort((a, b) => a.slot_at.localeCompare(b.slot_at));
+  const set = posts.filter((x) => x.status === 'refuse');
+  const example = held.find((x) => x.angle !== 'story')?.num ?? 1;
+  const model: ReportModel = {
+    subject: 'Squiggle : les premières publications, à valider',
+    banner: dry ? 'Version d’essai : rien ne sera programmé, même avec votre accord.' : null,
+    period: '',
+    essentiel: [
+      `Voici les premières publications de Squiggle sur les réseaux, pour les jours qui viennent : ${plural(held.length, 'publication')}, tirées des carrousels du glossaire.`,
+      'Elles ont passé les mêmes contrôles que toutes les autres. Rien ne partira sans votre accord.',
+      ...(set.length ? [`${plural(set.length, 'autre')} ${set.length > 1 ? 'ont été écartées' : 'a été écartée'} par le contrôle : ${set.map((x) => `${NETWORK_NAME[x.network]}, ${plainReason(x.reason)}`).join(' ; ')}.`] : []),
+    ],
+    expectation: `Répondez « ok » pour tout programmer, ou « ok sauf ${example} » pour en écarter une. Sans réponse, rien ne part.`,
+    decisions: [],
+    figures: [],
+    bars: [],
+    lecture: '',
+    tooEarly: null,
+    tests: [],
+    article: '',
+    queue: { intro: '', days: byDay(held) },
+    replies: [],
+    learned: [],
+    footer: [],
+    stop: [],
+  };
+  const text = [
+    ...(model.banner ? [`[ ${model.banner} ]`, ''] : []),
+    ...model.essentiel,
+    '',
+    `> ${model.expectation}`,
+    '',
+    ...held.map((x) => `[${x.num}] ${NETWORK_NAME[x.network]}${x.angle === 'story' ? ' story' : ''}, ${parisDate(x.slot_at)}\n${x.text}\n`),
+  ].join('\n');
+  return { subject: model.subject, text, html: renderHtml(model, true) };
 }
 
 /** The short e-mail that shows a fresh page's posts, 48 hours before the first goes out. */

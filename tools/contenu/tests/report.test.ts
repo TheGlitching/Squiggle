@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseCommands } from '../src/inbox';
 import type { PostRow } from '../src/posts';
-import { buildReport, plainReason, type ReportInput } from '../src/report';
+import { buildLaunch, buildReport, plainReason, type ReportInput } from '../src/report';
 import type { Facts } from '../src/strategy';
 import { checkSummary, jargon } from '../src/summary';
 
@@ -107,6 +107,21 @@ describe('the weekly report', () => {
   });
 });
 
+describe('the launch e-mail', () => {
+  it('shows every held post with its number, the story among them, and asks for « ok » before anything goes out', () => {
+    const held = [
+      post(1, 'x', '2026-11-03T11:00:00.000Z', 'Écrans : il faut choisir.', { status: 'en_attente' }),
+      post(2, 'instagram', '2026-11-04T18:00:00.000Z', 'Deux options. Lien dans la bio.', { status: 'en_attente' }),
+      post(3, 'instagram', '2026-11-04T20:00:00.000Z', 'Faux dilemme. Lisez ceci.', { status: 'en_attente', angle: 'story', image_url: 'https://squiggle.fr/og/social/faux-dilemme/story.png' }),
+    ];
+    const launch = buildLaunch(held, false);
+    expect(launch.text).toContain('Répondez « ok » pour tout programmer, ou « ok sauf 1 »');
+    expect(launch.text).toContain('[3] Instagram story');
+    expect(launch.html).toContain('Story, l’image seule');
+    expect(launch.html).toContain('story.png');
+  });
+});
+
 describe('the summary check', () => {
   it('refuses a number the program did not compute, and an internal word', () => {
     expect(checkSummary({ essentiel: ['3 visites.', 'Rien d’autre.'], lecture: '' }, { visites: 3 })).toBeNull();
@@ -117,12 +132,19 @@ describe('the summary check', () => {
 
 describe('short answers', () => {
   it('reads « retire 4 », several numbers, and « oui B », one a line, leaving the rest', () => {
-    expect(parseCommands('retire 4')).toEqual({ retire: [4], answers: [], rest: '' });
+    expect(parseCommands('retire 4')).toEqual({ launch: null, retire: [4], answers: [], rest: '' });
     const c = parseCommands('Retirez la 4 et 7.\nnon b\nMerci, très bien sinon');
     expect(c.retire).toEqual([4, 7]);
     expect(c.answers).toEqual([{ yes: false, letter: 'B' }]);
     expect(c.rest).toBe('Merci, très bien sinon');
     expect(parseCommands('oui A').answers).toEqual([{ yes: true, letter: 'A' }]);
     expect(parseCommands('Je retirerais bien celle sur la notion de jeudi').retire).toEqual([]);
+  });
+
+  it('reads the launch’s « ok », with the posts set aside', () => {
+    expect(parseCommands('ok').launch).toEqual({ except: [] });
+    expect(parseCommands('OK sauf 3 et 5').launch).toEqual({ except: [3, 5] });
+    expect(parseCommands('ok pour le lancement').launch).toEqual({ except: [] });
+    expect(parseCommands('oui A').launch).toBeNull();
   });
 });
