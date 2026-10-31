@@ -16,7 +16,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@squiggle/shared": "*",
-    "postal-mime": "^4.0.6"
+    "postal-mime": "^4.0.11"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
