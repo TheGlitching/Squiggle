@@ -29,7 +29,7 @@
  * is transcribed, fifteen minutes per analysis, and its text lands in the
  * field the same way, with the time of each passage (`media.ts`).
  */
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type FormEvent } from 'react';
 
 import { screenshotsCounter, type AudienceMetricName } from '@squiggle/shared/src/hosted/audience';
 import { pagesThatFit, pdfText, type PdfBlock } from '@squiggle/shared/src/extract/pdf';
@@ -232,6 +232,7 @@ const MEDIA_NO_ANALYSIS = 'Il ne vous reste pas d’analyse : la transcription a
 const MEDIA_NOT_MEDIA = 'Ce fichier n’est ni un son ni une vidéo. Importez un message vocal, une vidéo ou un épisode.';
 const MEDIA_TOO_HEAVY = `Ce fichier dépasse ${MAX_MEDIA_BYTES / 1024 / 1024} Mo : ce navigateur ne pourrait pas en lire le son.`;
 const MEDIA_TOO_LONG = `Cet enregistrement dure plus de ${MAX_MEDIA_SECONDS / 3600} heures : Squiggle ne lit pas aussi long.`;
+const NOT_IMPORTABLE = 'Ce fichier n’est ni une image, ni un PDF, ni un son ou une vidéo.';
 const MEDIA_UNREADABLE =
   'Le son de ce fichier n’a pas pu être lu sur cet appareil. Essayez un autre format, ou un navigateur récent.';
 const MEDIA_SILENT = 'Aucune parole n’a été reconnue dans cet enregistrement.';
@@ -352,7 +353,8 @@ function AnalyserPage() {
   const controller = useRef<AbortController | null>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const pdfInput = useRef<HTMLInputElement>(null);
+  /** A file is being dragged over the empty field. */
+  const [dragging, setDragging] = useState(false);
   /** What the transcription of a recording is doing, while it does it. */
   const [transcribing, setTranscribing] = useState<string | null>(null);
   /** A recording longer than one part, waiting for the reader to pick one. */
@@ -362,7 +364,6 @@ function AnalyserPage() {
   const [sharedMedia, setSharedMedia] = useState<Blob | null | undefined>(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('media') === '1' ? undefined : null,
   );
-  const mediaInput = useRef<HTMLInputElement>(null);
   const reportTop = useRef<HTMLHeadingElement>(null);
 
   // The shared text is in the form now; it does not stay in the address bar or the history.
@@ -702,17 +703,28 @@ function AnalyserPage() {
     setNotice(`Pages ${from} à ${to} du PDF : ${pastedChars(text).toLocaleString('fr-FR')} caractères.`);
   }
 
-  function pickPdf(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (file) void importPdf(file, 'import_pdf');
+  /** A file picked or dropped, whatever it is, to the reading that suits it: a PDF, a recording, or screenshots. */
+  function importFiles(files: readonly File[]) {
+    if (!files.length) return;
+    const pdf = files.find(isPdf);
+    if (pdf) return void importPdf(pdf, 'import_pdf');
+    const media = files.find(isMedia);
+    if (media) return void importMedia(media);
+    if (files.some((file) => file.type.startsWith('image/'))) return void importCaptures(files, 'import_screenshots');
+    setNotice(NOT_IMPORTABLE);
   }
 
-  function pickCaptures(event: ChangeEvent<HTMLInputElement>) {
+  function pickFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = [...(event.target.files ?? [])];
-    // The same screenshots picked again are a new choice.
+    // The same files picked again are a new choice.
     event.target.value = '';
-    if (files.length) void importCaptures(files, 'import_screenshots');
+    importFiles(files);
+  }
+
+  function dropFiles(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    importFiles([...event.dataTransfer.files]);
   }
 
   /**
@@ -768,12 +780,6 @@ function AnalyserPage() {
       controller.current = null;
       setTranscribing(null);
     }
-  }
-
-  function pickMedia(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (file) void importMedia(file);
   }
 
   /** Under a part's report: the next part of the same recording, in place of this text. */
@@ -987,27 +993,11 @@ function AnalyserPage() {
               <input
                 ref={fileInput}
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf,.pdf,audio/*,video/*"
                 multiple
                 hidden
-                onChange={pickCaptures}
-                data-testid="captures"
-              />
-              <input
-                ref={pdfInput}
-                type="file"
-                accept="application/pdf,.pdf"
-                hidden
-                onChange={pickPdf}
-                data-testid="pdf"
-              />
-              <input
-                ref={mediaInput}
-                type="file"
-                accept="audio/*,video/*"
-                hidden
-                onChange={pickMedia}
-                data-testid="media"
+                onChange={pickFiles}
+                data-testid="fichier"
               />
               {reading ? (
                 <ReadingPanel reading={reading} onCancel={() => controller.current?.abort()} />
@@ -1020,43 +1010,51 @@ function AnalyserPage() {
                   onCancel={() => setChoosing(null)}
                 />
               ) : !article.text ? (
-                <div className="mt-3">
-                  <div className="flex flex-wrap gap-3">
-                    <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}>
-                      Coller le texte copié
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => fileInput.current?.click()}
-                      className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
-                    >
-                      Importer des captures
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => pdfInput.current?.click()}
-                      className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
-                    >
-                      Importer un PDF
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => mediaInput.current?.click()}
-                      className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
-                    >
-                      Importer un son ou une vidéo
-                    </button>
+                // The drop is a shortcut for a mouse: the button opens the same choice from a keyboard or a phone.
+                <div
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+                  }}
+                  onDrop={dropFiles}
+                  data-testid="depot"
+                  className={`mt-3 grid gap-4 rounded-card border border-dashed px-4 py-5 transition-colors duration-150 sm:px-6 sm:py-6 ${
+                    dragging ? 'border-accent bg-accentSoft' : 'border-borderControl bg-surface'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <ImportGlyph />
+                    <p className="m-0 text-base font-medium">
+                      Collez le texte, ou <span className="pointer-coarse:hidden">déposez un fichier ici</span>
+                      <span className="hidden pointer-coarse:inline">importez un fichier</span>
+                    </p>
                   </div>
-                  <p className="mt-2 mb-0 text-sm text-muted">
-                    Une appli qui empêche de copier ? Faites des captures d’écran en descendant dans l’article, en
-                    gardant quelques lignes d’une capture à l’autre, puis importez-les. Un rapport ou un tract en
-                    PDF ? Importez le fichier. Le texte est lu sur cet appareil : aucune image, aucun fichier n’est
-                    envoyé.
-                  </p>
-                  <p className="mt-2 mb-0 text-sm text-muted">
-                    Une vidéo enregistrée, un message vocal, un épisode de podcast ? Importez le fichier : Squiggle en
-                    transcrit la parole, quinze minutes par analyse, puis l’oublie. Il faut un compte.
-                  </p>
+                  <div className="grid gap-4 sm:pl-16">
+                    <ul className="m-0 grid list-none gap-1 p-0 text-sm text-muted">
+                      <li>
+                        <span className="text-foreground">Captures, PDF :</span> lus sur cet appareil, rien n’est envoyé.
+                      </li>
+                      <li>
+                        <span className="text-foreground">Son, vidéo :</span> transcrits, 15 min par analyse, avec un
+                        compte.
+                      </li>
+                    </ul>
+                    <div className="flex flex-wrap gap-3">
+                      <button type="button" onClick={pasteCopied} className={`${PRIMARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}>
+                        Coller le texte copié
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInput.current?.click()}
+                        className={`${SECONDARY_BUTTON} w-full sm:w-auto sm:whitespace-nowrap`}
+                      >
+                        Importer un fichier
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : null}
               {notice ? (
@@ -1087,33 +1085,36 @@ function AnalyserPage() {
                 placeholder="Le texte de l’article, du chapô à la dernière phrase, ou le message reçu."
                 className={`${FIELD} min-h-64 resize-y leading-relaxed`}
               />
-              <p
-                id="texte-aide"
-                className={`mt-2 mb-0 text-sm ${showProblem && problem === 'too_short' ? 'text-warningInk' : 'text-muted'}`}
-              >
-                {chars === 0
-                  ? 'Sélectionnez le texte dans la page de l’article, copiez-le, puis collez-le ici.'
-                  : chars < MIN_TEXT_CHARS
+              {chars === 0 ? (
+                <ul id="texte-aide" className="mt-3 mb-0 grid list-none gap-1.5 p-0 text-sm text-muted">
+                  <li>
+                    <span className="text-foreground">Copie bloquée :</span> des captures d’écran qui se chevauchent un
+                    peu.
+                  </li>
+                  <li>
+                    <span className="text-foreground">WhatsApp, Facebook :</span> collez le message tel quel, un texte
+                    court est analysé comme un message.
+                  </li>
+                  <li>
+                    <span className="text-foreground">YouTube :</span> collez sa transcription (« Afficher la
+                    transcription », sous la description).
+                  </li>
+                </ul>
+              ) : (
+                <p
+                  id="texte-aide"
+                  className={`mt-2 mb-0 text-sm ${showProblem && problem === 'too_short' ? 'text-warningInk' : 'text-muted'}`}
+                >
+                  {chars < MIN_TEXT_CHARS
                     ? `${chars} caractères : il en faut au moins ${MIN_TEXT_CHARS}.`
                     : chars <= MAX_MESSAGE_CHARS && !transcript
                       ? `${chars.toLocaleString('fr-FR')} caractères : analysé comme un message (de quoi il parle, qui l’affirme, ce qu’on en sait, ce qui manque).`
                       : `${chars.toLocaleString('fr-FR')} caractères.`}
-                {transcript
-                  ? ' Transcription reconnue : les horodatages sont retirés du texte analysé, et chaque passage garde le sien dans le rapport.'
-                  : null}
-              </p>
-              {chars === 0 ? (
-                <p className="mt-1 mb-0 text-sm text-muted">
-                  Un message reçu sur WhatsApp, une publication Facebook, une rumeur ? Collez-le tel quel : un texte
-                  court est analysé comme un message.
+                  {transcript
+                    ? ' Transcription reconnue : les horodatages sont retirés du texte analysé, et chaque passage garde le sien dans le rapport.'
+                    : null}
                 </p>
-              ) : null}
-              {chars === 0 ? (
-                <p className="mt-1 mb-0 text-sm text-muted">
-                  Une vidéo YouTube ? Copiez sa transcription (« Afficher la transcription », sous la description)
-                  et collez-la ici. Dans l’appli, où elle ne se copie pas, faites-en des captures.
-                </p>
-              ) : null}
+              )}
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
@@ -1178,6 +1179,19 @@ function AnalyserPage() {
 }
 
 const TEXT_BUTTON = 'whitespace-nowrap px-2 py-3 text-sm text-muted underline underline-offset-4 hover:text-foreground';
+
+/** The empty field's picture: a file going up into the form. */
+function ImportGlyph() {
+  return (
+    <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full bg-accentSoft text-accentInk">
+      <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 15V4" />
+        <path d="m7.5 8.5 4.5-4.5 4.5 4.5" />
+        <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+      </svg>
+    </span>
+  );
+}
 
 /**
  * A link received alone: Squiggle does not fetch it, so the reader opens it in
@@ -1244,7 +1258,7 @@ function PhoneGuide({ os }: { os: PhoneOs }) {
       </p>
       <p className="mt-2 mb-0">
         Une appli qui bloque tout, ou la transcription d’une vidéo dans l’appli YouTube : faites des captures d’écran
-        en descendant, puis « Importer des captures »
+        en descendant, puis « Importer un fichier »
         {os === 'android' ? ', ou partagez-les depuis Photos vers Squiggle' : ''}. Leur texte est lu sur ce
         téléphone.
       </p>
