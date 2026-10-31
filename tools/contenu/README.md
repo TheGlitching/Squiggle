@@ -18,6 +18,7 @@ the report shows it in full that Monday, and silence is consent.
 | When (Paris) | Command | What it does |
 |---|---|---|
 | Monday 5:00 | `contenu hebdo` | collect, comments and lessons, strategy note, piece of substance, posts, report |
+| once, at the start | `contenu lancement` | prepares 5 posts from the carousels for the coming days (and the Instagram story), sends them for review; nothing is scheduled until the owner answers « ok » (or « ok sauf 3 »), or `contenu lancement-ok` is run |
 | every day 7:00 | `contenu quotidien` | owner's replies, failed posts, disconnected networks, thin reserve, spending, merged content (its posts go out within the week, at least 48 h after an e-mail that shows them) |
 
 Monday in order:
@@ -41,7 +42,11 @@ Monday in order:
    request from `contenu/<slug>`, at most two open, no audience figure in it, with
    Squiggle's own analysis of the text in its description.
 5. **Posts** (`src/posts.ts`, `src/calendar.ts`): 13 slots a week on Bluesky, Threads,
-   Facebook, Instagram and X, filled for every week at least three weeks out. Each post
+   Facebook, Instagram and X. At the start the queue fills one week at a time, two days
+   ahead at the least, and each Monday one week further, until it reaches four weeks
+   and the three-week review window (`fillWindow`). A post on Instagram or Facebook
+   gets its story the same evening (`post_type: story`), the 9:16 image the site's build
+   draws beside each carousel (`/og/social/<slug>/story.png`). Each post
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),
    then a separate review that sees only the text, its source, its image and the
    editorial line. A refused post leaves its slot empty and is never rewritten.
@@ -52,7 +57,8 @@ Monday in order:
    figures with their trend; the week's piece of substance; every post entering the queue
    as it will look, grouped by day, with its thumbnail and a short number; then replies,
    lessons, refused posts, health and spending, one line each. It is also kept on the VPS
-   under `donnees/comptes-rendus/`.
+   under `donnees/comptes-rendus/`. One report a week at most: a run started again the
+   same week keeps its report there and sends nothing.
 
 ## What it learns
 
@@ -109,7 +115,7 @@ The report's Reply-To is `routine@squiggle.fr`. That address is routed to the Wo
 Cloudflare authenticated (the checks of `server/src/mail/authenticated.ts`), strips the
 quoted report and attachments, and files the text in a KV namespace. The daily check
 reads it through Cloudflare's API (`src/inbox.ts`). Short answers are read without a
-model: « retire 4 » (several numbers allowed) removes those posts, « oui B » or « non B »
+model: « ok » (or « ok sauf 3 ») approves the launch, « retire 4 » (several numbers allowed) removes those posts, « oui B » or « non B »
 answers decision B of the last report (« non » on a page to review closes it). The rest
 is classed in a closed list: « stop » and « reprendre » act the same day; removing a post, leaving a subject alone,
 one network less or more this week are applied and confirmed in the next report; a
