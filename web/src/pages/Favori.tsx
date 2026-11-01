@@ -387,8 +387,8 @@ function Guide({
   step: number;
   copied: 'ok' | 'manual' | null;
   code: string;
-  field: RefObject<HTMLTextAreaElement>;
-  heading: RefObject<HTMLHeadingElement>;
+  field: RefObject<HTMLTextAreaElement | null>;
+  heading: RefObject<HTMLHeadingElement | null>;
   onCopy: (again?: boolean) => void;
   onGo: (step: number) => void;
 }) {
