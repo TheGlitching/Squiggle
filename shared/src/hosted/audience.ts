@@ -8,7 +8,7 @@
  * address or an article. Visits themselves (pages, referrers) are read in
  * Cloudflare Web Analytics, not counted here.
  */
-import type { FindingCategory } from '../engine/types';
+import type { FindingCategory, SourceNature } from '../engine/types';
 
 export const AUDIENCE_METRIC_NAMES = [
   // A visit arriving through a known campaign link (`?ref=`).
@@ -86,6 +86,15 @@ export const AUDIENCE_METRIC_NAMES = [
   'flag_reason_wrong_kind',
   'flag_reason_too_harsh',
   'flag_reason_other',
+  // A source's nature reported as wrong, by the nature shown (`sourceFlagCounter`).
+  'flag_source_statistique_publique',
+  'flag_source_etude',
+  'flag_source_institution',
+  'flag_source_media',
+  'flag_source_fact_checker',
+  'flag_source_personne_nommee',
+  'flag_source_temoignage_anonyme',
+  'flag_source_aucune',
   // The call to analyse followed from a blog article, one name per published
   // article (`blogCounter` in web/src/blog.ts): `blog_` and its slug.
   'blog_conclusion_hative',
@@ -134,3 +143,12 @@ const FLAG_BY_CATEGORY: Record<FindingCategory, AudienceMetricName> = {
   cadrage: 'flag_finding_cadrage',
   'point-fort': 'flag_finding_point_fort',
 };
+
+/**
+ * The one counter a source reported as wrongly classed bumps: the nature the
+ * report showed. There is only one way such an entry is wrong, so no reason
+ * is asked, and nothing of the passage or the source travels.
+ */
+export function sourceFlagCounter(nature: SourceNature): AudienceMetricName {
+  return `flag_source_${nature.replace(/-/g, '_')}` as AudienceMetricName;
+}

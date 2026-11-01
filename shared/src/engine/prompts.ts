@@ -9,7 +9,7 @@ import { isVideoTranscriptUrl } from './video';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.4.1';
+export const PROMPT_VERSION = '1.5.0';
 
 /**
  * Output ceiling of the audit, reasoning included. A reasoning model thinks
@@ -313,6 +313,38 @@ PERTINENCE DES CONSTATS (contraignant) :
 7. "quote" se copie caractère pour caractère depuis le bloc : garde l'apostrophe typographique (’), les guillemets « » et les espaces tels qu'ils sont, ne corrige rien, ne reformule rien.`;
 
 /**
+ * The audit's list of the sources the text itself invokes, by nature: how the
+ * text builds its credibility, beside whether each point holds. It costs no
+ * call of its own, only a few lines of the audit's answer. Its third rule is
+ * the one that must never bend: the list says what kind of source the text
+ * names, never how good that source is, so no outlet, institution or person
+ * is ever rated in a report. Shared by the article and the message prompts.
+ */
+const SOURCING_SECTION = `
+
+SOURCES SUR LESQUELLES S'APPUIE LE TEXTE ("sourcing") :
+Relève chaque source que le texte invoque lui-même pour étayer un fait, et classe sa NATURE dans une seule de ces catégories :
+- "statistique-publique" : chiffre d'un service public de statistique ou d'une administration (Insee, Eurostat, ministère, caisse publique).
+- "etude" : étude, enquête, rapport de recherche, sondage, publication scientifique.
+- "institution" : organisme qui s'exprime en son nom, public ou privé (ministère, mairie, tribunal, entreprise, association, syndicat, communiqué).
+- "media" : un autre média, une agence de presse, un journaliste d'un autre titre.
+- "fact-checker" : un service de vérification des faits.
+- "personne-nommee" : une personne identifiée par son nom (expert, élu, témoin nommé).
+- "temoignage-anonyme" : une personne ou une source qu'on ne peut pas identifier (« un proche du dossier », « une habitante », « selon nos informations »).
+- "aucune" : une affirmation factuelle qui compte (chiffre, événement, fait central) que le texte présente comme établie sans rien citer.
+Règles :
+1. C'est la source que CITE LE TEXTE, telle qu'il la présente ; jamais une source que tu connais, que tu supposes ou que tu irais chercher.
+2. "quote" : les mots exacts du texte qui nomment la source (12 mots au plus, ex. « selon l'Insee »), ou pour "aucune" l'affirmation non sourcée (20 mots au plus), copiés caractère pour caractère.
+3. Tu décris la nature de la source, JAMAIS sa fiabilité : aucun jugement, aucune note, aucun qualificatif sur un média, une institution ou une personne.
+4. Une source citée plusieurs fois n'est relevée qu'une fois, à sa première mention. Douze entrées au plus, dont quatre "aucune" au plus. Un texte qui n'avance aucun fait (opinion pure, message personnel) reçoit une liste vide.
+5. Un lien hypertexte du texte est une source : classe-le d'après ce que le texte et l'adresse en disent, et cite les mots du lien.`;
+
+const SOURCING_JSON = `,
+  "sourcing": [
+    { "blockId": "block_id_exact", "quote": "mots exacts du texte qui nomment la source", "nature": "statistique-publique" | "etude" | "institution" | "media" | "fact-checker" | "personne-nommee" | "temoignage-anonyme" | "aucune" }
+  ]`;
+
+/**
  * Generates the user prompt embedding the article data and the Squiggle 8-block criteria.
  *
  * No factual-verification evidence is embedded here: research now runs on the
@@ -370,7 +402,7 @@ paragraphe répété) n'a pas de catégorie de finding. Il reste dans les
 
 AFFIRMATION VÉRIFIABLE ("checkableClaim") :
 Chaque finding 'affirmation-non-etayee' sera ensuite vérifié par une recherche web. Pour qu'elle cherche le bon fait, "checkableClaim" reformule ce que l'article affirme en UNE phrase autonome, compréhensible sans l'article, avec son contexte : qui, quoi, quand, où, quel chiffre (ex. pour la citation « a supprimé 200 postes » : "L'usine Durand de Lille a supprimé 200 postes en 2023").
-Laisse "checkableClaim" vide ("") quand une recherche web ne peut pas trancher : témoignage anonyme ou non identifiable (« un client », « une habitante »), opinion, jugement de valeur, cadrage, langue. Ce point reste alors une réserve non vérifiable, sans recherche.
+Laisse "checkableClaim" vide ("") quand une recherche web ne peut pas trancher : témoignage anonyme ou non identifiable (« un client », « une habitante »), opinion, jugement de valeur, cadrage, langue. Ce point reste alors une réserve non vérifiable, sans recherche.${SOURCING_SECTION}
 
 FORMAT JSON STRICT ATTENDU :
 {
@@ -395,7 +427,7 @@ FORMAT JSON STRICT ATTENDU :
       "checkableClaim": "Pour 'affirmation-non-etayee' uniquement, voir AFFIRMATION VÉRIFIABLE ci-dessus ; chaîne vide sinon.",
       "confidence": 0.95
     }
-  ]
+  ]${SOURCING_JSON}
 }${RELEVANCE_RULES}`;
 }
 
@@ -475,7 +507,7 @@ LES FINDINGS D'UN MESSAGE :
 - Un message anodin reçoit un seul finding 'point-fort', qui dit qu'il n'y a rien à vérifier.
 
 AFFIRMATION VÉRIFIABLE ("checkableClaim") :
-Pour chaque finding 'affirmation-non-etayee', "checkableClaim" reformule ce que le message affirme en UNE phrase autonome, compréhensible sans le message, avec son contexte : qui, quoi, quand, où, quel chiffre (ex. pour « la CAF supprime les APL des retraités au 1er novembre » : "La CAF supprime les APL des retraités propriétaires à partir du 1er novembre"). Laisse-le vide ("") quand une recherche web ne peut pas trancher : témoignage privé, opinion, menace vague.
+Pour chaque finding 'affirmation-non-etayee', "checkableClaim" reformule ce que le message affirme en UNE phrase autonome, compréhensible sans le message, avec son contexte : qui, quoi, quand, où, quel chiffre (ex. pour « la CAF supprime les APL des retraités au 1er novembre » : "La CAF supprime les APL des retraités propriétaires à partir du 1er novembre"). Laisse-le vide ("") quand une recherche web ne peut pas trancher : témoignage privé, opinion, menace vague.${SOURCING_SECTION}
 
 FORMAT JSON STRICT ATTENDU :
 {
@@ -500,7 +532,7 @@ FORMAT JSON STRICT ATTENDU :
       "checkableClaim": "Pour 'affirmation-non-etayee' uniquement, voir AFFIRMATION VÉRIFIABLE ci-dessus ; chaîne vide sinon.",
       "confidence": 0.95
     }
-  ]
+  ]${SOURCING_JSON}
 }`;
 }
 

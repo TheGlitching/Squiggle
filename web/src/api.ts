@@ -210,7 +210,7 @@ export interface OwnerMetrics {
   windowWeeks: number;
   cache: { checks: number; hits: number; hitRate: number | null };
   stages: { audit: Stage & { truncated: number }; research: Stage; sourceCheck: Stage };
-  audience: { campaigns: Counts; clicks: Counts; pastes?: Counts; blog?: Counts; flags?: { categories: Counts; reasons: Counts } };
+  audience: { campaigns: Counts; clicks: Counts; pastes?: Counts; blog?: Counts; flags?: { categories: Counts; reasons: Counts; sources?: Counts } };
   funnel: {
     signin: Counts;
     checkout: Counts;

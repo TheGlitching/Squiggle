@@ -83,6 +83,10 @@ const REPORT: AnalysisReport = {
   ],
   claims: [],
   research: { performed: true, queries: [], withdrawn: [] },
+  sourcing: [
+    { blockId: 'b2', quote: 'Selon un expert', charStart: 99, charEnd: 114, nature: 'temoignage-anonyme' },
+    { blockId: 'b3', quote: 'La mairie promet un bilan chiffré', charStart: 176, charEnd: 209, nature: 'institution' },
+  ],
   meta: { model: 'openrouter/test-model', promptVersion: '1.0.0', analyzedAt: '2026-10-23T10:00:00.000Z', durationMs: 1000 },
 };
 
@@ -661,6 +665,31 @@ describe('Analyser, signed in', () => {
     await userEvent.click(within(other).getByRole('button', { name: 'Annuler' }));
     expect(within(other).getByRole('button', { name: 'Signaler une erreur' })).toBeInTheDocument();
     expect(seen.filter((s) => s.url.endsWith('/web/count'))).toHaveLength(2);
+  });
+
+  it('lists the sources the text cites by nature, apart from the ones Squiggle consulted, and counts a wrong nature', async () => {
+    const seen = serve(account());
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    await screen.findByText('58');
+
+    const heading = screen.getByRole('heading', { name: 'Sur quoi s’appuie le texte' });
+    const section = heading.parentElement as HTMLElement;
+    expect(section).toHaveTextContent('sans juger de leur fiabilité');
+    // In the typology's order, each nature with its count and the text's own words.
+    const groups = within(section).getAllByRole('listitem').filter((li) => li.parentElement?.parentElement === section);
+    expect(groups.map((g) => g.firstElementChild?.firstElementChild?.textContent)).toEqual(['Institution', 'Témoignage anonyme']);
+    expect(within(groups[1]).getByText('« Selon un expert »')).toBeInTheDocument();
+    // What Squiggle found in research stays on its finding, never in this list.
+    expect(within(section).queryByText('Statistiques publiques')).toBeNull();
+
+    await userEvent.click(within(groups[1]).getByRole('button', { name: 'Signaler une erreur : ce n’est pas « Témoignage anonyme »' }));
+    expect(within(groups[1]).getByRole('status')).toHaveTextContent('Merci, c’est noté.');
+    expect(within(groups[0]).getByRole('button', { name: /ce n’est pas « Institution »/ })).toBeInTheDocument();
+    const counts = seen.filter((s) => s.url.endsWith('/web/count'));
+    expect(counts.map((s) => s.body)).toEqual([{ name: 'flag_source_temoignage_anonyme' }]);
+    expect(counts[0].credentials).toBe('omit');
   });
 
   it('prepares the report for the class, in this browser only', async () => {

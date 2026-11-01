@@ -475,6 +475,7 @@ export async function analyzeAudit(
     summary: audited.summary,
     findings: audited.findings,
     rawScores: audited.meta.rawScores ?? [],
+    sourcing: audited.sourcing ?? [],
     citedSources,
     claims: [],
     sourceChecks: [],
@@ -946,6 +947,7 @@ function buildReport(state: AnalysisRunState, now: number): AnalysisReport {
     categories: score.normalizedCategories,
     findings,
     claims: state.claims,
+    sourcing: state.sourcing,
     research: {
       performed: state.researchPerformed,
       provider: state.researchProvider,
