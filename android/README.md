@@ -16,9 +16,14 @@ in the same package (`fr.squiggle.app`). Not published on any store yet.
   address opens in the TWA, where the analysis starts on its own. That address
   is never loaded by the web view. The reader's Squiggle account and the
   Google sign-in are there, since Google refuses to sign in inside a web view.
+- **A social post** (X, Threads, Instagram, Facebook, TikTok) takes the same
+  way: the bookmark reads it without scrolling into its comments, and
+  `/analyser` reads the post out of the page and analyses it as a message.
+  TikTok Lite's share carries a second link, to TikTok Lite's own page: the
+  app opens the first link that is not such an advertisement.
 - **Back** from the report returns to the article in the web view. A reader
-  who has just signed in to their paper there touches **Vérifier cet
-  article** to read it again.
+  who has just signed in to their paper, or to the social site, there touches
+  **Vérifier** to read it again.
 - **A YouTube link** has no page to read here: it opens `/analyser?url=…`,
   which shows the report already made for that link, or says what to do.
 - **A text without a link**, or with more around its link than a headline (a

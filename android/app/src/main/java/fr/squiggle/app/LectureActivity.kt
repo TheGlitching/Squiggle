@@ -63,8 +63,11 @@ class LectureActivity : Activity() {
 
     private val favori by lazy { assets.open("favori.js").bufferedReader().use { it.readText() } }
 
+    /** Whether the shared link is a social post rather than an article: the screen's words say which. */
+    private var post = false
+
     /** A page the bookmark could not leave (a consent wall, a script error) gives the button back. */
-    private val giveUp = Runnable { idle(getString(R.string.ready)) }
+    private val giveUp = Runnable { idle(getString(if (post) R.string.ready_post else R.string.ready)) }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -153,16 +156,17 @@ class LectureActivity : Activity() {
             finish()
             return
         }
+        post = isSocial(link)
         check.visibility = View.VISIBLE
         check.isEnabled = false
-        status.text = getString(R.string.loading)
+        status.text = getString(if (post) R.string.loading_post else R.string.loading)
         readOnLoad = true
         page.loadUrl(link.toString())
     }
 
     private fun read() {
         check.isEnabled = false
-        status.text = getString(R.string.reading)
+        status.text = getString(if (post) R.string.reading_post else R.string.reading)
         page.evaluateJavascript(favori, null)
         handler.postDelayed(giveUp, GIVE_UP_MS)
     }
@@ -181,7 +185,7 @@ class LectureActivity : Activity() {
 
     /** `files`: screenshots or a PDF for the site's share target, which the browser posts to it with read access. */
     private fun openReport(url: Uri, files: ShareData? = null) {
-        idle(getString(R.string.ready))
+        idle(getString(if (post) R.string.ready_post else R.string.ready))
         // In a browser the bookmark's banner leaves with the page; here the page stays, behind the report.
         page.evaluateJavascript(REMOVE_BANNER, null)
         val colors = CustomTabColorSchemeParams.Builder()
@@ -243,15 +247,28 @@ class LectureActivity : Activity() {
         )
         private val LINK = Regex("""https?://\S+""")
         private val YOUTUBE = Regex("""(^|\.)(youtube\.com|youtu\.be)$""")
+        /** The social sites, as `SOCIAL_HOST` in `shared/src/extract/socialPlatform.ts` lists them. */
+        private val SOCIAL =
+            Regex("""^((www|m|mobile|web)\.)?(x\.com|twitter\.com|threads\.com|threads\.net|instagram\.com|facebook\.com|fb\.watch|tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)$""", RegexOption.IGNORE_CASE)
+        /** A link an app adds to its share to advertise itself, never the post: TikTok Lite's "Download TikTok Lite". */
+        private val APP_PROMO = Regex("""^https?://(www\.)?tiktok\.com/tiktoklite/?$""", RegexOption.IGNORE_CASE)
 
         /** Longest line a paper's app sends before its link, as `paste.ts` reads a share. */
         private const val HEADLINE_MAX_CHARS = 200
 
-        /** The link in a share: papers' apps send "headline link", YouTube a lone link. */
-        fun sharedLink(text: String): Uri? = LINK.findAll(text).lastOrNull()?.let { Uri.parse(it.value) }
+        /**
+         * The link in a share: papers' apps send "headline link", YouTube a lone link, TikTok Lite
+         * "Check out …'s video! <link> … Download TikTok Lite …: <its own page>". The first link
+         * that is not an app's advertisement for itself.
+         */
+        fun sharedLink(text: String): Uri? =
+            LINK.findAll(text).map { it.value }.firstOrNull { !APP_PROMO.matches(it) }?.let { Uri.parse(it) }
 
         /** More around its link than a paper's headline: a message (a chain, a post) that carries a link. */
         fun isMessage(text: String): Boolean = LINK.replace(text, "").trim().length >= HEADLINE_MAX_CHARS
+
+        /** A link to a social site, whose page holds a post rather than an article. */
+        fun isSocial(link: Uri): Boolean = SOCIAL.matches(link.host.orEmpty())
 
         /** The files of a share: one with SEND, several with SEND_MULTIPLE. */
         @Suppress("DEPRECATION")

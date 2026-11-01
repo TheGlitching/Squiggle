@@ -10,6 +10,7 @@
  * has nothing to refuse. It must stay small: Chrome on Android keeps only the
  * first 5,000 characters of a bookmark's address (`favori.test.ts` holds it to that).
  */
+import { SOCIAL_HOST } from '../../../shared/src/extract/socialPlatform';
 import { readPage } from './lecture';
 import { pageFragment } from './payload';
 
@@ -18,7 +19,7 @@ declare const SQUIGGLE_ORIGIN: string;
 
 const banner = document.createElement('div');
 banner.setAttribute('role', 'status');
-banner.textContent = 'Squiggle lit l’article…';
+banner.textContent = SOCIAL_HOST.test(location.hostname) ? 'Squiggle lit la publication…' : 'Squiggle lit l’article…';
 banner.style.cssText =
   'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:12px 18px;border-radius:10px;background:#0a0a0b;color:#f4f4f5;font:600 16px/1.3 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35)';
 document.body.append(banner);

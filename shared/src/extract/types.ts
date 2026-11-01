@@ -62,4 +62,6 @@ export interface ExtractedArticle {
   extractionConfidence: number; // 0.0 - 1.0
   rootContainerSelector: string;
   citedSources: CitedSource[];
+  /** A social post the platform showed only the start of ("Voir plus" that does not unfold without a session). */
+  truncated?: boolean;
 }

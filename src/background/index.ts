@@ -28,7 +28,7 @@ import {
 } from '../podcast/transcript';
 import { recordFinalizedAnalysis } from '../review/reviewPrompt';
 import { hasSiteAccess } from '../permissions/siteAccess';
-import { isSocialHost } from '../content/socialPlatform';
+import { isSocialHost } from '../../shared/src/extract/socialPlatform';
 import {
   captureYoutubeCaptions,
   cuesToBlocks,

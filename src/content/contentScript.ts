@@ -9,9 +9,9 @@
  */
 
 import { ArticleExtractor } from '../../shared/src/extract/extractor';
-import { detectSocialPlatform } from './socialPlatform';
+import { detectSocialPlatform } from '../../shared/src/extract/socialPlatform';
 import { selectedMessage } from './selection';
-import { SocialExtractor, unreadSocialPost } from './socialExtractor';
+import { SocialExtractor, unreadSocialPost } from '../../shared/src/extract/socialExtractor';
 import { RangeTracker } from './rangeTracker';
 import { ShadowHighlightOverlay } from './shadowOverlay';
 import {
@@ -59,7 +59,7 @@ export class ContentScriptController {
 
   /**
    * Detect and extract the article from the current page. A classified social
-   * thread (an X status page) is assembled by the platform thread extractor,
+   * post or thread (an X status page, an Instagram post) is read by the platform extractor,
    * which reads the same article shape the rest of the pipeline expects;
    * anything else falls back to the semantic article extractor, or to it when
    * the thread rendered no readable posts. A message the reader selected
@@ -73,7 +73,9 @@ export class ContentScriptController {
         if (!this.socialExtractor) {
           this.socialExtractor = new SocialExtractor(this.doc, match.platform, this.url);
         }
-        article = this.socialExtractor.extract() ?? unreadSocialPost(this.url);
+        const post = this.socialExtractor.extract();
+        // A post the platform cut ("Voir plus") is not the post: the page's own text decides, as before.
+        if (!post?.truncated) article = post ?? unreadSocialPost(this.url);
       }
     }
     this.currentArticle = article ?? this.extractor.extract();

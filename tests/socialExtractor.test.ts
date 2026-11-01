@@ -1,9 +1,9 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
-import { detectSocialPlatform } from '../src/content/socialPlatform';
+import { detectSocialPlatform } from '../shared/src/extract/socialPlatform';
 import { ContentScriptController } from '../src/content/contentScript';
-import { SocialExtractor, unreadSocialPost } from '../src/content/socialExtractor';
+import { SocialExtractor, unreadSocialPost } from '../shared/src/extract/socialExtractor';
 
 describe('social platform classification', () => {
   it('classifies an X status page as x', () => {
