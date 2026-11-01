@@ -253,6 +253,10 @@ describe('Analyser, signed out', () => {
     await waitFor(() => expect(current()).toContain('Lecture : en cours'));
     expect(screen.getByText('Recherche des sources')).toBeInTheDocument();
     expect(screen.queryByText(/: fait$/)).toBeNull();
+    // The bar under the scene names the stage, never a percentage.
+    const bar = screen.getByRole('progressbar', { name: 'Avancement de l’analyse' });
+    expect(bar).toHaveAttribute('aria-valuetext', 'Étape 1 sur 3 : Lecture');
+    expect(bar).not.toHaveAttribute('aria-valuenow');
     expect(screen.queryByLabelText('Texte de l’article')).not.toBeInTheDocument();
 
     // The step shows from the cache lookup on, which comes before the audit is asked:

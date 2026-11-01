@@ -8,7 +8,7 @@
  * violet glass is Squiggle's reading laid over it. Severity tones only ever mark
  * a passage, as they do in the product.
  */
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { SEVERITY_COLORS, type HighlightSeverity } from '../demo';
 
@@ -1271,5 +1271,47 @@ export function GuideFigure({ step }: { step: GuideStep }) {
         <Key v={v} at={[150, 70]} label="→" />
       </g>
     </>,
+  );
+}
+
+/** About how long a hosted audit takes, which the bar is timed against. */
+const RUN_BAR_MS = 40_000;
+/** How far a finished stage moves the bar on, as run time it adds. */
+const RUN_BAR_STEP_MS = 6_000;
+
+/**
+ * How full the bar is after `ms` of the run: quick at first, slower as it
+ * goes, 95 % at 40 s, then full. It is time, not progress: the stages beside it
+ * are what says where the analysis is, so it carries no percentage.
+ */
+export function runBarFill(ms: number): number {
+  return ms >= RUN_BAR_MS ? 1 : 1 - Math.exp((-3 * ms) / RUN_BAR_MS);
+}
+
+/**
+ * The bar under the loading scene, so a long wait never looks stuck. It fills
+ * with the time the run has taken, each finished stage moves it on a notch,
+ * and it is full once the analysis is done. Past 40 s it stays full and a glow
+ * goes to and fro along it; without motion, it is simply full. Stages only
+ * ever move forward, so it never goes back. The extension's panel has the same
+ * bar (`RunBar` in `src/ui/components/RunScene.tsx`); change the two together.
+ */
+export function RunBar({ current, total, done, label }: { current: number; total: number; done: boolean; label: string }) {
+  const [start] = useState(Date.now);
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
+  const fill = done ? 1 : runBarFill(now - start + current * RUN_BAR_STEP_MS);
+  return (
+    <div
+      role="progressbar"
+      aria-label="Avancement de l’analyse"
+      aria-valuetext={`Étape ${current + 1} sur ${total} : ${label}`}
+      className="mx-auto h-1.5 w-full max-w-80 overflow-hidden rounded-full bg-border"
+    >
+      <div className={`run-bar h-full rounded-full bg-accent${fill === 1 ? ' run-bar-full' : ''}`} style={{ width: `${fill * 100}%` }} />
+    </div>
   );
 }

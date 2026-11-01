@@ -64,7 +64,7 @@ import { useBrowserValue } from '../client';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
 import { LinkGuide } from '../components/LinkGuide';
-import { RunScene, type RunStep } from '../components/Iso';
+import { RunBar, RunScene, type RunStep } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
@@ -1418,9 +1418,12 @@ function Stages({ progress, onCancel }: { progress: Progress; onCancel: () => vo
   const current = stepOf(progress.stage);
   return (
     <div className="mt-8 grid max-w-3xl items-center gap-6 rounded-card border border-border bg-surface p-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-8 sm:p-7">
-      {/* Remounted on each stage, so the new loop starts from its beginning. */}
-      <div key={STAGES[current][0]} className="run-scene mx-auto w-full max-w-80">
-        <RunScene step={STAGES[current][0]} />
+      <div className="grid gap-4">
+        {/* Remounted on each stage, so the new loop starts from its beginning. */}
+        <div key={STAGES[current][0]} className="run-scene mx-auto w-full max-w-80">
+          <RunScene step={STAGES[current][0]} />
+        </div>
+        <RunBar current={current} total={STAGES.length} done={progress.stage === 'success'} label={STAGES[current][1]} />
       </div>
       <div className="grid gap-5">
         <ol className="m-0 grid list-none gap-3 p-0">
