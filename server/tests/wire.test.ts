@@ -88,6 +88,26 @@ describe('extension client against the real server', () => {
     expect(await env.db.countUsageLog(user!.id)).toBe(1);
   });
 
+  it('says what the audit is at while it runs, from what the server reports', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
+    const client = await hostedClient(env, 'marie@example.org');
+
+    const messages: string[] = [];
+    await client.analyze(
+      { url: ARTICLE_URL, title: 'Emploi : la baisse', blocks: BLOCKS, citedSources: CITED },
+      { onProgress: (e) => messages.push(e.message) },
+    );
+
+    // The stub writes its two findings in one piece, then the critique rereads them.
+    const audit = messages.slice(messages.indexOf('Audit critique en cours...'), messages.indexOf('Audit reçu, vérification des constats...'));
+    expect(audit).toEqual([
+      'Audit critique en cours...',
+      'Audit critique : l’article est confié au modèle...',
+      'Audit critique : 2 constats rédigés...',
+      'Relecture critique des constats...',
+    ]);
+  });
+
   it('carries the sources the text cites, by nature, to the final report and the cache, at no extra model call', async () => {
     const plain = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
     await (await hostedClient(plain, 'paul@example.org')).analyze({ url: ARTICLE_URL, title: 'Emploi', blocks: BLOCKS, citedSources: CITED });
@@ -269,7 +289,12 @@ describe('extension client against the real server', () => {
     const env = makeTestEnv({ fetchImpl: pageFetch(), llm, now: Date.now() });
     const client = await hostedClient(env, 'marie@example.org');
 
-    llm.failNextGrounded = true;
+    // f1's research fails, whichever of the two calls reaches the provider first.
+    const grounded = llm.groundedAnswer.bind(llm);
+    llm.groundedAnswer = async (options) => {
+      if (options.messages.some((m) => m.content.includes('Tout le monde le sait.'))) throw new Error('stub grounded failure');
+      return grounded(options);
+    };
     const report = await client.analyze({
       url: ARTICLE_URL,
       title: 'T',

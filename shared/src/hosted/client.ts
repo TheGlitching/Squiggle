@@ -100,6 +100,51 @@ export interface HostedAnalyzeOptions {
   abortSignal?: AbortSignal;
 }
 
+/**
+ * How many research or source-check calls one run has in flight at once. Each
+ * is several model and search calls on the server, so a handful at a time is
+ * what divides the wait without bunching a run's calls on the provider.
+ */
+export const PARALLEL_CALLS = 3;
+
+/**
+ * `run` on every item, at most `limit` at once, the results in the items'
+ * order. The first error is thrown; `run` itself decides what an error ends.
+ */
+async function inParallel<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await run(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** What the client asks the audit to answer in: its progress, one JSON object per line. */
+const AUDIT_STREAM = 'application/x-ndjson';
+
+/**
+ * How long a streamed audit may stay silent before the run is given up. The
+ * server sends a line at least every ten seconds while it works, so this much
+ * silence means the connection or the server is gone, not that it is slow.
+ */
+export const AUDIT_SILENCE_MS = 45_000;
+
+/** One line of the audit's stream, or null for a line that is not one. */
+function parseLine(line: string): { progress?: { step?: string; findings?: number }; status?: unknown; body?: unknown } | null {
+  if (!line.trim()) return null;
+  try {
+    const value = JSON.parse(line) as unknown;
+    return value && typeof value === 'object' ? (value as ReturnType<typeof parseLine>) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The share of the bar the per-finding research loop owns, as in the BYOK pipeline. */
 const RESEARCH_WINDOW = { from: 55, to: 92 } as const;
 
@@ -169,7 +214,7 @@ export class HostedAnalysisClient {
       // 2. The audit. One call, and the only one that carries the article.
       this.report('calling_provider', 'Audit critique en cours...', 15);
       this.throwIfAborted();
-      const audit = await this.call<AuditResponse>('POST', `${this.stages}/audit`, {
+      const audit = await this.callAudit({
         url: input.url,
         title: input.title ?? '',
         author: input.author,
@@ -181,35 +226,45 @@ export class HostedAnalysisClient {
 
       this.report('parsing_response', 'Audit reçu, vérification des constats...', RESEARCH_WINDOW.from);
 
-      // 3. One call per factual finding. A failure here loses that finding's
-      //    verification, never the run: the report says so, which is the same
-      //    thing the BYOK pipeline does.
-      const claims: FactualClaim[] = [];
+      // 3. One call per factual finding, a few at a time. A failure here loses
+      //    that finding's verification, never the run: the report says so,
+      //    which is the same thing the BYOK pipeline does. The server files the
+      //    answers in the findings' order, whatever order they come back in.
       const researchable = audit.researchable;
-      for (let i = 0; i < researchable.length; i += 1) {
-        this.throwIfAborted();
+      let researched = 0;
+      const progressResearch = () =>
         this.report(
           'researching',
-          `Vérification des constats factuels (${i + 1}/${researchable.length})...`,
-          this.place(i / Math.max(1, researchable.length)),
+          `Vérification des constats factuels (${researched}/${researchable.length})...`,
+          this.place(researched / Math.max(1, researchable.length)),
         );
+      progressResearch();
+      const found = await inParallel(researchable, PARALLEL_CALLS, async (findingId) => {
+        this.throwIfAborted();
         try {
           const res = await this.call<{ ok: true; claim: FactualClaim | null }>('POST', `${this.stages}/research`, {
             runId: audit.runId,
-            findingId: researchable[i],
+            findingId,
           });
-          if (res.claim) claims.push(res.claim);
+          return res.claim;
         } catch (err) {
           this.rethrowIfAborted(err);
           this.note('Un constat n’a pas pu être vérifié ; il reste signalé comme non vérifié.');
+          return null;
+        } finally {
+          researched += 1;
+          progressResearch();
         }
-      }
+      });
+      const claims = found.filter((claim): claim is FactualClaim => claim !== null);
 
       // 4. One call per cited page, for the claims that have one. The server
       //    refuses any URL the article did not publish, so this only ever asks
-      //    for links that came out of the page itself.
+      //    for links that came out of the page itself. Claims go a few at a
+      //    time; a claim's own pages go in turn, since each reading re-rates
+      //    the claim the next one starts from.
       const sources = input.citedSources ?? [];
-      for (const claim of claims) {
+      await inParallel(claims, PARALLEL_CALLS, async (claim) => {
         for (const source of sources.filter((s) => s.blockId === claim.blockId)) {
           this.throwIfAborted();
           this.note(`Lecture de la source citée : ${source.text || source.domain}`);
@@ -224,7 +279,7 @@ export class HostedAnalysisClient {
             // One unreadable page is one unread citation, not a failed run.
           }
         }
-      }
+      });
 
       // 5. Pure code on the server: reconcile, rescore, cache, one credit.
       this.throwIfAborted();
@@ -280,15 +335,116 @@ export class HostedAnalysisClient {
    * make this protocol fail only in production, where a key ordering differs.
    */
   private async call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+    return this.parse<T>(await this.send(method, path, body));
+  }
+
+  /**
+   * The audit, watched as it goes: the server streams one JSON object per
+   * line (`server/src/index.ts`, `streamedAudit`), what the model is at, a
+   * heartbeat, then the response. A server that does not stream answers as
+   * any other stage does.
+   */
+  private async callAudit(body: unknown): Promise<AuditResponse> {
+    const response = await this.send('POST', `${this.stages}/audit`, body, AUDIT_STREAM);
+    if (!response.headers.get('content-type')?.includes(AUDIT_STREAM) || !response.body) {
+      return this.parse<AuditResponse>(response);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let silent = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const listen = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        silent = true;
+        void reader.cancel().catch(() => {});
+      }, AUDIT_SILENCE_MS);
+    };
+    let last: { status: number; body: unknown } | undefined;
+    try {
+      listen();
+      for (;;) {
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (err) {
+          this.rethrowIfAborted(err);
+          break;
+        }
+        if (chunk.done) break;
+        listen();
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const message = parseLine(line);
+          if (message?.progress) this.auditProgress(message.progress);
+          if (message && 'status' in message) last = { status: Number(message.status), body: message.body };
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    this.throwIfAborted();
+    if (!last) {
+      throw new HostedApiError(
+        silent ? 'audit_silent' : 'network',
+        silent
+          ? 'Le serveur Squiggle ne donne plus de nouvelles de l’audit. Relancez l’analyse.'
+          : 'La connexion au serveur Squiggle a été coupée pendant l’audit. Relancez l’analyse.',
+        0,
+      );
+    }
+    return this.parse<AuditResponse>(new Response(JSON.stringify(last.body), { status: last.status }));
+  }
+
+  /** What the panel says while the audit runs: only what the server reported, never a guess. */
+  private auditProgress(progress: { step?: string; findings?: number }): void {
+    switch (progress.step) {
+      case 'sent':
+        this.report('calling_provider', 'Audit critique : l’article est confié au modèle...', 16);
+        break;
+      case 'thinking':
+        this.report('calling_provider', 'Audit critique : le modèle lit et analyse l’article...', 20);
+        break;
+      case 'writing': {
+        const n = Math.max(0, Number(progress.findings) || 0);
+        this.report(
+          'calling_provider',
+          n === 0
+            ? 'Audit critique : rédaction du rapport...'
+            : `Audit critique : ${n} constat${n > 1 ? 's' : ''} rédigé${n > 1 ? 's' : ''}...`,
+          Math.min(48, 30 + 2 * n),
+        );
+        break;
+      }
+      case 'retry':
+        this.report('calling_provider', 'Audit critique : réponse illisible, le modèle est interrogé une seconde fois...', 18);
+        break;
+      case 'critique':
+        this.report('calling_provider', 'Relecture critique des constats...', 50);
+        break;
+    }
+  }
+
+  /**
+   * One request, signed when this is an install. The body is serialized ONCE
+   * and both signed and sent, because the signature covers a hash of the exact
+   * bytes: signing one serialization and sending another is the classic way to
+   * make this protocol fail only in production, where a key ordering differs.
+   */
+  private async send(method: 'GET' | 'POST', path: string, body?: unknown, accept?: string): Promise<Response> {
     const rawBody = body === undefined ? undefined : JSON.stringify(body);
     const headers: Record<string, string> =
       'privateKey' in this.config ? await this.signedHeaders(this.config, method, path, rawBody) : {};
     if (rawBody !== undefined) headers['content-type'] = 'application/json';
+    if (accept) headers.accept = accept;
 
     const fetchImpl = this.config.fetchImpl ?? fetch;
-    let response: Response;
     try {
-      response = await fetchImpl(`${this.config.baseUrl}${path}`, {
+      return await fetchImpl(`${this.config.baseUrl}${path}`, {
         method,
         headers,
         body: rawBody,
@@ -306,7 +462,9 @@ export class HostedAnalysisClient {
       // model's doing nor something the reader can fix by waiting on it.
       throw new HostedApiError('network', 'Impossible de joindre le serveur Squiggle. Vérifiez votre connexion, puis réessayez.', 0);
     }
+  }
 
+  private async parse<T>(response: Response): Promise<T> {
     let parsed: unknown;
     try {
       parsed = await response.json();

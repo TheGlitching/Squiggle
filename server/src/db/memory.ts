@@ -632,6 +632,14 @@ export class MemoryDb implements Db {
     row.updatedAt = now;
   }
 
+  async compareAndSetAnalysisRunState(id: string, expected: string, next: string, now: number): Promise<boolean> {
+    const row = this.runs.get(id);
+    if (!row || row.finalizedAt !== null || row.state !== expected) return false;
+    row.state = next;
+    row.updatedAt = now;
+    return true;
+  }
+
   async activeAnalysisRun(userId: string, since: number): Promise<AnalysisRunRow | null> {
     let latest: AnalysisRunRow | null = null;
     for (const row of this.runs.values()) {

@@ -731,6 +731,16 @@ export class NeonDb implements Db {
     `;
   }
 
+  async compareAndSetAnalysisRunState(id: string, expected: string, next: string, now: number): Promise<boolean> {
+    // JSONB equality, so the key order of the text read back does not matter.
+    const rows = await this.q`
+      UPDATE analysis_runs SET state = ${next}::jsonb, updated_at = ${now}
+      WHERE id = ${id} AND finalized_at IS NULL AND state = ${expected}::jsonb
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
+
   async activeAnalysisRun(userId: string, since: number): Promise<AnalysisRunRow | null> {
     const rows = await this.q`
       SELECT * FROM analysis_runs
