@@ -40,7 +40,10 @@ export function summaryData(input: ReportInput, decisions: Decision[]) {
     comptesCrees: f?.accounts ?? null,
     publicationsParties: f ? Object.values(f.networks).reduce((s, v) => s + v.posts, 0) : null,
     semainesDeDonnees: f?.weeksOfData ?? null,
-    publicationsQuiEntrentDansLaFile: accepted.length,
+    publicationsPrepareesCetteSemaine: accepted.length,
+    // Nothing goes out without the owner's « ok » (D8): what waits for it, this week's and older.
+    publicationsQuiAttendentVotreAccord: (input.waiting ?? accepted).length,
+    abonnesGagnes: f ? Object.fromEntries(Object.entries(f.networks).filter(([, v]) => v.followersGained != null).map(([n, v]) => [NETWORK_NAME[n as keyof typeof NETWORK_NAME], v.followersGained])) : null,
     publicationsLaisseesDeCote: input.entering.length - accepted.length,
     reseauxDeLaFile: [...new Set(accepted.map((p) => NETWORK_NAME[p.network]))],
     contenuDeLaSemaine: input.deep?.production ? { quoi: input.deep.production.label, pourquoi: input.deep.why } : input.deep ? { rien: input.deep.why } : null,

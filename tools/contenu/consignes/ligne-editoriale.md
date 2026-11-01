@@ -30,10 +30,11 @@ qu'aucune mauvaise position dans Google.
 7. **Validation humaine avant toute publication.** Rien de nouveau n'est publié ni
    fusionné sans le propriétaire : un article ou une fiche enrichie passe par une
    pull request qu'il relit, et c'est la pull request qu'il fusionne qui publie.
-   **Seule exception** : les publications sur les réseaux qui déclinent une page déjà
-   relue et en ligne. Elles entrent dans la file au moins trois semaines avant leur
-   sortie (48 heures pour la page de la semaine), le compte rendu les montre en entier
-   le jour où elles y entrent, et le silence du propriétaire vaut accord. Il peut en
+   Les publications sur les réseaux, qui déclinent une page déjà relue et en ligne,
+   passent aussi par lui : préparées au moins trois semaines avant leur sortie
+   (48 heures pour la page de la semaine), montrées en entier dans le compte rendu,
+   elles ne partent qu'après son accord explicite (« ok »). Sans accord, elles
+   attendent, et une publication dont l'heure arrive avant ne part pas. Il peut en
    retirer une à tout moment.
 8. **Pas de production en série.** Une page à la fois, chacune meilleure réponse à une
    intention précise. Jamais de pages déclinées d'un modèle.

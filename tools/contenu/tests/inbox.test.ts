@@ -14,7 +14,7 @@ const { Db } = sqlite ? await import('../src/db') : ({} as typeof import('../src
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 /** A daily run reading one reply, with Cloudflare, Postiz and the model answered in process. */
-async function read(reply: string, launchWaiting: boolean) {
+async function read(reply: string, launchWaiting: boolean, subject = 'Re: lancement') {
   const db = Db.memory();
   if (launchWaiting)
     db.run(
@@ -23,7 +23,7 @@ async function read(reply: string, launchWaiting: boolean) {
   const fetch = (async (input: string | URL | Request) => {
     const url = String(input);
     if (url.includes('/keys?')) return json({ result: [{ name: 'reponse:1:a' }] });
-    if (url.includes('/values/')) return json({ receivedAt: '2026-10-31T09:00:00.000Z', from: 'owner', subject: 'Re: lancement', text: reply });
+    if (url.includes('/values/')) return json({ receivedAt: '2026-10-31T09:00:00.000Z', from: 'owner', subject, text: reply });
     if (url.endsWith('/integrations')) return json([]);
     if (url.endsWith('/key')) return json({ data: { usage: 0, limit: null } });
     if (url.endsWith('/chat/completions')) return json({ choices: [{ message: { content: '{"categorie": "autre"}' }, finish_reason: 'stop' }] });
@@ -46,17 +46,23 @@ async function read(reply: string, launchWaiting: boolean) {
 }
 
 describe.skipIf(!sqlite)('the owner’s reply, read by the daily run', () => {
-  it('takes « ok tout part » as the launch’s approval', async () => {
+  it('takes « ok tout part » as the approval of the posts waiting', async () => {
     const mail = await read('ok tout part', true);
     expect(mail.category).toBe('reponse_courte');
-    expect(mail.outcome).toMatch(/^lancement : \(à blanc\) 1 publications auraient été programmées/);
+    expect(mail.outcome).toMatch(/^publications : \(à blanc\) 1 publications auraient été programmées/);
+  });
+
+  it('never takes « ok merci » under the day’s comments for an approval', async () => {
+    const mail = await read('ok merci', true, 'Re: Squiggle, réponses à faire : 2 brouillons');
+    expect(mail.outcome).toContain('rien n’est validé');
+    expect(mail.outcome).not.toContain('programmées');
   });
 
   it('says a reply was not understood while the launch waits, never files it in silence', async () => {
     const unclear = await read('ok mais pas celle de jeudi', true);
     expect(unclear.outcome).toContain('« ok mais pas celle de jeudi » pas compris, rien n’est appliqué : merci de répondre « ok » ou « ok sauf N »');
-    expect(unclear.outcome).not.toContain('lancement :');
+    expect(unclear.outcome).not.toContain('publications :');
     const other = await read('Je regarde ça ce soir.', true);
-    expect(other.outcome).toBe('le lancement attend toujours votre accord : merci de répondre « ok » ou « ok sauf N »');
+    expect(other.outcome).toBe('des publications attendent toujours votre accord : merci de répondre « ok » ou « ok sauf N » au compte rendu');
   });
 });

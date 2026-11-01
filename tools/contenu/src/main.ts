@@ -8,7 +8,7 @@
  *   reprendre       remove it
  *   vider-la-file   pause, and delete every future post the routine scheduled
  *   lancement       prepare the first posts and send them for approval (nothing is scheduled)
- *   lancement-ok    schedule them, as the owner's « ok » does; `lancement-ok sauf 3 5` sets some aside
+ *   lancement-ok    schedule every post waiting for approval, as the owner's « ok » does; `lancement-ok sauf 3 5` sets some aside
  *   liberer         leave draft mode (D2 b) after too many removals
  *   lecon-retirer N stop applying lesson N
  *   etat            what the routine holds, without calling anything
@@ -24,7 +24,7 @@ import { paths, secrets } from './config';
 import { pauseFile, paused, type Ctx } from './context';
 import { daily } from './daily';
 import { Db } from './db';
-import { approveLaunch, prepareLaunch } from './launch';
+import { approveHeld, prepareLaunch } from './launch';
 import { emptyQueue } from './posts';
 import { weekly } from './weekly';
 
@@ -80,7 +80,7 @@ async function main(): Promise<number> {
     if (command === 'quotidien') await daily(ctx);
     if (command === 'hebdo') await weekly(ctx);
     if (command === 'lancement') console.log(`${(await prepareLaunch(ctx)).filter((p) => p.status === 'en_attente').length} publications en attente d’accord`);
-    if (command === 'lancement-ok') console.log(await approveLaunch(ctx, args.slice(args.indexOf('sauf') + 1).filter((a) => args.includes('sauf') && /^\d+$/.test(a)).map(Number)));
+    if (command === 'lancement-ok') console.log(await approveHeld(ctx, args.slice(args.indexOf('sauf') + 1).filter((a) => args.includes('sauf') && /^\d+$/.test(a)).map(Number)));
     if (command === 'vider-la-file') {
       writeFileSync(pauseFile(ctx), `Suspendu et vidé à la main le ${started.toISOString()}\n`);
       console.log(`${await emptyQueue(ctx)} publications supprimées de Postiz`);

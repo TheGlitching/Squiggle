@@ -51,7 +51,9 @@ CREATE TABLE IF NOT EXISTS waitlist (
 CREATE TABLE IF NOT EXISTS comments (
   id TEXT PRIMARY KEY, network TEXT NOT NULL, post_ref TEXT NOT NULL, author TEXT NOT NULL,
   text TEXT NOT NULL, created_at TEXT NOT NULL, category TEXT, draft TEXT,
-  draft_status TEXT, actual_reply TEXT, seen_at TEXT NOT NULL
+  draft_status TEXT, actual_reply TEXT, seen_at TEXT NOT NULL,
+  -- The comment's own address, and when the daily e-mail showed it to the owner.
+  link TEXT, mailed_at TEXT
 );
 CREATE TABLE IF NOT EXISTS lessons (
   id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, origin TEXT NOT NULL, kind TEXT NOT NULL,
@@ -71,6 +73,13 @@ CREATE TABLE IF NOT EXISTS calls (id INTEGER PRIMARY KEY, at TEXT NOT NULL, serv
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `;
 
+/** Columns added after a table was first created: `CREATE TABLE IF NOT EXISTS` leaves an existing table as it was. */
+const ADDED: ReadonlyArray<[table: string, column: string, type: string, backfill?: string]> = [
+  ['comments', 'link', 'TEXT'],
+  // Comments read before the daily e-mail existed were shown in a Monday report already.
+  ['comments', 'mailed_at', 'TEXT', 'UPDATE comments SET mailed_at = seen_at'],
+];
+
 export class Db {
   readonly sql: DatabaseSync;
 
@@ -78,6 +87,11 @@ export class Db {
     this.sql = new DatabaseSync(file);
     this.sql.exec('PRAGMA journal_mode = WAL;');
     this.sql.exec(SCHEMA);
+    for (const [table, column, type, backfill] of ADDED) {
+      if (this.all<{ name: string }>(`PRAGMA table_info(${table})`).some((c) => c.name === column)) continue;
+      this.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+      if (backfill) this.sql.exec(backfill);
+    }
   }
 
   static open(dataDir: string, dry: boolean): Db {

@@ -13,7 +13,7 @@ const sqlite = await import('node:sqlite').then(
   () => false,
 );
 const { Db } = sqlite ? await import('../src/db') : ({} as typeof import('../src/db'));
-import { acceptTest, judge, networkShares, unknownNumbers, type Facts, type Note } from '../src/strategy';
+import { acceptTest, judge, networkShares, testValue, testVerdict, unknownNumbers, type Facts, type Note, type Tally } from '../src/strategy';
 
 describe('the calendar', () => {
   it('reads Paris time on both sides of the clock change', () => {
@@ -63,10 +63,28 @@ describe('the calendar', () => {
 });
 
 describe('the decision rules', () => {
-  it('gives no verdict under twenty visits, a winner from thirty per cent more per post', () => {
-    expect(judge({ visits: 19, posts: 8 }, { visits: 5, posts: 8 })).toBe('pas de signal');
-    expect(judge({ visits: 26, posts: 8 }, { visits: 20, posts: 8 })).toBe('gagnant');
-    expect(judge({ visits: 25, posts: 8 }, { visits: 20, posts: 8 })).toBe('sans gagnant');
+  const tally = (t: Partial<Tally>): Tally => ({ posts: 8, weeks: 4, visits: 0, conversation: 0, followers: 0, ...t });
+
+  it('judges on visits first, a winner from thirty per cent more per post', () => {
+    expect(judge(tally({ visits: 26 }), tally({ visits: 20 }))).toEqual({ verdict: 'gagnant', signal: 'visites' });
+    expect(judge(tally({ visits: 25 }), tally({ visits: 20 }))).toEqual({ verdict: 'aucun effet', signal: 'visites' });
+    expect(judge(tally({ visits: 20 }), tally({ visits: 26 }))).toEqual({ verdict: 'moins bien', signal: 'visites' });
+  });
+
+  it('falls back on the conversation, then the followers gained, and says when there is not yet any signal', () => {
+    expect(judge(tally({ visits: 19, conversation: 40 }), tally({ visits: 5, conversation: 20 }))).toEqual({ verdict: 'gagnant', signal: 'conversation' });
+    expect(judge(tally({ visits: 3, conversation: 4, followers: 21 }), tally({ followers: 20 }))).toEqual({ verdict: 'aucun effet', signal: 'abonnés' });
+    expect(judge(tally({ visits: 19, conversation: 19, followers: 19 }), tally({}))).toEqual({ verdict: 'pas encore de signal', signal: null });
+  });
+
+  it('runs a content test on every network, one week each way, and a setting on its network alone', () => {
+    const content = { network: 'tous', kind: 'question_finale', value: 'avec', start: '2026-11-30' };
+    expect(testValue(content, 'threads', new Date('2026-12-01T17:30:00Z'))).toBe('avec');
+    expect(testValue(content, 'bluesky', new Date('2026-12-09T11:15:00Z'))).toBe('sans');
+    expect(testValue(content, 'x', new Date('2026-12-17T11:00:00Z'))).toBe('avec');
+    expect(testValue({ ...content, kind: 'image' }, 'x', new Date('2026-12-01T11:00:00Z'))).toBeNull();
+    expect(testValue({ network: 'mastodon', kind: 'mots_diese', value: 'sans', start: '2026-11-30' }, 'mastodon', new Date('2026-12-09T11:30:00Z'))).toBe('sans');
+    expect(testValue({ network: 'mastodon', kind: 'mots_diese', value: 'sans', start: '2026-11-30' }, 'bluesky', new Date('2026-12-09T11:30:00Z'))).toBeNull();
   });
 
   it('proposes the minimal rhythm under five per cent of the networks’ visits, never a closure', () => {
@@ -87,10 +105,34 @@ describe('the decision rules', () => {
     const db = Db.memory();
     expect(acceptTest({ db }, { network: 'threads', kind: 'heure', value: '+60', hypothesis: 'le soir plus tard' })).toBe(true);
     expect(acceptTest({ db }, { network: 'threads', kind: 'pilier', value: 'x', hypothesis: 'h' })).toBe(false);
-    expect(acceptTest({ db }, { network: 'x', kind: 'image', value: 'avec', hypothesis: 'h' })).toBe(false);
+    expect(acceptTest({ db }, { network: 'x', kind: 'lien', value: 'avec', hypothesis: 'h' })).toBe(false);
+    expect(acceptTest({ db }, { network: 'bluesky', kind: 'mots_diese', value: 'sans', hypothesis: 'h' })).toBe(false);
     expect(acceptTest({ db }, { network: 'linkedin', kind: 'heure', value: '+60', hypothesis: 'h' })).toBe(false);
-    db.run("INSERT INTO tests (network, kind, value, hypothesis, start, end, status) VALUES ('threads', 'heure', '+60', 'h', '2026-11-30', '2026-12-27', 'en_cours')");
+    db.run("INSERT INTO tests (network, kind, value, hypothesis, start, end, status) VALUES ('threads', 'heure', '+60', 'h', '2026-11-30', '2027-01-24', 'en_cours')");
+    expect(acceptTest({ db }, { network: 'threads', kind: 'lien', value: 'sans', hypothesis: 'h' })).toBe(false);
+  });
+
+  it.skipIf(!sqlite)('accepts a content test only on every network at once, one at a time', () => {
+    const db = Db.memory();
     expect(acceptTest({ db }, { network: 'threads', kind: 'question_finale', value: 'avec', hypothesis: 'h' })).toBe(false);
+    expect(acceptTest({ db }, { network: 'tous', kind: 'format', value: 'video', hypothesis: 'h' })).toBe(false);
+    expect(acceptTest({ db }, { network: 'tous', kind: 'format', value: 'carrousel', hypothesis: 'h' })).toBe(true);
+    db.run("INSERT INTO tests (network, kind, value, hypothesis, start, end, status) VALUES ('tous', 'format', 'carrousel', 'h', '2026-11-30', '2027-01-24', 'en_cours')");
+    expect(acceptTest({ db }, { network: 'tous', kind: 'question_finale', value: 'avec', hypothesis: 'h' })).toBe(false);
+    expect(acceptTest({ db }, { network: 'threads', kind: 'heure', value: '-30', hypothesis: 'h' })).toBe(true);
+  });
+
+  it.skipIf(!sqlite)('weighs a content test’s weeks with the value against its weeks without, on the conversation when visits are few', () => {
+    const db = Db.memory();
+    const monday = (i: number) => new Date(Date.parse('2026-11-30T00:00:00Z') + 7 * i * 86_400_000).toISOString().slice(0, 10);
+    for (let i = 0; i < 8; i += 1) {
+      const posted = new Date(Date.parse(`${monday(i)}T11:15:00Z`)).toISOString();
+      db.run("INSERT INTO posts (id, week, network, slot_at, pillar, angle, source_id, text, status, created_at) VALUES (?, ?, 'bluesky', ?, 'notion', 'exemple', 's', 't', 'publie', ?)", `p${i}`, monday(i), posted, posted);
+      // The week's posts as the next Monday's snapshot reads them: eight replies on the weeks with a question, two without.
+      const bluesky = { followers: 100 + i, posts: [{ uri: `u${i}`, url: '', text: '', createdAt: posted, likes: 0, reposts: 0, replies: i % 2 === 0 ? 8 : 2, quotes: 0 }] };
+      db.run("INSERT INTO snapshots (source, week, collected_at, status, payload) VALUES ('bluesky', ?, ?, 'ok', ?)", monday(i + 1), posted, JSON.stringify(bluesky));
+    }
+    expect(testVerdict({ db }, { network: 'tous', kind: 'question_finale', start: monday(0), end: '2027-01-24' })).toEqual({ verdict: 'gagnant', signal: 'conversation' });
   });
 });
 
