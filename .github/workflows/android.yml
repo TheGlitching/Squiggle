@@ -55,7 +55,9 @@ jobs:
         run: |
           apk="squiggle-android-${{ steps.version.outputs.version }}.apk"
           mv android/app/build/outputs/apk/release/app-release.apk "$apk"
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --verbose --print-certs "$apk"
+          # several build-tools are installed: take the newest
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$apksigner" verify --verbose --print-certs "$apk"
           echo "file=$apk" >> "$GITHUB_OUTPUT"
 
       - name: Attach the APK to the release
