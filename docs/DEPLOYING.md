@@ -45,6 +45,7 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    | `BREVO_API_KEY` | key of the Brevo account that sends the sign-in emails and the forwarding address's replies |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the Google OAuth client |
    | `OPENROUTER_API_KEY` | the key hosted analyses run on |
+   | `X_BEARER_TOKEN` | optional: the X application's token; it opens the reading of links to X publications (`X_DAILY_CAP_USD`, `X_ACCOUNT_DAILY_CAP_USD` and `X_THREAD_MAX_POSTS` are plain variables) |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe, in test mode for staging |
    | `ADMIN_TOKEN` | bearer token for `POST /admin/migrate` and `GET /admin/metrics`; any long random string |
    | `METRICS_TOKEN` | optional: read-only bearer token accepted by `GET /admin/metrics` only, for a machine that reads the figures; any long random string, distinct from `ADMIN_TOKEN` |

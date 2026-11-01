@@ -70,7 +70,7 @@ export interface Metrics {
      * reported each response, web search included. Runs that never finalized
      * count here too: they were billed all the same.
      */
-    spent: { auditUsd: number; researchUsd: number; sourceCheckUsd: number; totalUsd: number; webSearches: number };
+    spent: { auditUsd: number; researchUsd: number; sourceCheckUsd: number; xUsd: number; totalUsd: number; webSearches: number };
   };
   /**
    * Recordings transcribed from the site: how many, how many minutes of sound,
@@ -78,6 +78,13 @@ export interface Metrics {
    * that bounds that cost. Refusals by the cap are in `funnel.refused`.
    */
   transcription: { count: number; failed: number; minutes: number; costUsd: number; dailyCapMinutes: number };
+  /**
+   * Publications read from X's API for links to X: calls made, publications
+   * billed, links served from our copy of the last day, links X could not give,
+   * refusals by the daily spend cap, and what the reads cost at X's prices
+   * (also in `analyses.spent.xUsd`).
+   */
+  x: { reads: number; postsRead: number; cacheHits: number; unavailable: number; refusedByCap: number; costUsd: number };
   /** Visits themselves are read in Cloudflare Web Analytics. */
   audience: {
     campaigns: Record<string, number>;
@@ -129,7 +136,7 @@ export async function collectLaunchMetrics(
   const raw = await db.collectMetrics({ now, weeks, trialAnalyses: TRIAL_ANALYSES });
   const c = raw.counters;
   const usd = (micros: number) => Math.round(micros / 100) / 10000;
-  const totalMicros = c.cost_audit + c.cost_research + c.cost_source_check;
+  const totalMicros = c.cost_audit + c.cost_research + c.cost_source_check + c.cost_x;
   const analyses = {
     finalized: raw.finalizes,
     costPerAnalysisUsd:
@@ -144,6 +151,7 @@ export async function collectLaunchMetrics(
       auditUsd: usd(c.cost_audit),
       researchUsd: usd(c.cost_research),
       sourceCheckUsd: usd(c.cost_source_check),
+      xUsd: usd(c.cost_x),
       totalUsd: usd(totalMicros),
       webSearches: c.web_searches,
     },
@@ -180,6 +188,14 @@ export async function collectLaunchMetrics(
       sourceCheck: stage(c.source_check, c.source_check_failed),
     },
     analyses,
+    x: {
+      reads: c.x_read,
+      postsRead: c.x_posts_read,
+      cacheHits: c.x_cache_hit,
+      unavailable: c.x_unavailable,
+      refusedByCap: c.refused_x_cap,
+      costUsd: usd(c.cost_x),
+    },
     transcription: {
       count: c.transcription,
       failed: c.transcription_failed,

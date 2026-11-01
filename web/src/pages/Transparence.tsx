@@ -44,6 +44,16 @@ export const RETENTION = [
     'Un jour',
   ],
   [
+    'Publication X (et son fil) lue pour vous à partir d’un lien X : son texte, son auteur public et le texte alternatif de ses images',
+    'Base de données',
+    'Un jour',
+  ],
+  [
+    'Dépense du jour en lectures X, par compte ou, sans compte, par empreinte de votre adresse IP, et pour tout le site (plafond de dépense)',
+    'Base de données',
+    'Un jour',
+  ],
+  [
     'Séance du mode classe : l’article et sa préparation',
     'L’onglet de votre navigateur, et le fichier de séance que vous téléchargez ; jamais nos serveurs',
     'Jusqu’à la fermeture de l’onglet ; le fichier, tant que vous le gardez',
@@ -200,7 +210,8 @@ export function Transparence() {
               <dt className="font-display text-lg font-semibold">Nous voyons l’article, le temps de l’analyser.</dt>
               <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
                 Le texte sert à l’audit et disparaît à la fin de la requête : aucune table de notre base ne contient de
-                texte d’article. Avec votre propre clé, il ne passe pas par nous.
+                texte d’article, à une exception : la publication X que nous lisons pour vous, gardée un jour. Avec votre
+                propre clé, il ne passe pas par nous.
               </dd>
             </div>
             <div>
@@ -208,6 +219,17 @@ export function Transparence() {
               <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
                 Votre navigateur le lui fournit. Un article payant est donc analysé dans la limite de ce que vous lisez.
                 L’adresse indiquée à côté d’un texte collé n’est jamais visitée.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-display text-lg font-semibold">Un lien vers une publication X est lu chez X.</dt>
+              <dd className="mt-2 ml-0 text-base leading-relaxed text-muted">
+                Pour un lien vers une publication X (x.com ou twitter.com), et pour ceux-là seulement, notre serveur lit
+                la publication par l’API officielle de X, avec le jeton de l’application Squiggle : ce qui part chez X, c’est
+                l’identifiant de la publication, rien de vous. Si l’auteur a écrit un fil, nous lisons ses publications
+                qui se répondent, vingt-cinq au plus, et pas les réponses des autres comptes. Le texte lu suit ensuite le
+                trajet d’un texte collé. Il est gardé un jour pour ne pas être relu et payé deux fois, puis effacé. La
+                presse garde la règle ci-dessus : son lien n’est jamais visité.
               </dd>
             </div>
             <div>
@@ -266,6 +288,11 @@ export function Transparence() {
           <div className="mt-8">
             <Table head={['Sous-traitant', 'Rôle', 'Ce qu’il voit']} rows={SUBPROCESSORS} strong />
           </div>
+          <p className="mt-6 mb-0 max-w-[55ch] text-base leading-relaxed text-muted">
+            X n’est pas un sous-traitant mais la source d’une publication X : il ne reçoit que l’identifiant de la
+            publication, avec l’identification de l’application Squiggle et l’adresse de notre serveur, jamais rien du
+            lecteur. Il décide seul de ce qu’il fait de ces requêtes.
+          </p>
         </section>
 
         <section aria-labelledby="jamais-titre">

@@ -83,6 +83,54 @@ export async function reportByLink(link: string): Promise<{ report: AnalysisRepo
   }
 }
 
+const X_HOSTS = new Set(['x.com', 'twitter.com', 'mobile.x.com', 'mobile.twitter.com']);
+
+/** Whether a link is to X: the server reads those, and only those, from the platform itself. */
+export function isXLink(link: string): boolean {
+  try {
+    return X_HOSTS.has(new URL(link).hostname.toLowerCase().replace(/^www\./, ''));
+  } catch {
+    return false;
+  }
+}
+
+export type XRead =
+  | { kind: 'ok'; article: PastedArticle; postsRead: number; partial: boolean }
+  | { kind: 'error'; message: string };
+
+/**
+ * A publication on X (and its thread, when the author wrote one), read by the
+ * server from X's own API for this link: the text comes back to be analysed
+ * like a pasted one. Only the link is sent. Any failure says, in the server's
+ * words, to paste the text instead.
+ */
+export async function readXPost(link: string, signedIn: boolean): Promise<XRead> {
+  const fallback: XRead = {
+    kind: 'error',
+    message: 'Squiggle n’a pas pu lire cette publication X. Copiez son texte et collez-le.',
+  };
+  try {
+    const res = await fetch(`${API_BASE}/web/${signedIn ? 'analyze' : 'anon'}/x-post?url=${encodeURIComponent(link)}`, {
+      credentials: signedIn ? 'include' : 'omit',
+    });
+    const body = (await res.json()) as {
+      ok?: boolean;
+      message?: string;
+      title?: string;
+      url?: string;
+      text?: string;
+      postsRead?: number;
+      partial?: boolean;
+    };
+    if (body.ok && body.text && body.title && body.url) {
+      return { kind: 'ok', article: { title: body.title, source: body.url, text: body.text }, postsRead: body.postsRead ?? 1, partial: !!body.partial };
+    }
+    return body.message ? { kind: 'error', message: body.message } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * The report of an e-mail the reader forwarded, by the fingerprint of its text
  * the reply's link carries: the same zero-credit cache lookup a pasted text's
