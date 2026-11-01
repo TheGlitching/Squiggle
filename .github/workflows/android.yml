@@ -1,0 +1,68 @@
+name: Android
+
+on:
+  push:
+    tags: ['android-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      # The build bundles the bookmark from the web app's source (favori.mjs).
+      - run: npm ci
+
+      - name: Version
+        id: version
+        run: |
+          version="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts)"
+          if [[ "$GITHUB_REF_NAME" == android-v* && "${GITHUB_REF_NAME#android-v}" != "$version" ]]; then
+            echo "tag $GITHUB_REF_NAME declares ${GITHUB_REF_NAME#android-v} but versionName is $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the signed release APK
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SQUIGGLE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SQUIGGLE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export SQUIGGLE_KEYSTORE="$RUNNER_TEMP/release.jks"
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Name and verify the APK
+        id: apk
+        run: |
+          apk="squiggle-android-${{ steps.version.outputs.version }}.apk"
+          mv android/app/build/outputs/apk/release/app-release.apk "$apk"
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --verbose --print-certs "$apk"
+          echo "file=$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the APK to the release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: android-v${{ steps.version.outputs.version }}
+          name: Squiggle for Android ${{ steps.version.outputs.version }}
+          files: ${{ steps.apk.outputs.file }}
+          generate_release_notes: true

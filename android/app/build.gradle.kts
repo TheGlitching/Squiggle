@@ -15,6 +15,26 @@ android {
         versionName = "0.3.0"
     }
 
+    // The release key comes from the environment (the workflow's secrets); without
+    // it assembleRelease still builds, unsigned.
+    val releaseKeystore = System.getenv("SQUIGGLE_KEYSTORE")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("SQUIGGLE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SQUIGGLE_KEY_ALIAS")
+                keyPassword = System.getenv("SQUIGGLE_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

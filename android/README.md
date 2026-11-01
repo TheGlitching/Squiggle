@@ -54,10 +54,34 @@ cd android
 Install on a phone or an emulator with `adb install -r` on that file, or copy
 the file to the phone and open it (allow installing from that app once).
 
+## Install it on a phone (no store)
+
+For someone who just wants the app:
+
+1. On the phone, open the latest "Squiggle for Android" release at
+   <https://github.com/TheGlitching/Squiggle/releases> and touch the
+   `squiggle-android-….apk` file.
+2. Chrome asks to allow installing apps from it: touch "Settings", switch the
+   permission on once, go back.
+3. Touch "Install", then "Open". Squiggle is on the home screen.
+
+The same link works to send it to someone else.
+
+## Release build
+
+The Android workflow (`.github/workflows/android.yml`) builds the signed APK
+and attaches it to a GitHub release, on a manual run or on a tag
+`android-v<versionName>`. Nothing is built on a developer machine. The signing
+key is in the repository secrets `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`; keep a copy of it outside
+GitHub, because an update only installs over an app signed with the same key.
+Raise `versionCode` and `versionName` in `app/build.gradle.kts` for each
+release.
+
 ## Digital Asset Links
 
 `web/public/.well-known/assetlinks.json` lists the certificates whose builds
 may show squiggle.fr without the browser's address bar. It holds the debug
-key the test builds are signed with; the Play signing key's fingerprint is
-added there before a store release. A build signed with another key still
+key the test builds are signed with and the release key the workflow signs
+with; the Play signing key's fingerprint is added there before a store release. A build signed with another key still
 works: the report then opens with the address bar showing.
