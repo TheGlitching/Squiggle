@@ -61,7 +61,17 @@ export interface Metrics {
     research: ReturnType<typeof stage>;
     sourceCheck: ReturnType<typeof stage>;
   };
-  analyses: { finalized: number; costPerAnalysisUsd: number | null };
+  analyses: {
+    finalized: number;
+    /** The provider's invoice over the finalized, when given; else what the server counted (`spent`). */
+    costPerAnalysisUsd: number | null;
+    /**
+     * What the model calls cost since the counters began, as OpenRouter
+     * reported each response, web search included. Runs that never finalized
+     * count here too: they were billed all the same.
+     */
+    spent: { auditUsd: number; researchUsd: number; sourceCheckUsd: number; totalUsd: number; webSearches: number };
+  };
   /**
    * Recordings transcribed from the site: how many, how many minutes of sound,
    * and what those minutes cost at the catalogue price, beside the daily cap
@@ -118,12 +128,25 @@ export async function collectLaunchMetrics(
 ): Promise<Metrics> {
   const raw = await db.collectMetrics({ now, weeks, trialAnalyses: TRIAL_ANALYSES });
   const c = raw.counters;
+  const usd = (micros: number) => Math.round(micros / 100) / 10000;
+  const totalMicros = c.cost_audit + c.cost_research + c.cost_source_check;
   const analyses = {
     finalized: raw.finalizes,
     costPerAnalysisUsd:
-      providerCostUsd !== undefined && raw.finalizes > 0
-        ? Math.round((providerCostUsd / raw.finalizes) * 10000) / 10000
-        : null,
+      raw.finalizes === 0
+        ? null
+        : providerCostUsd !== undefined
+          ? Math.round((providerCostUsd / raw.finalizes) * 10000) / 10000
+          : totalMicros > 0
+            ? Math.round((totalMicros / 1e6 / raw.finalizes) * 10000) / 10000
+            : null,
+    spent: {
+      auditUsd: usd(c.cost_audit),
+      researchUsd: usd(c.cost_research),
+      sourceCheckUsd: usd(c.cost_source_check),
+      totalUsd: usd(totalMicros),
+      webSearches: c.web_searches,
+    },
   };
   const campaigns = family(c, 'ref_');
   return {
