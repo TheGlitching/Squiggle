@@ -47,6 +47,13 @@ export const ANON_RATE_SCOPE_PREFIX = 'anon:';
 export const TRANSCRIPTION_RATE_SCOPE_PREFIX = 'transcribe:';
 
 /**
+ * What reading X publications has cost in a UTC day, in millionths of a dollar,
+ * one row per account or visitor and one for the whole site (key `all`). Like
+ * the allowances above, a row lives a day, then the sweep drops it.
+ */
+export const X_SPEND_RATE_SCOPE_PREFIX = 'xapi:';
+
+/**
  * The sound one account may have transcribed in a UTC day: four analyses of
  * fifteen minutes. The site's own daily allowance (`TRANSCRIBE_DAILY_MINUTES`)
  * is the spending cap; this keeps one account from taking all of it.
@@ -84,3 +91,6 @@ export const DAILY_CRON = '17 3 * * *';
 export function utcDayOf(now: number): number {
   return Math.floor(now / DAY_MS) * DAY_MS;
 }
+
+/** How long a publication read from X is kept (and served without a new read). */
+export const X_POST_TTL_MS = DAY_MS;

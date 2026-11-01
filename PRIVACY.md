@@ -171,8 +171,9 @@ Trois choses à en retenir.
 page, ou celui que vous collez sur le site, qui suit exactement le même trajet. C'est
 la différence essentielle avec le mode BYOK : nous le voyons. Il est utilisé pour l'appel d'audit et il
 disparaît à la fin de cette requête. **Aucune table de notre base de données ne
-contient de texte d'article** : les étapes suivantes de l'analyse ne travaillent que
-sur les constats de l'audit, pas sur l'article.
+contient de texte d'article**, à une exception, décrite plus bas : la publication X que
+nous lisons pour vous. Les étapes suivantes de l'analyse ne travaillent que sur les
+constats de l'audit, pas sur l'article.
 
 **Notre serveur ne va jamais chercher l'article lui-même.** C'est votre navigateur qui
 le lui fournit, depuis la page que vous lisez déjà. Conséquence directe : un article
@@ -188,6 +189,26 @@ l'apporte au site dans la partie de l'adresse qui suit `#`, que le navigateur n'
 aucun serveur : le site en lit l'article dans votre navigateur, avec l'extracteur de
 l'extension, et ce texte est ensuite traité exactement comme un texte collé. La page
 elle-même ne quitte pas votre téléphone.
+
+**Une publication X fait exception, et elle seule.** Quand vous envoyez un lien vers une
+publication X (`x.com` ou `twitter.com`), depuis le site, l'appli Android, le raccourci
+iPhone ou un e-mail transféré, notre serveur lit la publication auprès de X, par son API
+officielle. **Ce qui part chez X est l'identifiant de la publication** (et, pour un fil,
+l'identifiant de sa conversation et celui de son auteur), avec le jeton de l'application
+Squiggle : rien de vous, ni votre adresse e-mail, ni votre compte, ni votre adresse IP,
+mais l'adresse de notre serveur. Si l'auteur a écrit un fil, nous lisons ses publications
+qui se répondent, vingt-cinq au plus, et pas les réponses des autres comptes ; l'analyse
+dit combien de publications ont été lues. Le texte, l'auteur public et le texte alternatif
+des images reviennent dans votre navigateur et suivent le trajet d'un texte collé. Nous les
+gardons **un jour** dans notre base, pour ne pas relire (et payer) deux fois la même
+publication, puis nous les effaçons ; nous les effaçons sans attendre si X le demande. X
+n'est pas notre sous-traitant : c'est la source de la publication, et elle décide seule
+de ce qu'elle fait des requêtes qu'elle reçoit ([politique](https://x.com/en/privacy)).
+Pour borner la dépense, nous comptons ce que les lectures du jour ont coûté, par compte
+(ou, sans compte, par empreinte de l'adresse IP) et pour tout le site, pendant un jour.
+Sans le jeton de l'application, ou au-delà du plafond du jour, ce lien est traité comme
+un lien de presse : Squiggle ne va pas le chercher, et vous collez le texte. **Un lien de
+journal n'est jamais visité.**
 
 **Un e-mail transféré est lu comme un texte collé.** Un e-mail (une lettre
 d'information, un article reçu, une chaîne) transféré à `verifier@squiggle.fr` depuis
@@ -240,6 +261,8 @@ raconte.
 | PDF importés sur le site, partagés vers l'appli installée, ou lus par l'extension (« Analyser ce PDF ») | **votre appareil** : son texte y est lu (celui d'un PDF scanné, par la lecture des captures), et seul ce texte part à l'analyse ; **le fichier n'est jamais envoyé**. L'extension le reprend à l'adresse de votre onglet, depuis votre navigateur | le temps de la lecture ; un PDF partagé attend la page dans le cache du site, qui le vide dès qu'il l'a pris |
 | Enregistrement importé sur le site, ou partagé vers l'appli installée (vidéo, message vocal, épisode) | **votre appareil**, qui en extrait le son ; ce son, quinze minutes au plus, traverse notre serveur vers la transcription **sans y être écrit** | le temps de la transcription ; un enregistrement partagé attend la page dans le cache du site, qui la vide dès qu'elle l'a pris |
 | Minutes de son transcrites par compte et pour tout le site, dans la journée (plafond de dépense) | base de données | un jour |
+| Publication X (et son fil) lue pour vous à partir d'un lien X : son texte, son auteur public, le texte alternatif de ses images | base de données | un jour |
+| Dépense du jour en lectures X, par compte (ou par empreinte de l'adresse IP, sans compte) et pour tout le site (plafond de dépense) | base de données | un jour |
 | Séance du mode classe : l'article, le rapport, l'ordre de révélation et vos remarques | **l'onglet de votre navigateur** (stockage de session), et le fichier de séance que vous téléchargez ; jamais notre serveur | jusqu'à la fermeture de l'onglet ; le fichier, tant que vous le gardez |
 | Fichiers du site installé sur l'écran d'accueil | votre navigateur | jusqu'à la version suivante du site ; **jamais une réponse de compte ou d'analyse** |
 | Rapport d'analyse, avec extraits de l'article (cache partagé) | base de données | 30 jours, 500 rapports au plus |
