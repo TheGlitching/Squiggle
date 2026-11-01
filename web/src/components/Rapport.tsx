@@ -93,6 +93,10 @@ function Passage({
       id={anchor ? passageId(anchor) : undefined}
       tabIndex={anchor ? undefined : -1}
       className="annot"
+      // The finding's name rides on the label, not on a hidden child: with a child
+      // element inside, Chrome wrapped the passage as one block and pushed the rest
+      // of its sentence onto a line of its own.
+      aria-label={anchor ? `${segment.text} (constat : ${lead.label})` : undefined}
       style={passageStyle(lead)}
       aria-current={segment.findings.some((f) => f.id === selected) ? 'true' : undefined}
       onClick={(event) => {
@@ -102,7 +106,6 @@ function Passage({
       }}
     >
       {segment.text}
-      {anchor ? <span className="sr-only"> (constat : {lead.label})</span> : null}
     </a>
   );
 }
