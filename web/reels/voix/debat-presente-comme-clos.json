@@ -1,0 +1,12 @@
+{
+  "said": {
+    "text": "Le piège : Débat présenté comme tranché. Une question que les spécialistes discutent encore, présentée comme réglée.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR",
+      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+    }
+  },
+  "seconds": 7.773958
+}

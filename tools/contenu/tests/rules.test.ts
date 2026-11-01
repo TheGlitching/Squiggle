@@ -95,6 +95,13 @@ describe('the decision rules', () => {
     expect(testValue({ network: 'mastodon', kind: 'mots_diese', value: 'sans', start: '2026-11-30' }, 'bluesky', new Date('2026-12-09T11:30:00Z'))).toBeNull();
   });
 
+  it('tests the spoken video against the silent one on Bluesky alone, one week each way', () => {
+    const voice = { network: 'tous', kind: 'voix', value: 'muette', start: '2026-11-30' };
+    expect(testValue(voice, 'bluesky', new Date('2026-11-30T11:15:00Z'))).toBe('muette');
+    expect(testValue(voice, 'bluesky', new Date('2026-12-07T11:15:00Z'))).toBe('parlee');
+    for (const network of ['instagram', 'facebook', 'threads', 'mastodon', 'x'] as const) expect(testValue(voice, network, new Date('2026-11-30T18:00:00Z'))).toBeNull();
+  });
+
   it('proposes the minimal rhythm under five per cent of the networks’ visits, never a closure', () => {
     const shares = networkShares({ bluesky: 60, mastodon: 0, threads: 25, facebook: 11, instagram: 3, x: 1 });
     expect(shares.x.proposal).toBe('rythme minimal');

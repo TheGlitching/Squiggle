@@ -1,0 +1,12 @@
+{
+  "said": {
+    "text": "Le piège : Appel à l’émotion. Faire réagir le lecteur par la peur, la colère ou la pitié plutôt que par des preuves.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR",
+      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+    }
+  },
+  "seconds": 7.77575
+}

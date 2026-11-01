@@ -17,8 +17,8 @@ import type { Lesson } from './memory';
 import type { PostRow } from './posts';
 import type { CommentRow } from './replies';
 import type { UnreadComments } from './replies';
-import { isVideo, still } from './sources';
-import { EVERY_NETWORK, type Facts, type StrategyResult } from './strategy';
+import { isSpoken, isVideo, still } from './sources';
+import { EVERY_NETWORK, TEST_NETWORKS, type Facts, type StrategyResult, type TestKind } from './strategy';
 
 export const NETWORK_NAME: Record<Network, string> = { bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads', facebook: 'Facebook', instagram: 'Instagram', x: 'X' };
 /** Each network's own colour, for its dot: what the eye looks for in a list of posts. */
@@ -176,13 +176,17 @@ const TEST_NAME: Record<string, (v: string) => string> = {
   format: (v) => (v === 'carrousel' ? 'plusieurs images plutôt qu’une' : 'une seule image'),
   lien: (v) => (v === 'avec' ? 'toujours un lien' : 'sans lien'),
   mots_diese: (v) => (v === 'avec' ? 'avec mots-dièse' : 'sans mot-dièse'),
+  voix: (v) => (v === 'parlee' ? 'la vidéo avec sa voix' : 'la vidéo sans voix'),
 };
 
 const SIGNAL_NAME: Record<string, string> = { visites: 'jugé sur les visites', conversation: 'jugé sur les réponses et les partages', abonnés: 'jugé sur les abonnés gagnés' };
 
 function testLine(t: Facts['tests'][number]): string {
   const what = (TEST_NAME[t.kind] ?? (() => t.kind))(t.value);
-  const where = t.network === EVERY_NETWORK ? `sur tous les réseaux, une semaine sur deux, ${what}` : `sur ${NETWORK_NAME[t.network]} : ${what}`;
+  // A content test that only one network can carry (the voice, for now) says which.
+  const only = TEST_NETWORKS[t.kind as TestKind];
+  const everywhere = only?.length === 1 ? `sur ${NETWORK_NAME[only[0]]}` : 'sur tous les réseaux';
+  const where = t.network === EVERY_NETWORK ? `${everywhere}, une semaine sur deux, ${what}` : `sur ${NETWORK_NAME[t.network]} : ${what}`;
   const result = t.verdict ? `, résultat : ${t.verdict}${t.signal ? ` (${SIGNAL_NAME[t.signal]})` : ''}` : '';
   return `Essai en cours ${where}, semaine ${t.week} sur ${t.weeks}${result}.`;
 }
@@ -325,7 +329,7 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
 // ---------- Plain text ----------
 
 /** A post that is not a plain post says so after its network: « Instagram story », « Bluesky vidéo ». */
-const format = (x: PostRow): string => (x.angle === 'story' ? ' story' : x.angle === 'video' ? ' vidéo' : '');
+const format = (x: PostRow): string => (x.angle === 'story' ? ' story' : x.angle !== 'video' ? '' : x.image_url && isSpoken(x.image_url) ? ' vidéo parlée' : ' vidéo');
 
 function imagesLine(x: PostRow): string | null {
   const images = x.image_url ? x.image_url.split(' ') : [];

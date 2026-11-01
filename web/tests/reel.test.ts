@@ -8,8 +8,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { NOTIONS, type Segments } from '../src/glossaire';
-import { REEL_FPS, REEL_HEIGHT, REEL_WIDTH, reel, reelSource, reelText, timeline } from '../src/reel';
+import { NOTIONS, typo, type Segments } from '../src/glossaire';
+import { REEL_FPS, REEL_HEIGHT, REEL_WIDTH, VOICE, narration, reel, reelSource, reelText, spokenAt, spokenSource, timeline } from '../src/reel';
 
 const plain = (segments: Segments) => segments.map((part) => (typeof part === 'string' ? part : part[0])).join('');
 const folded = (text: string) => text.replace(/[\u00a0\u202f]/g, ' ');
@@ -62,14 +62,51 @@ describe('the short video of a notion', () => {
 
   it('has its video, its poster and its record for every rendered notion, and no other', () => {
     const dir = new URL('../reels/', import.meta.url);
-    const files = readdirSync(dir);
+    const files = readdirSync(dir).filter((file) => file !== 'voix');
     for (const record of files.filter((file) => file.endsWith('.json'))) {
-      const slug = record.slice(0, -'.json'.length);
+      const name = record.slice(0, -'.json'.length);
+      const slug = name.replace(/\.voix$/, '');
       expect(NOTIONS.some((notion) => notion.slug === slug), record).toBe(true);
-      expect(existsSync(new URL(`${slug}.mp4`, dir)), slug).toBe(true);
+      expect(existsSync(new URL(`${name}.mp4`, dir)), name).toBe(true);
       expect(existsSync(new URL(`${slug}.jpg`, dir)), slug).toBe(true);
       expect(Object.keys(JSON.parse(readFileSync(new URL(record, dir), 'utf8')))).toEqual(['source', 'seconds']);
     }
-    expect(files.every((file) => /\.(mp4|jpg|json)$/.test(file))).toBe(true);
+    expect(files.every((file) => /^[a-z-]+(\.voix)?\.(mp4|json)$|^[a-z-]+\.jpg$/.test(file)), files.join(' ')).toBe(true);
+  });
+});
+
+describe('its spoken version', () => {
+  it('says only words the screen shows, so they stay its subtitles', () => {
+    for (const notion of NOTIONS) {
+      const { question, answer } = narration(notion);
+      expect(folded(reelText(notion)), notion.slug).toContain(folded(typo(question)));
+      expect(folded(reelText(notion)), notion.slug).toContain(folded(typo(answer)));
+    }
+  });
+
+  it('speaks the answer as it appears, and holds the last frame until the voice is done', () => {
+    const notion = NOTIONS[0];
+    const silent = timeline(notion);
+    expect(spokenAt(notion).answer).toBeGreaterThan(silent.reveal);
+    expect(timeline(notion, 1).end).toBe(silent.end);
+    expect(timeline(notion, 7).end).toBeCloseTo(spokenAt(notion).answer + 7.8);
+  });
+
+  it('is out of date when the voice or what it says changes, not only what it shows', () => {
+    const notion = NOTIONS[0];
+    expect(spokenSource(notion)).not.toBe(reelSource(notion));
+    expect(spokenSource({ ...notion, resume: `${notion.resume} ` })).not.toBe(spokenSource(notion));
+    expect(spokenSource({ ...notion, question: 'Autre chose ?' })).toBe(spokenSource(notion));
+  });
+
+  it('keeps each line it said with the voice that said it', () => {
+    const dir = new URL('../reels/voix/', import.meta.url);
+    if (!existsSync(dir)) return;
+    for (const record of readdirSync(dir).filter((file) => file.endsWith('.json'))) {
+      const { said, seconds } = JSON.parse(readFileSync(new URL(record, dir), 'utf8'));
+      expect(existsSync(new URL(record.replace(/\.json$/, '.m4a'), dir)), record).toBe(true);
+      expect(said.voice, record).toEqual(VOICE);
+      expect(seconds, record).toBeGreaterThan(0);
+    }
   });
 });

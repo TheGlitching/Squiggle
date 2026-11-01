@@ -1,0 +1,12 @@
+{
+  "said": {
+    "text": "Le piège : Chiffre sans origine. Un chiffre donné sans institut, sans date, sans périmètre ni méthode.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR",
+      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+    }
+  },
+  "seconds": 6.978417
+}

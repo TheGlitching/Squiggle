@@ -1,0 +1,12 @@
+{
+  "said": {
+    "text": "Le piège : Argument d’autorité. Tenir une affirmation pour vraie parce qu’une personne prestigieuse l’a dite.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR",
+      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+    }
+  },
+  "seconds": 6.844375
+}

@@ -133,6 +133,9 @@ describe('a video post', () => {
     expect(launch.html).toContain('Bluesky vidéo');
     expect(launch.html).toContain('src="https://squiggle.fr/og/social/faux-dilemme/video.jpg"');
     expect(launch.html).toContain(`href="${video}"`);
+    const spoken = buildLaunch([post(1, 'bluesky', '2026-11-03T11:15:00.000Z', 'Deux options, vraiment ?', { status: 'en_attente', angle: 'video', image_url: video.replace('video.mp4', 'video-voix.mp4') })], false);
+    expect(spoken.text).toContain('[1] Bluesky vidéo parlée');
+    expect(spoken.html).toContain('src="https://squiggle.fr/og/social/faux-dilemme/video.jpg"');
   });
 });
 
