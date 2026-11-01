@@ -65,7 +65,7 @@ CE QUE SQUIGGLE REGARDE
 Les mêmes critères pour chaque article. Le texte est jugé, jamais son auteur.
 
 LES CHIFFRES CONFRONTÉS AUX SOURCES
-Avant de mettre un fait en doute, Squiggle lit les sources citées et en cherche d’autres. Si elles donnent raison à l’article, le doute est retiré. Les sources consultées sont listées dans le rapport.
+Avant de mettre un fait en doute, Squiggle lit les sources citées et en cherche d’autres. Si elles donnent raison à l’article, le doute est retiré. Les sources consultées sont listées dans le rapport, avec celles que l’article cite lui-même, classées par nature (institution, personne nommée, témoignage anonyme…), sans juger de leur fiabilité.
 
 POUR QUI
 Pour toute personne qui lit la presse en ligne et veut garder l’esprit critique face à la désinformation, sans attendre un fact-checking. Pour la classe aussi : l’offre enseignants est gratuite.
@@ -74,7 +74,7 @@ VOS DONNÉES
 • Rien n’est lu avant votre clic. Squiggle n’a accès qu’à la page où vous l’ouvrez ; aucun script ne tourne sur les autres pages.
 • Avec votre clé : l’article va de votre navigateur au fournisseur choisi, et nulle part ailleurs.
 • Avec un compte : le texte de l’article est envoyé le temps de l’analyse, sans votre identité, et n’est pas conservé. Le rapport, qui cite des extraits, est gardé 30 jours.
-• Aucune publicité, aucun traceur, aucun code distant. La méthode et le code sont publics.
+• Aucune publicité, aucun traceur, aucun code distant. La méthode et le code sont publics, sous licence AGPL-3.0.
 
 Les articles payants sont analysés jusqu’où vous pouvez les lire, et un texte partiel est signalé.
 
