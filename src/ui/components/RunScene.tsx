@@ -9,7 +9,7 @@
  * It mirrors `RunScene` in `web/src/components/Iso.tsx` (the web app's loading
  * scene), stages and frames included; change the two together.
  */
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { PipelineStage } from '@squiggle/shared';
 
 import { darkTheme } from '../tokens/colors';
@@ -226,6 +226,47 @@ const STEPS: Array<[RunStep, string]> = [
   ['verification', 'Vérification et note'],
 ];
 
+/** About how long a hosted audit takes, which the bar is timed against. */
+const RUN_BAR_MS = 40_000;
+/** How far a finished stage moves the bar on, as run time it adds. */
+const RUN_BAR_STEP_MS = 6_000;
+
+/**
+ * How full the bar is after `ms` of the run: quick at first, slower as it
+ * goes, 95 % at 40 s, then full. It is time, not progress: the stages beside it
+ * are what says where the analysis is, so it carries no percentage.
+ */
+export function runBarFill(ms: number): number {
+  return ms >= RUN_BAR_MS ? 1 : 1 - Math.exp((-3 * ms) / RUN_BAR_MS);
+}
+
+/**
+ * The bar under the scene, so a long wait never looks stuck. It fills with the
+ * time the run has taken, each finished stage moves it on a notch, and it is
+ * full once the analysis is done. Past 40 s it stays full and a glow goes to
+ * and fro along it; without motion, it is simply full. Stages only ever move
+ * forward, so it never goes back. Mirrors `RunBar` in `web/src/components/Iso.tsx`.
+ */
+export function RunBar({ current, done, label }: { current: number; done: boolean; label: string }) {
+  const [start] = useState(Date.now);
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
+  const fill = done ? 1 : runBarFill(now - start + current * RUN_BAR_STEP_MS);
+  return (
+    <div
+      role="progressbar"
+      aria-label="Avancement de l’analyse"
+      aria-valuetext={`Étape ${current + 1} sur ${STEPS.length} : ${label}`}
+      className="mx-auto h-1.5 w-full max-w-72 overflow-hidden rounded-full bg-line"
+    >
+      <div className={`run-bar h-full rounded-full bg-accent${fill === 1 ? ' run-bar-full' : ''}`} style={{ width: `${fill * 100}%` }} />
+    </div>
+  );
+}
+
 /**
  * Where the analysis stands: the scene for the stage under way, beside the
  * three stages, the current one carrying the engine's own live message. It
@@ -241,6 +282,7 @@ export function RunProgress({ stage, message }: { stage: PipelineStage | undefin
       <div key={step} className="run-scene mx-auto w-full max-w-72">
         <RunScene step={step} />
       </div>
+      <RunBar current={current} done={stage === 'success'} label={STEPS[current][1]} />
       <ol className="space-y-2.5">
         {STEPS.map(([key, label], index) => (
           <li key={key} aria-current={index === current ? 'step' : undefined} className="flex gap-2.5">
