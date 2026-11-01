@@ -44,8 +44,9 @@ export const CONCURRENT_RUN_WINDOW_MS = 5 * 60 * 1000;
  * The site's analysis without an account: one per visitor in all (the
  * visitor known only by the fingerprint of their address, kept for
  * `VISITOR_USE_RETENTION_MS`), and at most this many a UTC day for every
- * visitor together. The global figure is the cost bound: at about 5 cents an
- * analysis, 40 a day is 60 dollars a month at most. It is a product limit as
+ * visitor together. The global figure is the cost bound: at about 10 cents an
+ * analysis, the audit asked twice at once included, 40 a day is 120 dollars a
+ * month at most. It is a product limit as
  * much as an abuse one, so it sits low on purpose; a visitor who meets either
  * is asked to create an account.
  */

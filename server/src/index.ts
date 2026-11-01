@@ -66,6 +66,7 @@ import {
   type BaseLLMClient,
   type OpenRouterProviderPreferences,
   type OpenRouterReasoning,
+  type OpenRouterRace,
 } from '@squiggle/shared';
 
 import {
@@ -276,6 +277,18 @@ const HOSTED_PROVIDER_PREFERENCES: OpenRouterProviderPreferences = {
 const HOSTED_REASONING: OpenRouterReasoning = { effort: 'low' };
 
 /**
+ * The audit is asked twice at once and the first readable answer kept: how
+ * long the model reasons is a draw, between 7 000 and 15 000 tokens on the
+ * same article, so two draws cut the long tail (measured: 46 s on average and
+ * 91 s at worst for one audit, 31-33 s and 52 s for the faster of two). Both
+ * run on the European host alone, the one the public pages name first, so an
+ * article is never sent to a host it would not have reached otherwise. Nebius
+ * does not stop on an abandoned stream: the second audit is billed in full,
+ * about 1.5 cents an analysis, and counted in `cost_audit`.
+ */
+const HOSTED_AUDIT_RACE: OpenRouterRace = { host: HOSTED_ANALYSIS.inferenceHosts[0].slug, count: 2 };
+
+/**
  * Builds the hosted LLM client from deployment config, so the provider and the
  * model are settings rather than something baked into a build. OpenRouter is
  * the default; `gemini` is kept selectable.
@@ -305,7 +318,7 @@ export function createHostedLlm(env: LlmEnv): BaseLLMClient | undefined {
       // The default is the exact OpenRouter catalogue id, tilde-free: the API
       // rejects anything that is not exactly right.
       model: env.OPENROUTER_MODEL || HOSTED_ANALYSIS.model,
-    }, HOSTED_PROVIDER_PREFERENCES, HOSTED_REASONING);
+    }, HOSTED_PROVIDER_PREFERENCES, HOSTED_REASONING, HOSTED_AUDIT_RACE);
   }
 
   return undefined;
