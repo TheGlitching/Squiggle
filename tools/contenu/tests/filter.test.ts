@@ -89,6 +89,14 @@ describe('filterPost', () => {
     expect(filterPost(input(long, { network: 'threads', text: long.replace('?ref=bluesky', '?ref=threads') })).reasons).toEqual([]);
   });
 
+  it('takes Mastodon’s link and closing hashtags, three at most', () => {
+    const toot = `${GOOD.replace('?ref=bluesky', '?ref=mastodon')} #EspritCritique #ÉducationAuxMédias`;
+    expect(filterPost(input(toot, { network: 'mastodon' })).reasons).toEqual([]);
+    expect(filterPost(input(toot, { network: 'mastodon' })).text.endsWith('?ref=mastodon #EspritCritique #ÉducationAuxMédias')).toBe(true);
+    expect(filterPost(input(`${toot} #Presse #Lecture`, { network: 'mastodon' })).reasons).toContain('plus de trois mots-dièse');
+    expect(filterPost(input(toot, { network: 'mastodon', text: toot.replace(/ squiggle\.fr\S+/, '') })).reasons).toContain('un lien vers squiggle.fr exactement, il y en a 0');
+  });
+
   it('refuses the same opening twice and the same source twice a day on a network', () => {
     const others = [{ network: 'threads' as const, text: GOOD.replace('bluesky', 'threads'), day: '2026-11-29', sourceId: 'glossaire/autre' }];
     expect(filterPost(input(GOOD, { others })).reasons).toContain('même accroche qu’une autre publication');

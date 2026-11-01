@@ -35,6 +35,7 @@ const facts = {
   google: { impressions: 18, clicks: 0, position: 13.8, impressionsVs4: null, clicksVs4: null },
   networks: {
     bluesky: { visits: 0, posts: 0, visitsPerPost4w: null, followers: null },
+    mastodon: { visits: 0, posts: 0, visitsPerPost4w: null, followers: null },
     threads: { visits: 0, posts: 0, visitsPerPost4w: null, followers: null },
     facebook: { visits: 0, posts: 0, visitsPerPost4w: null, followers: null },
     instagram: { visits: 3, posts: 0, visitsPerPost4w: null, followers: null },
@@ -60,7 +61,7 @@ function input(extra: Partial<ReportInput> = {}): ReportInput {
     toRead: {},
     lessons: [],
     mail: [],
-    health: { reserve: { bluesky: null, threads: null, facebook: null, instagram: null, x: null }, failed: [], disconnected: [], spend: { openrouter: 0.03, x: 0 }, paused: false, draftMode: false },
+    health: { reserve: { bluesky: null, mastodon: null, threads: null, facebook: null, instagram: null, x: null }, failed: [], disconnected: [], spend: { openrouter: 0.03, x: 0 }, paused: false, draftMode: false },
     steps: [],
     now: new Date('2026-11-02T05:00:00Z'),
     dry: true,

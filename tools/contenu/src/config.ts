@@ -18,7 +18,7 @@ export const REPORT_FROM = 'no-reply@squiggle.fr';
 export { OWNER_SENDERS, REPLY_TO } from './owners';
 
 /** The networks connected in Postiz, by Postiz's `identifier`. */
-export const NETWORKS = ['bluesky', 'threads', 'facebook', 'instagram', 'x'] as const;
+export const NETWORKS = ['bluesky', 'mastodon', 'threads', 'facebook', 'instagram', 'x'] as const;
 export type Network = (typeof NETWORKS)[number];
 
 /** Spending caps, in dollars. The keys themselves carry the hard limits (D4); these stop the routine before them. */
