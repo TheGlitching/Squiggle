@@ -9,6 +9,7 @@ import { ScoreGauge, DomainScoreGauge } from '../ui/components/ScoreGauges';
 import { FindingCard } from '../ui/components/FindingCard';
 import { CategoryFilterBar, type FindingCategory as FilterCategory } from '../ui/components/CategoryFilterBar';
 import { ResearchDisclosure } from '../ui/components/ResearchDisclosure';
+import { SourcingSection } from '../ui/components/SourcingSection';
 import { ByokSettingsModal } from '../ui/components/ByokSettingsModal';
 import { HostedAccountCard } from '../ui/components/HostedAccountCard';
 import { SubscribeOffer } from '../ui/components/SubscribeOffer';
@@ -29,7 +30,7 @@ import {
 import { TRANSPARENCY_URL } from '../hosted/config';
 import { isPdfAddress, pdfPageUrl } from '../pdf/address';
 import { requestSiteAccess } from '../permissions/siteAccess';
-import { reportFinding } from '../hosted/flag';
+import { reportFinding, reportSourceNature } from '../hosted/flag';
 import type { AnalysisMode } from '../crypto/storage';
 
 import { countFindingsByFilterCategory, filterFindings } from '../adapters/findingAdapters';
@@ -862,6 +863,13 @@ function SidepanelApp() {
                 )}
               </div>
             </section>
+
+            {report.sourcing && (
+              <SourcingSection
+                sourcing={report.sourcing}
+                onReport={hosted ? (nature) => reportSourceNature(nature) : undefined}
+              />
+            )}
 
             {offer ??
               (hostedView && (

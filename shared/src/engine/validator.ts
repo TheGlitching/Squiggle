@@ -10,6 +10,9 @@ import {
   FindingSchema,
   RawLlmAnalysisResponseSchema,
   ResearchRecord,
+  SourcingEntry,
+  SourcingEntrySchema,
+  MAX_SOURCING_ENTRIES,
   TextBlock,
   WithdrawnObjection
 } from './types';
@@ -96,7 +99,10 @@ export function quotePattern(quote: string): RegExp {
  * replaced by the article's exact characters, so the highlight and the quote
  * shown to the reader are both literal even when the model retyped a character.
  */
-export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]): Finding[] {
+export function matchFindingsToBlocks<T extends Pick<Finding, 'blockId' | 'quote' | 'charStart' | 'charEnd'>>(
+  findings: T[],
+  blocks: TextBlock[]
+): T[] {
   return findings.map((finding) => {
     const quote = (finding.quote || '').trim();
     if (quote.length === 0) return finding;
@@ -121,6 +127,29 @@ export function matchFindingsToBlocks(findings: Finding[], blocks: TextBlock[]):
 
     return finding;
   });
+}
+
+/**
+ * The audit's list of the sources the article invokes, held to what the text
+ * really contains: an entry is kept only if its quote is found in the article,
+ * because a source the model names but the text does not is not the article's
+ * source at all. Each is validated on its own, anchored with the article's own
+ * characters like a finding, listed once, in reading order, and capped.
+ */
+export function parseSourcing(raw: unknown[], blocks: TextBlock[]): SourcingEntry[] {
+  const seen = new Set<number>();
+  const entries: SourcingEntry[] = [];
+  for (const item of raw) {
+    const parsed = SourcingEntrySchema.safeParse(item);
+    if (!parsed.success) continue;
+    const [anchored] = matchFindingsToBlocks<SourcingEntry>([{ ...parsed.data }], blocks);
+    if (anchored.charStart === undefined) continue;
+    // One passage, one nature: a second reading of the same words is a contradiction, not more sources.
+    if (seen.has(anchored.charStart)) continue;
+    seen.add(anchored.charStart);
+    entries.push(anchored);
+  }
+  return entries.sort((a, b) => (a.charStart ?? 0) - (b.charStart ?? 0)).slice(0, MAX_SOURCING_ENTRIES);
 }
 
 /**
@@ -335,7 +364,8 @@ export function parseAndValidateLlmOutput(
         summary: typeof candidate.summary === 'string' ? candidate.summary : 'Analyse effectuée avec réserves.',
         scores: scoresParsed as RawLlmAnalysisResponse['scores'],
         findings: findingsParsed,
-        claims: []
+        claims: [],
+        sourcing: Array.isArray(candidate.sourcing) ? candidate.sourcing : []
       };
     } else {
       throw new Error(`Invalid Fourches Caudines LLM response structure: ${validationResult.error.message}`);
@@ -374,6 +404,7 @@ export function parseAndValidateLlmOutput(
     findings: matchedFindings,
     claims,
     research,
+    sourcing: parseSourcing(rawData.sourcing, input.blocks),
     meta: {
       model: options.modelName || 'llm-byok',
       promptVersion: PROMPT_VERSION,

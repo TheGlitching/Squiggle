@@ -466,8 +466,10 @@ export function Confidentialite() {
           Signaler un constat erroné. Sous chaque constat d’un rapport, sur le site et dans l’extension en mode hébergé,
           « Signaler une erreur » propose une courte liste de motifs. Le choix ajoute un à chacun de deux de ces totaux : l’un pour
           la catégorie du constat (sophisme, cadrage…), l’autre pour le motif. Rien d’autre ne part : ni le texte du
-          constat, ni l’article, ni son adresse, ni votre compte, et les deux totaux ne sont pas reliés entre eux. Avec
-          votre propre clé, l’extension ne propose pas ce signalement, puisqu’elle n’envoie rien à notre serveur.
+          constat, ni l’article, ni son adresse, ni votre compte, et les deux totaux ne sont pas reliés entre eux. De
+          même, sous « Sur quoi s’appuie le texte », « Signaler » à côté d’une nature de source (étude, média…) ajoute un
+          au seul total de cette nature, sans rien du passage ni de la source. Avec votre propre clé, l’extension ne
+          propose aucun de ces signalements, puisqu’elle n’envoie rien à notre serveur.
         </p>
       </Article>
     </LegalPage>

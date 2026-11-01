@@ -236,4 +236,14 @@ describe('short quotations', () => {
     const many = shortQuotes(report(Array.from({ length: 100 }, () => words(25)), 6_000));
     expect(many.findings[0].quote.split(' ')).toHaveLength(MIN_QUOTE_WORDS);
   });
+
+  it('holds the sources the text cites to the same ceiling, and counts them in the share', () => {
+    const served = shortQuotes({
+      ...report(Array.from({ length: 5 }, () => words(25)), 6_000),
+      sourcing: Array.from({ length: 5 }, () => ({ blockId: 'b1', quote: words(25), nature: 'aucune' as const })),
+    });
+    for (const quote of [...served.findings, ...served.sourcing!].map((q) => q.quote)) {
+      expect(quote.split(' ')).toHaveLength(10);
+    }
+  });
 });

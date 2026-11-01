@@ -288,8 +288,10 @@ l'extension en mode hébergé, « Signaler une erreur » propose une courte list
 motifs. Le choix ajoute un à chacun de deux de ces totaux : l'un pour la catégorie du constat
 (`flag_finding_<catégorie>`), l'autre pour le motif (`flag_reason_<motif>`). Rien d'autre
 ne part : ni le texte du constat, ni l'article, ni son adresse, ni votre compte, et les
-deux totaux ne sont pas reliés entre eux. En mode clé personnelle, l'extension ne propose
-pas ce signalement : elle n'envoie toujours rien à notre serveur.
+deux totaux ne sont pas reliés entre eux. De même, sous « Sur quoi s'appuie le texte »,
+« Signaler » à côté d'une nature de source ajoute un au seul total de cette nature
+(`flag_source_<nature>`), sans rien du passage ni de la source. En mode clé personnelle,
+l'extension ne propose aucun de ces signalements : elle n'envoie toujours rien à notre serveur.
 
 ## Les sous-traitants
 
