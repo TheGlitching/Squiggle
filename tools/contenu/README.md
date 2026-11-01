@@ -46,7 +46,12 @@ Monday in order:
    two days ahead at the least, and each Monday one week further, until it reaches four
    weeks and the three-week review window (`fillWindow`). A post on Instagram or Facebook
    gets its story the same evening (`post_type: story`), the 9:16 image the site's build
-   draws beside each carousel (`/og/social/<slug>/story.png`). Each post
+   draws beside each carousel (`/og/social/<slug>/story.png`). Facebook and Threads
+   bury links, so there only the piece of substance carries one (on Facebook two a
+   month at most, Meta's cap for Pages); every other post goes out native, with the
+   carousel on Facebook and one picture on Threads. Mastodon's hashtags are the three
+   most used of a closed list (`src/hashtags.ts`), measured each Monday on the public
+   tag API of three French-speaking instances. Each post
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),
    then a separate review that sees only the text, its source, its image and the
    editorial line. A refused post leaves its slot empty and is never rewritten.
