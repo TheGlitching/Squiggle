@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { MAX_MESSAGE_CHARS } from '../../shared/src/engine/message';
 import { ArticleExtractor } from '../../shared/src/extract/extractor';
 
 import { carriesPage, readFavori } from '../src/favori/article';
@@ -84,6 +85,15 @@ describe('readPage', () => {
     expect(html).not.toMatch(new RegExp(`${HIDDEN}|tracker|favicon|<style|<img`));
     expect(doc.querySelector('[data-squiggle-hidden]')).toBeNull();
     expect(doc.querySelector('img')).not.toBeNull();
+  });
+
+  it('does not scroll a social post into its comments', async () => {
+    const doc = page();
+    doc.querySelector('article')!.getBoundingClientRect = () => ({ bottom: 3000 }) as DOMRect;
+    Object.defineProperty(doc.documentElement, 'scrollHeight', { value: 5000 });
+    const win = windowOver(doc, { location: { href: 'https://www.instagram.com/p/DcqkO2BljsL/', hostname: 'www.instagram.com' } });
+    expect(await readPage(doc, win as unknown as Window)).toContain(PARAGRAPHS[0]);
+    expect(win.scrollBy).not.toHaveBeenCalled();
   });
 
   it('takes what is there at once when the page will not scroll', async () => {
@@ -187,5 +197,48 @@ describe('the bookmark on saved press pages', () => {
     expect(read.text.length).toBeGreaterThan(500);
     expect(read.title).toBe(extension.metadata.title.replace(/\s+/g, ' ').trim());
     expect(read.text).toBe(lines.join('\n'));
+  });
+});
+
+describe('the bookmark on a social post', () => {
+  // Public posts as the bookmark copied them, signed out, in Android's web view (`tests/fixtures/social/`).
+  const fixture = (name: string) => readFileSync(join(__dirname, '../../tests/fixtures/social', `${name}.html`), 'utf8');
+  const read = async (name: string, url: string) =>
+    readFavori(sharedParams({ search: '', hash: await pageFragment(fixture(name), url) }));
+
+  it('brings the whole Instagram caption, titled with the network and the account', async () => {
+    const post = await read('instagram-signed-out-post', 'https://www.instagram.com/p/DcqkO2BljsL/?igsh=xyz');
+    expect(post.title).toBe('Publication Instagram de NASA');
+    expect(post.network).toBe('Instagram');
+    expect(post.url).toBe('https://www.instagram.com/p/DcqkO2BljsL/');
+    expect(post.text.split('\n')[0]).toBe('Ad astra ⭐');
+    expect(post.text).toContain('Nancy Grace Roman Space Telescope');
+    expect(post.problem).toBeUndefined();
+  });
+
+  it.each([
+    ['x-signed-out-meta', 'https://x.com/NASA/status/2116263878807998722?s=46', 'Publication X de NASA (@NASA)', /^MAX POWER/],
+    ['threads-signed-out-post', 'https://www.threads.com/@nasa/post/DfKe2cBEYvb', 'Publication Threads de NASA (@nasa)', /^Watch live/],
+    ['tiktok-signed-out-video', 'https://www.tiktok.com/@nasa/video/7679483952507276558', 'Publication TikTok de NASA', /^A pretty historic day here at NASA 🏅💫$/],
+  ])('brings the post of %s, short enough to be read as a message', async (name, url, title, text) => {
+    const post = await read(name, url);
+    expect(post.title).toBe(title);
+    expect(post.text).toMatch(text);
+    expect(post.text.length).toBeLessThanOrEqual(MAX_MESSAGE_CHARS);
+  });
+
+  it('brings nothing of a Facebook post cut after its first line, and says why', async () => {
+    const post = await read('facebook-signed-out-post', 'https://www.facebook.com/story.php?story_fbid=1672153010946735&id=100044561550831');
+    expect(post).toMatchObject({ text: '', network: 'Facebook', problem: 'cut' });
+  });
+
+  it('brings nothing of a consent wall or a profile, not even the banner’s text', async () => {
+    const post = await read('facebook-consent', 'https://www.facebook.com/cookie/consent');
+    expect(post).toMatchObject({ text: '', problem: 'not_a_post' });
+  });
+
+  it('brings nothing of a YouTube Short, whose link is looked up instead', async () => {
+    const post = await read('youtube-short', 'https://m.youtube.com/shorts/-62C9R_41Sc');
+    expect(post).toMatchObject({ text: '', url: 'https://m.youtube.com/shorts/-62C9R_41Sc', problem: 'video' });
   });
 });

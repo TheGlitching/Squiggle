@@ -6,8 +6,11 @@
  * back where the reader was. The copy keeps what the extractor reads (the
  * text, the links, the head's metadata) and drops what it never reads, and
  * what the reader cannot see: the extractor that reads it on /analyser has no
- * styles to tell a hidden paragraph by.
+ * styles to tell a hidden paragraph by. A social post is not scrolled: it is
+ * at the top, and what scrolling renders below it is other people's comments.
  */
+
+import { SOCIAL_HOST } from '../../../shared/src/extract/socialPlatform';
 
 /** Long enough for a lazy site to render what scrolled into view. */
 const STEP_MS = 150;
@@ -48,9 +51,11 @@ export async function scrollThrough(article: Element, win: Window = window): Pro
 export async function readPage(doc: Document = document, win: Window = window): Promise<string> {
   // ponytail: the first <article> stands in for the extractor's container, which is too big to ship in the bookmark.
   const article = doc.querySelector('[itemprop="articleBody"], article') ?? doc.documentElement;
-  const top = win.scrollY;
-  await scrollThrough(article, win);
-  win.scrollTo(0, top);
+  if (!SOCIAL_HOST.test(win.location?.hostname ?? '')) {
+    const top = win.scrollY;
+    await scrollThrough(article, win);
+    win.scrollTo(0, top);
+  }
 
   const hidden: Element[] = [];
   for (const el of doc.body.querySelectorAll('*')) {
