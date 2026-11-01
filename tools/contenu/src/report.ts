@@ -16,7 +16,8 @@ import type { DeepResult } from './deep';
 import type { Lesson } from './memory';
 import type { PostRow } from './posts';
 import type { CommentRow } from './replies';
-import type { Facts, StrategyResult } from './strategy';
+import type { UnreadComments } from './replies';
+import { EVERY_NETWORK, type Facts, type StrategyResult } from './strategy';
 
 export const NETWORK_NAME: Record<Network, string> = { bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads', facebook: 'Facebook', instagram: 'Instagram', x: 'X' };
 /** Each network's own colour, for its dot: what the eye looks for in a list of posts. */
@@ -32,7 +33,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const firstOf = (s: string) => s.replace(/^1 /, '1er ');
 export const parisDay = (iso: string) => cap(firstOf(DAY_LONG.format(new Date(iso)).replace(/ 1 /, ' 1er ')));
 export const parisHour = (iso: string) => HOUR.format(new Date(iso)).replace(':', ' h ').replace(/ h 00$/, ' h');
-export const parisDate = (iso: string) => `${DAY_LONG.format(new Date(iso))} à ${parisHour(iso)}`;
+export const parisDate = (iso: string) => `${parisDay(iso).toLowerCase()} à ${parisHour(iso)}`;
 const shortDay = (iso: string) => firstOf(DAY_SHORT.format(new Date(iso)));
 const money = (n: number) => (Number.isFinite(n) ? `${n.toFixed(2).replace('.', ',')} $` : 'inconnu');
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n > 1 ? many : one}`;
@@ -51,6 +52,10 @@ export interface ReportInput {
   strategy: StrategyResult | null;
   deep: DeepResult | null;
   entering: PostRow[];
+  /** Every post waiting for the owner's « ok » (D8), this week's and those still unapproved; the entering ones when absent. */
+  waiting?: PostRow[];
+  /** Held posts whose hour came without an « ok », since the last run. */
+  expired?: number;
   comments: CommentRow[];
   toRead: Record<string, number>;
   lessons: Lesson[];
@@ -111,10 +116,13 @@ export function decisionsFor(input: ReportInput): Decision[] {
 }
 
 /** What the owner is expected to do, in one line. */
-export function expectation(decisions: Decision[], paused: boolean): string {
+export function expectation(decisions: Decision[], paused: boolean, waiting = 0, example: number | null = null): string {
   if (paused) return 'La routine est suspendue. Répondez « reprendre » pour qu’elle reprenne.';
-  if (decisions.length === 0) return 'Rien à faire cette semaine : si les publications vous conviennent, elles partiront seules.';
-  return decisions.length === 1 ? 'Une décision vous attend, juste en dessous.' : `${plural(decisions.length, 'décision')} vous attendent, juste en dessous.`;
+  const approve = waiting
+    ? `${plural(waiting, 'publication')} ${waiting > 1 ? 'attendent' : 'attend'} votre accord : répondez « ok » pour ${waiting > 1 ? 'les' : 'la'} programmer${example !== null ? `, ou « ok sauf ${example} » pour en écarter une` : ''}. Sans réponse, rien ne part.`
+    : '';
+  const decide = decisions.length === 0 ? '' : decisions.length === 1 ? 'Une décision vous attend, juste en dessous.' : `${plural(decisions.length, 'décision')} vous attendent, juste en dessous.`;
+  return [approve, decide].filter(Boolean).join(' ') || 'Rien à faire cette semaine.';
 }
 
 /** A refused post's reason, said plainly. */
@@ -164,7 +172,19 @@ const TEST_NAME: Record<string, (v: string) => string> = {
   heure: (v) => `publier ${v.startsWith('-') ? 'plus tôt' : 'plus tard'} (${v.replace(/^[+-]/, '')} minutes)`,
   question_finale: (v) => (v === 'avec' ? 'finir par une question' : 'ne pas finir par une question'),
   image: (v) => (v === 'avec' ? 'ajouter une image' : 'sans image'),
+  format: (v) => (v === 'carrousel' ? 'plusieurs images plutôt qu’une' : 'une seule image'),
+  lien: (v) => (v === 'avec' ? 'toujours un lien' : 'sans lien'),
+  mots_diese: (v) => (v === 'avec' ? 'avec mots-dièse' : 'sans mot-dièse'),
 };
+
+const SIGNAL_NAME: Record<string, string> = { visites: 'jugé sur les visites', conversation: 'jugé sur les réponses et les partages', abonnés: 'jugé sur les abonnés gagnés' };
+
+function testLine(t: Facts['tests'][number]): string {
+  const what = (TEST_NAME[t.kind] ?? (() => t.kind))(t.value);
+  const where = t.network === EVERY_NETWORK ? `sur tous les réseaux, une semaine sur deux, ${what}` : `sur ${NETWORK_NAME[t.network]} : ${what}`;
+  const result = t.verdict ? `, résultat : ${t.verdict}${t.signal ? ` (${SIGNAL_NAME[t.signal]})` : ''}` : '';
+  return `Essai en cours ${where}, semaine ${t.week} sur ${t.weeks}${result}.`;
+}
 
 /** Everything both renderings say, already in plain French. */
 export interface ReportModel {
@@ -189,7 +209,10 @@ export interface ReportModel {
 
 export function reportModel(input: ReportInput, summary: Summary | null): ReportModel {
   const f = input.facts;
-  const accepted = input.entering.filter((x) => x.status !== 'refuse' && x.num !== null).sort((a, b) => a.slot_at.localeCompare(b.slot_at));
+  const accepted = (input.waiting ?? input.entering.filter((x) => x.status !== 'refuse' && x.num !== null)).slice().sort((a, b) => a.slot_at.localeCompare(b.slot_at));
+  const fresh = new Set(input.entering.map((x) => x.id));
+  const older = accepted.filter((x) => !fresh.has(x.id)).length;
+  const example = accepted.find((x) => x.angle !== 'story')?.num ?? accepted[0]?.num ?? null;
   const refused = input.entering.filter((x) => x.status === 'refuse');
   const decisions = decisionsFor(input);
   // The seven days the figures cover: from a week ago to yesterday.
@@ -199,6 +222,23 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
   if (f?.networkVisits) figures.push({ label: 'Visites venues des réseaux', value: String(f.networkVisits.week), trend: trend(f.networkVisits.week, f.networkVisits.previous) });
   if (f?.google) figures.push({ label: 'Visites venues de Google', value: String(f.google.clicks), trend: `pour ${plural(f.google.impressions, 'apparition')} dans les résultats` });
   if (f?.accounts) figures.push({ label: 'Comptes créés sur le site', value: String(f.accounts.week), trend: trend(f.accounts.week, f.accounts.previous) });
+  const gains = f ? NETWORKS.filter((n) => f.networks[n].followersGained != null) : [];
+  if (f && gains.length) {
+    figures.push({
+      label: 'Abonnés gagnés sur les réseaux',
+      value: String(gains.reduce((s, n) => s + f.networks[n].followersGained!, 0)),
+      trend: gains.map((n) => `${NETWORK_NAME[n]} ${f.networks[n].followersGained}`).join(', '),
+    });
+  }
+  const talked = f ? NETWORKS.filter((n) => f.networks[n].conversation?.posts) : [];
+  if (f && talked.length) {
+    const c = (n: Network) => f.networks[n].conversation!;
+    figures.push({
+      label: 'Réponses et partages sous les publications',
+      value: String(talked.reduce((s, n) => s + c(n).replies + c(n).shares, 0)),
+      trend: talked.map((n) => `${NETWORK_NAME[n]} ${c(n).replies + c(n).shares}`).join(', '),
+    });
+  }
 
 
   const d = input.deep;
@@ -231,13 +271,14 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
     `Dépenses du mois : ${money(input.health.spend.openrouter)} pour la rédaction (plafond ${money(CAPS.openrouterMonthly)}), ${money(input.health.spend.x)} pour X (plafond ${money(CAPS.xMonthly)}).`,
     ...(failedSteps.length ? [`À noter : ${failedSteps.map((s) => s.name).join(', ')} n’${failedSteps.length > 1 ? 'ont' : 'a'} pas pu se faire cette semaine.`] : []),
     ...(input.health.draftMode ? ['Après plusieurs retraits la même semaine, les publications entrent dans Postiz en brouillon, à valider vous-même.'] : []),
+    ...(input.expired ? [`${plural(input.expired, 'publication')} ${input.expired > 1 ? 'sont arrivées' : 'est arrivée'} à son heure sans votre accord : ${input.expired > 1 ? 'elles ne sont pas parties' : 'elle n’est pas partie'}, le créneau est resté vide.`] : []),
   ];
 
   const visits = f?.networkVisits?.week;
   const fallback: Summary = {
     essentiel: [
       visits === undefined ? 'Les chiffres de la semaine n’ont pas pu être lus.' : `La semaine dernière, ${plural(visits, 'visite')} ${visits > 1 ? 'sont venues' : 'est venue'} des réseaux.`,
-      accepted.length ? `${plural(accepted.length, 'publication')} entrent dans la file, à partir du ${shortDay(accepted[0].slot_at)}.` : 'Aucune publication n’entre dans la file cette semaine.',
+      accepted.length ? `${plural(accepted.length, 'publication')} ${accepted.length > 1 ? 'attendent' : 'attend'} votre accord, à partir du ${shortDay(accepted[0].slot_at)}.` : 'Aucune publication n’attend votre accord cette semaine.',
       d?.subject && d.production ? `Un contenu est proposé pour le site : ${d.production.label}.` : 'Pas de nouveau contenu pour le site cette semaine.',
     ],
     lecture: '',
@@ -245,21 +286,27 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
   const s = summary ?? fallback;
 
   return {
-    subject: `Squiggle, votre semaine ${period}${decisions.length ? ` : ${plural(decisions.length, 'décision')} à prendre` : ''}`,
+    subject: `Squiggle, votre semaine ${period}${accepted.length ? ` : ${plural(accepted.length, 'publication')} à valider` : ''}${decisions.length ? `${accepted.length ? ',' : ' :'} ${plural(decisions.length, 'décision')} à prendre` : ''}`,
     banner: input.dry ? 'Version d’essai : rien n’a été publié, programmé ni proposé. Ce qui suit montre ce qui serait parti.' : null,
     period,
     essentiel: s.essentiel,
-    expectation: expectation(decisions, input.health.paused),
+    expectation: expectation(decisions, input.health.paused, accepted.length, example),
     decisions,
     figures,
     bars: f ? NETWORKS.map((n) => ({ label: NETWORK_NAME[n], value: f.networks[n].visits })) : [],
     lecture: s.lecture,
     tooEarly: f && f.weeksOfData < 4 ? 'Il y a encore trop peu de semaines de publications pour tirer des conclusions : ces chiffres servent de point de départ.' : null,
-    tests: (f?.tests ?? []).map((t) => `Essai en cours sur ${NETWORK_NAME[t.network]} : ${(TEST_NAME[t.kind] ?? (() => t.kind))(t.value)}, semaine ${t.week} sur 4${t.verdict ? `, résultat : ${t.verdict}` : ''}.`),
+    tests: (f?.tests ?? []).map(testLine),
     article,
     queue: accepted.length
       ? {
-          intro: `${plural(accepted.length, 'publication')} entrent dans la file. Elles partiront du ${shortDay(accepted[0].slot_at)} au ${shortDay(accepted[accepted.length - 1].slot_at)}. Pour en retirer une, répondez « retire » et son numéro (par exemple « retire ${accepted[0].num} »), ou supprimez-la dans Postiz.${input.ramping ? ' La routine démarre : la file se remplit une semaine à la fois, et le délai avant parution remonte chaque lundi jusqu’à quatre semaines.' : ''}`,
+          intro: [
+            `${plural(accepted.length, 'publication')} ${accepted.length > 1 ? 'attendent' : 'attend'} votre accord, du ${shortDay(accepted[0].slot_at)} au ${shortDay(accepted[accepted.length - 1].slot_at)}${older ? `, dont ${older} déjà ${older > 1 ? 'montrées' : 'montrée'} et toujours sans réponse` : ''}.`,
+            `Rien ne part sans votre « ok » : une publication dont l’heure arrive avant ne part pas. Pour en écarter, « ok sauf ${example ?? accepted[0].num} » ; une fois programmées, « retire » et le numéro (par exemple « retire ${example ?? accepted[0].num} »), ou supprimez-la dans Postiz.`,
+            input.ramping ? 'La routine démarre : la file se remplit une semaine à la fois, et le délai avant parution remonte chaque lundi jusqu’à quatre semaines.' : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
           days: byDay(accepted),
         }
       : null,
@@ -267,7 +314,7 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
     learned,
     footer,
     stop: [
-      'Tout suspendre : répondez « stop » à cet e-mail. Plus rien n’est ajouté, ce qui est déjà prévu continue de partir. « reprendre » relance.',
+      'Tout suspendre : répondez « stop » à cet e-mail. Plus rien n’est ajouté, ce qui est déjà programmé continue de partir. « reprendre » relance.',
       'Retirer une publication : supprimez-la dans l’appli Postiz, ou répondez « retire » et son numéro.',
       'En dernier recours : éteignez le serveur depuis l’appli OVH. Plus rien ne part.',
     ],
@@ -295,8 +342,8 @@ export function renderText(m: ReportModel): string {
   if (m.bars.length) out.push(`Par réseau : ${m.bars.map((b) => `${b.label} ${b.value}`).join(', ')}`);
   if (m.lecture) out.push('', m.lecture);
   if (m.tooEarly) out.push('', m.tooEarly);
-  out.push(...m.tests, '', 'LE CONTENU DE LA SEMAINE', '', m.article, '', 'CE QUI VA PARTIR', '');
-  if (!m.queue) out.push('Rien de nouveau dans la file cette semaine.', '');
+  out.push(...m.tests, '', 'LE CONTENU DE LA SEMAINE', '', m.article, '', 'À VALIDER', '');
+  if (!m.queue) out.push('Aucune publication n’attend votre accord.', '');
   else {
     out.push(m.queue.intro, '');
     for (const day of m.queue.days) {
@@ -410,8 +457,8 @@ ${d.link ? `<a href="${esc(d.link.href)}" style="display:inline-block;margin-top
 
   parts.push(h2('Le contenu de la semaine'), para(m.article));
 
-  parts.push(h2('Ce qui va partir'));
-  if (!m.queue) parts.push(para('Rien de nouveau dans la file cette semaine.'));
+  parts.push(h2('À valider'));
+  if (!m.queue) parts.push(para('Aucune publication n’attend votre accord.'));
   else {
     parts.push(para(m.queue.intro));
     for (const day of m.queue.days) parts.push(`<div class="fg" style="margin:22px 0 10px;font:700 17px/1.3 ${SANS};color:${C.fg}">${esc(day.day)}</div>`, ...day.posts.map(postCard));
@@ -488,16 +535,17 @@ export function buildLaunch(posts: PostRow[], dry: boolean): { subject: string; 
   return { subject: model.subject, text, html: renderHtml(model, true) };
 }
 
-/** The short e-mail that shows a fresh page's posts, 48 hours before the first goes out. */
+/** The short e-mail that shows a fresh page's posts, held for the owner's « ok », 48 hours before the first could go out. */
 export function buildNotice(title: string, path: string, posts: PostRow[], dry: boolean): { subject: string; text: string; html: string } {
   const list = posts.filter((x) => x.num !== null).sort((a, b) => a.slot_at.localeCompare(b.slot_at));
-  const intro = `« ${title} » est en ligne sur le site. ${plural(list.length, 'publication')} ${list.length > 1 ? 'vont' : 'va'} la faire connaître cette semaine, la première au plus tôt dans 48 heures. Pour en retirer une, répondez « retire » et son numéro, ou supprimez-la dans Postiz.`;
+  const example = list.find((x) => x.angle !== 'story')?.num ?? list[0]?.num ?? 1;
+  const intro = `« ${title} » est en ligne sur le site. ${plural(list.length, 'publication')} ${list.length > 1 ? 'peuvent' : 'peut'} la faire connaître cette semaine, la première au plus tôt dans 48 heures.`;
   const model: ReportModel = {
-    subject: `Squiggle : « ${title} » part sur les réseaux`,
+    subject: `Squiggle : « ${title} », publications à valider`,
     banner: dry ? 'Version d’essai : rien n’a été programmé.' : null,
     period: '',
     essentiel: [intro],
-    expectation: 'Rien à faire si elles vous conviennent.',
+    expectation: `Répondez « ok » pour les programmer, ou « ok sauf ${example} » pour en écarter une. Sans réponse, rien ne part.`,
     decisions: [],
     figures: [],
     bars: [],
@@ -511,11 +559,77 @@ export function buildNotice(title: string, path: string, posts: PostRow[], dry: 
     footer: [],
     stop: [],
   };
-  const text = [intro, '', ...list.map((x) => `[${x.num}] ${NETWORK_NAME[x.network]}, ${parisDate(x.slot_at)}\n${x.text}\n`)].join('\n');
+  const text = [intro, '', `> ${model.expectation}`, '', ...list.map((x) => `[${x.num}] ${NETWORK_NAME[x.network]}, ${parisDate(x.slot_at)}\n${x.text}\n`)].join('\n');
   return { subject: model.subject, text, html: renderHtml(model, true) };
 }
 
 export function buildReport(input: ReportInput, summary: Summary | null): { subject: string; text: string; html: string; decisions: Decision[] } {
   const model = reportModel(input, summary);
   return { subject: model.subject, text: renderText(model), html: renderHtml(model), decisions: model.decisions };
+}
+
+const CATEGORY_NAME: Record<string, string> = {
+  question: 'question',
+  objection: 'objection',
+  correction: 'correction',
+  demande_sujet: 'demande de sujet',
+  eloge: 'compliment',
+  hostile: 'hostile',
+  autre: 'autre',
+};
+
+/**
+ * The daily e-mail of comments (A3, D1): every new message, its link, and the
+ * reply the rules call for, to post by hand from the app the same day. Sent
+ * only when something new arrived. An « ok » in reply to it approves nothing
+ * (`inbox.ts`): it shows no post.
+ */
+export function buildReplies(comments: CommentRow[], unread: UnreadComments[], waiting: number, dry: boolean): { subject: string; text: string; html: string } {
+  const drafted = comments.filter((c) => c.draft).length;
+  const total = comments.length + unread.reduce((s, u) => s + u.added, 0);
+  const subject = drafted ? `Squiggle, réponses à faire : ${plural(drafted, 'brouillon')}` : `Squiggle : ${plural(total, 'message')} ${total > 1 ? 'reçus' : 'reçu'}`;
+  const intro = `${plural(total, 'nouveau message', 'nouveaux messages')} sous les publications de Squiggle. La routine ne répond jamais seule : répondez depuis l’appli du réseau, aujourd’hui si possible, en reprenant ou en corrigeant la réponse proposée.`;
+  const item = (c: CommentRow) => ({
+    head: `${NETWORK_NAME[c.network as Network] ?? c.network}, ${c.author}, ${parisDate(c.created_at)} (${CATEGORY_NAME[c.category ?? 'autre'] ?? c.category})`,
+    text: c.text,
+    label: c.draft ? 'Réponse proposée :' : c.category === 'hostile' ? 'Pas de réponse : ne pas entrer dans l’échange.' : 'Pas de réponse publique conseillée.',
+    draft: c.draft,
+    link: c.link ?? c.post_ref,
+  });
+  const meta = unread.map((u) => ({
+    line: `${NETWORK_NAME[u.network]} : ${plural(u.added, 'nouveau commentaire', 'nouveaux commentaires')} sous la publication du ${parisDay(u.publishedAt).toLowerCase()}, à lire dans l’appli (son texte n’est pas accessible à la routine).`,
+    link: u.url,
+  }));
+  const reminder = waiting ? `Par ailleurs, ${plural(waiting, 'publication')} ${waiting > 1 ? 'attendent' : 'attend'} toujours votre accord : répondez « ok » au compte rendu du lundi, sans quoi rien ne part.` : '';
+  const stop = 'Répondre « stop » à cet e-mail suspend la routine.';
+  const banner = dry ? 'Version d’essai : les messages sont réels, rien n’a été enregistré comme montré.' : '';
+
+  const text = [
+    ...(banner ? [`[ ${banner} ]`, ''] : []),
+    intro,
+    '',
+    ...comments.flatMap((c) => {
+      const i = item(c);
+      return [i.head, `« ${i.text} »`, i.draft ? `${i.label} « ${i.draft} »` : i.label, i.link, ''];
+    }),
+    ...meta.flatMap((m) => [m.line, ...(m.link ? [m.link] : []), '']),
+    ...(reminder ? [reminder, ''] : []),
+    stop,
+  ].join('\n');
+
+  const parts = [
+    ...(banner ? [`<div style="margin:0 0 20px;padding:12px 14px;border-radius:8px;background:#1f1608;border:1px solid #d97706;font:600 15px/1.45 ${SANS};color:#fbbf24">${esc(banner)}</div>`] : []),
+    para(intro, 17),
+    ...comments.map((c) => {
+      const i = item(c);
+      return card(`<div class="muted" style="font:400 14px/1.4 ${SANS};color:${C.muted}">${esc(i.head)}</div>
+<div class="fg" style="margin-top:8px;font:400 16px/1.5 ${SERIF};color:${C.fg}">« ${esc(i.text).replace(/\n/g, '<br>')} »</div>
+<div class="accent" style="margin-top:12px;font:700 14px/1.4 ${SANS};color:${C.accentInk}">${esc(i.label)}</div>${i.draft ? `<div class="fg" style="margin-top:4px;padding:10px 12px;border-left:3px solid ${C.accent};font:400 16px/1.5 ${SANS};color:${C.fg}">${esc(i.draft)}</div>` : ''}
+<a href="${esc(i.link)}" style="display:inline-block;margin-top:12px;padding:11px 16px;border-radius:8px;background:${C.accent};color:${C.accentFg};font:700 15px/1.2 ${SANS};text-decoration:none">Ouvrir le message</a>`);
+    }),
+    ...meta.map((m) => card(`<div class="fg" style="font:400 16px/1.5 ${SANS};color:${C.fg}">${esc(m.line)}</div>${m.link ? `<a href="${esc(m.link)}" style="display:inline-block;margin-top:12px;padding:11px 16px;border-radius:8px;background:${C.accent};color:${C.accentFg};font:700 15px/1.2 ${SANS};text-decoration:none">Ouvrir la publication</a>` : ''}`)),
+    ...(reminder ? [`<div class="note" style="margin:16px 0 0;padding:12px 14px;border-radius:8px;background:${C.accentSoft};border-left:4px solid ${C.accent};font:600 16px/1.45 ${SANS};color:${C.accentInk}">${esc(reminder)}</div>`] : []),
+    small(stop),
+  ];
+  return { subject, text, html: shell(subject, parts) };
 }

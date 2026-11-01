@@ -9,11 +9,13 @@ import { metricTotal, Postiz } from '../postiz';
 import { collectBluesky, type BskyData } from './bluesky';
 import { collectCloudflare, type CfData } from './cloudflare';
 import { collectGsc, type GscData } from './gsc';
+import { collectMastodon, type MastoData } from './mastodon';
 import { collectMetrics, type SiteMetrics } from './metrics';
 
 export interface PostizStats {
   networks: Partial<Record<Network, { integrationId: string; followers: number | null; impressions: number | null }>>;
-  posts: Array<{ id: string; network: Network; publishDate: string; url?: string; likes: number | null; comments: number | null; impressions: number | null }>;
+  /** `shares` and `saves` were added on 1 November 2026: older snapshots lack them. */
+  posts: Array<{ id: string; network: Network; publishDate: string; url?: string; likes: number | null; comments: number | null; impressions: number | null; shares?: number | null; saves?: number | null }>;
 }
 
 export interface Week {
@@ -24,9 +26,10 @@ export interface Week {
   metrics4?: SiteMetrics;
   postiz?: PostizStats;
   bluesky?: BskyData;
+  mastodon?: MastoData;
 }
 
-export const SOURCES = ['gsc', 'cloudflare', 'metrics1', 'metrics4', 'postiz', 'bluesky'] as const;
+export const SOURCES = ['gsc', 'cloudflare', 'metrics1', 'metrics4', 'postiz', 'bluesky', 'mastodon'] as const;
 export type SourceName = (typeof SOURCES)[number];
 
 export function saveSnapshot(ctx: Ctx, source: SourceName, week: string, payload: unknown): void {
@@ -56,7 +59,49 @@ export function loadWeek(ctx: Pick<Ctx, 'db'>, week: string): Week {
     metrics4: snapshot(ctx, 'metrics4', week),
     postiz: snapshot(ctx, 'postiz', week),
     bluesky: snapshot(ctx, 'bluesky', week),
+    mastodon: snapshot(ctx, 'mastodon', week),
   };
+}
+
+/** What a network's posts of the week drew besides visits: the signals the platforms say they reward. */
+export interface Engagement {
+  posts: number;
+  /** Replies or comments. */
+  replies: number;
+  /** Reposts, quotes, shares. */
+  shares: number;
+  likes: number;
+  /** Instagram's two named signals, saves and shares, read against the reach. */
+  saves: number | null;
+  reach: number | null;
+}
+
+/**
+ * A network's engagement on the posts published in the seven days a week's
+ * snapshot covers; null when the source was not collected. Counters are read
+ * once, on the Monday: a post of Sunday has had a day, one of Monday a week.
+ */
+export function engagementOf(w: Week, network: Network): Engagement | null {
+  const from = Date.parse(`${w.week}T00:00:00Z`) - 7 * 86_400_000;
+  const inWeek = (iso: string) => Date.parse(iso) >= from && Date.parse(iso) < from + 7 * 86_400_000;
+  const sum = <T>(list: T[], f: (x: T) => number | null | undefined) => list.reduce((s, x) => s + (f(x) ?? 0), 0);
+  if (network === 'bluesky' || network === 'mastodon') {
+    const data = network === 'bluesky' ? w.bluesky : w.mastodon;
+    if (!data) return null;
+    const posts = data.posts.filter((p) => inWeek(p.createdAt));
+    return { posts: posts.length, replies: sum(posts, (p) => p.replies), shares: sum(posts, (p) => p.reposts + ('quotes' in p ? p.quotes : 0)), likes: sum(posts, (p) => p.likes), saves: null, reach: null };
+  }
+  if (!w.postiz) return null;
+  const posts = w.postiz.posts.filter((p) => p.network === network);
+  const known = (f: (p: (typeof posts)[number]) => number | null | undefined) => (posts.some((p) => typeof f(p) === 'number') ? sum(posts, f) : null);
+  return { posts: posts.length, replies: sum(posts, (p) => p.comments), shares: sum(posts, (p) => p.shares), likes: sum(posts, (p) => p.likes), saves: known((p) => p.saves), reach: known((p) => p.impressions) };
+}
+
+/** A network's followers as a week's snapshot read them. */
+export function followersOf(w: Week, network: Network): number | null {
+  if (network === 'bluesky') return w.bluesky?.followers ?? null;
+  if (network === 'mastodon') return w.mastodon?.followers ?? null;
+  return w.postiz?.networks[network]?.followers ?? null;
 }
 
 /** What X statistics the routine has read this month, in dollars. */
@@ -104,6 +149,8 @@ async function collectPostiz(ctx: Ctx): Promise<PostizStats> {
       likes: metricTotal(metrics, /like|j.aime|reaction/i, 'sum'),
       comments: metricTotal(metrics, /comment|repl/i, 'sum'),
       impressions: metricTotal(metrics, /impression|views|reach/i, 'sum'),
+      shares: metricTotal(metrics, /share|repost|retweet|quote|partage/i, 'sum'),
+      saves: metricTotal(metrics, /save|enregistr|bookmark/i, 'sum'),
     });
   }
   return stats;
@@ -124,5 +171,7 @@ export async function collectAll(ctx: Ctx): Promise<Week> {
   saveSnapshot(ctx, 'postiz', week, postiz);
   const bluesky = await step(ctx, 'lecture de Bluesky', () => collectBluesky(ctx, addDays(ctx.now, -28)), (d) => `${d.posts.length} publications sur 4 semaines`);
   saveSnapshot(ctx, 'bluesky', week, bluesky);
-  return { week, gsc, cloudflare, metrics1, metrics4, postiz, bluesky };
+  const mastodon = await step(ctx, 'lecture de Mastodon', () => collectMastodon(ctx, addDays(ctx.now, -28)), (d) => `${d.posts.length} publications sur 4 semaines`);
+  saveSnapshot(ctx, 'mastodon', week, mastodon);
+  return { week, gsc, cloudflare, metrics1, metrics4, postiz, bluesky, mastodon };
 }

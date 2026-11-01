@@ -23,7 +23,7 @@ import { askJson } from './llm';
 import { addDirective, addLesson, consigne } from './memory';
 import { Postiz } from './postiz';
 import { GitHub } from './github';
-import { approveLaunch, pendingLaunch } from './launch';
+import { approveHeld, pendingApproval } from './launch';
 import type { PostRow } from './posts';
 import type { Decision } from './report';
 
@@ -105,7 +105,7 @@ async function apply(ctx: Ctx, text: string): Promise<{ category: MailCategory; 
       if (!ctx.dry) writeFileSync(pauseFile(ctx), `Suspendu par e-mail le ${ctx.now.toISOString()}\n`);
       return { category, outcome: 'routine suspendue' };
     case 'retirer_publication': {
-      const future = ctx.db.all<PostRow>("SELECT * FROM posts WHERE slot_at > ? AND status IN ('programme', 'brouillon_postiz')", ctx.now.toISOString());
+      const future = ctx.db.all<PostRow>("SELECT * FROM posts WHERE slot_at > ? AND status IN ('programme', 'brouillon_postiz', 'en_attente')", ctx.now.toISOString());
       const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       const matches = future.filter(
         (p) =>
@@ -144,7 +144,7 @@ async function apply(ctx: Ctx, text: string): Promise<{ category: MailCategory; 
 
 /**
  * The short answers the report asks for, read without a model: « ok » to the
- * launch (« ok sauf 3 »), « retire 4 » (several numbers allowed), « oui B »,
+ * posts waiting for approval, the launch's or the week's (« ok sauf 3 »), « retire 4 » (several numbers allowed), « oui B »,
  * « non B ». One a line. Each may be written naturally: « ok tout part »,
  * « parfait, merci », « retirez la 4 et la 7 svp », « oui pour la B, merci ».
  * What follows the command must only be words that do not change it; a line
@@ -154,7 +154,7 @@ async function apply(ctx: Ctx, text: string): Promise<{ category: MailCategory; 
  * model to class.
  */
 export interface Commands {
-  /** « ok » to the launch, with the numbers set aside (« ok sauf 3 »). */
+  /** « ok » to the posts waiting for approval, with the numbers set aside (« ok sauf 3 »). */
   launch: { except: number[] } | null;
   retire: number[];
   answers: Array<{ yes: boolean; letter: string }>;
@@ -165,7 +165,7 @@ export interface Commands {
 
 /** Words that may follow a short answer without changing it. */
 const POLITE = new Set(
-  'tout tous toutes part partent partir peut peuvent c est bon bonne bons pour moi nous merci beaucoup bien tres le la les l lancement on y va vas allez allons ca marche parfait top super nickel ok okay oui go valide d accord et alors envoie envoyez envoyer publie publiez lance lancez programme programmez bravo cordialement journee soiree s il te vous plait svp stp a toi vos votre ton tes lui de du ces ce cela'.split(' '),
+  'tout tous toutes part partent partir peut peuvent c est bon bonne bons pour moi nous merci beaucoup bien tres le la les l lancement on y va vas allez allons ca marche parfait top super nickel ok okay oui go valide d accord et alors envoie envoyez envoyer publie publiez lance lancez programme programmez bravo cordialement journee soiree semaine cette s il te vous plait svp stp a toi vos votre ton tes lui de du ces ce cela'.split(' '),
 );
 const AGREE = /^(?:ok(?:ay)?|d'accord|dac|go|valid\w*|oui|parfait|top|super|nickel|banco|c'est bon|ca marche|vas-y|allez-y)(?![\w'])/;
 const NUMBERS = /((?:(?:la|le|les|n°|numeros?|publications?)\s+)*\d+(?:\s*(?:,|et|&)?\s*(?:(?:la|le|les|n°|numeros?)\s+)*\d+)*)/.source;
@@ -222,11 +222,18 @@ export function notUnderstood(u: Commands['unclear'][number]): string {
   return `« ${u.line.slice(0, 100)} » pas compris, rien n’est appliqué : merci de répondre ${ask}`;
 }
 
-async function applyCommands(ctx: Ctx, c: Commands): Promise<string[]> {
+/**
+ * E-mails that show no post to approve: an « ok » in reply to one is a thank
+ * you, never an approval (« ok merci » under the day's comments).
+ */
+const NOT_AN_APPROVAL = /réponses à faire|messages? reçus?|alerte/i;
+
+async function applyCommands(ctx: Ctx, c: Commands, subject = ''): Promise<string[]> {
   const outcomes: string[] = [];
-  if (c.launch) outcomes.push(`lancement : ${await approveLaunch(ctx, c.launch.except)}`);
+  if (c.launch && NOT_AN_APPROVAL.test(subject)) outcomes.push('« ok » en réponse à un e-mail qui ne montrait aucune publication : rien n’est validé. Pour valider les publications en attente, répondez « ok » au compte rendu du lundi');
+  else if (c.launch) outcomes.push(`publications : ${await approveHeld(ctx, c.launch.except)}`);
   for (const num of c.retire) {
-    const p = ctx.db.get<PostRow>("SELECT * FROM posts WHERE num = ? AND status IN ('programme', 'brouillon_postiz', 'propose') AND slot_at > ?", num, ctx.now.toISOString());
+    const p = ctx.db.get<PostRow>("SELECT * FROM posts WHERE num = ? AND status IN ('programme', 'brouillon_postiz', 'propose', 'en_attente') AND slot_at > ?", num, ctx.now.toISOString());
     if (!p) {
       outcomes.push(`publication ${num} introuvable, ou déjà partie`);
       continue;
@@ -262,11 +269,11 @@ export async function readOwnerMail(ctx: Ctx): Promise<number> {
   const replies = (await listReplies(ctx)).sort((a, b) => a.value.receivedAt.localeCompare(b.value.receivedAt));
   for (const { key, value } of replies) {
     const commands = parseCommands(value.text);
-    // A launch is waiting while this reply says nothing the program can act on: say so rather than file it in silence.
-    const waiting = !commands.launch && pendingLaunch(ctx).length > 0;
-    const done = await applyCommands(ctx, commands).catch((e: Error) => [`illisible : ${e.message}`]);
+    // Posts are waiting while this reply says nothing the program can act on: say so rather than file it in silence.
+    const waiting = !commands.launch && pendingApproval(ctx).length > 0;
+    const done = await applyCommands(ctx, commands, value.subject).catch((e: Error) => [`illisible : ${e.message}`]);
     const notes = commands.unclear.map(notUnderstood);
-    if (waiting && !commands.unclear.some((u) => u.kind === 'launch')) notes.push('le lancement attend toujours votre accord : merci de répondre « ok » ou « ok sauf N »');
+    if (waiting && !commands.unclear.some((u) => u.kind === 'launch')) notes.push('des publications attendent toujours votre accord : merci de répondre « ok » ou « ok sauf N » au compte rendu');
     const rest = commands.rest ? await apply(ctx, commands.rest).catch((e: Error) => ({ category: 'autre' as MailCategory, outcome: `illisible : ${e.message}` })) : null;
     // A short answer with a word of thanks under it is a short answer.
     const extra = rest && !((done.length || notes.length) && rest.category === 'autre') ? rest : null;

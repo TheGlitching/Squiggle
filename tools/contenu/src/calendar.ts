@@ -48,7 +48,7 @@ export const CALENDAR: readonly Slot[] = [
   { network: 'instagram', weekday: 5, time: '19:00', pillar: 'produit-ou-classe', angle: 'page' },
 ];
 
-/** A post enters the queue at least this far ahead: three weeks to say no before it goes out (D2). */
+/** A post is prepared at least this far ahead: three weeks to read it and answer « ok » (D8). */
 export const REVIEW_DAYS = 21;
 
 /** The UTC instant of a wall-clock time in Paris, on a `YYYY-MM-DD` day, daylight saving included. */

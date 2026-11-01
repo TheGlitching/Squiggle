@@ -59,6 +59,28 @@ describe('a post’s pictures', () => {
     expect(chooseImages('threads', 'page', imgs, { ...none, image: 'avec' }, 'required')).toEqual([img(2)]);
     expect(chooseImages('threads', 'question', imgs, { ...none, image: 'sans' }, 'none')).toEqual([]);
   });
+
+  it('turns one picture into the carousel, or the carousel into one picture, under a format test', () => {
+    expect(chooseImages('bluesky', 'exemple', imgs, { ...none, format: 'carrousel' }, 'required')).toEqual(imgs.slides);
+    expect(chooseImages('facebook', 'long', imgs, { ...none, format: 'image' }, 'none')).toEqual([img(1)]);
+    expect(chooseImages('facebook', 'page', imgs, { ...none, format: 'carrousel' }, 'required')).toEqual([]);
+    expect(chooseImages('instagram', 'carrousel', imgs, { ...none, format: 'image' }, 'domain')).toEqual(imgs.slides);
+  });
+});
+
+describe.skipIf(!sqlite)('a running test, on the post it concerns', () => {
+  it('sets a link test on its network and a content test on every network, one week each way', async () => {
+    const { tweaks } = await import('../src/posts');
+    const db = Db.memory();
+    db.run("INSERT INTO tests (network, kind, value, hypothesis, start, end, status) VALUES ('bluesky', 'lien', 'sans', 'h', '2026-11-30', '2027-01-24', 'en_cours')");
+    db.run("INSERT INTO tests (network, kind, value, hypothesis, start, end, status) VALUES ('tous', 'format', 'carrousel', 'h', '2026-11-30', '2027-01-24', 'en_cours')");
+    expect(tweaks({ db }, 'bluesky', new Date('2026-12-02T11:15:00Z'))).toMatchObject({ link: 'sans', format: 'carrousel' });
+    expect(tweaks({ db }, 'threads', new Date('2026-12-09T17:30:00Z'))).toMatchObject({ link: null, format: 'image' });
+    expect(tweaks({ db }, 'instagram', new Date('2026-12-02T18:00:00Z'))).toMatchObject({ link: null, format: null });
+    const p = { slot: CALENDAR.find((s) => s.network === 'bluesky')!, pillar: 'notion' as const, at: at('2026-12-02') };
+    expect(linkFor({ db }, p, [], { link: 'sans' })).toBe('none');
+    expect(linkFor({ db }, p, [])).toBe('required');
+  });
 });
 
 describe('Mastodon’s hashtags', () => {

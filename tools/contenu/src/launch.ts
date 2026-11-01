@@ -5,6 +5,9 @@
  * same filter and the same review, are sent to the owner in a launch e-mail, and
  * are only put into Postiz once the owner answers « ok » (or « ok sauf 3 »),
  * never before. Approving starts the routine's ramp (`fillWindow`).
+ *
+ * Since D8 every week works the same way: Monday's posts, and a fresh page's,
+ * are held too, and the same « ok » puts into Postiz everything that waits.
  */
 import { CALENDAR, parisTime, rotate, type Slot } from './calendar';
 import type { Network } from './config';
@@ -30,13 +33,28 @@ function hourOf(network: Network): Slot {
   return CALENDAR.find((s) => s.network === network && s.pillar === 'notion')!;
 }
 
-export function pendingLaunch(ctx: Pick<Ctx, 'db'>): PostRow[] {
+/** A post approved less than this before its hour is too late to schedule. */
+const APPROVAL_MARGIN_MS = 2 * 3_600_000;
+
+/** Every post waiting for the owner's « ok »: the launch's, each week's, a fresh page's. */
+export function pendingApproval(ctx: Pick<Ctx, 'db'>): PostRow[] {
   return ctx.db.all<PostRow>("SELECT * FROM posts WHERE status = 'en_attente' ORDER BY slot_at");
 }
 
+/**
+ * A held post whose hour came without an « ok » does not go out (D8): it leaves
+ * the queue as `sans_accord`, and its slot stays empty. Returns how many.
+ */
+export function expireHeld(ctx: Pick<Ctx, 'db' | 'now' | 'dry'>): number {
+  const late = ctx.db.all<PostRow>("SELECT * FROM posts WHERE status = 'en_attente' AND slot_at <= ?", new Date(ctx.now.getTime() + APPROVAL_MARGIN_MS).toISOString());
+  if (!ctx.dry) for (const p of late) ctx.db.run("UPDATE posts SET status = 'sans_accord', reason = 'arrivée à son heure sans votre accord', checked_at = ? WHERE id = ?", ctx.now.toISOString(), p.id);
+  return late.length;
+}
+
+
 /** Prepares the launch posts, holds them, and sends them to the owner. */
 export async function prepareLaunch(ctx: Ctx): Promise<PostRow[]> {
-  if (pendingLaunch(ctx).length) throw new Error('un lancement attend déjà votre accord : répondez « ok », ou `contenu lancement-ok`');
+  if (pendingApproval(ctx).length) throw new Error('des publications attendent déjà votre accord : répondez « ok », ou `contenu lancement-ok`');
   const list = directives(ctx, ctx.now);
   // Notions whose carousel the build has drawn: the launch is made of them.
   const usage = journal(ctx, addDays(ctx.now, -84)).map((p) => ({ sourceId: p.source_id, network: p.network, slotAt: p.slot_at }));
@@ -60,26 +78,40 @@ export async function prepareLaunch(ctx: Ctx): Promise<PostRow[]> {
 }
 
 /**
- * The owner's « ok »: every held post goes into Postiz, but those set aside. A
- * post whose time has passed while it waited moves to the same hour the next day.
+ * The owner's « ok » (D8): every held post goes into Postiz, but those set
+ * aside. A post whose hour came while it waited does not go out (`expireHeld`).
  */
-export async function approveLaunch(ctx: Ctx, except: number[]): Promise<string> {
-  const held = pendingLaunch(ctx);
-  if (!held.length) return 'aucun lancement en attente';
+export async function approveHeld(ctx: Ctx, except: number[]): Promise<string> {
+  const late = expireHeld(ctx);
+  const held = pendingApproval(ctx).filter((p) => p.slot_at > new Date(ctx.now.getTime() + APPROVAL_MARGIN_MS).toISOString());
+  if (!held.length) return late ? `${late} publication${late > 1 ? 's' : ''} arrivée${late > 1 ? 's' : ''} à son heure sans accord, rien d’autre en attente` : 'aucune publication en attente';
   const integrations = await new Postiz(ctx).integrations();
   let scheduled = 0;
+  let setAside = 0;
+  const failed: string[] = [];
   for (const row of held) {
     if (row.num !== null && except.includes(row.num)) {
-      ctx.db.run("UPDATE posts SET status = 'retire', reason = 'écartée au lancement' WHERE id = ?", row.id);
+      if (!ctx.dry) ctx.db.run("UPDATE posts SET status = 'retire', reason = 'écartée à votre demande', checked_at = ? WHERE id = ?", ctx.now.toISOString(), row.id);
+      setAside += 1;
       continue;
     }
-    let at = new Date(row.slot_at);
-    while (at.getTime() < ctx.now.getTime() + 2 * 3_600_000) at = addDays(at, 1);
     if (ctx.dry) continue;
-    await publishHeld(ctx, { ...row, slot_at: at.toISOString() }, integrations);
-    scheduled += 1;
+    try {
+      await publishHeld(ctx, row, integrations);
+      scheduled += 1;
+    } catch (error) {
+      failed.push(`${row.num} (${(error as Error).message})`);
+    }
   }
   if (!ctx.dry && scheduled && !ctx.db.getKv('demarrage')) ctx.db.setKv('demarrage', weekOf(ctx.now));
-  return ctx.dry ? `(à blanc) ${held.length - except.length} publications auraient été programmées` : `${scheduled} publications programmées${except.length ? `, ${except.length} écartées` : ''}`;
+  if (ctx.dry) return `(à blanc) ${held.length - setAside} publications auraient été programmées`;
+  return [
+    `${scheduled} publication${scheduled > 1 ? 's' : ''} programmée${scheduled > 1 ? 's' : ''}`,
+    setAside ? `${setAside} écartée${setAside > 1 ? 's' : ''}` : '',
+    late ? `${late} arrivée${late > 1 ? 's' : ''} à son heure sans accord, non partie${late > 1 ? 's' : ''}` : '',
+    failed.length ? `non programmées, à reprendre dans Postiz : ${failed.join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 

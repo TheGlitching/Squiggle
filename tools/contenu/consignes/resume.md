@@ -7,7 +7,7 @@ suffire à elle-même.
 ## Ce que tu écris
 
 - `essentiel` : **trois ou quatre phrases** en français courant, au vouvoiement. Ce qui
-  s'est passé la semaine dernière, ce qui part dans la file, ce qui change. Commence
+  s'est passé la semaine dernière, ce qui attend son accord pour partir, ce qui change. Commence
   par le plus important. Une phrase dit une chose.
 - `lecture` : **une phrase** qui interprète les chiffres de la semaine pour quelqu'un qui
   n'est pas spécialiste : ce qu'ils veulent dire, pas leur liste.

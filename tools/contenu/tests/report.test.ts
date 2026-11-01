@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { parseCommands } from '../src/inbox';
 import type { PostRow } from '../src/posts';
-import { buildLaunch, buildReport, plainReason, type ReportInput } from '../src/report';
+import { buildLaunch, buildReplies, buildReport, plainReason, type ReportInput } from '../src/report';
+import type { CommentRow } from '../src/replies';
 import type { Facts } from '../src/strategy';
 import { checkSummary, jargon } from '../src/summary';
 
@@ -78,7 +79,8 @@ describe('the weekly report', () => {
     expect(report.subject).toContain('du 26 octobre au 1er novembre');
     expect(report.html.match(/Version d’essai : rien n’a été publié/g)).toHaveLength(1);
     expect(report.text.indexOf('Une semaine calme.')).toBeLessThan(report.text.indexOf('LES CHIFFRES'));
-    expect(report.text).toContain('> Une décision vous attend, juste en dessous.');
+    expect(report.text).toContain('> 2 publications attendent votre accord : répondez « ok » pour les programmer, ou « ok sauf 1 » pour en écarter une. Sans réponse, rien ne part. Une décision vous attend, juste en dessous.');
+    expect(report.subject).toContain('2 publications à valider, 1 décision à prendre');
   });
 
   it('numbers each post entering the queue, groups them by day, and shows its image as a thumbnail', () => {
@@ -120,6 +122,51 @@ describe('the launch e-mail', () => {
     expect(launch.text).toContain('[3] Instagram story');
     expect(launch.html).toContain('Story, l’image seule');
     expect(launch.html).toContain('story.png');
+  });
+});
+
+describe('the weekly report, with posts still waiting from last week', () => {
+  it('shows every post the « ok » would schedule, and says which were already shown', () => {
+    const entering = input().entering;
+    const old = post(9, 'threads', '2026-11-20T17:30:00.000Z', 'Une question qui attend.', { status: 'en_attente' });
+    const report = buildReport(input({ waiting: [old, ...entering.filter((x) => x.num !== null)], expired: 1 }), null);
+    expect(report.text).toContain('3 publications attendent votre accord, du 20 novembre au 25 novembre, dont 1 déjà montrée et toujours sans réponse.');
+    expect(report.text).toContain('[9] Threads');
+    expect(report.text).toContain('1 publication est arrivée à son heure sans votre accord');
+  });
+});
+
+describe('the daily e-mail of comments', () => {
+  const comment = (extra: Partial<CommentRow>): CommentRow => ({
+    id: 'c1',
+    network: 'mastodon',
+    post_ref: 'https://mastodon.social/@squigglefr/1',
+    author: 'lectrice@piaille.fr',
+    text: 'Ça marche sur téléphone ?',
+    created_at: '2026-11-02T08:00:00Z',
+    category: 'question',
+    draft: 'Oui, sur Android avec Firefox : squiggle.fr/telephone?ref=mastodon',
+    draft_status: 'propose',
+    actual_reply: null,
+    link: 'https://piaille.fr/@lectrice/2',
+    ...extra,
+  });
+
+  it('gives each message with its link and the reply to post by hand, and the Meta posts to open', () => {
+    const mail = buildReplies(
+      [comment({}), comment({ id: 'c2', network: 'bluesky', category: 'hostile', draft: null, text: 'Encore de la propagande.', link: 'https://bsky.app/profile/a/post/3' })],
+      [{ network: 'threads', url: 'https://www.threads.net/@squiggle/post/x', publishedAt: '2026-10-30T17:30:00Z', added: 2 }],
+      3,
+      false,
+    );
+    expect(mail.subject).toBe('Squiggle, réponses à faire : 1 brouillon');
+    expect(mail.text).toContain('4 nouveaux messages');
+    expect(mail.text).toContain('Réponse proposée : « Oui, sur Android avec Firefox');
+    expect(mail.text).toContain('https://piaille.fr/@lectrice/2');
+    expect(mail.text).toContain('Pas de réponse : ne pas entrer dans l’échange.');
+    expect(mail.text).toContain('Threads : 2 nouveaux commentaires sous la publication du vendredi 30 octobre');
+    expect(mail.text).toContain('3 publications attendent toujours votre accord');
+    expect(mail.html).toContain('href="https://bsky.app/profile/a/post/3"');
   });
 });
 

@@ -4,34 +4,147 @@
  * sentences around them, and a sentence carrying a number the program did not
  * compute blocks the note. The model proposes, the program decides (rule 6).
  *
- * The rules (plan, section 6):
- *  1. a test changes one thing, on one network, for four weeks;
- *  2. under 20 tracked visits over those four weeks, the verdict is « pas de signal »;
- *  3. a winner brings at least 30 % more visits per post than the four weeks before;
+ * The rules (plan, section 6, revised in November 2026 on the evidence report):
+ *  1. a test changes one thing for eight weeks: a network's own setting (hour,
+ *     link, hashtags) on that network, against the eight weeks before; the writing
+ *     or the pictures on every network at once, one week each way;
+ *  2. the visits stay the goal, but a new account brings too few of them to learn
+ *     anything for months: under 20 visits, the test is judged on the conversation
+ *     (replies and shares, Instagram's saves), then on the followers gained, the
+ *     signals the platforms say they reward; under 20 of each, « pas encore de signal »;
+ *  3. a winner brings at least 30 % more per post (per week for followers);
+ *     30 % less is « moins bien », in between « aucun effet »;
  *  4. a network is judged after eight weeks, and at twelve a network under 5 % of
  *     the networks' visits is proposed for the minimal rhythm, never cut by the routine;
  *  7. the strategy itself (a pillar, a network, the editorial line) is only ever proposed.
  */
 import { NETWORKS, type Network } from './config';
 import { addDays, day, type Ctx } from './context';
-import { loadWeek, type Week } from './collect';
+import { engagementOf, followersOf, loadWeek, type Engagement, type Week } from './collect';
 import { numbersIn } from './filter';
 import { askJson } from './llm';
 import { consigne, lessonsBlock } from './memory';
 
 export const MIN_VISITS = 20;
 export const WIN_RATIO = 1.3;
-export const TEST_WEEKS = 4;
-export const TEST_KINDS = ['heure', 'question_finale', 'image'] as const;
+export const TEST_WEEKS = 8;
 
-export type Verdict = 'pas de signal' | 'gagnant' | 'sans gagnant';
+/** A network's own setting: tested on that network alone, against the weeks before. */
+export const NETWORK_KINDS = ['heure', 'lien', 'mots_diese'] as const;
+/** The writing or the pictures: tested on every network at once, one week each way (A, B, A, B). */
+export const CONTENT_KINDS = ['question_finale', 'image', 'format'] as const;
+export const TEST_KINDS = [...NETWORK_KINDS, ...CONTENT_KINDS] as const;
+export type TestKind = (typeof TEST_KINDS)[number];
+/** The `network` of a content test. */
+export const EVERY_NETWORK = 'tous';
 
-/** Rules 2 and 3, on one network's visits and posts during a test and in the four weeks before it. */
-export function judge(during: { visits: number; posts: number }, before: { visits: number; posts: number }): Verdict {
-  if (during.visits < MIN_VISITS || during.posts === 0) return 'pas de signal';
-  const now = during.visits / during.posts;
-  const then = before.posts > 0 ? before.visits / before.posts : 0;
-  return then > 0 && now >= then * WIN_RATIO ? 'gagnant' : then === 0 && before.visits === 0 ? 'gagnant' : 'sans gagnant';
+export const TEST_VALUES: Record<TestKind, readonly string[]> = {
+  heure: ['+30', '-30', '+60', '-60', '+90', '-90', '+120', '-120'],
+  lien: ['avec', 'sans'],
+  mots_diese: ['avec', 'sans'],
+  question_finale: ['avec', 'sans'],
+  image: ['avec', 'sans'],
+  format: ['image', 'carrousel'],
+};
+
+/** The networks where a kind of test means something: an image beside a link card, a link where one is optional, hashtags where they are read. */
+export const TEST_NETWORKS: Record<TestKind, readonly Network[]> = {
+  heure: NETWORKS,
+  lien: ['bluesky', 'mastodon', 'threads'],
+  mots_diese: ['mastodon'],
+  question_finale: NETWORKS,
+  image: ['threads', 'facebook', 'mastodon'],
+  format: ['bluesky', 'mastodon', 'threads', 'facebook', 'x'],
+};
+
+const OPPOSITE: Record<string, string> = { avec: 'sans', sans: 'avec', image: 'carrousel', carrousel: 'image' };
+
+/**
+ * What a running test sets on one network's post at a given instant, or null
+ * when it does not concern it. A content test sets its value on even weeks and
+ * the opposite on odd ones (rule 1, since November 2026: a content test on one
+ * network alone saw ten to twenty posts, too few to tell anything).
+ */
+export function testValue(t: { network: string; kind: string; value: string; start: string }, network: Network, at: Date): string | null {
+  if (!TEST_NETWORKS[t.kind as TestKind]?.includes(network)) return null;
+  if (t.network !== EVERY_NETWORK) return t.network === network ? t.value : null;
+  const week = Math.floor((Date.parse(day(at)) - Date.parse(t.start)) / (7 * 86_400_000));
+  return week % 2 === 0 ? t.value : (OPPOSITE[t.value] ?? null);
+}
+
+export type Verdict = 'pas encore de signal' | 'gagnant' | 'aucun effet' | 'moins bien';
+/** Which signal decided: the first one with enough of it, in this order. */
+export type Signal = 'visites' | 'conversation' | 'abonnés';
+
+/** What one side of a test gathered: its posts, weeks, visits, replies and shares, followers gained. */
+export interface Tally {
+  posts: number;
+  weeks: number;
+  visits: number;
+  conversation: number;
+  followers: number;
+}
+
+const ZERO: Tally = { posts: 0, weeks: 0, visits: 0, conversation: 0, followers: 0 };
+const add = (a: Tally, b: Tally): Tally => ({ posts: a.posts + b.posts, weeks: a.weeks + b.weeks, visits: a.visits + b.visits, conversation: a.conversation + b.conversation, followers: a.followers + b.followers });
+
+/** Rules 2 and 3: the side tested (`tried`) against the other (`base`). */
+export function judge(tried: Tally, base: Tally): { verdict: Verdict; signal: Signal | null } {
+  const signals: Array<[Signal, (t: Tally) => number, (t: Tally) => number]> = [
+    ['visites', (t) => t.visits, (t) => t.posts],
+    ['conversation', (t) => t.conversation, (t) => t.posts],
+    ['abonnés', (t) => t.followers, (t) => t.weeks],
+  ];
+  for (const [signal, count, per] of signals) {
+    if (count(tried) < MIN_VISITS || per(tried) === 0) continue;
+    const now = count(tried) / per(tried);
+    const then = per(base) > 0 ? count(base) / per(base) : 0;
+    if (then <= 0) return { verdict: 'gagnant', signal };
+    const verdict = now >= then * WIN_RATIO ? 'gagnant' : now * WIN_RATIO <= then ? 'moins bien' : 'aucun effet';
+    return { verdict, signal };
+  }
+  return { verdict: 'pas encore de signal', signal: null };
+}
+
+/** Replies and shares, plus Instagram's saves: the conversation a week's posts drew. */
+const conversationOf = (e: Engagement | null) => (e ? e.replies + e.shares + (e.saves ?? 0) : 0);
+
+/** What one network gathered from the posts of the week that starts on `monday`, as the next Monday's snapshot read it. */
+function weekTally(ctx: Pick<Ctx, 'db'>, network: Network, monday: string): Tally {
+  const next = day(addDays(new Date(`${monday}T00:00:00Z`), 7));
+  const after = loadWeek(ctx, next);
+  const start = followersOf(loadWeek(ctx, monday), network);
+  const end = followersOf(after, network);
+  return {
+    posts: postsOut(ctx, network, monday, next),
+    weeks: 1,
+    visits: refVisits(after, network),
+    conversation: conversationOf(engagementOf(after, network)),
+    followers: start !== null && end !== null ? Math.max(0, end - start) : 0,
+  };
+}
+
+/** The Mondays of a test, from its start. */
+const mondaysOf = (start: string, weeks: number) => Array.from({ length: weeks }, (_, i) => day(addDays(new Date(`${start}T00:00:00Z`), 7 * i)));
+
+/**
+ * A finished test's verdict. A network's setting is weighed against the same
+ * number of weeks before it; a content test, on every network it concerns, its
+ * weeks with the value against its weeks with the opposite.
+ */
+export function testVerdict(ctx: Pick<Ctx, 'db'>, t: { network: string; kind: string; start: string; end: string }): ReturnType<typeof judge> {
+  // A test keeps the length it started with (four weeks before November 2026).
+  const length = Math.max(1, Math.round((Date.parse(t.end) - Date.parse(t.start)) / (7 * 86_400_000)));
+  const weeks = mondaysOf(t.start, length);
+  if (t.network === EVERY_NETWORK) {
+    const networks = TEST_NETWORKS[t.kind as TestKind] ?? NETWORKS;
+    const side = (parity: number) => weeks.filter((_, i) => i % 2 === parity).reduce((acc, w) => networks.reduce((a, n) => add(a, weekTally(ctx, n, w)), acc), ZERO);
+    return judge(side(0), side(1));
+  }
+  const network = t.network as Network;
+  const before = mondaysOf(day(addDays(new Date(`${t.start}T00:00:00Z`), -7 * length)), length);
+  const sum = (list: string[]) => list.reduce((a, w) => add(a, weekTally(ctx, network, w)), ZERO);
+  return judge(sum(weeks), sum(before));
 }
 
 /** Rule 4 at twelve weeks: a network's share of the visits the networks brought. */
@@ -67,13 +180,25 @@ export interface Facts {
   /** Sources collected this week, or « non collecté ». */
   collected: Record<string, 'collecté' | 'non collecté'>;
   google: { impressions: number; clicks: number; position: number | null; impressionsVs4: number | null; clicksVs4: number | null } | null;
-  networks: Record<Network, { visits: number; posts: number; visitsPerPost4w: number | null; followers: number | null }>;
+  networks: Record<
+    Network,
+    {
+      visits: number;
+      posts: number;
+      visitsPerPost4w: number | null;
+      followers: number | null;
+      /** Against last week's snapshot; null when either is missing. */
+      followersGained: number | null;
+      /** What the week's posts drew besides visits; null when the network's source was not collected. */
+      conversation: { posts: number; replies: number; shares: number; likes: number; perPost: number | null; savesSharesPer1000Reach: number | null } | null;
+    }
+  >;
   contentVisits: number | null;
   /** Visits through the networks this week, and their weekly average over the four weeks before. */
   networkVisits: { week: number; previous: number | null } | null;
   accounts: { week: number; previous: number | null } | null;
   site: { analysesFromBlog: number; analysesFromGlossary: number; newAccounts: number; paying: number } | null;
-  tests: Array<{ network: Network; kind: string; value: string; hypothesis: string; start: string; end: string; week: number; verdict: Verdict | null }>;
+  tests: Array<{ network: Network | typeof EVERY_NETWORK; kind: string; value: string; hypothesis: string; start: string; end: string; week: number; weeks: number; verdict: Verdict | null; signal: Signal | null }>;
   weeksOfData: number;
   /** The decision rules' thresholds, so the note may name them. */
   rules: { minVisits: number; winPct: number; testWeeks: number; judgeWeeks: number; reviewWeeks: number; minimalPct: number; keepPct: number };
@@ -86,6 +211,17 @@ export function computeFacts(ctx: Ctx, current: Week): Facts {
   const g = current.gsc;
   const avg = avgOf;
   const weekStart = day(addDays(new Date(`${current.week}T00:00:00Z`), -7));
+  const gained = (n: Network) => {
+    const now = followersOf(current, n);
+    const then = followersOf(weeks[0], n);
+    return now !== null && then !== null ? now - then : null;
+  };
+  const conversation = (n: Network): Facts['networks'][Network]['conversation'] => {
+    const e = engagementOf(current, n);
+    if (!e) return null;
+    const per1000 = n === 'instagram' && e.reach ? Math.round((((e.saves ?? 0) + e.shares) / e.reach) * 1000 * 10) / 10 : null;
+    return { posts: e.posts, replies: e.replies, shares: e.shares, likes: e.likes, perPost: e.posts ? Math.round((conversationOf(e) / e.posts) * 10) / 10 : null, savesSharesPer1000Reach: per1000 };
+  };
   const networks = Object.fromEntries(
     NETWORKS.map((n) => {
       const posts4 = postsOut(ctx, n, day(addDays(new Date(`${current.week}T00:00:00Z`), -28)), current.week);
@@ -96,33 +232,28 @@ export function computeFacts(ctx: Ctx, current: Week): Facts {
           visits: refVisits(current, n),
           posts: postsOut(ctx, n, weekStart, current.week),
           visitsPerPost4w: visits4 !== undefined && posts4 > 0 ? Math.round((visits4 / posts4) * 10) / 10 : null,
-          followers: n === 'bluesky' ? (current.bluesky?.followers ?? null) : (current.postiz?.networks[n]?.followers ?? null),
+          followers: followersOf(current, n),
+          followersGained: gained(n),
+          conversation: conversation(n),
         },
       ];
     }),
   ) as Facts['networks'];
 
   const tests = ctx.db
-    .all<{ id: number; network: Network; kind: string; value: string; hypothesis: string; start: string; end: string; status: string }>(
+    .all<{ id: number; network: Network | typeof EVERY_NETWORK; kind: string; value: string; hypothesis: string; start: string; end: string; status: string; verdict: string | null }>(
       "SELECT * FROM tests WHERE status = 'en_cours' OR end >= ? ORDER BY id",
       day(addDays(ctx.now, -7)),
     )
     .map((t) => {
-      const weekNo = Math.max(1, Math.min(TEST_WEEKS, Math.floor((Date.parse(current.week) - Date.parse(t.start)) / (7 * 86_400_000)) + 1));
-      let verdict: Verdict | null = null;
+      const length = Math.max(1, Math.round((Date.parse(t.end) - Date.parse(t.start)) / (7 * 86_400_000)));
+      const weekNo = Math.max(1, Math.min(length, Math.floor((Date.parse(current.week) - Date.parse(t.start)) / (7 * 86_400_000)) + 1));
+      let result: ReturnType<typeof judge> | null = null;
       if (t.end < current.week && t.status === 'en_cours') {
-        const sum = (from: string, to: string) =>
-          ctx.db
-            .all<{ week: string }>('SELECT DISTINCT week FROM snapshots WHERE source = ? AND week > ? AND week <= ?', 'metrics1', from, to)
-            .reduce((s, r) => s + refVisits(loadWeek(ctx, r.week), t.network), 0);
-        const before = day(addDays(new Date(`${t.start}T00:00:00Z`), -28));
-        verdict = judge(
-          { visits: sum(t.start, day(addDays(new Date(`${t.end}T00:00:00Z`), 7))), posts: postsOut(ctx, t.network, t.start, t.end) },
-          { visits: sum(before, t.start), posts: postsOut(ctx, t.network, before, t.start) },
-        );
-        ctx.db.run("UPDATE tests SET status = 'termine', verdict = ? WHERE id = ?", verdict, t.id);
+        result = testVerdict(ctx, t);
+        ctx.db.run("UPDATE tests SET status = 'termine', verdict = ? WHERE id = ?", result.signal ? `${result.verdict} (${result.signal})` : result.verdict, t.id);
       }
-      return { network: t.network, kind: t.kind, value: t.value, hypothesis: t.hypothesis, start: t.start, end: t.end, week: weekNo, verdict };
+      return { network: t.network, kind: t.kind, value: t.value, hypothesis: t.hypothesis, start: t.start, end: t.end, week: weekNo, weeks: length, verdict: result?.verdict ?? null, signal: result?.signal ?? null };
     });
 
   const weeksOfData = 1 + weeks.filter((w) => w.metrics1).length;
@@ -136,6 +267,7 @@ export function computeFacts(ctx: Ctx, current: Week): Facts {
       'Compteurs du site': current.metrics1 ? 'collecté' : 'non collecté',
       Postiz: current.postiz ? 'collecté' : 'non collecté',
       Bluesky: current.bluesky ? 'collecté' : 'non collecté',
+      Mastodon: current.mastodon ? 'collecté' : 'non collecté',
     },
     google: g
       ? {
@@ -180,7 +312,7 @@ export interface StrategyResult {
   facts: Facts;
   note: Note | null;
   problem: string | null;
-  newTests: Array<{ network: Network; kind: string; value: string; hypothesis: string }>;
+  newTests: Array<{ network: Network | typeof EVERY_NETWORK; kind: string; value: string; hypothesis: string }>;
 }
 
 /** Rule 6 on prose: every number the model wrote must be one the program computed. */
@@ -191,14 +323,19 @@ export function unknownNumbers(note: Note, facts: Facts): string[] {
 }
 
 /** Validates a test the model proposes: a known kind and value, one network, none already running there. */
+/**
+ * Validates a test the model proposes: a known kind and value, and nothing
+ * already running in its place. A content test runs on every network, one at a
+ * time; a network's own setting, on a network where it means something, one
+ * test per network.
+ */
 export function acceptTest(ctx: Pick<Ctx, 'db'>, t: { network?: string; kind?: string; value?: string; hypothesis?: string }): boolean {
-  if (!t.network || !NETWORKS.includes(t.network as Network)) return false;
-  if (!TEST_KINDS.includes(t.kind as (typeof TEST_KINDS)[number])) return false;
-  if (t.kind === 'heure' && !/^[+-]?(30|60|90|120)$/.test(t.value ?? '')) return false;
-  if (t.kind !== 'heure' && t.value !== 'avec' && t.value !== 'sans') return false;
-  if (t.kind === 'image' && t.network !== 'threads' && t.network !== 'facebook' && t.network !== 'mastodon') return false;
-  if (!t.hypothesis?.trim()) return false;
-  return !ctx.db.get("SELECT id FROM tests WHERE network = ? AND status = 'en_cours'", t.network);
+  const kind = t.kind as TestKind;
+  if (!TEST_KINDS.includes(kind) || !t.hypothesis?.trim()) return false;
+  if (kind === 'heure' ? !/^[+-]?(30|60|90|120)$/.test(t.value ?? '') : !TEST_VALUES[kind].includes(t.value ?? '')) return false;
+  const content = (CONTENT_KINDS as readonly string[]).includes(kind);
+  if (content ? t.network !== EVERY_NETWORK : !TEST_NETWORKS[kind].includes(t.network as Network)) return false;
+  return !ctx.db.get("SELECT id FROM tests WHERE network = ? AND status = 'en_cours'", t.network!);
 }
 
 export async function writeStrategy(ctx: Ctx, current: Week, signals: string): Promise<StrategyResult> {
@@ -240,7 +377,7 @@ export async function writeStrategy(ctx: Ctx, current: Week, signals: string): P
   return { facts, note: problem ? null : note, problem, newTests: unique as StrategyResult['newTests'] };
 }
 
-/** Starts the accepted tests on the first week the queue is now filling, for four weeks. */
+/** Starts the accepted tests on the first week the queue is now filling, for `TEST_WEEKS` weeks. */
 export function startTests(ctx: Ctx, tests: StrategyResult['newTests'], firstWeek: string | undefined): void {
   if (!firstWeek || ctx.dry) return;
   const end = day(addDays(new Date(`${firstWeek}T00:00:00Z`), 7 * TEST_WEEKS - 1));
