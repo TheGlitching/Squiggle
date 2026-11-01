@@ -31,7 +31,7 @@ export const SHARE_HEIGHT = 630;
 const css = readFileSync(new URL('./index.css', import.meta.url), 'utf8');
 /** The palette, from the `@theme` block: a drawing names its colours `var(--color-…)`. */
 const TOKENS = Object.fromEntries([...css.matchAll(/--color-(\w+):\s*(#[0-9a-f]{3,8});/gi)].map((m) => [m[1], m[2]]));
-function color(name: string): string {
+export function color(name: string): string {
   if (!TOKENS[name]) throw new Error(`no --color-${name} in index.css`);
   return TOKENS[name];
 }
@@ -136,7 +136,7 @@ const DRAWING_FONTS = (() => {
 })();
 
 /** The R2-02 badge (`components/Brand.tsx`), as an image Satori can place. */
-const BADGE = `data:image/svg+xml;base64,${Buffer.from(
+export const BADGE = `data:image/svg+xml;base64,${Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 4 120 120" width="52" height="52">' +
     '<rect x="4" y="4" width="120" height="120" rx="30" fill="#9061f0"/>' +
     '<rect x="30" y="30" width="68" height="13" rx="6.5" fill="#faf9f5"/>' +
@@ -161,13 +161,24 @@ function solid(rgba: string, base: string): string {
  * no inline box per line, so each word carries its own, half a space wide on each
  * side: side by side they read as one mark per line.
  */
-function Marked({ text, size }: { text: string; size: number }) {
+export function Marked({ text, size }: { text: string; size: number }) {
   const { color: underline } = SEVERITY_COLORS.warning;
   const tint = solid(SEVERITY_COLORS.warning.tint, color('background'));
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -0.13em', rowGap: 10, fontSize: size, lineHeight: 1.1, letterSpacing: -size * 0.025 }}>
       {text.split(' ').map((word, index) => (
-        <div key={index} style={{ display: 'flex', whiteSpace: 'nowrap', background: tint, padding: '0 0.13em 0.04em', borderBottom: `4px solid ${underline}` }}>
+        // A word starts a pixel early, under the edge of the one before: no seam between them (see `Words`).
+        <div
+          key={index}
+          style={{
+            display: 'flex',
+            whiteSpace: 'nowrap',
+            background: tint,
+            padding: '0 0.13em 0.04em',
+            borderBottom: `4px solid ${underline}`,
+            ...(index > 0 ? { marginLeft: -1, paddingLeft: 1 + size * 0.13 } : {}),
+          }}
+        >
           {word}
         </div>
       ))}
@@ -247,13 +258,20 @@ export async function shareImage(page: PublicPage): Promise<Buffer> {
   return png(svg, SHARE_WIDTH);
 }
 
-function png(svg: string, width: number): Buffer {
+function raster(svg: string, width: number) {
   return new Resvg(svg, {
     fitTo: { mode: 'width', value: width },
     font: { fontFiles: DRAWING_FONTS, loadSystemFonts: false, defaultFontFamily: 'Bricolage Grotesque' },
-  })
-    .render()
-    .asPng();
+  }).render();
+}
+
+function png(svg: string, width: number): Buffer {
+  return raster(svg, width).asPng();
+}
+
+/** An image as its RGBA pixels, row after row: a frame of a video (`src/reel.tsx`). */
+export function pixels(svg: string, width: number): Buffer {
+  return raster(svg, width).pixels;
 }
 
 /*
@@ -311,9 +329,19 @@ function words(segments: Segments): Run[][] {
  * a word that leaves its column or runs into another one is found by the layout,
  * not by looking at the image (`misfit`). Half a space on each side of a word
  * makes the space between two, so a marked passage reads as one mark per line.
+ * A `mark` between 0 and 1 marks that share of the passage, word after word, the
+ * way a reader's pen would: a video's frames (`src/reel.tsx`).
  */
-function Words({ segments, style, mark = true }: { segments: Segments | string; style: CSSProperties; mark?: boolean }) {
+export function Words({ segments, style, mark = true }: { segments: Segments | string; style: CSSProperties; mark?: boolean | number }) {
   const list = words(typeof segments === 'string' ? [segments] : segments);
+  const total = list.flat().filter((run) => run.marked).length;
+  let seen = 0;
+  // How marked a run of the passage is, from 0 to 1.
+  const ink = () => Math.max(0, Math.min(1, Number(mark) * total - seen++));
+  const em = Number(style.fontSize);
+  // Two marked boxes side by side share a pixel column, each half covering it: a pale
+  // seam. A marked run that follows another one starts a pixel early, under its edge.
+  const follows = (index: number, at: number) => (at > 0 ? list[index][at - 1] : list[index - 1]?.at(-1))?.marked === true;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -0.13em', flexShrink: 0, ...style }}>
       {list.map((word, index) => (
@@ -327,7 +355,8 @@ function Words({ segments, style, mark = true }: { segments: Segments | string; 
                 paddingLeft: at === 0 ? '0.13em' : run.joined ? '0.26em' : 0,
                 paddingRight: at === word.length - 1 ? '0.13em' : 0,
                 // The passage, as the glossary page marks it on its paper (`.hero-hl`).
-                ...(run.marked && mark ? { background: solid(PASSAGE.tint, color('paper')), borderBottom: `3px solid ${PASSAGE.color}` } : {}),
+                ...(run.marked && mark ? marked(ink()) : {}),
+                ...(run.marked && mark && em && follows(index, at) ? { marginLeft: -1, paddingLeft: 1 + em * (at === 0 ? 0.13 : run.joined ? 0.26 : 0) } : {}),
               }}
             >
               {run.text}
@@ -339,10 +368,23 @@ function Words({ segments, style, mark = true }: { segments: Segments | string; 
   );
 }
 
-type Rect = { left: number; top: number; width: number; height: number };
+/** A run of the passage marked `amount` of the way: its tint and its underline, faded in on the paper. */
+function marked(amount: number): CSSProperties {
+  // Rounded, so that no colour is ever written `1e-17`.
+  amount = Math.round(amount * 1000) / 1000;
+  if (amount === 1) return { background: solid(PASSAGE.tint, color('paper')), borderBottom: `3px solid ${PASSAGE.color}` };
+  const [r, g, b, alpha] = PASSAGE.tint.match(/[\d.]+/g)!.map(Number);
+  const line = [1, 3, 5].map((at) => parseInt(PASSAGE.color.slice(at, at + 2), 16));
+  return {
+    background: solid(`rgba(${r}, ${g}, ${b}, ${(alpha * amount).toFixed(4)})`, color('paper')),
+    borderBottom: `3px solid ${solid(`rgba(${line.join(', ')}, ${amount})`, color('paper'))}`,
+  };
+}
+
+export type Rect = { left: number; top: number; width: number; height: number };
 
 /** A layout and every box Satori placed in it. */
-async function layout(element: ReactElement, size: { width: number; height?: number }) {
+export async function layout(element: ReactElement, size: { width: number; height?: number }) {
   const nodes: SatoriNode[] = [];
   const svg = await satori(element, { ...size, fonts: FONTS, onNodeDetected: (node) => nodes.push(node) });
   return { svg, nodes };
@@ -353,7 +395,7 @@ async function layout(element: ReactElement, size: { width: number; height?: num
  * two of them on top of each other. Satori neither clips nor shrinks a word that
  * does not fit; it only pushes it out of its column or under the next block.
  */
-function misfit(nodes: SatoriNode[], area: Rect): string | null {
+export function misfit(nodes: SatoriNode[], area: Rect): string | null {
   const placed = nodes.filter((node) => node.type === 'img' || (node.textContent ?? '').trim() !== '');
   const name = (node: SatoriNode) => (node.type === 'img' ? 'a drawing' : `« ${node.textContent} »`);
   // A caption sits outside the content area, in the band it shares with nothing else.
@@ -383,7 +425,7 @@ function misfit(nodes: SatoriNode[], area: Rect): string | null {
  * page shows it (`ExempleFigure`): a text meant to be read is never put in
  * perspective. With `glass`, Squiggle's violet pane lies over it.
  */
-function Paper({ children, glass = false, top }: { children: ReactNode; glass?: boolean; top: number }) {
+export function Paper({ children, glass = false, top }: { children: ReactNode; glass?: boolean | number; top: number }) {
   return (
     <div style={{ display: 'flex', position: 'relative', flexShrink: 0, marginTop: top }}>
       <div
@@ -412,6 +454,8 @@ function Paper({ children, glass = false, top }: { children: ReactNode; glass?: 
             borderRadius: 30,
             border: `3px solid ${color('accent')}`,
             background: 'rgba(144, 97, 240, 0.12)',
+            // Between 0 and 1, the pane is still coming down onto the paper.
+            ...(glass === true ? {} : { opacity: Number(glass), transform: `translateY(${(Number(glass) - 1) * 48}px)` }),
           }}
         />
       ) : null}
@@ -452,7 +496,7 @@ function Frame({ page, children, height = SLIDE_HEIGHT, inset = CAPTION_BAND }: 
 }
 
 /** A slide's heading: what the slide is, in the site's own words for it. */
-function Heading({ text, size }: { text: string; size: number }) {
+export function Heading({ text, size }: { text: string; size: number }) {
   return (
     <Words
       segments={text}

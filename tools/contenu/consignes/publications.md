@@ -24,7 +24,7 @@ décrit. Jamais de promesse au-delà de ce que dit la page.
 | Mastodon | public tech, libre, éducation ; on y découvre par mots-dièse | 500 caractères au plus, lien compris ; l'exemple et sa lecture, le lien, puis les mots-dièse de la semaine, donnés avec la demande |
 | Threads | grand public, ton de conversation | 500 caractères au plus ; une question ou l'exemple ; le lien en fin seulement pour le contenu de fond, sinon aucun : l'image porte la page |
 | Facebook | grand public, parents | 3 à 6 phrases ; l'exemple, sa lecture ; le lien seulement quand il est donné (deux par mois au plus, pour le contenu de fond), sinon aucun : le carrousel porte la page |
-| Instagram | grand public plus jeune | légende de 2 à 4 phrases sous un carrousel ; pas d'adresse, « Lien dans la bio. » |
+| Instagram | grand public plus jeune | légende de 2 à 4 phrases sous un carrousel ou une courte vidéo ; pas d'adresse, « Lien dans la bio. » |
 | X | débat public, médias | texte court sans aucun lien ni adresse ; l'image porte la page |
 
 ## Le ton

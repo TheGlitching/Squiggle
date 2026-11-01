@@ -125,6 +125,17 @@ describe('the launch e-mail', () => {
   });
 });
 
+describe('a video post', () => {
+  it('shows its poster, not the video, and says it is one', () => {
+    const video = 'https://squiggle.fr/og/social/faux-dilemme/video.mp4';
+    const launch = buildLaunch([post(1, 'bluesky', '2026-11-03T11:15:00.000Z', 'Deux options, vraiment ?', { status: 'en_attente', angle: 'video', image_url: video })], false);
+    expect(launch.text).toContain('[1] Bluesky vidéo');
+    expect(launch.html).toContain('Bluesky vidéo');
+    expect(launch.html).toContain('src="https://squiggle.fr/og/social/faux-dilemme/video.jpg"');
+    expect(launch.html).toContain(`href="${video}"`);
+  });
+});
+
 describe('the weekly report, with posts still waiting from last week', () => {
   it('shows every post the « ok » would schedule, and says which were already shown', () => {
     const entering = input().entering;
