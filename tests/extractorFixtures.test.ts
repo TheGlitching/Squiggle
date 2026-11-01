@@ -29,8 +29,11 @@ function load(file: string): Document {
 
 function measure(file: string) {
   const doc = load(file);
+  // A block inside another block (a quote's paragraph) is read as part of the outer one.
   const truth = new Set(
-    Array.from(doc.querySelectorAll(`[data-fixture-body] :is(${BLOCK_SELECTOR})`)).map(el => norm(el.textContent ?? ''))
+    Array.from(doc.querySelectorAll(`[data-fixture-body] :is(${BLOCK_SELECTOR})`))
+      .filter(el => !el.parentElement?.closest(`[data-fixture-body] :is(${BLOCK_SELECTOR})`))
+      .map(el => norm(el.textContent ?? ''))
   );
   const article = new ArticleExtractor(doc).extract();
   const sent = article.blocks.reduce((n, b) => n + b.cleanText.length, 0);
@@ -96,5 +99,16 @@ describe('Article extraction on saved French pages', () => {
       'https://www.insee.example.invalid/statistiques/ecoles',
     ]);
     expect(article.blocks.some(b => b.cleanText.includes('Un nouveau gymnase'))).toBe(false);
+  });
+
+  it('reads an embedded post once, and leaves out a dialog and a video carousel inside the article', () => {
+    const { article } = measure('franceinfo-enquete.html');
+    const texts = article.blocks.map(b => b.cleanText);
+    expect(texts.filter(t => t.includes('Des vigiles bénévoles poussent'))).toHaveLength(1);
+    expect(article.blocks.find(b => b.cleanText.includes('Des vigiles bénévoles poussent'))?.isQuote).toBe(true);
+    expect(new Set(texts).size).toBe(texts.length);
+    expect(texts.some(t => /connectez-vous|Sans paiement/.test(t))).toBe(false);
+    expect(texts).not.toContain('Shorts');
+    expect(texts.some(t => t.startsWith('Franceinfo a pu consulter une autre vidéo'))).toBe(true);
   });
 });
