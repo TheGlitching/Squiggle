@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CALENDAR, REVIEW_DAYS, parisTime, resolvePillar, rotate, slotAt, weeksToFill } from '../src/calendar';
+import { CALENDAR, REVIEW_DAYS, parisTime, resolvePillar, rotate, slotAt, weeksToFill, withoutVideo } from '../src/calendar';
 import type { GscData, GscRow } from '../src/collect/gsc';
 import { impressionsWithoutClicks, unansweredQueries } from '../src/deep';
 import { firstWord } from '../src/inbox';
@@ -34,6 +34,14 @@ describe('the calendar', () => {
       expect(of('mastodon')).not.toBe(of('bluesky'));
       expect(of('instagram')).not.toBe(of('bluesky'));
     }
+  });
+
+  it('shows both notions of the week as their video on Instagram, Bluesky, Facebook and Threads, the format from before when there is none', () => {
+    const videos = CALENDAR.filter((s) => s.angle === 'video');
+    expect(new Set(videos.map((s) => s.network))).toEqual(new Set(['instagram', 'bluesky', 'facebook', 'threads']));
+    expect(videos.every((s) => s.pillar === 'notion')).toBe(true);
+    expect(new Set(videos.map((s) => s.notion))).toEqual(new Set(['A', 'B']));
+    expect((['instagram', 'facebook', 'bluesky', 'threads'] as const).map(withoutVideo)).toEqual(['carrousel', 'long', 'exemple', 'exemple']);
   });
 
   it('starts with the next week, then fills one week further each Monday until four weeks out', () => {

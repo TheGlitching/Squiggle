@@ -17,6 +17,7 @@ import type { Lesson } from './memory';
 import type { PostRow } from './posts';
 import type { CommentRow } from './replies';
 import type { UnreadComments } from './replies';
+import { isVideo, still } from './sources';
 import { EVERY_NETWORK, type Facts, type StrategyResult } from './strategy';
 
 export const NETWORK_NAME: Record<Network, string> = { bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads', facebook: 'Facebook', instagram: 'Instagram', x: 'X' };
@@ -323,9 +324,13 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
 
 // ---------- Plain text ----------
 
+/** A post that is not a plain post says so after its network: « Instagram story », « Bluesky vidéo ». */
+const format = (x: PostRow): string => (x.angle === 'story' ? ' story' : x.angle === 'video' ? ' vidéo' : '');
+
 function imagesLine(x: PostRow): string | null {
   const images = x.image_url ? x.image_url.split(' ') : [];
   if (!images.length) return null;
+  if (isVideo(images[0])) return `Vidéo : ${images[0]}`;
   return `Image : ${images[0]}${images.length > 1 ? ` (et ${images.length - 1} de plus)` : ''}`;
 }
 
@@ -349,7 +354,7 @@ export function renderText(m: ReportModel): string {
     for (const day of m.queue.days) {
       out.push(`--- ${day.day} ---`);
       for (const x of day.posts) {
-        out.push('', `[${x.num}] ${NETWORK_NAME[x.network]}${x.angle === 'story' ? ' story' : ''}, ${parisHour(x.slot_at)}`, x.text);
+        out.push('', `[${x.num}] ${NETWORK_NAME[x.network]}${format(x)}, ${parisHour(x.slot_at)}`, x.text);
         const img = imagesLine(x);
         if (img) out.push(img);
       }
@@ -394,12 +399,12 @@ function postCard(x: PostRow): string {
   const images = x.image_url ? x.image_url.split(' ') : [];
   const alts = x.alt ? x.alt.split(' | ') : [];
   const thumb = images.length
-    ? `<td width="88" valign="top" style="padding:0 0 0 12px"><a href="${esc(images[0])}"><img src="${esc(images[0])}" width="88" alt="${esc(alts[0] ?? '')}" style="display:block;width:88px;height:auto;border-radius:6px;border:1px solid ${C.paperEdge}"></a>${
+    ? `<td width="88" valign="top" style="padding:0 0 0 12px"><a href="${esc(images[0])}"><img src="${esc(still(images[0]))}" width="88" alt="${esc(alts[0] ?? '')}" style="display:block;width:88px;height:auto;border-radius:6px;border:1px solid ${C.paperEdge}"></a>${
         images.length > 1 ? `<div style="font:400 12px/1.4 ${SANS};color:${C.paperMuted};text-align:center;padding-top:4px">+${images.length - 1} image${images.length > 2 ? 's' : ''}</div>` : ''
       }</td>`
     : '';
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;background:${C.paper};border-radius:10px;border:1px solid ${C.paperEdge}"><tr><td style="padding:14px 16px">
-<div style="font:700 15px/1.4 ${SANS};color:${C.paperInk}"><span style="display:inline-block;min-width:22px;padding:1px 6px;margin-right:8px;border-radius:6px;background:${C.paperInk};color:${C.paper};text-align:center">${x.num}</span><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${NETWORK_DOT[x.network]};margin-right:6px"></span>${esc(NETWORK_NAME[x.network])}${x.angle === 'story' ? ' story' : ''}<span style="font-weight:400;color:${C.paperMuted}"> · ${esc(parisHour(x.slot_at))}</span></div>
+<div style="font:700 15px/1.4 ${SANS};color:${C.paperInk}"><span style="display:inline-block;min-width:22px;padding:1px 6px;margin-right:8px;border-radius:6px;background:${C.paperInk};color:${C.paper};text-align:center">${x.num}</span><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${NETWORK_DOT[x.network]};margin-right:6px"></span>${esc(NETWORK_NAME[x.network])}${format(x)}<span style="font-weight:400;color:${C.paperMuted}"> · ${esc(parisHour(x.slot_at))}</span></div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr><td valign="top" style="font:400 16px/1.5 ${SERIF};color:${C.paperInk};overflow-wrap:anywhere;word-break:break-word">${x.angle === 'story' ? `<span style="font:600 14px/1.4 ${SANS};color:${C.paperMuted}">Story, l’image seule. Ce qu’elle dit :</span><br>` : ''}${esc(x.text).replace(/\n/g, '<br>')}</td>${thumb}</tr></table>
 <div style="margin-top:10px;font:400 13px/1.4 ${SANS};color:${C.paperMuted}">${esc(cap(PILLAR_NAME[x.pillar] ?? x.pillar))} : ${esc(x.source_title ?? x.source_id)}</div>
 </td></tr></table>`;
@@ -530,7 +535,7 @@ export function buildLaunch(posts: PostRow[], dry: boolean): { subject: string; 
     '',
     `> ${model.expectation}`,
     '',
-    ...held.map((x) => `[${x.num}] ${NETWORK_NAME[x.network]}${x.angle === 'story' ? ' story' : ''}, ${parisDate(x.slot_at)}\n${x.text}\n`),
+    ...held.map((x) => `[${x.num}] ${NETWORK_NAME[x.network]}${format(x)}, ${parisDate(x.slot_at)}\n${x.text}\n`),
   ].join('\n');
   return { subject: model.subject, text, html: renderHtml(model, true) };
 }

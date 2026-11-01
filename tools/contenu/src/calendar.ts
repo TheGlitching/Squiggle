@@ -5,17 +5,23 @@
  * glossary's questions are worded for any reader, and teachers get one slot in two
  * weeks on each network that carries them.
  *
- * Starting shares, over a week of 16 posts: a glossary notion about half, the
+ * Starting shares, over a week of 17 posts: a glossary notion about half, the
  * week's piece of substance about a quarter (more when one has just been
  * merged), product and teachers the rest. They are starting points: a test
  * moves an hour, the owner moves a share (rule 7).
+ *
+ * Each notion of the week is also shown as its short video, the format the
+ * inoculation studies tested (a technique shown on a made-up example, then
+ * named): an Instagram Reel, and the notion slots on Bluesky, Facebook and
+ * Threads that showed its example. A notion without a current video keeps the
+ * slot's format from before (`withoutVideo`).
  */
 import type { Network } from './config';
 import { addDays, day } from './context';
 
 export type Pillar = 'notion' | 'fond' | 'produit' | 'classe';
-/** Which side of a notion a post shows (`blog-declinaison`): its example, how to spot it, its question; the whole card; or the story that goes with a post. */
-export type Angle = 'exemple' | 'reperer' | 'question' | 'long' | 'carrousel' | 'page' | 'story';
+/** Which side of a notion a post shows (`blog-declinaison`): its example, how to spot it, its question; the whole card; its short video; or the story that goes with a post. */
+export type Angle = 'exemple' | 'reperer' | 'question' | 'long' | 'carrousel' | 'video' | 'page' | 'story';
 
 export interface Slot {
   network: Network;
@@ -31,10 +37,11 @@ export interface Slot {
 
 export const CALENDAR: readonly Slot[] = [
   { network: 'x', weekday: 1, time: '12:00', pillar: 'notion', angle: 'exemple', notion: 'A' },
-  { network: 'bluesky', weekday: 1, time: '12:15', pillar: 'notion', angle: 'exemple', notion: 'A' },
+  { network: 'bluesky', weekday: 1, time: '12:15', pillar: 'notion', angle: 'video', notion: 'A' },
   { network: 'mastodon', weekday: 1, time: '12:30', pillar: 'notion', angle: 'exemple', notion: 'A' },
   { network: 'threads', weekday: 1, time: '18:30', pillar: 'notion', angle: 'question', notion: 'A' },
-  { network: 'facebook', weekday: 2, time: '18:30', pillar: 'notion', angle: 'long', notion: 'A' },
+  { network: 'instagram', weekday: 1, time: '19:00', pillar: 'notion', angle: 'video', notion: 'B' },
+  { network: 'facebook', weekday: 2, time: '18:30', pillar: 'notion', angle: 'video', notion: 'A' },
   { network: 'bluesky', weekday: 3, time: '12:15', pillar: 'fond', angle: 'page' },
   { network: 'mastodon', weekday: 3, time: '12:30', pillar: 'fond', angle: 'page' },
   { network: 'threads', weekday: 3, time: '18:30', pillar: 'fond', angle: 'page' },
@@ -44,9 +51,16 @@ export const CALENDAR: readonly Slot[] = [
   { network: 'facebook', weekday: 4, time: '18:30', pillar: 'fond', angle: 'page' },
   { network: 'bluesky', weekday: 5, time: '12:15', pillar: 'produit-ou-classe', angle: 'page' },
   { network: 'mastodon', weekday: 5, time: '12:30', pillar: 'produit-ou-classe', angle: 'page' },
-  { network: 'threads', weekday: 5, time: '18:30', pillar: 'notion', angle: 'exemple', notion: 'B' },
+  { network: 'threads', weekday: 5, time: '18:30', pillar: 'notion', angle: 'video', notion: 'B' },
   { network: 'instagram', weekday: 5, time: '19:00', pillar: 'produit-ou-classe', angle: 'page' },
 ];
+
+/** The format a video slot takes when its notion has no video yet, or none showing its current words. */
+export function withoutVideo(network: Network): Angle {
+  if (network === 'instagram') return 'carrousel';
+  if (network === 'facebook') return 'long';
+  return 'exemple';
+}
 
 /** A post is prepared at least this far ahead: three weeks to read it and answer « ok » (D8). */
 export const REVIEW_DAYS = 21;

@@ -60,6 +60,15 @@ describe('a post’s pictures', () => {
     expect(chooseImages('threads', 'question', imgs, { ...none, image: 'sans' }, 'none')).toEqual([]);
   });
 
+  it('carries the video alone on a video slot, whatever the link, a picture test or a format test says', () => {
+    const video: Image = { url: 'https://squiggle.fr/og/social/faux-dilemme/video.mp4', alt: 'Où est le piège ?' };
+    for (const network of ['instagram', 'facebook', 'threads', 'bluesky'] as const) {
+      expect(chooseImages(network, 'video', { ...imgs, video }, { ...none, image: 'sans', format: 'image' }, 'required')).toEqual([video]);
+      expect(chooseImages(network, 'video', { ...imgs, video }, { ...none, format: 'carrousel' }, 'none')).toEqual([video]);
+    }
+    expect(chooseImages('bluesky', 'video', imgs, none, 'required')).toEqual([]);
+  });
+
   it('turns one picture into the carousel, or the carousel into one picture, under a format test', () => {
     expect(chooseImages('bluesky', 'exemple', imgs, { ...none, format: 'carrousel' }, 'required')).toEqual(imgs.slides);
     expect(chooseImages('facebook', 'long', imgs, { ...none, format: 'image' }, 'none')).toEqual([img(1)]);

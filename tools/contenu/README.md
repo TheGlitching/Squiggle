@@ -47,7 +47,7 @@ Monday in order:
    waiting list; else a draft already in `web/src/blog/`; else nothing. Always a pull
    request from `contenu/<slug>`, at most two open, no audience figure in it, with
    Squiggle's own analysis of the text in its description.
-5. **Posts** (`src/posts.ts`, `src/calendar.ts`): 16 slots a week on Bluesky, Mastodon,
+5. **Posts** (`src/posts.ts`, `src/calendar.ts`): 17 slots a week on Bluesky, Mastodon,
    Threads, Facebook, Instagram and X, each post held until the owner's « ok » (D8,
    `src/launch.ts`). At the start the queue fills one week at a time,
    two days ahead at the least, and each Monday one week further, until it reaches four
@@ -58,7 +58,13 @@ Monday in order:
    month at most, Meta's cap for Pages); every other post goes out native, with the
    carousel on Facebook and one picture on Threads. Mastodon's hashtags are the three
    most used of a closed list (`src/hashtags.ts`), measured each Monday on the public
-   tag API of three French-speaking instances. Each post
+   tag API of three French-speaking instances. Each notion of the week also goes out
+   as its short video, silent, every word on screen: an Instagram Reel, and the notion
+   slots on Bluesky, Facebook and Threads that showed its example
+   (`/og/social/<slug>/video.mp4`, rendered once per notion on a computer by
+   `npm run reels -w @squiggle/web` and published by the build while it shows the
+   glossary's current words). A notion without one keeps the slot's format from before
+   (`withoutVideo`). Each post
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),
    then a separate review that sees only the text, its source, its image and the
    editorial line. A refused post leaves its slot empty and is never rewritten.
@@ -175,4 +181,3 @@ Setting it up, once, in the Cloudflare dashboard and from a checkout:
 - A link in the first comment: the `lien` test only compares a link in the text with
   none, since Postiz would have to post the comment after the post.
 - The database is not backed up yet; Postiz's own databases are not either.
-- Short videos (Remotion), after the carousels.
