@@ -24,7 +24,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       # The build bundles the bookmark from the web app's source (favori.mjs).
       - run: npm ci
