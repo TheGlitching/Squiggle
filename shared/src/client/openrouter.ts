@@ -101,9 +101,23 @@ export interface OpenRouterReasoning {
   effort: 'none' | 'low' | 'medium' | 'high';
 }
 
+interface OpenRouterUsage {
+  cost?: number;
+  server_tool_use_details?: { web_search_requests?: number };
+}
+
+/** What one OpenRouter request cost, as its response reports it. */
+export interface OpenRouterSpend {
+  /** Everything billed for the request, web search included, in US dollars. */
+  costUsd: number;
+  /** Web searches the request ran. */
+  webSearches: number;
+}
+
 export class OpenRouterClient extends OpenAIClient {
   private readonly providerPreferences?: OpenRouterProviderPreferences;
   private readonly reasoning?: OpenRouterReasoning;
+  private spendSink?: (spend: OpenRouterSpend) => void;
 
   /**
    * Without preferences OpenRouter picks among every host of the model, and
@@ -143,13 +157,38 @@ export class OpenRouterClient extends OpenAIClient {
    * search), so neither the provider preferences nor the reasoning effort can
    * be left off one of them.
    */
-  protected override postJson(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<Response> {
+  protected override async postJson(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<Response> {
     const routed = {
       ...(body as Record<string, unknown>),
       ...(this.providerPreferences ? { provider: this.providerPreferences } : {}),
       ...(this.reasoning ? { reasoning: this.reasoning } : {}),
     };
-    return super.postJson(url, headers, routed, signal);
+    const response = await super.postJson(url, headers, routed, signal);
+    const sink = this.spendSink;
+    if (sink && response.headers.get('content-type')?.includes('application/json')) {
+      // A copy, so the caller still reads the body it asked for. A response
+      // that does not parse costs nothing to report: the answer is untouched.
+      try {
+        const usage = ((await response.clone().json()) as { usage?: OpenRouterUsage }).usage;
+        if (typeof usage?.cost === 'number') {
+          sink({ costUsd: usage.cost, webSearches: usage.server_tool_use_details?.web_search_requests ?? 0 });
+        }
+      } catch {
+        // see above
+      }
+    }
+    return response;
+  }
+
+  /**
+   * The same client, reporting what each of its requests costs to `sink`. A
+   * copy rather than a setter: the hosted server shares one client between
+   * concurrent requests, and each of them counts its own spend.
+   */
+  withSpendSink(sink: (spend: OpenRouterSpend) => void): OpenRouterClient {
+    const copy = Object.create(this) as OpenRouterClient;
+    copy.spendSink = sink;
+    return copy;
   }
 
   /**
