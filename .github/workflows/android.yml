@@ -24,8 +24,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
+      # The runner image already carries the Android SDK (ANDROID_HOME).
       # The build bundles the bookmark from the web app's source (favori.mjs).
       - run: npm ci
 
