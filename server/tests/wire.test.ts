@@ -108,6 +108,35 @@ describe('extension client against the real server', () => {
     ]);
   });
 
+  it('shows a reasoning model at work, then each finding as it is written', async () => {
+    const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
+    // The provider as a reasoning model streams it: a long reasoning, then the
+    // answer in small pieces, a key sometimes cut in two between them.
+    const complete = env.llm.complete.bind(env.llm);
+    env.llm.stream = async (options, callbacks) => {
+      const res = await complete(options);
+      const reasoning = Array.from({ length: 320 }, (_, i) => `mot${i}`).join(' ');
+      for (let i = 0; i < reasoning.length; i += 9) callbacks.onReasoning?.(reasoning.slice(i, i + 9));
+      for (let i = 0; i < res.content.length; i += 7) callbacks.onChunk(res.content.slice(i, i + 7));
+      return res;
+    };
+    const client = await hostedClient(env, 'marie@example.org');
+
+    const messages: string[] = [];
+    await client.analyze(
+      { url: ARTICLE_URL, title: 'Emploi : la baisse', blocks: BLOCKS, citedSources: CITED },
+      { onProgress: (e) => messages.push(e.message) },
+    );
+
+    // Told again every 150 words or so, the count only ever growing.
+    const counts = messages.flatMap((m) => /\((\d+) mots de réflexion\)/.exec(m)?.[1] ?? []).map(Number);
+    expect(counts).toHaveLength(2);
+    expect(counts[0]).toBeGreaterThanOrEqual(150);
+    expect(counts[1]).toBeGreaterThanOrEqual(counts[0] + 150);
+    const written = messages.filter((m) => m.includes('rédigé'));
+    expect(written).toEqual(['Audit critique : 1 constat rédigé...', 'Audit critique : 2 constats rédigés...']);
+  });
+
   it('carries the sources the text cites, by nature, to the final report and the cache, at no extra model call', async () => {
     const plain = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
     await (await hostedClient(plain, 'paul@example.org')).analyze({ url: ARTICLE_URL, title: 'Emploi', blocks: BLOCKS, citedSources: CITED });

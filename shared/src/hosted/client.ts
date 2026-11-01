@@ -135,7 +135,7 @@ const AUDIT_STREAM = 'application/x-ndjson';
 export const AUDIT_SILENCE_MS = 45_000;
 
 /** One line of the audit's stream, or null for a line that is not one. */
-function parseLine(line: string): { progress?: { step?: string; findings?: number }; status?: unknown; body?: unknown } | null {
+function parseLine(line: string): { progress?: { step?: string; findings?: number; words?: number }; status?: unknown; body?: unknown } | null {
   if (!line.trim()) return null;
   try {
     const value = JSON.parse(line) as unknown;
@@ -401,14 +401,22 @@ export class HostedAnalysisClient {
   }
 
   /** What the panel says while the audit runs: only what the server reported, never a guess. */
-  private auditProgress(progress: { step?: string; findings?: number }): void {
+  private auditProgress(progress: { step?: string; findings?: number; words?: number }): void {
     switch (progress.step) {
       case 'sent':
         this.report('calling_provider', 'Audit critique : l’article est confié au modèle...', 16);
         break;
-      case 'thinking':
-        this.report('calling_provider', 'Audit critique : le modèle lit et analyse l’article...', 20);
+      case 'thinking': {
+        const words = Math.max(0, Number(progress.words) || 0);
+        this.report(
+          'calling_provider',
+          words < 100
+            ? 'Audit critique : le modèle lit et analyse l’article...'
+            : `Audit critique : le modèle analyse l’article (${words.toLocaleString('fr-FR')} mots de réflexion)...`,
+          Math.min(28, 20 + Math.floor(words / 500)),
+        );
         break;
+      }
       case 'writing': {
         const n = Math.max(0, Number(progress.findings) || 0);
         this.report(
@@ -421,7 +429,7 @@ export class HostedAnalysisClient {
         break;
       }
       case 'retry':
-        this.report('calling_provider', 'Audit critique : réponse illisible, le modèle est interrogé une seconde fois...', 18);
+        this.report('calling_provider', 'Audit critique : réponse illisible, le modèle est interrogé une seconde fois...', this.lastProgress);
         break;
       case 'critique':
         this.report('calling_provider', 'Relecture critique des constats...', 50);

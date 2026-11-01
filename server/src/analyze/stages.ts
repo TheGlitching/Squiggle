@@ -314,11 +314,17 @@ export interface AuditResult {
  * word of what the model wrote: a visitor's findings are withheld.
  */
 export type AuditProgress =
-  | { step: 'sent' | 'thinking' | 'retry' | 'critique' }
+  | { step: 'sent' | 'retry' | 'critique' }
+  | { step: 'thinking'; words: number }
   | { step: 'writing'; findings: number };
+
+/** How many more words of reasoning before the reader is told again: often enough to see it move. */
+const REASONING_WORDS_STEP = 150;
 
 /** Only a finding has a severity in the audit's answer: counting them counts the findings written. */
 const FINDING_IN_ANSWER = /"severity"\s*:/g;
+/** Enough of the answer's end to hold a key cut in two between chunks. */
+const FINDING_KEY_SPAN = 24;
 
 export async function analyzeAudit(
   s: AnalyzeServices,
@@ -415,8 +421,11 @@ export async function analyzeAudit(
     let completion;
     await count(s, 'audit');
     onProgress({ step: attempt === 0 ? 'sent' : 'retry' });
-    let thinking = false;
+    let words = 0;
+    let inWord = false;
+    let toldWords = -1;
     let written = '';
+    let scanned = 0;
     let findings = -1;
     try {
       // Streamed, so the reader sees the model reason and then write rather
@@ -435,14 +444,29 @@ export async function analyzeAudit(
           maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
         },
         {
-          onReasoning: () => {
-            if (thinking) return;
-            thinking = true;
-            onProgress({ step: 'thinking' });
+          // A reasoning model thinks for most of the call before it writes a
+          // word of the answer: how far it has got is the only sign of life.
+          onReasoning: (delta) => {
+            // Counted as it comes, a word at its first letter: never the text again.
+            for (const ch of delta) {
+              const space = ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r';
+              if (!space && !inWord) words += 1;
+              inWord = !space;
+            }
+            if (toldWords >= 0 && words < toldWords + REASONING_WORDS_STEP) return;
+            toldWords = words;
+            onProgress({ step: 'thinking', words });
           },
           onChunk: (delta) => {
             written += delta;
-            const count = written.match(FINDING_IN_ANSWER)?.length ?? 0;
+            // Only the new text, and the end of the last chunk a key may straddle.
+            FINDING_IN_ANSWER.lastIndex = scanned;
+            let count = Math.max(findings, 0);
+            for (let m = FINDING_IN_ANSWER.exec(written); m; m = FINDING_IN_ANSWER.exec(written)) {
+              count += 1;
+              scanned = m.index + m[0].length;
+            }
+            scanned = Math.max(scanned, written.length - FINDING_KEY_SPAN);
             if (count === findings) return;
             findings = count;
             onProgress({ step: 'writing', findings: count });
