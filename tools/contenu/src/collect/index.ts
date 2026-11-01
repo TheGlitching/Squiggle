@@ -72,9 +72,9 @@ async function collectPostiz(ctx: Ctx): Promise<PostizStats> {
   for (const i of integrations) {
     const network = i.identifier as Network;
     if (!NETWORKS.includes(network)) continue;
-    // Postiz returns no statistics for Bluesky: its public API is read instead.
-    if (network === 'bluesky') {
-      stats.networks.bluesky = { integrationId: i.id, followers: null, impressions: null };
+    // Postiz returns no statistics for Bluesky (its public API is read instead) nor for Mastodon.
+    if (network === 'bluesky' || network === 'mastodon') {
+      stats.networks[network] = { integrationId: i.id, followers: null, impressions: null };
       continue;
     }
     const metrics = await postiz.platformAnalytics(i.id, 7).catch(() => []);
@@ -88,7 +88,7 @@ async function collectPostiz(ctx: Ctx): Promise<PostizStats> {
   for (const p of published) {
     const network = p.integration.providerIdentifier as Network;
     let metrics: Awaited<ReturnType<Postiz['postAnalytics']>> = [];
-    if (network !== 'bluesky') {
+    if (network !== 'bluesky' && network !== 'mastodon') {
       // Each X statistic Postiz reads is billed to the X account.
       const xAllowed = network !== 'x' || xReadsThisMonth(ctx) + X_PRICES.read <= CAPS.xReadsMonthly;
       if (xAllowed) {

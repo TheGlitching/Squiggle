@@ -85,7 +85,7 @@ export async function daily(ctx: Ctx): Promise<void> {
   });
 
   await step(ctx, 'visites ?ref=', async () => {
-    const out = ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM posts WHERE status = 'publie' AND slot_at >= ? AND network IN ('bluesky', 'threads', 'facebook')", addDays(ctx.now, -14).toISOString())?.n ?? 0;
+    const out = ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM posts WHERE status = 'publie' AND slot_at >= ? AND network IN ('bluesky', 'mastodon', 'threads', 'facebook')", addDays(ctx.now, -14).toISOString())?.n ?? 0;
     if (out === 0) return 'aucune publication avec lien en 14 jours';
     const metrics = await collectMetrics(ctx, 2);
     const visits = NETWORKS.reduce((s, n) => s + (metrics.audience.campaigns[n] ?? 0), 0);

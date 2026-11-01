@@ -21,6 +21,7 @@ décrit. Jamais de promesse au-delà de ce que dit la page.
 | Réseau | Pour qui | Forme |
 |---|---|---|
 | Bluesky | lecteurs curieux, publics tech, journalistes, enseignants | 300 caractères au plus, lien compris ; une phrase d'exemple, une phrase de lecture, le lien |
+| Mastodon | public tech, libre, éducation ; on y découvre par mots-dièse | 500 caractères au plus, lien compris ; l'exemple et sa lecture, le lien, puis 2 ou 3 mots-dièse sans sigle (#EspritCritique #ÉducationAuxMédias) |
 | Threads | grand public, ton de conversation | 500 caractères au plus ; une question ou l'exemple, le lien en fin |
 | Facebook | grand public, parents | 3 à 6 phrases ; l'exemple, sa lecture, le lien |
 | Instagram | grand public plus jeune | légende de 2 à 4 phrases sous un carrousel ; pas d'adresse, « Lien dans la bio. » |
@@ -35,6 +36,7 @@ décrit. Jamais de promesse au-delà de ce que dit la page.
 - Le lien, quand il y en a un, est recopié **exactement** tel qu'il est donné, avec
   son `?ref=`.
 - Pas de mot-dièse, sauf un seul quand il aide vraiment à trouver la publication.
+  Mastodon fait exception : on y découvre par mots-dièse, 2 ou 3 en fin de texte.
 - Pas de mention `@` d'un compte, pas d'émoji en série, pas de majuscules d'accroche.
 - Deux publications ne commencent jamais par les mêmes mots.
 - Écrire pour quelqu'un qui n'a jamais entendu parler de Squiggle.

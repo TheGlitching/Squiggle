@@ -31,7 +31,7 @@ des réseaux). Les mentions j'aime et les abonnés ne servent qu'à départager.
   existent :
   - `{"network", "kind": "heure", "value": "+60" | "-60" | "+30" | "-30" | "+90" | "-90" | "+120" | "-120", "hypothesis"}` : décaler les heures de ce réseau ;
   - `{"network", "kind": "question_finale", "value": "avec" | "sans", "hypothesis"}` : finir ou non par une question ;
-  - `{"network": "threads" | "facebook", "kind": "image", "value": "avec" | "sans", "hypothesis"}` : une image en plus de l'aperçu du lien.
+  - `{"network": "threads" | "facebook" | "mastodon", "kind": "image", "value": "avec" | "sans", "hypothesis"}` : une image en plus de l'aperçu du lien.
   Ne propose un test que s'il y a déjà des publications parties sur ce réseau.
 
 Ce qui est entendu dans la semaine (commentaires, réponses et gestes du propriétaire)
