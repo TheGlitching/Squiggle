@@ -19,7 +19,11 @@ const NON_CONTENT_TAGS = new Set(['noscript', 'script', 'template', 'style']);
 // Matched against whole words of an id/class, never substrings: "ad" must not catch
 // "lead", "heading", "headline" or "thread", which are the standfirst and the title.
 const NOISE_WORD =
-  /^(ads?|banner|share|sharing|promo|promoted|related|teasers?|disclaimer|copyright|signin|signup|login|subscribe|newsletter|comments?|breadcrumbs?|outbrain|taboola)$|^(advert|sponsor|cookie|consent)/;
+  /^(ads?|banner|share|sharing|promo|promoted|related|teasers?|disclaimer|copyright|signin|signup|login|subscribe|newsletter|comments?|breadcrumbs?|outbrain|taboola|carousels?)$|^(advert|sponsor|cookie|consent)/;
+
+// A dialog is the page talking to the reader (sign in to save, accept cookies), never
+// the article, whether or not it is on screen when the page is read.
+const DIALOG_SELECTOR = 'dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]';
 
 // Short blocks that are page furniture whatever their markup: "related article" lead-ins,
 // sign-in prompts, comment widgets. French first, English for the sites that mix both.
@@ -508,7 +512,7 @@ export class ArticleExtractor {
       return verdict;
     };
 
-    return elements.filter(el => {
+    const kept = elements.filter(el => {
       // Filter out hidden elements
       if (typeof window !== 'undefined' && window.getComputedStyle) {
         try {
@@ -523,6 +527,7 @@ export class ArticleExtractor {
 
       // Filter out fallbacks and markup that is not prose
       if (el.closest(NON_CONTENT_SELECTOR)) return false;
+      if (el.closest(DIALOG_SELECTOR)) return false;
 
       // Filter out elements, or wrappers up to the article container, with noise names
       for (let node: HTMLElement | null = el; node && node !== container; node = node.parentElement) {
@@ -549,6 +554,16 @@ export class ArticleExtractor {
           (tag === 'li' && isCardList(el.parentElement)));
       if (navigationLike && !citesOnlyElsewhere(el)) return false;
 
+      return true;
+    });
+
+    // A block inside another kept block (the paragraph of an embedded post inside its
+    // <blockquote>, a <p> inside an <li>) is already in that block's text: read once.
+    const keptSet = new Set<Element>(kept);
+    return kept.filter(el => {
+      for (let node = el.parentElement; node && node !== container; node = node.parentElement) {
+        if (keptSet.has(node)) return false;
+      }
       return true;
     });
   }
