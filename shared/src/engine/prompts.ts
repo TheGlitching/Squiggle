@@ -9,7 +9,7 @@ import { isVideoTranscriptUrl } from './video';
  * analysed under different instructions is a different report. Bump it
  * whenever a prompt in this file changes in a way that can move a verdict.
  */
-export const PROMPT_VERSION = '1.4.0';
+export const PROMPT_VERSION = '1.4.1';
 
 /**
  * Output ceiling of the audit, reasoning included. A reasoning model thinks
@@ -364,6 +364,9 @@ avec son "blockId", sa "category" et sa "severity". "weaknesses" est une reprise
 en prose, jamais le seul endroit où un défaut est consigné : un défaut qui
 n'existe que là ne sera pas répercuté sur la note, et l'article passera pour
 plus solide qu'il ne l'est.
+Seule exception : un défaut de langue (faute d'orthographe, coquille, phrase ou
+paragraphe répété) n'a pas de catégorie de finding. Il reste dans les
+"weaknesses" de "orthographe_grammaire" et ne figure jamais dans "findings".
 
 AFFIRMATION VÉRIFIABLE ("checkableClaim") :
 Chaque finding 'affirmation-non-etayee' sera ensuite vérifié par une recherche web. Pour qu'elle cherche le bon fait, "checkableClaim" reformule ce que l'article affirme en UNE phrase autonome, compréhensible sans l'article, avec son contexte : qui, quoi, quand, où, quel chiffre (ex. pour la citation « a supprimé 200 postes » : "L'usine Durand de Lille a supprimé 200 postes en 2023").
