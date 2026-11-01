@@ -41,6 +41,8 @@ import {
   analyzePasted,
   cachedReport,
   reportByFingerprint,
+  isXLink,
+  readXPost,
   reportByLink,
   type AnalysisFailure,
   type Progress,
@@ -137,6 +139,8 @@ const MAILED_GONE =
   'Ce rapport n’est plus disponible. Transférez de nouveau l’e-mail à verifier@squiggle.fr, ou collez son texte ici.';
 
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
+const READING_X = 'Lien X reçu. Lecture de la publication…';
+const X_PARTIAL = 'Le fil n’a pas pu être lu en entier : l’analyse porte sur ce qui a été lu jusqu’à cette publication.';
 const LOOKING_UP = 'Adresse reçue. Recherche d’un rapport déjà fait pour ce lien…';
 
 /** What to do with a link nobody has analysed with the extension yet, in one sentence. */
@@ -539,6 +543,18 @@ function AnalyserPage() {
    * sentence, how to have it analysed.
    */
   async function findByLink(link: string) {
+    // A publication on X is read by the server from X itself, then analysed like a paste.
+    if (isXLink(link)) {
+      setNotice(READING_X);
+      const read = await readXPost(link, !!account);
+      if (read.kind === 'error') return setNotice((current) => (current === READING_X ? read.message : current));
+      setArticle(read.article);
+      setNotice(read.partial ? X_PARTIAL : null);
+      if (!pasteProblem(read.article) && (account === null || (account && describeAccount(account).canAnalyse))) {
+        await run(read.article);
+      }
+      return;
+    }
     setNotice(LOOKING_UP);
     const found = await reportByLink(link);
     if (!found) {

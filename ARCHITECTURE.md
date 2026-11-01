@@ -207,6 +207,15 @@ a minute at a time (`server/src/transcribe/`). The timed text comes back into th
 a pasted transcript; neither the sound nor the text is kept. The Android app hands a shared
 recording to the site's share target inside the Trusted Web Activity.
 
+A link to a publication on X (`x.com`, `twitter.com`; never a press link) is read by the
+server through X's official API (`server/src/x/`, `GET /web/analyze/x-post`, `/web/anon/x-post`
+and the same stage under `/v1/analyze/`), and by the forwarding address for a message that is
+only such a link. The author's thread is read whole (the search on its conversation, or the
+replies walked up one by one if the plan has no search), capped at 25 publications. The text comes
+back to the reader and is analysed like a paste; `x_posts` keeps each publication for a day, and
+two daily spend allowances (reader, site) are reserved before X is called. Without
+`X_BEARER_TOKEN` the whole path is absent.
+
 A podcast episode's own transcript, when its feed publishes one (`podcast:transcript`), is
 read by the extension in the reader's browser (`src/podcast/transcript.ts`): the page's
 feed, the episode in it, then the transcript, analysed like a video's captions. The server

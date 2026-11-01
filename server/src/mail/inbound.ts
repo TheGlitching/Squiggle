@@ -55,6 +55,8 @@ import type { EmailSender } from '../lib/brevo';
 import type { Clock } from '../lib/clock';
 import type { ApiError } from '../lib/errors';
 import { logEvent, newRequestId } from '../lib/log';
+import { parseXLink } from '../x/client';
+import { readXThread, type XServices, type XThread } from '../x/thread';
 import { domainOf, isAutomatic, senderAuthenticated } from './authenticated';
 import { firstLink, forwardedArticle, withoutLinks } from './forwarded';
 import { renderMailHtml, renderMailText, type MailContent } from './reply';
@@ -106,6 +108,8 @@ export interface MailServices {
   llm?: () => BaseLLMClient;
   promptVersion: string;
   fetchImpl?: typeof fetch;
+  /** Reads publications on X; absent, a link to X is looked up like any other. */
+  x?: XServices;
   /** The queue the research runs from. Absent (tests, local), the job runs at once. */
   mailQueue?: MailQueue;
 }
@@ -180,7 +184,26 @@ async function receive(
     surface: 'email',
   };
 
-  const article = forwardedArticle(email.subject, email.text);
+  let article = forwardedArticle(email.subject, email.text);
+
+  // A message that is only a link to a publication on X: the publication (and
+  // its thread) is read from X, then analysed as the short message it is.
+  let fromX: XThread | undefined;
+  if (s.x && withoutLinks(article.text).length < MIN_MESSAGE_CHARS) {
+    const link = firstLink(article.text);
+    const target = link ? parseXLink(link) : null;
+    if (target) {
+      const read = await readXThread({ db: s.db, clock: s.clock, x: s.x, requestId }, user.id, target.id);
+      if (!read.ok) {
+        await reply('Squiggle n’a pas pu lire cette publication X', {
+          paragraphs: [read.message],
+        });
+        return { code: 'link_unknown', userId: user.id };
+      }
+      fromX = read;
+      article = { ...article, title: read.title, text: read.text };
+    }
+  }
   const title = article.title.slice(0, 500);
   const blocks = plainTextBlocks(title, article.text);
 
@@ -188,7 +211,7 @@ async function receive(
   // claims nothing; a text of any length above it is analysed, as a short
   // message (a chain, a post) or as an article, which the audit reads from
   // its length alone, as it does for a paste.
-  if (withoutLinks(article.text).length < MIN_MESSAGE_CHARS) {
+  if (!fromX && withoutLinks(article.text).length < MIN_MESSAGE_CHARS) {
     const link = firstLink(article.text);
     if (!link) {
       await reply('Squiggle n’a pas trouvé de texte dans votre message', {
@@ -219,7 +242,7 @@ async function receive(
     return { code: 'link_unknown', userId: user.id };
   }
 
-  const payload = PastedAuditRequestSchema.safeParse({ title, blocks });
+  const payload = PastedAuditRequestSchema.safeParse({ title, blocks, url: fromX?.url });
   if (!payload.success) {
     await reply('Squiggle n’a pas pu lire votre message', {
       paragraphs: ['Ce message n’a pas pu être lu comme un article. Transférez l’article seul, sans le reste de la conversation.'],

@@ -64,6 +64,10 @@
         "OPENROUTER_MODEL": "deepseek/deepseek-v4.1-flash",
         // The minutes of sound staging may have transcribed in a day (see production).
         "TRANSCRIBE_DAILY_MINUTES": "60",
+        // Reading publications on X (see production). Staging has no X_BEARER_TOKEN
+        // unless one is set, and then a link to X is read like any other link.
+        "X_DAILY_CAP_USD": "0.5",
+        "X_ACCOUNT_DAILY_CAP_USD": "0.1",
         // The Stripe test-mode price: staging never talks to live billing.
         "STRIPE_PRICE_ID": "PENDING_TEST_PRICE_ID",
         // The test-mode teacher coupon (see production). None exists yet, so
@@ -109,6 +113,13 @@
         // have transcribed in a UTC day, all accounts together. At 0.0035 $ a
         // minute (HOSTED_TRANSCRIPTION), 600 minutes is 2.10 $ a day at most.
         "TRANSCRIBE_DAILY_MINUTES": "600",
+        // The spending caps of reading publications on X, in dollars per UTC day:
+        // all readers together, and one account (or one visitor). X bills
+        // 0.005 $ a publication read and 0.010 $ an author, once a day each, so a
+        // 25-publication thread costs 0.135 $ at most. The secret X_BEARER_TOKEN
+        // opens the feature; without it a link to X is read like any other link.
+        "X_DAILY_CAP_USD": "2",
+        "X_ACCOUNT_DAILY_CAP_USD": "0.25",
         // The recurring price the subscription is sold at. A `price_…` id is not
         // a secret (it is visible in any Checkout URL), but it is environment
         // specific, so it lives here rather than in code. Filled in from the

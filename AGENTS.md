@@ -88,7 +88,8 @@ Each of these is load-bearing, and each is easy to break with a change that look
 a simplification.
 
 **The server never fetches the article.** Its text always comes from the extension,
-from the page the reader is already looking at. That is what makes a paywalled page
+from the page the reader is already looking at. The one exception is a publication on
+X, read through X's official API (`server/src/x/`, X hosts only, never a press link). That is what makes a paywalled page
 analysable exactly as far as the reader can read it (flagged as partial), and what
 keeps our IP out of publishers' logs. The only pages the server fetches are the sources
 the article itself cites, through the SSRF-hardened fetcher — never the browser-safe

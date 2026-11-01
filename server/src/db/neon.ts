@@ -19,6 +19,8 @@ import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
 import {
   ANON_RATE_SCOPE_PREFIX,
   TRANSCRIPTION_RATE_SCOPE_PREFIX,
+  X_SPEND_RATE_SCOPE_PREFIX,
+  X_POST_TTL_MS,
   DAY_MS,
   RATE_WINDOW_MS,
   REPORT_MAX_BYTES,
@@ -50,6 +52,7 @@ import type {
   PurgeReportsResult,
   CollectMetricsArgs,
   MetricName,
+  XPostRow,
   MetricsRaw,
   RateCheckArgs,
   RateCheckResult,
@@ -531,6 +534,34 @@ export class NeonDb implements Db {
     return rows.length === 1;
   }
 
+  async getXPost(id: string, since: number): Promise<XPostRow | null> {
+    const rows = await this.q`SELECT * FROM x_posts WHERE id = ${id} AND fetched_at > ${since}`;
+    return rows.length === 0 ? null : xPostRow(rows[0]);
+  }
+
+  async getXThread(conversationId: string, authorId: string, since: number): Promise<XPostRow[]> {
+    const rows = await this.q`
+      SELECT * FROM x_posts
+      WHERE conversation_id = ${conversationId} AND author_id = ${authorId} AND thread_done AND fetched_at > ${since}
+      ORDER BY LENGTH(id), id
+    `;
+    return rows.map(xPostRow);
+  }
+
+  async putXPosts(rows: XPostRow[]): Promise<void> {
+    for (const r of rows) {
+      await this.q`
+        INSERT INTO x_posts (id, conversation_id, author_id, author_username, author_name, text, created_at, replied_to_id, alt_texts, thread_done, fetched_at)
+        VALUES (${r.id}, ${r.conversationId}, ${r.authorId}, ${r.authorUsername}, ${r.authorName}, ${r.text}, ${r.createdAt}, ${r.repliedToId}, ${r.altTexts}, ${r.threadDone}, ${r.fetchedAt})
+        ON CONFLICT (id) DO UPDATE SET
+          conversation_id = EXCLUDED.conversation_id, author_id = EXCLUDED.author_id,
+          author_username = EXCLUDED.author_username, author_name = EXCLUDED.author_name,
+          text = EXCLUDED.text, created_at = EXCLUDED.created_at, replied_to_id = EXCLUDED.replied_to_id,
+          alt_texts = EXCLUDED.alt_texts, thread_done = EXCLUDED.thread_done, fetched_at = EXCLUDED.fetched_at
+      `;
+    }
+  }
+
   async releaseVisitorUse(ipHash: string, usedAt: number): Promise<void> {
     await this.q`DELETE FROM visitor_uses WHERE ip_hash = ${ipHash} AND used_at = ${usedAt}`;
   }
@@ -810,13 +841,30 @@ export class NeonDb implements Db {
       this.q`DELETE FROM usage_log WHERE created_at <= ${now - usageLogRetentionMs} RETURNING 1`,
       this.q`
         DELETE FROM rate_limits
-        WHERE window_start <= CASE WHEN scope LIKE ${`${ANON_RATE_SCOPE_PREFIX}%`} OR scope LIKE ${`${TRANSCRIPTION_RATE_SCOPE_PREFIX}%`} THEN ${now - DAY_MS}::bigint ELSE ${now - RATE_WINDOW_MS}::bigint END
+        WHERE window_start <= CASE WHEN scope LIKE ${`${ANON_RATE_SCOPE_PREFIX}%`} OR scope LIKE ${`${TRANSCRIPTION_RATE_SCOPE_PREFIX}%`} OR scope LIKE ${`${X_SPEND_RATE_SCOPE_PREFIX}%`} THEN ${now - DAY_MS}::bigint ELSE ${now - RATE_WINDOW_MS}::bigint END
         RETURNING 1
       `,
       this.q`DELETE FROM visitor_uses WHERE used_at <= ${now - VISITOR_USE_RETENTION_MS} RETURNING 1`,
+      this.q`DELETE FROM x_posts WHERE fetched_at <= ${now - X_POST_TTL_MS} RETURNING 1`,
     ]);
     return swept.reduce((n, rows) => n + rows.length, 0);
   }
+}
+
+function xPostRow(r: Record<string, unknown>): XPostRow {
+  return {
+    id: r.id as string,
+    conversationId: r.conversation_id as string,
+    authorId: r.author_id as string,
+    authorUsername: r.author_username as string,
+    authorName: r.author_name as string,
+    text: r.text as string,
+    createdAt: r.created_at as string,
+    repliedToId: (r.replied_to_id as string | null) ?? null,
+    altTexts: r.alt_texts as string,
+    threadDone: r.thread_done as boolean,
+    fetchedAt: num(r.fetched_at),
+  };
 }
 
 function runRow(r: Record<string, unknown>): AnalysisRunRow {

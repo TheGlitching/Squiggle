@@ -136,7 +136,7 @@ describe('GET /admin/metrics', () => {
     expect(body.metrics.analyses).toEqual({
       finalized: 0,
       costPerAnalysisUsd: null,
-      spent: { auditUsd: 0, researchUsd: 0, sourceCheckUsd: 0, totalUsd: 0, webSearches: 0 },
+      spent: { auditUsd: 0, researchUsd: 0, sourceCheckUsd: 0, xUsd: 0, totalUsd: 0, webSearches: 0 },
     });
   });
 
@@ -180,7 +180,7 @@ describe('GET /admin/metrics', () => {
     expect(body.metrics.analyses).toEqual({
       finalized: 1,
       costPerAnalysisUsd: 0.0232,
-      spent: { auditUsd: 0.0083, researchUsd: 0.0139, sourceCheckUsd: 0.001, totalUsd: 0.0232, webSearches: 2 },
+      spent: { auditUsd: 0.0083, researchUsd: 0.0139, sourceCheckUsd: 0.001, xUsd: 0, totalUsd: 0.0232, webSearches: 2 },
     });
   });
 

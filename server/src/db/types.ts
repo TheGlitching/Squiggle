@@ -383,6 +383,16 @@ export const METRIC_NAMES = [
   'cost_research',
   'cost_source_check',
   'web_searches',
+  // Publications read from X's API, the ones served from our own copy, links
+  // X could not give (deleted, protected, or refused), refusals by the daily
+  // spend cap, and what the reads cost at X's published prices, in millionths
+  // of a dollar (what was billed, not what was served from the copy).
+  'x_read',
+  'x_cache_hit',
+  'x_unavailable',
+  'refused_x_cap',
+  'cost_x',
+  'x_posts_read',
 ] as const;
 export type MetricName = (typeof METRIC_NAMES)[number];
 
@@ -446,6 +456,27 @@ export interface RateCheckResult {
   /** Number of uses inside the current window, including this one. */
   count: number;
   windowStart: number;
+}
+
+/**
+ * A publication read from X, kept for `X_POST_TTL_MS`: X wants its content kept
+ * current, and bills a resource once a day, so a day is also what a second
+ * read would have cost nothing to repeat. `threadDone` marks the publications
+ * of a thread that was read whole, so a cached thread is never served half.
+ */
+export interface XPostRow {
+  id: string;
+  conversationId: string;
+  authorId: string;
+  authorUsername: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+  repliedToId: string | null;
+  /** JSON array of the images' alternative texts. */
+  altTexts: string;
+  threadDone: boolean;
+  fetchedAt: number;
 }
 
 export interface Db {
@@ -564,6 +595,15 @@ export interface Db {
    * at `now`; false, with nothing changed, when it already had one.
    */
   claimVisitorUse(ipHash: string, now: number, retentionMs: number): Promise<boolean>;
+
+  /** A publication read from X no longer than `since` ago, or null. */
+  getXPost(id: string, since: number): Promise<XPostRow | null>;
+
+  /** The publications of one author's thread, read whole no longer than `since` ago, oldest first. */
+  getXThread(conversationId: string, authorId: string, since: number): Promise<XPostRow[]>;
+
+  /** Keep these publications, replacing any held under the same identifier. */
+  putXPosts(rows: XPostRow[]): Promise<void>;
 
   /** Give back the use claimed at `usedAt`, for an analysis that ended up costing nothing. */
   releaseVisitorUse(ipHash: string, usedAt: number): Promise<void>;

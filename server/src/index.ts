@@ -126,6 +126,8 @@ import { HOSTED_ANALYSIS, isAudienceMetricName, sha256Hex } from '@squiggle/shar
 import { migrate, type SqlQuery } from './migrations';
 import { openRouterTranscriber, type Transcriber } from './transcribe/openrouter';
 import { transcribeRecording } from './transcribe/transcribe';
+import { parseXLink } from './x/client';
+import { readXThread, xServicesOf, type XEnv, type XServices } from './x/thread';
 import { collectLaunchMetrics, countMetric } from './metrics';
 import { secureEquals } from './lib/secureCompare';
 import { MAIL_JOB_ATTEMPTS, receiveEmail, runMailJob, type MailJob, type MailQueue } from './mail/inbound';
@@ -187,6 +189,15 @@ export interface Env {
    * transcription; unset, empty or 0, transcription is closed.
    */
   TRANSCRIBE_DAILY_MINUTES?: string;
+  /**
+   * Secret: the X application's bearer token. Absent, links to X are read like
+   * any other link and nothing calls X. The caps and the thread length beside
+   * it are plain variables (`x/thread.ts`).
+   */
+  X_BEARER_TOKEN?: string;
+  X_DAILY_CAP_USD?: string;
+  X_ACCOUNT_DAILY_CAP_USD?: string;
+  X_THREAD_MAX_POSTS?: string;
 }
 
 export interface Services {
@@ -221,6 +232,8 @@ export interface Services {
   runMigrations?: (now: number) => Promise<string[]>;
   /** Where a forwarded message's research and reply are queued (`mail/inbound.ts`). */
   mailQueue?: MailQueue;
+  /** Reads publications on X; absent without `X_BEARER_TOKEN`. A stub client in tests. */
+  x?: XServices;
 }
 
 /** The deployment settings the provider gateway reads. */
@@ -943,6 +956,16 @@ async function analyzeRoute(
     return finish(await analyzeLink(analyze, query.data.url));
   }
 
+  // A link to a publication on X, read by X's own API for the analysis that follows.
+  // The text goes back to the reader, who analyses it like a pasted one: only X's
+  // hosts are read this way, so a press link never reaches this.
+  if (stage === '/x-post' && method === 'GET') {
+    const link = parseXLink(url.searchParams.get('url') ?? '');
+    if (!link) return finish(apiError('invalid_url', 'Ce n’est pas un lien vers une publication X.'));
+    const who = 'visitor' in reader ? reader.ipHash : reader.id;
+    return finish(await readXThread({ db: s.db, clock: s.clock, x: s.x, requestId }, who, link.id));
+  }
+
   if (stage === '/audit' && method === 'POST') {
     const schema = caller === 'install' ? AuditRequestSchema : PastedAuditRequestSchema;
     const parsed = schema.safeParse(parseJson(rawBody));
@@ -1079,6 +1102,7 @@ function servicesFromEnv(env: Env): Services {
     // `LLM_PROVIDER` selects: only OpenRouter serves the model it names.
     transcriber: env.OPENROUTER_API_KEY ? openRouterTranscriber(env.OPENROUTER_API_KEY) : undefined,
     transcriptionDailyMinutes: Number(env.TRANSCRIBE_DAILY_MINUTES) || 0,
+    x: xServicesOf(env as XEnv, (input, init) => fetch(input, init)),
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY,
       priceId: env.STRIPE_PRICE_ID,
@@ -1112,6 +1136,7 @@ export function mailServicesOf(s: Services) {
     promptVersion: s.promptVersion ?? PROMPT_VERSION,
     fetchImpl: s.fetchImpl as typeof fetch | undefined,
     mailQueue: s.mailQueue,
+    x: s.x,
   };
 }
 

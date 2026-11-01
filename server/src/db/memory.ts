@@ -13,10 +13,12 @@ import { EMAIL_CHANGE_RATE_SCOPE } from '../account/rateScopes';
 import {
   ANON_RATE_SCOPE_PREFIX,
   TRANSCRIPTION_RATE_SCOPE_PREFIX,
+  X_SPEND_RATE_SCOPE_PREFIX,
   DAY_MS,
   RATE_WINDOW_MS,
   REPORT_MAX_BYTES,
   VISITOR_USE_RETENTION_MS,
+  X_POST_TTL_MS,
   WEEK_MS,
   utcDayOf,
 } from '../usage/limits';
@@ -45,6 +47,7 @@ import type {
   PurgeReportsResult,
   CollectMetricsArgs,
   MetricName,
+  XPostRow,
   MetricsRaw,
   RateCheckArgs,
   RateCheckResult,
@@ -67,6 +70,7 @@ export class MemoryDb implements Db {
   private readonly oauth = new Map<string, OAuthPendingRow>();
   private readonly rates = new Map<string, { scope: string; count: number; windowStart: number }>();
   private readonly visitorUses = new Map<string, { usedAt: number }>();
+  private readonly xPosts = new Map<string, XPostRow>();
   private readonly usageDaily = new Map<string, UsageDailyRow>();
   private readonly usageLog = new Map<string, UsageLogRow>();
   private readonly reports = new Map<string, ReportRow>();
@@ -441,6 +445,22 @@ export class MemoryDb implements Db {
     return true;
   }
 
+  async getXPost(id: string, since: number): Promise<XPostRow | null> {
+    const row = this.xPosts.get(id);
+    return row && row.fetchedAt > since ? { ...row } : null;
+  }
+
+  async getXThread(conversationId: string, authorId: string, since: number): Promise<XPostRow[]> {
+    return [...this.xPosts.values()]
+      .filter((r) => r.conversationId === conversationId && r.authorId === authorId && r.threadDone && r.fetchedAt > since)
+      .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1))
+      .map((r) => ({ ...r }));
+  }
+
+  async putXPosts(rows: XPostRow[]): Promise<void> {
+    for (const row of rows) this.xPosts.set(row.id, { ...row });
+  }
+
   async releaseVisitorUse(ipHash: string, usedAt: number): Promise<void> {
     if (this.visitorUses.get(ipHash)?.usedAt === usedAt) this.visitorUses.delete(ipHash);
   }
@@ -727,10 +747,12 @@ export class MemoryDb implements Db {
       (r) =>
         r.windowStart <=
         now -
-          (r.scope.startsWith(ANON_RATE_SCOPE_PREFIX) || r.scope.startsWith(TRANSCRIPTION_RATE_SCOPE_PREFIX)
+          (r.scope.startsWith(ANON_RATE_SCOPE_PREFIX) || r.scope.startsWith(TRANSCRIPTION_RATE_SCOPE_PREFIX) ||
+            r.scope.startsWith(X_SPEND_RATE_SCOPE_PREFIX)
             ? DAY_MS
             : RATE_WINDOW_MS),
     );
+    sweep(this.xPosts, (r) => r.fetchedAt <= now - X_POST_TTL_MS);
     sweep(this.visitorUses, (r) => r.usedAt <= now - VISITOR_USE_RETENTION_MS);
     return removed;
   }

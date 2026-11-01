@@ -391,6 +391,14 @@ export function Confidentialite() {
           ne va jamais chercher la vidéo ni ses sous-titres, et aucune API de YouTube n’est appelée.
         </p>
         <p>
+          Un lien vers une publication X (x.com ou twitter.com) est la seule page qu’un lecteur nous confie que notre
+          serveur va lire lui-même, par l’API officielle de X : il envoie à X l’identifiant de la publication, avec
+          l’identification de l’application Squiggle, rien du lecteur. Si l’auteur a écrit un fil, ses publications qui se
+          répondent sont lues aussi, vingt-cinq au plus. X décide seul du sort de ces requêtes : il n’est pas notre
+          sous-traitant. Le texte lu est gardé un jour, puis effacé, et suit ensuite le trajet d’un texte collé. Le lien
+          d’un journal n’est jamais visité.
+        </p>
+        <p>
           Un PDF, importé sur le site, partagé vers l’appli ou ouvert dans votre navigateur avec l’extension (« Analyser
           ce PDF »), est lu sur votre appareil : seul son texte part à l’analyse, traité exactement comme un texte collé,
           et le fichier n’est jamais envoyé. L’extension le reprend à l’adresse que votre onglet affiche, avec votre
