@@ -11,9 +11,10 @@
 import { randomUUID } from 'node:crypto';
 
 import { CALENDAR, fillWindow, resolvePillar, rotate, slotAt, weeksToFill, type Angle, type Pillar, type Slot, type Usage } from './calendar';
-import { FRESH_NOTICE_HOURS, NETWORKS, ORIGIN, X_PRICES, type Network } from './config';
+import { FACEBOOK_LINKS_PER_MONTH, FRESH_NOTICE_HOURS, NETWORKS, ORIGIN, X_PRICES, type Network } from './config';
 import { addDays, day, weekOf, type Ctx } from './context';
-import { contentReasons, filterPost } from './filter';
+import { contentReasons, filterPost, linkPolicy, type LinkPolicy } from './filter';
+import { weekTags } from './hashtags';
 import { askJson, BudgetExceeded } from './llm';
 import { avoided, consigne, directives, lessonsBlock, networkDirective, type Directive } from './memory';
 import { Postiz, type Integration } from './postiz';
@@ -55,7 +56,7 @@ export async function sitePaths(ctx: Ctx): Promise<Set<string>> {
 }
 
 /** The running tests' effect on a network (`strategy.ts`): an hour moved, a closing question, an image. */
-interface Tweaks {
+export interface Tweaks {
   minutes: number;
   question: 'avec' | 'sans' | null;
   image: 'avec' | 'sans' | null;
@@ -151,7 +152,7 @@ const ANGLE_BRIEF: Record<Angle, string> = {
   exemple: 'Angle « l’exemple » : l’article de la fiche en une ou deux phrases, montré comme un passage à lire, sans dire qu’il est inventé ni le faire passer pour réel, puis ce qui cloche, en une phrase.',
   reperer: 'Angle « comment le repérer » : les signes de la fiche (champ « Comment le repérer »), tels quels ou condensés.',
   question: 'Angle « la question » : la question de la fiche, posée au lecteur, avec juste assez de l’exemple pour y répondre.',
-  long: 'Angle « texte long » : trois à six phrases, l’exemple puis sa lecture, puis le lien.',
+  long: 'Angle « texte long » : trois à six phrases, l’exemple puis sa lecture.',
   carrousel: 'Légende d’un carrousel qui montre la fiche en images : deux ou trois phrases qui donnent envie de faire défiler, puis « Lien dans la bio ».',
   page: 'Ce que la page apporte au lecteur, en partant d’un exemple ou d’un geste qu’elle contient.',
   story: 'Une story : l’image parle seule, sans légende.',
@@ -168,7 +169,7 @@ const LINK_RULE: Record<Network, (url: string) => string> = {
 
 const FORMAT: Record<Network, string> = {
   bluesky: '300 caractères au plus, lien compris.',
-  mastodon: '500 caractères au plus, lien compris ; termine par 2 ou 3 mots-dièse sans sigle, par exemple #EspritCritique #ÉducationAuxMédias.',
+  mastodon: '500 caractères au plus, lien et mots-dièse compris.',
   threads: '500 caractères au plus, ton de conversation.',
   facebook: '3 à 6 phrases.',
   instagram: 'Une légende de 2 à 4 phrases.',
@@ -176,12 +177,14 @@ const FORMAT: Record<Network, string> = {
 };
 
 /** The images a post carries: on Instagram the carousel, elsewhere one picture or none when the link shows its card. */
-function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null }, t: Tweaks): Image[] {
+export function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null }, t: Tweaks, link: LinkPolicy): Image[] {
   const example = imgs.slides[1] ?? imgs.card;
   if (network === 'instagram') return imgs.slides.length ? imgs.slides.slice(0, 10) : imgs.card ? [imgs.card] : [];
   // X shows no link, so the picture carries the page; Bluesky shows no card unless one is given.
   if (network === 'x' || network === 'bluesky') return example ? [angle === 'reperer' && imgs.slides[3] ? imgs.slides[3] : example] : [];
-  // Threads, Facebook and Mastodon draw the page's card from its link, unless a test says otherwise.
+  // Without a link there is no card: Facebook shows the carousel, Threads one picture (an image beats a link on both).
+  if (link === 'none' && t.image !== 'sans') return network === 'facebook' && imgs.slides.length ? imgs.slides.slice(0, 10) : example ? [example] : [];
+  // With one, Threads, Facebook and Mastodon draw the page's card from it, unless a test says otherwise.
   return t.image === 'avec' && example ? [example] : [];
 }
 
@@ -193,7 +196,7 @@ export interface Draft {
   reason: string | null;
 }
 
-async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks): Promise<string> {
+async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks, link: LinkPolicy, tags: readonly string[]): Promise<string> {
   const url = `${ORIGIN}${p.source.path}?ref=${p.slot.network}`;
   const question = t.question === 'avec' ? 'Termine par une question au lecteur.' : t.question === 'sans' ? 'Ne termine pas par une question.' : '';
   const answer = await askJson<{ texte: string }>(ctx, {
@@ -202,7 +205,8 @@ async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks): Promise
     user: [
       `Réseau : ${p.slot.network}. ${FORMAT[p.slot.network]}`,
       ANGLE_BRIEF[p.angle],
-      LINK_RULE[p.slot.network](url),
+      link === 'none' ? LINK_RULE.x(url) : LINK_RULE[p.slot.network](url),
+      p.slot.network === 'mastodon' ? `Termine par ces mots-dièse, exactement et dans cet ordre : ${tags.map((tag) => `#${tag}`).join(' ')}` : '',
       question,
       `Source, la seule matière permise (page ${p.source.path}) :\n"""\n${p.source.text.slice(0, 6000)}\n"""`,
       'Réponds {"texte": "..."}.',
@@ -231,27 +235,56 @@ async function review(ctx: Ctx, network: Network, text: string, source: Source, 
   return { conforme: answer.conforme === true, raison: String(answer.raison ?? '') };
 }
 
+type Other = { network: Network; text: string; day: string };
+
+/**
+ * Whether a post carries its link: its network and pillar (`linkPolicy`), then
+ * on Facebook the monthly cap, counted on the posts already in the queue or out
+ * that month. A Facebook link post that failed this month (`reconcile`) is read
+ * as the cap reached: the rest of the month goes out native.
+ */
+export function linkFor(ctx: Pick<Ctx, 'db'>, p: Pick<Planned, 'slot' | 'pillar' | 'at'>, others: readonly Other[]): LinkPolicy {
+  const policy = linkPolicy(p.slot.network, p.pillar);
+  if (p.slot.network !== 'facebook' || policy !== 'required') return policy;
+  const month = day(p.at).slice(0, 7);
+  if (ctx.db.getKv<string>('facebook_sans_lien') === month) return 'none';
+  const used = others.filter((o) => o.network === 'facebook' && o.day.startsWith(month) && /\?ref=facebook/.test(o.text)).length;
+  return used < FACEBOOK_LINKS_PER_MONTH ? 'required' : 'none';
+}
+
 /** Drafts, filters and reviews a list of planned posts, in order, each judged against those already accepted. */
 export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string): Promise<Draft[]> {
   const paths = await sitePaths(ctx);
   const others = journal(ctx, addDays(ctx.now, -56)).map((p) => ({ network: p.network, text: p.text, day: p.slot_at.slice(0, 10), sourceId: p.source_id }));
+  const tags = planned.some((p) => p.slot.network === 'mastodon') ? await weekTags(ctx) : [];
   const drafts: Draft[] = [];
   for (const p of planned) {
     const t = tweaks(ctx, p.slot.network, p.at);
-    const images = chooseImages(p.slot.network, p.angle, await imagesFor(ctx, p.source), t);
+    const link = linkFor(ctx, p, others);
+    const images = chooseImages(p.slot.network, p.angle, await imagesFor(ctx, p.source), t, link);
     if (p.slot.network === 'instagram' && images.length === 0) {
       drafts.push({ planned: p, text: '', images, status: 'refuse', reason: 'aucune image pour Instagram' });
       continue;
     }
     let text = '';
     try {
-      text = await draft(ctx, p, thisWeek, t);
+      text = await draft(ctx, p, thisWeek, t, link, tags);
     } catch (error) {
       drafts.push({ planned: p, text: '', images, status: 'refuse', reason: `rédaction impossible : ${(error as Error).message}` });
       if (error instanceof BudgetExceeded) break;
       continue;
     }
-    const filtered = filterPost({ network: p.slot.network, text, source: p.source.text, sitePaths: paths, others, day: day(p.at), sourceId: p.source.id });
+    const filtered = filterPost({
+      network: p.slot.network,
+      text,
+      source: p.source.text,
+      sitePaths: paths,
+      others,
+      day: day(p.at),
+      sourceId: p.source.id,
+      link,
+      hashtags: p.slot.network === 'mastodon' ? tags : undefined,
+    });
     if (filtered.reasons.length) {
       drafts.push({ planned: p, text: filtered.text, images, status: 'refuse', reason: `filtre : ${filtered.reasons.join(' ; ')}` });
       continue;
@@ -495,6 +528,9 @@ export async function reconcile(ctx: Ctx): Promise<{ removed: PostRow[]; failed:
       published += 1;
     }
     if (live.state === 'ERROR') {
+      // ponytail: any failure of a Facebook link post counts as Meta's link cap, since its error text is not documented;
+      // a failure for another reason only costs that month's remaining links.
+      if (p.network === 'facebook' && /\?ref=facebook/.test(p.text)) ctx.db.setKv('facebook_sans_lien', p.slot_at.slice(0, 7));
       ctx.db.run("UPDATE posts SET status = 'echec', reason = ?, checked_at = ? WHERE id = ?", live.error ?? 'échec', ctx.now.toISOString(), p.id);
       failed.push({ ...p, reason: live.error ?? 'échec' });
     }

@@ -8,6 +8,7 @@
  * inside « », a narrow space before `: ; ? !`), which is form, not content.
  */
 import { typo } from '../../../web/src/glossaire';
+import type { Pillar } from './calendar';
 import { ORIGIN, REPO, type Network } from './config';
 
 /** Longest text each network takes, counted in graphemes, link included. */
@@ -20,8 +21,10 @@ export const MAX_LENGTH: Record<Network, number> = {
   instagram: 2200,
 };
 
+export type LinkPolicy = 'required' | 'none' | 'domain';
+
 /** Where a link to the site is required, refused, or only the bare domain is allowed. */
-export const LINK_POLICY: Record<Network, 'required' | 'none' | 'domain'> = {
+export const LINK_POLICY: Record<Network, LinkPolicy> = {
   bluesky: 'required',
   mastodon: 'required',
   threads: 'required',
@@ -31,6 +34,17 @@ export const LINK_POLICY: Record<Network, 'required' | 'none' | 'domain'> = {
   // A post with a link costs X's API about thirteen times more (D5): none at all.
   x: 'none',
 };
+
+/**
+ * A post's link rule, by network and pillar. Facebook and Threads rank a link
+ * below everything else (1.1 % of Facebook's views in Q2 2026, Meta's own
+ * report): there only the piece of substance carries one, the rest goes out
+ * native, with its picture. Facebook's monthly cap is applied on top (`posts.ts`).
+ */
+export function linkPolicy(network: Network, pillar: Pillar): LinkPolicy {
+  if ((network === 'facebook' || network === 'threads') && pillar !== 'fond') return 'none';
+  return LINK_POLICY[network];
+}
 
 /**
  * Outlets, parties and public figures a post never names. Case-sensitive where
@@ -73,6 +87,10 @@ export interface FilterInput {
   others: ReadonlyArray<{ network: Network; text: string; day: string; sourceId: string }>;
   day: string;
   sourceId: string;
+  /** This post's link rule, when it is not its network's own (`linkPolicy`, Facebook's monthly cap). */
+  link?: LinkPolicy;
+  /** The week's hashtags (Mastodon): no other may close the post. */
+  hashtags?: readonly string[];
 }
 
 export interface FilterResult {
@@ -117,7 +135,7 @@ export function hook(text: string): string {
 
 function checkLinks(input: FilterInput, links: string[]): string[] {
   const reasons: string[] = [];
-  const policy = LINK_POLICY[input.network];
+  const policy = input.link ?? LINK_POLICY[input.network];
   let siteLinks = 0;
   for (const raw of links) {
     const link = raw.replace(/[.,;:!?)\]]+$/, '');
@@ -205,7 +223,12 @@ export function filterPost(input: FilterInput): FilterResult {
   if (announced) reasons.push(`annonce l’exemple comme inventé : ${announced[0]}`);
   const real = /(?<![\p{L}])(paru (hier|ce matin|cette semaine)|lu dans (la presse|un journal)|publié (hier|ce matin))(?![\p{L}])/iu.exec(prose);
   if (real) reasons.push(`fait passer l’exemple pour réel : ${real[0]}`);
-  if ((prose.match(/#[\p{L}\p{N}_]+/gu) ?? []).length > 3) reasons.push('plus de trois mots-dièse');
+  const tags = prose.match(/#[\p{L}\p{N}_]+/gu) ?? [];
+  if (tags.length > 3) reasons.push('plus de trois mots-dièse');
+  if (input.hashtags) {
+    const allowed = new Set(input.hashtags.map((t) => fold(t)));
+    for (const tag of tags) if (!allowed.has(fold(tag))) reasons.push(`mot-dièse hors de ceux de la semaine : ${tag}`);
+  }
 
   const opening = hook(text);
   for (const other of input.others) {
