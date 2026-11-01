@@ -135,7 +135,7 @@ describe('the glossary pages', () => {
   });
 
   it('gives the notions a search already finds more made-up examples, under the words the search uses', () => {
-    const enriched = ['proces-d-intention', 'generalisation-hative', 'citation-tronquee', 'affirmation-non-etayee', 'correlation-causalite'];
+    const enriched = ['proces-d-intention', 'generalisation-hative', 'citation-tronquee', 'affirmation-non-etayee', 'correlation-causalite', 'pente-savonneuse', 'appel-a-la-popularite', 'fausse-analogie', 'debat-presente-comme-clos'];
     expect(NOTIONS.filter((item) => item.exemples).map((item) => item.slug).sort()).toEqual([...enriched].sort());
     for (const slug of enriched) {
       const item = NOTIONS.find((notion) => notion.slug === slug)!;
@@ -151,6 +151,7 @@ describe('the glossary pages', () => {
     cleanup();
     render(<App path="/glossaire/generalisation-hative" />);
     expect(screen.getByText(/Autres noms : .*Conclusion hâtive/)).toBeInTheDocument();
+    expect(glossaryLink({ label: 'Procès en intention', category: 'cadrage' })?.to).toBe('/glossaire/proces-d-intention');
   });
 
   it('offers the analysis right after the example, and counts who takes it', () => {
