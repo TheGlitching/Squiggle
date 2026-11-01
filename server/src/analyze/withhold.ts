@@ -19,6 +19,8 @@ export function withholdForVisitor(report: AnalysisReport): AnalysisReport {
     findings: first ? [first] : [],
     withheld: rest.map(({ category, severity }) => ({ category, severity })),
     claims,
+    // Which source each passage leans on quotes the text as the findings do.
+    sourcing: undefined,
     // The domains' notes stay; their notes in words name the findings.
     categories: report.categories.map((category) => ({ ...category, strengths: [], weaknesses: [] })),
     research: {

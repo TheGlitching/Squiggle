@@ -57,7 +57,7 @@ describe('Fourches Caudines Engine', () => {
 
   it('keeps the borrowed method name out of reader-facing text', () => {
     // The prompt version is shown to readers and is part of the cache key.
-    expect(PROMPT_VERSION).toBe('1.4.1');
+    expect(PROMPT_VERSION).toBe('1.5.0');
     expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).not.toMatch(/fourches|caudines/i);
     expect(buildFourchesCaudinesUserPrompt(sampleInput)).not.toMatch(/fourches|caudines/i);
   });

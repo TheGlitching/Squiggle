@@ -88,6 +88,33 @@ describe('extension client against the real server', () => {
     expect(await env.db.countUsageLog(user!.id)).toBe(1);
   });
 
+  it('carries the sources the text cites, by nature, to the final report and the cache, at no extra model call', async () => {
+    const plain = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
+    await (await hostedClient(plain, 'paul@example.org')).analyze({ url: ARTICLE_URL, title: 'Emploi', blocks: BLOCKS, citedSources: CITED });
+
+    const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
+    const audit = JSON.parse(env.llm.auditJson) as Record<string, unknown>;
+    env.llm.auditJson = JSON.stringify({
+      ...audit,
+      sourcing: [
+        { blockId: 'b1', quote: 'Le chomage a baisse de 12 %', nature: 'aucune' },
+        // Not in the text: a source the model supposed is not the article's.
+        { blockId: 'b1', quote: 'selon la Dares', nature: 'statistique-publique' },
+        { blockId: 'b2', quote: 'Tout le monde le sait', nature: 'rumeur' },
+      ],
+    });
+    const client = await hostedClient(env, 'marie@example.org');
+    const input = { url: ARTICLE_URL, title: 'Emploi', blocks: BLOCKS, citedSources: CITED };
+    const report = await client.analyze(input);
+
+    expect(report.sourcing).toEqual([
+      { blockId: 'b1', quote: 'Le chomage a baisse de 12 %', charStart: 0, charEnd: 27, nature: 'aucune' },
+    ]);
+    expect(env.llm.calls).toEqual(plain.llm.calls);
+    // Served again from the shared cache, it is the same list.
+    expect((await (await hostedClient(env, 'lea@example.org')).analyze(input)).sourcing).toEqual(report.sourcing);
+  });
+
   it('stops a page of fifty articles before sending anything, with the sentence the server would give', async () => {
     const env = makeTestEnv({ fetchImpl: pageFetch(), now: Date.now() });
     const client = await hostedClient(env, 'marie@example.org');

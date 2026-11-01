@@ -239,6 +239,50 @@ export interface ResearchRecord {
 }
 
 /**
+ * What kind of source the article itself leans on for what it asserts: a
+ * typology of the source's nature, never a judgement of it. `media` says the
+ * article cites a news outlet, nothing about whether that outlet is any good;
+ * the report never rates a named source. `aucune` marks an assertion the text
+ * presents as fact without naming anything behind it.
+ */
+export type SourceNature =
+  | 'statistique-publique'
+  | 'etude'
+  | 'institution'
+  | 'media'
+  | 'fact-checker'
+  | 'personne-nommee'
+  | 'temoignage-anonyme'
+  | 'aucune';
+
+/** How the report names each nature, on the site and in the panel alike. */
+export const SOURCE_NATURE_LABELS: Record<SourceNature, string> = {
+  'statistique-publique': 'Statistique publique',
+  etude: 'Étude',
+  institution: 'Institution',
+  media: 'Média',
+  'fact-checker': 'Vérification des faits',
+  'personne-nommee': 'Personne nommée',
+  'temoignage-anonyme': 'Témoignage anonyme',
+  aucune: 'Aucune source'
+};
+
+/**
+ * One source the article invokes, as the audit read it in the text. It is
+ * what the ARTICLE relies on, and is kept apart from `EvidenceSource`, which
+ * is what Squiggle consulted: the two answer different questions and are
+ * never shown as one.
+ */
+export interface SourcingEntry {
+  blockId: string;
+  /** The words naming the source, or the unsourced assertion for `aucune`. */
+  quote: string;
+  charStart?: number;
+  charEnd?: number;
+  nature: SourceNature;
+}
+
+/**
  * An annotation / finding located in the text
  */
 export interface Finding {
@@ -296,6 +340,8 @@ export interface AnalysisReport {
   claims: FactualClaim[];
   /** What research ran. Never optional: silence here would read as "checked". */
   research: ResearchRecord;
+  /** The sources the article itself invokes, by nature. Absent on a report made before it existed. */
+  sourcing?: SourcingEntry[];
   /**
    * Set only on a report served to a visitor without an account: the findings
    * past the first, which the server kept back. Only the tone each would be
@@ -395,11 +441,33 @@ export const CategoryScoreSchema = z.object({
   weaknesses: z.array(z.string()).default([])
 });
 
+export const SourceNatureSchema = z.enum([
+  'statistique-publique',
+  'etude',
+  'institution',
+  'media',
+  'fact-checker',
+  'personne-nommee',
+  'temoignage-anonyme',
+  'aucune'
+]);
+
+export const SourcingEntrySchema = z.object({
+  blockId: z.string().default(''),
+  quote: z.string().trim().min(1),
+  nature: SourceNatureSchema
+});
+
+/** Most sources one report lists, so a long article cannot turn the section into a second text. */
+export const MAX_SOURCING_ENTRIES = 12;
+
 export const RawLlmAnalysisResponseSchema = z.object({
   summary: z.string().min(1),
   scores: z.array(CategoryScoreSchema).min(1),
   findings: z.array(FindingSchema).default([]),
-  claims: z.array(FactualClaimSchema).default([])
+  claims: z.array(FactualClaimSchema).default([]),
+  // Each entry stands alone: one the model got wrong costs only itself (`parseSourcing`).
+  sourcing: z.array(z.unknown()).default([])
 });
 
 export type RawLlmAnalysisResponse = z.infer<typeof RawLlmAnalysisResponseSchema>;

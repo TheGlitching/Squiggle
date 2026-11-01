@@ -173,6 +173,7 @@ function Figures({ m }: { m: OwnerMetrics }) {
       <Band title="Constats signalés comme erronés">
         <Counts title="Par catégorie" counts={m.audience.flags?.categories ?? {}} />
         <Counts title="Par motif" counts={m.audience.flags?.reasons ?? {}} />
+        <Counts title="Nature de source" counts={m.audience.flags?.sources ?? {}} />
       </Band>
 
       <Band title="Entonnoir">

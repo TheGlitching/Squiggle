@@ -8,8 +8,16 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 
 import { getScoreBandLabel, reportSubject } from '../../../shared/src/engine/bands';
-import { FLAG_REASONS, flagCounters } from '../../../shared/src/hosted/audience';
-import type { AnalysisReport, EvidenceSource, Finding, TextBlock } from '../../../shared/src/engine/types';
+import { FLAG_REASONS, flagCounters, sourceFlagCounter } from '../../../shared/src/hosted/audience';
+import {
+  SOURCE_NATURE_LABELS,
+  type AnalysisReport,
+  type EvidenceSource,
+  type Finding,
+  type SourceNature,
+  type SourcingEntry,
+  type TextBlock,
+} from '../../../shared/src/engine/types';
 import {
   CATEGORY_LABELS,
   findingTone,
@@ -85,6 +93,10 @@ function Passage({
       id={anchor ? passageId(anchor) : undefined}
       tabIndex={anchor ? undefined : -1}
       className="annot"
+      // The finding's name rides on the label, not on a hidden child: with a child
+      // element inside, Chrome wrapped the passage as one block and pushed the rest
+      // of its sentence onto a line of its own.
+      aria-label={anchor ? `${segment.text} (constat : ${lead.label})` : undefined}
       style={passageStyle(lead)}
       aria-current={segment.findings.some((f) => f.id === selected) ? 'true' : undefined}
       onClick={(event) => {
@@ -94,7 +106,6 @@ function Passage({
       }}
     >
       {segment.text}
-      {anchor ? <span className="sr-only"> (constat : {lead.label})</span> : null}
     </a>
   );
 }
@@ -270,6 +281,74 @@ function Sources({ sources, label = 'Sources consultées' }: { sources: Evidence
   );
 }
 
+/** The typology's own order: the most traceable sources first, nothing at all last. */
+const NATURE_ORDER = Object.keys(SOURCE_NATURE_LABELS) as SourceNature[];
+
+/**
+ * The sources the text itself invokes, grouped by nature: how it builds its
+ * credibility, never a rating of any source. Kept apart from the findings'
+ * "Sources consultées", which are what Squiggle read.
+ */
+function Sourcing({ sourcing }: { sourcing: SourcingEntry[] }) {
+  const groups = NATURE_ORDER.map((nature) => ({
+    nature,
+    entries: sourcing.filter((entry) => entry.nature === nature),
+  })).filter((group) => group.entries.length > 0);
+  return (
+    <section aria-labelledby="sources-titre" className="mt-10">
+      <h2 id="sources-titre" className="m-0 text-base font-semibold">
+        Sur quoi s’appuie le texte
+      </h2>
+      <p className="mt-1 mb-0 max-w-[55ch] text-sm text-muted">
+        Les sources que le texte cite lui-même, classées par nature, sans juger de leur fiabilité. Celles que
+        Squiggle a consultées figurent dans les constats.
+      </p>
+      <ul className="mt-2 mb-0 list-none divide-y divide-border p-0">
+        {groups.map(({ nature, entries }) => (
+          <li key={nature} className="pb-3">
+            <NatureHeading nature={nature} />
+            <ul className="m-0 grid list-none gap-1 p-0">
+              {entries.map((entry) => (
+                <li key={`${entry.blockId}-${entry.charStart}`} className="font-serif text-base italic leading-snug text-muted">
+                  « {entry.quote} »
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** A nature's name, and beside it one click to say it is the wrong one: only the nature is counted. */
+function NatureHeading({ nature }: { nature: SourceNature }) {
+  const [sent, setSent] = useState(false);
+  const label = SOURCE_NATURE_LABELS[nature];
+  return (
+    <p className="m-0 flex min-h-11 items-center justify-between gap-3 text-sm">
+      <span className="font-medium">{label}</span>
+      {sent ? (
+        <span role="status" className="text-muted">
+          Merci, c’est noté.
+        </span>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Signaler une erreur : ce n’est pas « ${label} »`}
+          className="min-h-11 text-muted underline decoration-borderControl underline-offset-4 hover:text-foreground hover:decoration-foreground"
+          onClick={() => {
+            count(sourceFlagCounter(nature));
+            setSent(true);
+          }}
+        >
+          Signaler
+        </button>
+      )}
+    </p>
+  );
+}
+
 function Block({
   block,
   at,
@@ -427,6 +506,7 @@ export function Rapport({
               {line}
             </p>
           ))}
+          {report.sourcing && report.sourcing.length > 0 ? <Sourcing sourcing={report.sourcing} /> : null}
         </div>
 
         <div>

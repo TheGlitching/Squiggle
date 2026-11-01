@@ -210,6 +210,18 @@ describe('the report a visitor is served', () => {
     expect((await counters(env)).report_withheld).toBe(2);
   });
 
+  it('keeps back the sources the text cites, which quote it as the findings do', async () => {
+    const env = twoFindings();
+    const audit = JSON.parse(env.llm.auditJson) as Record<string, unknown>;
+    env.llm.auditJson = JSON.stringify({
+      ...audit,
+      sourcing: [{ blockId: 'b2', quote: 'Tout le monde le sait', nature: 'temoignage-anonyme' }],
+    });
+    const run = await bodies(env, '203.0.113.7');
+    expect(run).not.toContain('temoignage-anonyme');
+    expect(run).not.toContain('"sourcing"');
+  });
+
   it('keeps nothing back when there is nothing past the first finding', async () => {
     const env = makeTestEnv();
     // The stub's first finding is withdrawn by research: one survives.

@@ -75,8 +75,11 @@ export interface Metrics {
     pastes: Record<string, number>;
     /** Calls to analyse followed from a blog article, by article. */
     blog: Record<string, number>;
-    /** Findings reported as wrong, by category and, apart, by reason: the two are never linked. */
-    flags: { categories: Record<string, number>; reasons: Record<string, number> };
+    /**
+     * Findings reported as wrong, by category and, apart, by reason: the two are never linked.
+     * `sources`: a source's nature reported as wrong, by the nature shown.
+     */
+    flags: { categories: Record<string, number>; reasons: Record<string, number>; sources: Record<string, number> };
   };
   funnel: {
     signin: Record<string, number>;
@@ -166,7 +169,11 @@ export async function collectLaunchMetrics(
       clicks: family(c, 'click_'),
       pastes: family(c, 'paste_'),
       blog: family(c, 'blog_'),
-      flags: { categories: family(c, 'flag_finding_'), reasons: family(c, 'flag_reason_') },
+      flags: {
+        categories: family(c, 'flag_finding_'),
+        reasons: family(c, 'flag_reason_'),
+        sources: family(c, 'flag_source_'),
+      },
     },
     funnel: {
       signin: family(c, 'signin_'),

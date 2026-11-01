@@ -318,6 +318,16 @@ describe('POST /web/count', () => {
     expect(flags.reasons).toMatchObject({ misread: 1, sourced: 0, other: 0 });
   });
 
+  it('counts a source reported as wrongly classed by the nature shown, and refuses any other name', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    expect((await countRequest(env, 'flag_source_media')).status).toBe(204);
+    for (const name of ['flag_source_note', 'flag_source_le_monde', 'flag_source_']) {
+      expect((await countRequest(env, name)).status).toBe(400);
+    }
+    const { flags } = (await metrics(env, '?weeks=1')).body.metrics.audience;
+    expect(flags.sources).toMatchObject({ media: 1, aucune: 0 });
+  });
+
   it('keeps the name and the day, never who sent it', async () => {
     const env = makeTestEnv({ adminToken: 'admin-secret' });
     const { sessionCookie } = await magicLogin(env, 'marie@example.org');

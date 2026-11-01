@@ -14,6 +14,7 @@ import type {
   Finding,
   ScoreDomainKey,
   SourceCheck,
+  SourcingEntry,
 } from '@squiggle/shared';
 
 export interface AnalysisRunState {
@@ -49,6 +50,8 @@ export interface AnalysisRunState {
   summary: string;
   findings: Finding[];
   rawScores: Array<{ domain: ScoreDomainKey; score: number }>;
+  /** The sources the text invokes, by nature; absent on a run that predates it. */
+  sourcing?: SourcingEntry[];
 
   /** The links the article offers as its own backing. */
   citedSources: CitedSource[];
