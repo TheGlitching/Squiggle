@@ -1092,7 +1092,8 @@ describe('Analyser, from the clipboard', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/Suite ajoutée/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(/déjà dans le texte/);
+    // The first passage's status stays shown while the clipboard is read.
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/déjà dans le texte/));
   });
 
   it('adds a markup-only next passage, and hands an empty read over to the field', async () => {
