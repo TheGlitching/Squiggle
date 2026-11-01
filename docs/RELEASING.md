@@ -207,9 +207,12 @@ Run the lint on the built package before uploading; the validator AMO runs is th
 npx web-ext lint -s dist/firefox
 ```
 
-It reports no error and two expected warnings. Both `UNSAFE_VAR_ASSIGNMENT` point at
-`innerHTML` inside the bundled React runtime (the `SquiggleBadge-*.js` chunk); the
-extension's own code never assigns `innerHTML`, and AMO review accepts them.
+It reports no error and five expected warnings, all in bundled dependencies: two
+`UNSAFE_VAR_ASSIGNMENT` on `innerHTML` in the React runtime (the `SquiggleBadge-*.js`
+chunk), two on a dynamic `import` in pdf.js (`pdf-*.js` and `pdf.worker.min-*.mjs`), and
+one `DANGEROUS_EVAL` in the `storage-*.js` chunk, which is zod probing whether
+`Function("")` is allowed (inside a `try`, and false under the extension's CSP). The
+extension's own code does none of these, and AMO review accepts them.
 
 `data_collection_permissions` in the Firefox manifest is only understood from Firefox 140
 on the desktop and 142 on Android, which is why `gecko.strict_min_version` is `140.0` and
@@ -244,5 +247,11 @@ The privacy answers, permission justifications and reviewer notes are written on
 - [ ] `npx web-ext lint -s dist/firefox` reports no error
 - [ ] the Chrome zip declares no content script and no host permission beyond the four
       providers: the packaging tests pin both
+- [ ] each package loaded for real (Chrome: unpacked; Firefox: temporary add-on, see
+      [`ESSAI.md`](ESSAI.md)), with one full analysis of a page that cites sources, in
+      both modes: with an own key, and signed in to an account. On Firefox the account
+      goes through the 8-character code redeemed in the panel, since the bridge cannot
+      redirect into a `moz-extension://` page. The analysis must outlast 30 s: that is
+      where a Firefox event page that is not kept alive dies mid-run
 - [ ] the privacy policy URL in both dashboards answers with the published policy
 - [ ] `npm run package:source` for the AMO upload
