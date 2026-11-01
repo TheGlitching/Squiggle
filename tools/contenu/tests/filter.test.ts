@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { filterPost, hook, typography, type FilterInput } from '../src/filter';
+import { filterPost, hook, linkPolicy, typography, type FilterInput } from '../src/filter';
 import { NOTION_SOURCES } from '../src/sources';
 
 const fauxDilemme = NOTION_SOURCES.find((s) => s.id === 'glossaire/faux-dilemme')!;
@@ -89,12 +89,28 @@ describe('filterPost', () => {
     expect(filterPost(input(long, { network: 'threads', text: long.replace('?ref=bluesky', '?ref=threads') })).reasons).toEqual([]);
   });
 
-  it('takes Mastodon’s link and closing hashtags, three at most', () => {
-    const toot = `${GOOD.replace('?ref=bluesky', '?ref=mastodon')} #EspritCritique #ÉducationAuxMédias`;
-    expect(filterPost(input(toot, { network: 'mastodon' })).reasons).toEqual([]);
-    expect(filterPost(input(toot, { network: 'mastodon' })).text.endsWith('?ref=mastodon #EspritCritique #ÉducationAuxMédias')).toBe(true);
+  it('takes Mastodon’s link and closing hashtags, three at most, the week’s only', () => {
+    const toot = `${GOOD.replace('?ref=bluesky', '?ref=mastodon')} #Désinformation #FactChecking`;
+    const hashtags = ['Désinformation', 'Éducation', 'FactChecking'];
+    expect(filterPost(input(toot, { network: 'mastodon', hashtags })).reasons).toEqual([]);
+    expect(filterPost(input(toot, { network: 'mastodon', hashtags })).text.endsWith('?ref=mastodon #Désinformation #FactChecking')).toBe(true);
+    // Mastodon folds accents and case in a hashtag; so does the check.
+    expect(filterPost(input(toot.replace('#Désinformation', '#desinformation'), { network: 'mastodon', hashtags })).reasons).toEqual([]);
+    expect(filterPost(input(`${toot} #ÉducationAuxMédias`, { network: 'mastodon', hashtags })).reasons).toContain('mot-dièse hors de ceux de la semaine : #ÉducationAuxMédias');
     expect(filterPost(input(`${toot} #Presse #Lecture`, { network: 'mastodon' })).reasons).toContain('plus de trois mots-dièse');
     expect(filterPost(input(toot, { network: 'mastodon', text: toot.replace(/ squiggle\.fr\S+/, '') })).reasons).toContain('un lien vers squiggle.fr exactement, il y en a 0');
+  });
+
+  it('takes no link on Facebook and Threads but on the piece of substance', () => {
+    expect(linkPolicy('facebook', 'notion')).toBe('none');
+    expect(linkPolicy('threads', 'produit')).toBe('none');
+    expect(linkPolicy('facebook', 'fond')).toBe('required');
+    expect(linkPolicy('bluesky', 'notion')).toBe('required');
+    expect(linkPolicy('mastodon', 'classe')).toBe('required');
+    const fb = GOOD.replace('?ref=bluesky', '?ref=facebook');
+    expect(filterPost(input(fb, { network: 'facebook', link: 'none' })).reasons.some((r) => r.startsWith('aucun lien sur facebook'))).toBe(true);
+    expect(filterPost(input(fb.replace(/ Comment.*$/, ''), { network: 'facebook', link: 'none' })).reasons).toEqual([]);
+    expect(filterPost(input(fb, { network: 'facebook' })).reasons).toEqual([]);
   });
 
   it('refuses the same opening twice and the same source twice a day on a network', () => {

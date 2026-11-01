@@ -46,6 +46,13 @@ export const FRESH_NOTICE_HOURS = 48;
 /** At most this many content pull requests open at once; beyond, the week proposes none. */
 export const MAX_OPEN_CONTENT_PRS = 2;
 
+/**
+ * Facebook posts with a link, per calendar month: Meta caps Pages without its
+ * paid subscription at two (a test since December 2025, widened in September
+ * 2026). The piece of substance takes them; every other post goes out native.
+ */
+export const FACEBOOK_LINKS_PER_MONTH = 2;
+
 /** More removals than this by the owner in a week puts the routine in draft mode (D2 b). */
 export const MAX_REMOVALS_PER_WEEK = 2;
 
