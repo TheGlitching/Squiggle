@@ -123,6 +123,19 @@ describe('article extraction recovery', () => {
     expect(res.error).toContain('abonnés');
   });
 
+  it('tells the reader a social post could not be read, and offers a way out', async () => {
+    receiverMissing = false;
+    tabUrl = 'https://x.com/jack/status/20';
+    extraction = { ...extraction, fullText: '', cleanText: '', wordCount: 0, detectionMethod: 'social-thread' };
+
+    const sw = new BackgroundServiceWorker();
+    const res = await sw.runAnalysisForTab(TAB);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('n’a pas pu être lue');
+    expect(res.error).toContain('collez le texte');
+  });
+
   it('says a short social page is too short to judge, not paywalled', async () => {
     receiverMissing = false;
     tabUrl = 'https://x.com/someone';

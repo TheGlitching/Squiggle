@@ -629,7 +629,10 @@ export class BackgroundServiceWorker {
       // the first: an answer that came back empty means the page was read fine, so
       // telling the reader to reload it sends them round a loop that cannot help.
       const readButEmpty = Boolean(extracted);
-      const err = readButEmpty
+      const err = extracted?.detectionMethod === 'social-thread'
+        ? 'Cette publication n’a pas pu être lue : le réseau ne l’affiche pas à un lecteur non ' +
+          'connecté. Connectez-vous, ou collez le texte dans Squiggle pour l’analyser.'
+        : readButEmpty
         ? 'Cette page a été lue, mais aucun article n’y a été trouvé. Squiggle ' +
           'analyse un article de presse : sur un fil de réseau social, une page ' +
           'd’accueil ou une liste de résultats, il n’y a rien à évaluer. Ouvrez ' +
