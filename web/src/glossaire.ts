@@ -304,6 +304,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Pente glissante', 'Effet domino'],
     famille: 'raisonnement',
     resume: 'Affirmer qu’un premier pas mènera forcément, de proche en proche, à une catastrophe.',
+    description:
+      'Comment reconnaître une pente savonneuse dans un article ? Définition, trois exemples et les chaînes d’événements annoncées sans preuve.',
     definition: [
       'La pente savonneuse annonce qu’une mesure modeste entraînera une suite d’autres, chacune pire que la précédente, jusqu’à un résultat inacceptable. Le lecteur, effrayé par l’arrivée, rejette le point de départ.',
       'Certaines chaînes de conséquences sont réelles. Le raisonnement devient fautif quand chaque marche est affirmée sans être démontrée, et que l’arrivée est présentée comme inévitable.',
@@ -319,6 +321,29 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Rien dans le texte n’explique pourquoi cent places payantes mèneraient à interdire la voiture : chaque étape est simplement annoncée. Le lecteur est invité à juger la dernière, la plus inquiétante, au lieu de la mesure réellement proposée.',
     },
+    exemples: [
+      {
+        rubrique: 'Société',
+        titre: ['Deux caméras devant la gare'],
+        texte: ['La commune veut installer deux caméras devant la gare. ', ['Après les caméras viendront les micros, puis la reconnaissance faciale, et bientôt plus personne n’osera sortir sans se sentir surveillé'], '.'],
+        lecture:
+          'Rien ne relie deux caméras à des micros, ni ceux-ci à la reconnaissance faciale : chaque étape est annoncée, aucune n’est expliquée. La crainte de la surveillance peut être légitime, mais l’article invite à refuser la mesure pour une suite qu’il ne montre pas. Il faudrait dire qui déciderait de chaque étape, et ce qui l’en empêcherait.',
+      },
+      {
+        rubrique: 'Consommation',
+        titre: ['Une taxe sur les boissons sucrées'],
+        texte: ['Le gouvernement envisage de taxer les boissons très sucrées. ', ['Ce sera ensuite la charcuterie, puis le fromage, et dans dix ans l’État décidera de ce que chacun a le droit de mettre dans son assiette'], '.'],
+        lecture:
+          'Une taxe sur une catégorie de produits n’annonce pas, à elle seule, une taxe sur toutes les autres. L’article saute de marche en marche sans dire ce qui rendrait chacune probable. Pour juger la mesure, il faudrait parler de ce qu’elle coûte, de ce qu’elle rapporte et de ce qu’elle change dans les achats.',
+      },
+      {
+        rubrique: 'Sport',
+        titre: ['L’arbitrage vidéo arrive en deuxième division'],
+        texte: ['La fédération veut tester l’arbitrage vidéo en deuxième division. ', ['Aujourd’hui la vidéo, demain des arbitres remplacés par des machines, et un jeu qui n’aura plus rien d’humain'], '.'],
+        lecture:
+          'Un test limité à une division n’annonce pas la disparition des arbitres. La phrase s’appuie sur « aujourd’hui, demain » plutôt que sur des faits : aucune décision n’est citée, aucune réaction non plus. Un lecteur sérieux demanderait ce que le test prévoit, pour combien de temps, et qui doit en décider ensuite.',
+      },
+    ],
     reperer: [
       'Des enchaînements « aujourd’hui… demain… après-demain », « c’est la porte ouverte à… ».',
       'Les étapes intermédiaires ne sont ni sourcées ni expliquées.',
@@ -370,6 +395,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Ad populum', 'Appel au sens commun'],
     famille: 'raisonnement',
     resume: 'Présenter une idée comme vraie parce que beaucoup de gens y croient.',
+    description:
+      'Un article dit « tout le monde sait » : est-ce une preuve ? Définition de l’appel à la popularité, trois exemples et comment le repérer.',
     definition: [
       'L’appel à la popularité fait du nombre une preuve : « tout le monde le sait », « les Français l’ont compris », « le bon sens le dit ». Qu’une opinion soit répandue renseigne sur l’opinion, pas sur la réalité qu’elle décrit.',
       'Le procédé est efficace parce qu’il met le lecteur mal à l’aise : douter, c’est se mettre à part.',
@@ -385,6 +412,29 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Que beaucoup de parents le pensent n’établit pas que c’est vrai, et l’article ne dit même pas d’où il tient que « tous » le pensent. Il écarte d’avance les « études compliquées », c’est-à-dire précisément ce qui permettrait de vérifier.',
     },
+    exemples: [
+      {
+        rubrique: 'Santé',
+        titre: ['La tisane des générations'],
+        texte: ['Des millions de personnes boivent cette tisane depuis des générations, ', ['preuve qu’elle soigne les maux d’estomac'], '.'],
+        lecture:
+          'L’ancienneté d’un usage et le nombre de ses adeptes ne disent pas qu’il fonctionne : beaucoup de maux d’estomac passent d’eux-mêmes, et on garde volontiers une habitude agréable. Pour savoir si la tisane soigne, il faudrait comparer deux groupes, l’un qui la boit et l’autre qui boit une infusion sans effet connu.',
+      },
+      {
+        rubrique: 'Consommation',
+        titre: ['Le téléphone qui se vend comme des petits pains'],
+        texte: ['Le nouveau modèle s’est vendu à trois millions d’exemplaires en un mois. ', ['Un tel succès montre que c’est le meilleur appareil du marché'], '.'],
+        lecture:
+          'Un succès de vente dit surtout quelque chose de la publicité, du prix et de la mode. Il ne dit rien de la solidité de l’appareil, de la qualité de l’écran ou de la durée de sa batterie. Pour comparer, il faudrait des tests indépendants et des relevés de pannes.',
+      },
+      {
+        rubrique: 'Société',
+        titre: ['Les radars, un gadget ?'],
+        texte: ['Un sondage mené auprès des auditeurs d’une radio montre que sept sur dix jugent les radars inutiles. ', ['Les radars ne servent donc à rien'], '.'],
+        lecture:
+          'Ce que pensent les auditeurs d’une radio renseigne sur leur opinion, pas sur l’effet des radars. Cet effet se mesure en vitesses relevées et en accidents avant et après leur installation. Le sondage ne vise d’ailleurs pas toute la population : les auditeurs d’une station ne la représentent pas.',
+      },
+    ],
     reperer: [
       '« Tout le monde sait », « chacun a compris », « le bon sens ».',
       'Un sondage d’opinion utilisé pour trancher une question de fait.',
@@ -402,6 +452,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Comparaison trompeuse', 'Amalgame'],
     famille: 'raisonnement',
     resume: 'Rapprocher deux situations qui se ressemblent en surface pour conclure de l’une à l’autre.',
+    description:
+      'Comment savoir si une comparaison éclaire ou trompe ? Définition de la fausse analogie, trois exemples et la question à poser.',
     definition: [
       'Une analogie aide à comprendre en rapprochant une situation nouvelle d’une situation connue. Elle devient fausse quand les deux situations diffèrent justement sur le point qui compte, et que l’article conclut quand même de l’une à l’autre.',
       'L’image est souvent choisie pour son effet : une mesure comparée à une dictature, une entreprise à une famille, le budget d’un État à celui d’un ménage.',
@@ -417,6 +469,29 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Un État ne part pas à la retraite, lève l’impôt et emprunte sur des durées qu’aucun ménage ne connaît. Ces différences touchent exactement la question posée, celle de la dette. On peut défendre des économies avec d’autres arguments ; celui-ci ne les porte pas.',
     },
+    exemples: [
+      {
+        rubrique: 'Économie',
+        titre: ['Le bateau et l’entreprise'],
+        texte: ['Une entreprise, c’est comme un bateau : ', ['quand la mer est grosse, on ne discute pas les ordres du skipper'], '. Les salariés doivent obéir sans poser de questions.'],
+        lecture:
+          'Sur un bateau en pleine tempête, on décide en quelques secondes et chacun en subit les conséquences tout de suite. Une entreprise décide sur des mois, et ses salariés peuvent être consultés sans que le navire coule. La différence touche exactement le point en jeu, la place de la discussion, et l’image ne la discute pas.',
+      },
+      {
+        rubrique: 'Transports',
+        titre: ['La ligne de train et la voiture en panne'],
+        texte: ['Personne ne laisse sa voiture en panne au bord de la route. ', ['Une ligne de train déficitaire, c’est pareil : on la répare ou on la ferme, on ne la garde pas à perte'], '.'],
+        lecture:
+          'Une voiture a un propriétaire qui en tire seul le bénéfice ; une ligne de train sert une région, ses habitants, ses commerces, et son intérêt ne se lit pas seulement dans la billetterie. On peut défendre la fermeture d’une ligne, avec des chiffres sur son coût et sur ceux qui l’utilisent. L’analogie n’en apporte aucun.',
+      },
+      {
+        rubrique: 'Santé',
+        titre: ['Le cerveau, un muscle'],
+        texte: ['Le cerveau est un muscle : ', ['plus on le fait travailler, plus il grossit, et il faut donc multiplier les jeux de mémoire pour garder l’esprit vif'], '.'],
+        lecture:
+          'L’image aide à comprendre qu’on apprend en s’exerçant, mais le cerveau ne grossit pas comme un biceps, et rien ne montre qu’un jeu de mémoire améliore autre chose que ce jeu. Il faudrait des études qui suivent des personnes sur plusieurs années et qui mesurent ce qu’elles savent faire hors du jeu.',
+      },
+    ],
     reperer: [
       '« X, c’est comme Y », « exactement comme », « rien d’autre que ».',
       'La comparaison sert de conclusion au lieu d’illustrer un raisonnement.',
@@ -765,6 +840,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Question ouverte présentée comme réglée'],
     famille: 'cadrage',
     resume: 'Une question que les spécialistes discutent encore, présentée comme réglée.',
+    description:
+      'Les études l’ont montré, vraiment ? Définition du débat présenté comme tranché, trois exemples et comment repérer un désaccord caché.',
     definition: [
       'Sur certains sujets, les spécialistes ne sont pas d’accord : les données manquent, les études divergent, les valeurs en jeu diffèrent. Un article qui présente l’une des positions comme « ce que montrent les études » ou comme une évidence cache ce désaccord au lecteur.',
       'C’est le miroir du faux équilibre, qui fait l’inverse : il donne l’apparence d’un débat à une question que les spécialistes ont tranchée.',
@@ -780,6 +857,29 @@ export const NOTIONS: readonly Notion[] = [
       lecture:
         'Les effets des groupes de niveau sont discutés depuis longtemps par les chercheurs en éducation, avec des résultats qui varient selon les élèves concernés. « Les études » ne sont ni nommées ni résumées, et rien n’indique au lecteur que certaines concluent autrement.',
     },
+    exemples: [
+      {
+        rubrique: 'Travail',
+        titre: ['La semaine de quatre jours'],
+        texte: ['Une administration lance la semaine de quatre jours. ', ['Les études sont formelles : travailler quatre jours rend les équipes plus productives'], '.'],
+        lecture:
+          'Les résultats varient selon les secteurs, les équipes et ce que l’on mesure : le nombre de dossiers traités, la satisfaction, la fatigue. Les expérimentations sont encore peu nombreuses et souvent petites. « Les études » ne sont ni nommées ni résumées, et rien n’indique que certaines concluent autrement.',
+      },
+      {
+        rubrique: 'Santé',
+        titre: ['Le café et le cœur'],
+        texte: ['La recherche est unanime : ', ['trois tasses de café par jour protègent le cœur'], '.'],
+        lecture:
+          'Les enquêtes sur le café et le cœur comparent des buveurs et des non-buveurs, qui diffèrent aussi par bien d’autres habitudes, et leurs résultats ne vont pas tous dans le même sens. « Unanime » est un mot de l’article, pas un constat qu’il rapporte : aucune étude n’est citée, aucun chercheur n’est cité.',
+      },
+      {
+        rubrique: 'Économie',
+        titre: ['Le salaire minimum et l’emploi'],
+        texte: ['Un débat agite l’Assemblée sur le salaire minimum. ', ['Tous les économistes savent qu’une hausse détruit des emplois'], '. Il est temps d’en finir avec les illusions.'],
+        lecture:
+          'Les travaux sur le sujet ne concluent pas tous pareil : selon le niveau du salaire, le pays et la période, les effets observés sont tantôt négatifs, tantôt faibles ou nuls. Écrire « tous les économistes » efface ce désaccord, et l’article ne nomme aucune étude pour appuyer sa certitude.',
+      },
+    ],
     reperer: [
       '« Les études ont montré », « la science dit », « tout le monde s’accorde », sans étude citée.',
       'Aucune voix discordante, même pour la réfuter.',
@@ -865,6 +965,7 @@ export const NOTIONS: readonly Notion[] = [
   {
     slug: 'proces-d-intention',
     nom: 'Procès d’intention',
+    aussi: ['Procès en intention'],
     famille: 'cadrage',
     resume: 'Prêter à quelqu’un des motivations cachées sans apporter de preuve.',
     description:
@@ -933,7 +1034,7 @@ export const NOTIONS: readonly Notion[] = [
         url: 'https://www.snj.fr/charte-dethique-professionnelle-des-journalistes/94',
       },
     ],
-    motif: /proces d'intention|intentions? (pretee|supposee|attribuee|cachee)|arriere-pensee|motivations? (pretee|supposee|cachee)/,
+    motif: /proces (d'|en )intention|intentions? (pretee|supposee|attribuee|cachee)|arriere-pensee|motivations? (pretee|supposee|cachee)/,
   },
   {
     slug: 'autorite-anonyme',
