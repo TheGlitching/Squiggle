@@ -619,6 +619,41 @@ describe('Analyser, signed in', () => {
     ).toBeInTheDocument();
   });
 
+  it('leads the whole finding card to its passage, except where a control inside has its own action', async () => {
+    serve(account());
+    render(<Analyser />);
+    paste(TEXT);
+    fireEvent.click(await analyseButton());
+    await screen.findByText('58');
+
+    expect(screen.queryByText('Voir le passage dans le texte')).toBeNull();
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const card = screen.getByRole('article', { name: 'Chiffre sans source' });
+    const target = document.getElementById('passage-f1')!;
+
+    // Keyboard: the title is a real button, named for where it leads.
+    expect(within(card).getByRole('button', { name: /Chiffre sans source \(voir le passage dans le texte\)/ })).toBeInTheDocument();
+
+    await userEvent.click(within(card).getByText(/la fréquentation aurait chuté/));
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(target).toHaveFocus();
+
+    // Controls inside the card do not scroll.
+    await userEvent.click(within(card).getByRole('button', { name: 'Signaler une erreur' }));
+    const leave = (event: Event) => event.preventDefault();
+    document.addEventListener('click', leave);
+    fireEvent.click(within(card).getByRole('link', { name: 'Statistiques publiques' }));
+    document.removeEventListener('click', leave);
+    expect(scroll).toHaveBeenCalledTimes(1);
+
+    // A finding whose quote is not in the text is not clickable.
+    const lost = screen.getByRole('article', { name: 'Formule appuyée' });
+    expect(within(lost).queryByRole('button', { name: /voir le passage/ })).toBeNull();
+    fireEvent.click(lost);
+    expect(scroll).toHaveBeenCalledTimes(1);
+  });
+
   it('sends one analysis for two taps in a row', async () => {
     const seen = serve(account());
     render(<Analyser />);

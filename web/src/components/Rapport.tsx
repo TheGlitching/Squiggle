@@ -142,6 +142,11 @@ function FindingCard({
   const glossary = glossaryLink(finding);
   // "Signaler une erreur": the category and the reason are counted, never the text.
   const [report, setReport] = useState<'closed' | 'open' | 'sent'>('closed');
+  const showable = located && inText;
+  const show = () => {
+    onSelect(finding);
+    reveal(passageId(finding));
+  };
   return (
     <article
       id={findingId(finding)}
@@ -150,15 +155,37 @@ function FindingCard({
       aria-labelledby={`${findingId(finding)}-titre`}
       className={`scroll-mt-6 rounded-card border bg-surface p-5 outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-offset-0 transition-colors duration-160 ease-out ${
         selected ? 'border-accentHover ring-1 ring-inset ring-accentHover' : 'border-border'
-      }`}
+      } ${showable ? 'cursor-pointer hover:border-accentHover' : ''}`}
       onFocus={() => onSelect(finding)}
+      // The whole card leads to its passage; the links and buttons inside keep their own
+      // action, and a text selection is left alone. Keyboard users have the title button.
+      onClick={
+        showable
+          ? (event) => {
+              if ((event.target as Element).closest('a, button, input, [role="group"]')) return;
+              if (window.getSelection?.()?.toString()) return;
+              show();
+            }
+          : undefined
+      }
     >
       <p className="m-0 flex items-center gap-2 text-sm font-medium text-[var(--sev-text)]">
         <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[var(--sev-color)]" />
         {CATEGORY_LABELS[finding.category] ?? finding.category}
       </p>
-      <h3 id={`${findingId(finding)}-titre`} className="mt-2 mb-0 text-lg font-semibold leading-snug">
-        {finding.label}
+      <h3 className="mt-2 mb-0 text-lg font-semibold leading-snug">
+        {showable ? (
+          <button
+            type="button"
+            className="block w-full cursor-pointer rounded-control bg-transparent p-0 text-left font-[inherit] text-inherit outline-hidden focus-visible:ring-2 focus-visible:ring-accentHover"
+            onClick={show}
+          >
+            <span id={`${findingId(finding)}-titre`}>{finding.label}</span>
+            <span className="sr-only"> (voir le passage dans le texte)</span>
+          </button>
+        ) : (
+          <span id={`${findingId(finding)}-titre`}>{finding.label}</span>
+        )}
       </h3>
       {verification || finding.category !== 'point-fort' ? (
         <p className="mt-2 mb-0 flex flex-wrap gap-1.5">
@@ -186,28 +213,13 @@ function FindingCard({
       {located || !inText ? null : (
         <p className="mt-4 mb-0 text-sm text-muted">Ce passage n’a pas été retrouvé tel quel dans le texte collé.</p>
       )}
-      {(located && inText) || glossary ? (
+      {glossary ? (
         <p className="mt-2 mb-0 flex flex-wrap gap-x-5">
-          {located && inText ? (
-            <a
-              href={`#${passageId(finding)}`}
-              className={CARD_LINK}
-              onClick={(event) => {
-                event.preventDefault();
-                onSelect(finding);
-                reveal(passageId(finding));
-              }}
-            >
-              Voir le passage dans le texte
-            </a>
-          ) : null}
           {/* A new tab: leaving would lose the report, which costs an analysis to get back. */}
-          {glossary ? (
-            <a href={glossary.to} target="_blank" rel="noopener" className={CARD_LINK}>
-              {glossary.label}
-              <span className="sr-only"> (nouvel onglet)</span>
-            </a>
-          ) : null}
+          <a href={glossary.to} target="_blank" rel="noopener" className={CARD_LINK}>
+            {glossary.label}
+            <span className="sr-only"> (nouvel onglet)</span>
+          </a>
         </p>
       ) : null}
       {/* Apart from the links above: it is a word about the report, not a way through it. */}
