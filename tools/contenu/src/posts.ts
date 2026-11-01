@@ -18,6 +18,7 @@ import { weekTags } from './hashtags';
 import { askJson, BudgetExceeded } from './llm';
 import { avoided, consigne, directives, lessonsBlock, networkDirective, type Directive } from './memory';
 import { Postiz, type Integration } from './postiz';
+import { EVERY_NETWORK, testValue } from './strategy';
 import { ARTICLE_SOURCES, NOTION_SOURCES, PRODUCT_PAGES, TEACHER_PAGES, imagesFor, online, pageSource, type Image, type Source } from './sources';
 
 export interface PostRow {
@@ -32,8 +33,8 @@ export interface PostRow {
   text: string;
   image_url: string | null;
   alt: string | null;
-  /** `en_attente`: a launch post, held until the owner says « ok ». */
-  status: 'propose' | 'refuse' | 'en_attente' | 'programme' | 'brouillon_postiz' | 'retire' | 'publie' | 'echec' | 'rendu' | 'supprime';
+  /** `en_attente`: held until the owner says « ok » (D8); `sans_accord`: its hour came first, it did not go out. */
+  status: 'propose' | 'refuse' | 'en_attente' | 'programme' | 'brouillon_postiz' | 'retire' | 'publie' | 'echec' | 'rendu' | 'supprime' | 'sans_accord';
   reason: string | null;
   postiz_id: string | null;
   created_at: string;
@@ -55,20 +56,34 @@ export async function sitePaths(ctx: Ctx): Promise<Set<string>> {
   return new Set([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname.replace(/\/$/, '') || '/'));
 }
 
-/** The running tests' effect on a network (`strategy.ts`): an hour moved, a closing question, an image. */
+/** The running tests' effect on a network (`strategy.ts`): an hour moved, a closing question, an image, one picture or several, a link, hashtags. */
 export interface Tweaks {
   minutes: number;
   question: 'avec' | 'sans' | null;
   image: 'avec' | 'sans' | null;
+  format?: 'image' | 'carrousel' | null;
+  link?: 'avec' | 'sans' | null;
+  tags?: 'avec' | 'sans' | null;
 }
 
-function tweaks(ctx: Pick<Ctx, 'db'>, network: Network, at: Date): Tweaks {
-  const rows = ctx.db.all<{ kind: string; value: string }>("SELECT kind, value FROM tests WHERE network = ? AND status = 'en_cours' AND start <= ? AND end >= ?", network, day(at), day(at));
-  const t: Tweaks = { minutes: 0, question: null, image: null };
+export function tweaks(ctx: Pick<Ctx, 'db'>, network: Network, at: Date): Tweaks {
+  const rows = ctx.db.all<{ network: string; kind: string; value: string; start: string }>(
+    "SELECT network, kind, value, start FROM tests WHERE network IN (?, ?) AND status = 'en_cours' AND start <= ? AND end >= ?",
+    network,
+    EVERY_NETWORK,
+    day(at),
+    day(at),
+  );
+  const t: Tweaks = { minutes: 0, question: null, image: null, format: null, link: null, tags: null };
+  const either = (v: string | null) => (v === 'avec' || v === 'sans' ? v : null);
   for (const r of rows) {
-    if (r.kind === 'heure') t.minutes = Math.max(-180, Math.min(180, Number(r.value) || 0));
-    if (r.kind === 'question_finale' && (r.value === 'avec' || r.value === 'sans')) t.question = r.value;
-    if (r.kind === 'image' && (r.value === 'avec' || r.value === 'sans')) t.image = r.value;
+    const v = testValue(r, network, at);
+    if (r.kind === 'heure' && v) t.minutes = Math.max(-180, Math.min(180, Number(v) || 0));
+    if (r.kind === 'question_finale') t.question = either(v);
+    if (r.kind === 'image') t.image = either(v);
+    if (r.kind === 'lien') t.link = either(v);
+    if (r.kind === 'mots_diese') t.tags = either(v);
+    if (r.kind === 'format') t.format = v === 'image' || v === 'carrousel' ? v : null;
   }
   return t;
 }
@@ -176,8 +191,22 @@ const FORMAT: Record<Network, string> = {
   x: '260 caractères au plus.',
 };
 
-/** The images a post carries: on Instagram the carousel, elsewhere one picture or none when the link shows its card. */
+/** How many pictures one post may carry on each network. */
+const MAX_IMAGES: Record<Network, number> = { bluesky: 4, mastodon: 4, x: 4, threads: 10, facebook: 10, instagram: 10 };
+
+/**
+ * The images a post carries: on Instagram the carousel, elsewhere one picture
+ * or none when the link shows its card. A format test turns a post that carries
+ * a picture into the carousel, or the carousel into its one picture.
+ */
 export function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null }, t: Tweaks, link: LinkPolicy): Image[] {
+  const chosen = defaultImages(network, angle, imgs, t, link);
+  if (network === 'instagram' || !t.format || chosen.length === 0) return chosen;
+  if (t.format === 'image') return chosen.slice(0, 1);
+  return imgs.slides.length > 1 ? imgs.slides.slice(0, MAX_IMAGES[network]) : chosen;
+}
+
+function defaultImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null }, t: Tweaks, link: LinkPolicy): Image[] {
   const example = imgs.slides[1] ?? imgs.card;
   if (network === 'instagram') return imgs.slides.length ? imgs.slides.slice(0, 10) : imgs.card ? [imgs.card] : [];
   // X shows no link, so the picture carries the page; Bluesky shows no card unless one is given.
@@ -206,7 +235,7 @@ async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks, link: Li
       `Réseau : ${p.slot.network}. ${FORMAT[p.slot.network]}`,
       ANGLE_BRIEF[p.angle],
       link === 'none' ? LINK_RULE.x(url) : LINK_RULE[p.slot.network](url),
-      p.slot.network === 'mastodon' ? `Termine par ces mots-dièse, exactement et dans cet ordre : ${tags.map((tag) => `#${tag}`).join(' ')}` : '',
+      p.slot.network === 'mastodon' ? (tags.length ? `Termine par ces mots-dièse, exactement et dans cet ordre : ${tags.map((tag) => `#${tag}`).join(' ')}` : 'Aucun mot-dièse.') : '',
       question,
       `Source, la seule matière permise (page ${p.source.path}) :\n"""\n${p.source.text.slice(0, 6000)}\n"""`,
       'Réponds {"texte": "..."}.',
@@ -243,7 +272,10 @@ type Other = { network: Network; text: string; day: string };
  * that month. A Facebook link post that failed this month (`reconcile`) is read
  * as the cap reached: the rest of the month goes out native.
  */
-export function linkFor(ctx: Pick<Ctx, 'db'>, p: Pick<Planned, 'slot' | 'pillar' | 'at'>, others: readonly Other[]): LinkPolicy {
+export function linkFor(ctx: Pick<Ctx, 'db'>, p: Pick<Planned, 'slot' | 'pillar' | 'at'>, others: readonly Other[], t: Pick<Tweaks, 'link'> = {}): LinkPolicy {
+  // A link test only runs where a link is optional (`TEST_NETWORKS.lien`), never on Facebook and its cap.
+  if (t.link === 'sans') return 'none';
+  if (t.link === 'avec') return 'required';
   const policy = linkPolicy(p.slot.network, p.pillar);
   if (p.slot.network !== 'facebook' || policy !== 'required') return policy;
   const month = day(p.at).slice(0, 7);
@@ -260,7 +292,8 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
   const drafts: Draft[] = [];
   for (const p of planned) {
     const t = tweaks(ctx, p.slot.network, p.at);
-    const link = linkFor(ctx, p, others);
+    const link = linkFor(ctx, p, others, t);
+    const postTags = t.tags === 'sans' ? [] : tags;
     const images = chooseImages(p.slot.network, p.angle, await imagesFor(ctx, p.source), t, link);
     if (p.slot.network === 'instagram' && images.length === 0) {
       drafts.push({ planned: p, text: '', images, status: 'refuse', reason: 'aucune image pour Instagram' });
@@ -268,7 +301,7 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
     }
     let text = '';
     try {
-      text = await draft(ctx, p, thisWeek, t, link, tags);
+      text = await draft(ctx, p, thisWeek, t, link, postTags);
     } catch (error) {
       drafts.push({ planned: p, text: '', images, status: 'refuse', reason: `rédaction impossible : ${(error as Error).message}` });
       if (error instanceof BudgetExceeded) break;
@@ -283,7 +316,7 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
       day: day(p.at),
       sourceId: p.source.id,
       link,
-      hashtags: p.slot.network === 'mastodon' ? tags : undefined,
+      hashtags: p.slot.network === 'mastodon' ? postTags : undefined,
     });
     if (filtered.reasons.length) {
       drafts.push({ planned: p, text: filtered.text, images, status: 'refuse', reason: `filtre : ${filtered.reasons.join(' ; ')}` });
@@ -330,7 +363,7 @@ export function draftMode(ctx: Pick<Ctx, 'db'>): boolean {
 /**
  * Records every draft in the journal and, outside a dry run, schedules the
  * accepted ones in Postiz. With `hold`, accepted posts wait for the owner's
- * approval instead (the launch), and Postiz is not called.
+ * « ok » instead (D8: the launch, each week, a fresh page), and Postiz is not called.
  */
 export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integration[], hold = false): Promise<PostRow[]> {
   const postiz = new Postiz(ctx);
@@ -411,10 +444,12 @@ export async function publishHeld(ctx: Ctx, row: PostRow, integrations: Integrat
   const urls = row.image_url ? row.image_url.split(' ') : [];
   const alts = row.alt ? row.alt.split(' | ') : [];
   for (const [i, url] of urls.entries()) media.push(await postiz.media(url, alts[i] ?? ''));
-  const id = await postiz.create({ integrationId: integration.id, network: row.network, at: new Date(row.slot_at), text: row.text, images: media, draft: false, story: row.angle === 'story' });
-  ctx.db.run("UPDATE posts SET status = 'programme', postiz_id = ?, slot_at = ? WHERE id = ?", id, row.slot_at, row.id);
+  const asDraft = draftMode(ctx);
+  const id = await postiz.create({ integrationId: integration.id, network: row.network, at: new Date(row.slot_at), text: row.text, images: media, draft: asDraft, story: row.angle === 'story' });
+  const status = asDraft ? 'brouillon_postiz' : 'programme';
+  ctx.db.run('UPDATE posts SET status = ?, postiz_id = ?, slot_at = ? WHERE id = ?', status, id, row.slot_at, row.id);
   if (row.network === 'x') ctx.db.run("INSERT INTO spend (at, service, usd, run_id) VALUES (?, 'x', ?, ?)", row.slot_at, X_PRICES.post, ctx.runId);
-  return { ...row, status: 'programme', postiz_id: id };
+  return { ...row, status, postiz_id: id };
 }
 
 /** The slots already held, by network and instant: our journal, and anything the owner scheduled by hand. */
@@ -439,18 +474,17 @@ export function startedOn(ctx: Pick<Ctx, 'db'>): string | null {
   return ctx.db.getKv<string>('demarrage') ?? null;
 }
 
-/** Monday's step: fills the weeks the window allows (`fillWindow`), up to four weeks out. */
+/** Monday's step: fills the weeks the window allows (`fillWindow`), up to four weeks out, held for the owner's « ok » (D8). */
 export async function fillQueue(ctx: Ctx, thisWeek: string, weight: Weight): Promise<PostRow[]> {
   const start = startedOn(ctx);
   const weeks = weeksToFill(ctx.now, weekOf(ctx.now), start);
   if (weeks.length === 0) return [];
   const list = directives(ctx, ctx.now);
   const taken = await takenSlots(ctx, addDays(fillWindow(ctx.now, start).from, -1), addDays(new Date(`${weeks[weeks.length - 1]}T00:00:00Z`), 8));
-  const integrations = await new Postiz(ctx).integrations();
   const rows: PostRow[] = [];
   for (const monday of weeks) {
     const planned = await planWeek(ctx, monday, taken, weight, list);
-    rows.push(...(await schedule(ctx, await writePosts(ctx, planned, thisWeek), integrations)));
+    rows.push(...(await schedule(ctx, await writePosts(ctx, planned, thisWeek), [], true)));
   }
   if (!start && !ctx.dry && rows.some((r) => r.status !== 'refuse')) ctx.db.setKv('demarrage', weekOf(ctx.now));
   return rows;
@@ -459,7 +493,7 @@ export async function fillQueue(ctx: Ctx, thisWeek: string, weight: Weight): Pro
 /**
  * A piece of substance just went online (3.4): its posts take the « contenu de
  * la semaine » slots of the next seven days, at least 48 hours after the e-mail
- * that shows them. A post already in such a slot is taken out of Postiz and
+ * that shows them, and wait for the owner's « ok » like every other (D8). A post already in such a slot is taken out of Postiz and
  * goes back to the journal as `rendu`; nothing the owner placed by hand is moved.
  */
 export async function declineFresh(ctx: Ctx, source: Source): Promise<PostRow[]> {
@@ -483,7 +517,7 @@ export async function declineFresh(ctx: Ctx, source: Source): Promise<PostRow[]>
       ctx.db.run("UPDATE posts SET status = 'rendu', reason = ? WHERE id = ?", `cède la place à ${source.id}`, held.id);
     }
   }
-  return schedule(ctx, drafts, integrations);
+  return schedule(ctx, drafts, integrations, true);
 }
 
 /** The stop lever: every future post the routine scheduled is deleted from Postiz. Posts placed by hand stay. */

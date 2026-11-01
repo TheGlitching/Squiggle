@@ -1,9 +1,11 @@
 /**
- * The daily check, at 7:00 Paris time. The check itself calls no model: it
- * reads Postiz, the queue, the spending and the site, and sends an e-mail only
- * when an alert fires (plan, section 7). Two follow-ups do use the model, and
- * only when there is something to follow up: a reply from the owner that is
- * not a plain « stop », and a piece of substance that has just gone online.
+ * The daily check, at 7:00 Paris time. It reads Postiz, the queue, the
+ * spending and the site, and sends an alert only when one fires (plan, section
+ * 7). It also reads the day's comments (A3, D1) and, when there are new ones,
+ * sends the owner one e-mail with each message, its link and a reply to post by
+ * hand. The model is called only when there is something to follow up: new
+ * comments to class, a reply from the owner that is not a plain « stop », a
+ * piece of substance that has just gone online.
  */
 import { CAPS, MAX_OPEN_CONTENT_PRS, MAX_REMOVALS_PER_WEEK, NETWORKS, RESERVE_ALERT_DAYS, type Network } from './config';
 import { addDays, paused, step, type Ctx } from './context';
@@ -12,11 +14,13 @@ import { collectMetrics } from './collect/metrics';
 import { followDeep, freshSource } from './deep';
 import { GitHub } from './github';
 import { readOwnerMail } from './inbox';
+import { expireHeld, pendingApproval } from './launch';
 import { monthlySpend } from './llm';
 import { alert, sendMail } from './mail';
 import { Postiz } from './postiz';
 import { declineFresh, reconcile, reserve, sitePaths } from './posts';
-import { buildNotice, parisDate, reserveDays } from './report';
+import { classifyComments, collectBlueskyComments, collectMastodonComments, learnFromReplies, markMailed, metaComments, rememberMeta, unmailed } from './replies';
+import { buildNotice, buildReplies, parisDate, reserveDays } from './report';
 
 /** Notifications that mean a post did not go out, or a network needs reconnecting. */
 const FAILED = /fail|error|échou|erreur|could not|impossible/i;
@@ -31,7 +35,27 @@ export async function spendThisMonth(ctx: Ctx): Promise<{ openrouter: number; x:
 
 export async function daily(ctx: Ctx): Promise<void> {
   await step(ctx, 'réponses du propriétaire', () => readOwnerMail(ctx), (n) => `${n} nouvelle${n > 1 ? 's' : ''}`);
+  await step(ctx, 'publications sans accord', async () => expireHeld(ctx), (n) => (n ? `${n} non parties` : 'aucune'));
   const isPaused = paused(ctx);
+
+  // Comments are read even while the routine is suspended: « stop » stops posting, not listening.
+  await step(ctx, 'commentaires Bluesky', () => collectBlueskyComments(ctx), (n) => `${n} nouveaux`);
+  await step(ctx, 'commentaires Mastodon', () => collectMastodonComments(ctx), (n) => `${n} nouveaux`);
+  const meta = await step(ctx, 'commentaires Threads, Facebook, Instagram', () => metaComments(ctx), (m) => `${m.unread.length} publications avec du nouveau`);
+  await step(ctx, 'classement des commentaires', async () => {
+    await classifyComments(ctx);
+    return learnFromReplies(ctx);
+  }, (n) => `${n} leçon${n > 1 ? 's' : ''} de réponses modifiées`);
+  await step(ctx, 'e-mail des réponses', async () => {
+    const rows = unmailed(ctx);
+    const unread = meta?.unread ?? [];
+    if (!rows.length && !unread.length) return 'rien de nouveau';
+    const mail = buildReplies(rows, unread, pendingApproval(ctx).length, ctx.dry);
+    await sendMail(ctx, mail.subject, mail.text, mail.html);
+    markMailed(ctx, rows);
+    if (meta) rememberMeta(ctx, meta.seen);
+    return `${rows.length} message${rows.length > 1 ? 's' : ''}, ${unread.length} publication${unread.length > 1 ? 's' : ''} à lire dans l’appli`;
+  });
   const postiz = new Postiz(ctx);
 
   const rec = await step(ctx, 'état de la file', () => reconcile(ctx));
@@ -63,8 +87,14 @@ export async function daily(ctx: Ctx): Promise<void> {
     const thin = NETWORKS.filter((n: Network) => enabled.has(n) && days[n] < RESERVE_ALERT_DAYS);
     // Until the first queue is in place, a thin reserve is the expected state, not an alert.
     const started = ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM posts WHERE status IN ('programme', 'publie')")?.n ?? 0;
+    const waiting = pendingApproval(ctx).length;
     if (thin.length && started > 0) {
-      await alert(ctx, 'reserve', `réserve sous ${RESERVE_ALERT_DAYS} jours`, `Réserve : ${thin.map((n) => `${n} ${days[n]} jours`).join(', ')}.\n${isPaused ? 'La routine est suspendue : répondre « reprendre » pour qu’elle remplisse la file lundi.' : 'Rien à faire si la routine tourne lundi ; sinon la relancer : `contenu hebdo`.'}`);
+      const what = isPaused
+        ? 'La routine est suspendue : répondre « reprendre » pour qu’elle remplisse la file lundi.'
+        : waiting
+          ? `${waiting} publications attendent votre accord : répondre « ok » au compte rendu du lundi pour les programmer.`
+          : 'Rien à faire si la routine tourne lundi ; sinon la relancer : `contenu hebdo`.';
+      await alert(ctx, 'reserve', `réserve sous ${RESERVE_ALERT_DAYS} jours`, `Réserve : ${thin.map((n) => `${n} ${days[n]} jours`).join(', ')}.\n${what}`);
     }
     return thin.join(', ') || 'au moins 14 jours partout';
   });
@@ -117,7 +147,7 @@ export async function daily(ctx: Ctx): Promise<void> {
       ctx.db.run("UPDATE deep SET status = 'fusionne' WHERE slug = ? AND status = 'en_ligne'", item.slug);
       continue;
     }
-    const rows = await step(ctx, `déclinaisons de ${item.slug}`, () => declineFresh(ctx, source), (r) => `${r.filter((p) => p.status !== 'refuse').length} programmées`);
+    const rows = await step(ctx, `déclinaisons de ${item.slug}`, () => declineFresh(ctx, source), (r) => `${r.filter((p) => p.status !== 'refuse').length} en attente d’accord`);
     const accepted = (rows ?? []).filter((p) => p.status !== 'refuse');
     if (accepted.length) {
       const notice = buildNotice(source.title, source.path, accepted, ctx.dry);

@@ -1,9 +1,10 @@
 /**
  * Monday, from 5:00 Paris time, in the order of the plan (3.3): collection,
- * comments and lessons, the strategy note, the piece of substance, the posts
- * four weeks out, then the report. Each step can fail on its own; the report
- * always leaves, and says which step is missing. Content pull requests are
- * followed by the daily check, which drafts their posts once they are online.
+ * lessons, the strategy note, the piece of substance, the posts four weeks out,
+ * held for the owner's « ok » (D8), then the report. Each step can fail on its
+ * own; the report always leaves, and says which step is missing. Comments are
+ * read every day by the daily check (`daily.ts`), which also follows content
+ * pull requests and drafts their posts once they are online.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,12 +17,13 @@ import { addDays, paused, step, weekOf, type Ctx } from './context';
 import { spendThisMonth } from './daily';
 import { weeklyDeep } from './deep';
 import { readOwnerMail } from './inbox';
+import { expireHeld, pendingApproval } from './launch';
 import { lessonsSince } from './memory';
 import { Postiz } from './postiz';
 import { draftMode, fillQueue, reconcile, reserve, startedOn } from './posts';
 import { buildReport, decisionsFor, type ReportInput } from './report';
 import { summarize } from './summary';
-import { classifyComments, collectComments, commentsToRead, learnFromRemovals, learnFromReplies, signals } from './replies';
+import { commentsToRead, learnFromRemovals, signals } from './replies';
 import { sendMail } from './mail';
 import { startTests, weekGuidance, writeStrategy } from './strategy';
 
@@ -30,17 +32,11 @@ export async function weekly(ctx: Ctx): Promise<void> {
   const isPaused = paused(ctx);
   await step(ctx, 'réponses du propriétaire', () => readOwnerMail(ctx));
   const rec = await step(ctx, 'état de la file', () => reconcile(ctx));
+  const expired = expireHeld(ctx);
   const removed = ctx.db.all<{ network: string; text: string; source_id: string }>("SELECT network, text, source_id FROM posts WHERE status = 'retire' AND checked_at >= ?", since);
   await step(ctx, 'leçons des publications retirées', () => learnFromRemovals(ctx, removed));
 
   const week = await collectAll(ctx);
-
-  await step(ctx, 'commentaires', async () => {
-    const added = await collectComments(ctx, week);
-    await classifyComments(ctx);
-    await learnFromReplies(ctx);
-    return added;
-  }, (n) => `${n} nouveaux`);
 
   const strategy = await step(ctx, 'note de stratégie', () => writeStrategy(ctx, week, signals(ctx)), (s) => (s.problem ? `note bloquée : ${s.problem}` : 'réécrite'));
 
@@ -69,6 +65,8 @@ export async function weekly(ctx: Ctx): Promise<void> {
     strategy: strategy ?? null,
     deep: deep ?? null,
     entering,
+    waiting: pendingApproval(ctx),
+    expired,
     comments,
     toRead: commentsToRead(week),
     lessons: lessonsSince(ctx, since),
