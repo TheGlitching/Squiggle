@@ -1,14 +1,34 @@
 /**
- * Social-platform thread extractor.
+ * Social-platform post and thread extractor.
  *
- * Turns a social thread page (X today) into the same `ExtractedArticle` the
+ * Turns a social post's page (X, Threads, Instagram, Facebook, TikTok) into the same `ExtractedArticle` the
  * article extractor produces, so the entire downstream pipeline - engine
  * pipeline, source-reading research, sidepanel annotations, in-page
  * highlighting - treats a thread exactly like any other article. Nothing
  * upstream needs to know how the content got extracted.
  *
- * The layout facts relied upon here are deliberately X-specific but kept
- * simple and resilient:
+ * A signed-in X thread is read off its DOM, below. Every other post, and an X
+ * post opened without a session, is read off the page's own metadata: the
+ * `og:` tags and the `<title>` the platform writes for link previews carry the
+ * post's whole text where the page itself shows one line of it (an Instagram
+ * caption cut after "plus", an X post in a layout with no test ids), and they
+ * are what the page already handed the reader. Measured on public posts, signed
+ * out, in Android's web view (`tests/fixtures/social/`):
+ *
+ * - X: `og:description`, or the `<title>` "NASA sur X : « … » / X";
+ * - Threads: `og:description`;
+ * - Instagram: `og:title`, `NASA sur Instagram: "<caption>"`;
+ * - TikTok: `og:description`, the caption between « », or the `<title>`;
+ * - Facebook: `og:description` and the post's visible text, both cut with
+ *   "..." / "Voir plus" without a session: the read is then `truncated`.
+ *
+ * Such a read has no node in the page, so its blocks carry no xpath: nothing
+ * to highlight in place, which a phone has no use for anyway. The metadata is
+ * only trusted when it names the post the page's address names, so a stale
+ * `og:` tag left by an in-app navigation is never read as the current post.
+ *
+ * The layout facts relied upon for an X thread are deliberately X-specific but
+ * kept simple and resilient:
  *
  * - Every post is an `<article data-testid="tweet">`; a quoted tweet renders
  *   as an article nested inside its owner, so filtering out nested articles
@@ -30,7 +50,7 @@ import {
   ExtractedArticle,
   TextBlock,
 } from './types';
-import { SocialPlatform } from './socialPlatform';
+import { PLATFORM_NAMES, SocialPlatform } from './socialPlatform';
 
 /** One thread post, as read off the DOM. */
 interface ParsedPost {
@@ -171,7 +191,83 @@ export class SocialExtractor {
 
   /** Null when the classified page rendered no readable posts. */
   public extract(): ExtractedArticle | null {
-    return this.platform === 'x' ? this.extractX() : null;
+    return (this.platform === 'x' ? this.extractX() : null) ?? this.extractFromMetadata();
+  }
+
+  /** The post as the page's preview metadata gives it, or null when it gives no text. */
+  private extractFromMetadata(): ExtractedArticle | null {
+    if (!this.metadataNamesThisPost()) return null;
+    const read = readPostMetadata(this.doc, this.platform);
+    if (!read || read.text.length === 0) return null;
+    const name = PLATFORM_NAMES[this.platform];
+    const title = read.author ? `Publication ${name} de ${read.author}` : `Publication ${name}`;
+    const lines = read.text.split('\n').map(clean).filter(Boolean);
+
+    const blocks: TextBlock[] = [];
+    let offset = 0;
+    const push = (text: string, heading: boolean) => {
+      blocks.push({
+        id: heading ? 'head' : `post-${blocks.length}`,
+        index: blocks.length,
+        text,
+        cleanText: text,
+        charStart: offset,
+        charEnd: offset + text.length,
+        tagName: heading ? 'h1' : 'p',
+        isHeading: heading,
+        isQuote: false,
+        isList: false,
+        domPath: '',
+        xpath: '',
+        nodeCoordinates: { xpath: '', cssSelector: '', startOffset: 0, endOffset: 0 },
+      });
+      offset += text.length + 1;
+    };
+    push(title, true);
+    for (const line of lines) push(line, false);
+
+    const cleanText = lines.join(' ');
+    const words = cleanText.split(/\s+/).filter((w) => w.length > 0);
+    return {
+      metadata: {
+        title,
+        byline: read.author,
+        siteName: name,
+        publishedTime: null,
+        modifiedTime: null,
+        description: cleanText.slice(0, 140) || null,
+        lang: this.doc.documentElement?.lang || null,
+        canonicalUrl: postAddress(this.doc) ?? this.canonicalUrl,
+        estimatedReadTimeMinutes: Math.max(1, Math.round(words.length / 45)),
+      },
+      fullText: blocks.map((b) => b.cleanText).join('\n\n'),
+      cleanText,
+      wordCount: words.length,
+      blocks,
+      detectionMethod: 'social-thread',
+      extractionConfidence: read.truncated ? 0.4 : 0.8,
+      rootContainerSelector: 'head',
+      citedSources: [],
+      ...(read.truncated ? { truncated: true } : {}),
+    };
+  }
+
+  /**
+   * Whether the preview metadata is this post's: one of the address's ids (a
+   * status number, a shortcode, a story id) is in the page's `og:url` or
+   * canonical link. A page without either is taken at its word.
+   */
+  private metadataNamesThisPost(): boolean {
+    const named = [metaContent(this.doc, 'og:url'), postAddress(this.doc)].filter(Boolean).join(' ');
+    if (!named) return true;
+    let ids: string[] = [];
+    try {
+      const url = new URL(this.canonicalUrl);
+      ids = [...url.pathname.split('/'), ...url.searchParams.values()].filter((part) => /^[\w-]{6,}$/.test(part) && /\d/.test(part));
+    } catch {
+      return true;
+    }
+    return ids.length === 0 || ids.some((id) => named.includes(id));
   }
 
   private extractX(): ExtractedArticle | null {
@@ -328,4 +424,103 @@ export function unreadSocialPost(url: string): ExtractedArticle {
     rootContainerSelector: 'main',
     citedSources: [],
   };
+}
+
+/** A post's text and author as its page's preview metadata gives them. */
+export interface PostMetadata {
+  text: string;
+  /** The account, as the platform names it ("NASA (@NASA)", "NASA"), when it does. */
+  author: string | null;
+  truncated: boolean;
+}
+
+function metaContent(doc: Document, key: string): string {
+  const el = doc.querySelector(`meta[property="${key}"], meta[name="${key}"]`);
+  return (el?.getAttribute('content') ?? '').trim();
+}
+
+function postAddress(doc: Document): string | null {
+  return doc.querySelector('link[rel="canonical"]')?.getAttribute('href')?.trim() || null;
+}
+
+/** The post's text, line breaks kept, runs of spaces and blank lines folded. */
+function postText(raw: string): string {
+  return raw
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+const longest = (...texts: string[]): string => texts.map(postText).reduce((a, b) => (b.length > a.length ? b : a), '');
+
+/** "NASA (@NASA) sur X", "NASA on Instagram" -> "NASA (@NASA)", "NASA". */
+function authorBefore(label: string, platform: string): string | null {
+  const m = new RegExp(`^(.+?)\\s+(?:sur|on)\\s+${platform}\\b`, 'i').exec(label);
+  return m ? m[1].trim() : null;
+}
+
+/** Facebook's cut: the text ends on "..." or "… Voir plus" / "See more". */
+/** What may follow the post's own text in its box: the cut marker alone. */
+const CUT_ONLY = /^\s*(?:\.\.\.|…)?\s*(?:Voir plus|See more|Afficher la suite)?\s*$/i;
+const CUT = /(?:\s*(?:\.\.\.|…)\s*(?:Voir plus|See more|Afficher la suite)?|\s+(?:Voir plus|See more))\s*$/i;
+
+/**
+ * Reads a post off its page's preview metadata (and, for Facebook, the
+ * visible text that starts like it). Exported for the tests.
+ */
+export function readPostMetadata(doc: Document, platform: SocialPlatform): PostMetadata | null {
+  const ogTitle = metaContent(doc, 'og:title');
+  const ogDescription = metaContent(doc, 'og:description');
+  const title = (doc.querySelector('title')?.textContent ?? '').trim();
+
+  switch (platform) {
+    case 'x': {
+      // <title>: NASA sur X : « <post> » / X
+      const inTitle = /[«"]\s*([\s\S]*?)\s*[»"]\s*\/\s*X\s*$/.exec(title)?.[1] ?? '';
+      return { text: longest(ogDescription, inTitle), author: authorBefore(ogTitle, 'X'), truncated: false };
+    }
+    case 'threads':
+      return { text: longest(ogDescription), author: authorBefore(ogTitle, 'Threads'), truncated: false };
+    case 'instagram': {
+      // og:title: NASA sur Instagram: "<caption>"; og:description: 308K likes, … - nasa le <date>: "<caption>".
+      const inTitle = /:\s*"([\s\S]*)"\s*$/.exec(ogTitle)?.[1] ?? '';
+      const inDescription = /:\s*"([\s\S]*)"\.?\s*$/.exec(ogDescription)?.[1] ?? '';
+      return { text: longest(inTitle, inDescription), author: authorBefore(ogTitle, 'Instagram'), truncated: false };
+    }
+    case 'tiktok': {
+      // og:description: 188.5K j'aime, 2573 commentaires. « <caption> »; <title>: <caption> | TikTok
+      const inDescription = /[«"]\s*([\s\S]*?)\s*[»"]\s*$/.exec(ogDescription)?.[1] ?? '';
+      const inTitle = /^([\s\S]*?)\s*\|\s*TikTok\s*$/.exec(title)?.[1] ?? '';
+      const author = /·\s*(.+)$/.exec(ogTitle)?.[1]?.trim() || null;
+      return { text: longest(inDescription, inTitle === 'TikTok' ? '' : inTitle), author, truncated: false };
+    }
+    case 'facebook': {
+      // Without a session both the metadata and the post stop on "..." / "Voir plus"; with one,
+      // the post's text in the page may be whole: the longer of the two, cut or not.
+      const start = postText(ogDescription.replace(CUT, '')).slice(0, 40);
+      let visible = '';
+      if (start.length >= 10) {
+        // The innermost element that starts like the post, with the "... Voir plus" beside it, if any.
+        const holders = Array.from(doc.body?.querySelectorAll('div, span, p') ?? []).filter((el) =>
+          postText(el.textContent ?? '').startsWith(start),
+        );
+        let el = holders[holders.length - 1];
+        while (el?.parentElement) {
+          const inner = postText(el.textContent ?? '');
+          const outer = postText(el.parentElement.textContent ?? '');
+          if (!outer.startsWith(inner) || !CUT_ONLY.test(outer.slice(inner.length))) break;
+          el = el.parentElement;
+        }
+        visible = el ? postText(el.textContent ?? '') : '';
+      }
+      const og = postText(ogDescription);
+      const best = visible.replace(CUT, '').length > og.replace(CUT, '').length ? visible : og;
+      return {
+        text: postText(best.replace(CUT, '')),
+        author: ogTitle || null,
+        truncated: CUT.test(best),
+      };
+    }
+  }
 }

@@ -85,7 +85,8 @@ import {
   type PastedArticle,
   webAddress,
 } from '../paste';
-import { carriesPage, readFavori } from '../favori/article';
+import { isSocialHost } from '../../../shared/src/extract/socialPlatform';
+import { carriesPage, readFavori, type PostProblem } from '../favori/article';
 import { APP_VALUE, FAVORI_PARAM, FAVORI_VALUE, SHORTCUT_VALUE } from '../favori/payload';
 import { browserLink, currentPhoneOs, type PhoneOs } from '../phone';
 import { newSeance, saveSeance } from '../classe';
@@ -193,6 +194,16 @@ const CAPTURES_EMPTY = 'Aucun texte n’a été lu sur ces images. Importez des 
 const CAPTURES_FAILED =
   'La lecture des captures n’a pas pu démarrer. Vérifiez la connexion : le lecteur de texte se télécharge la première fois.';
 const FAVORI_UNREAD = 'Squiggle n’a pas trouvé d’article dans la page que le favori a apportée. Copiez le texte, puis collez-le ici.';
+
+/** What to do with a social page that brought no text, in its own case. YouTube is looked up by its link instead. */
+const POST_UNREAD: Record<Exclude<PostProblem, 'video'>, (network: string) => string> = {
+  cut: (network) =>
+    `${network} ne montre que le début de cette publication sans connexion, et Squiggle n’en analyse pas une moitié. Connectez-vous à ${network} sur la page de la publication, puis relancez Squiggle (dans l’application Squiggle, touchez Vérifier ; Squiggle ne voit pas votre mot de passe). Ou faites une capture d’écran de la publication et partagez-la vers Squiggle, ou copiez son texte et collez-le ici.`,
+  no_text: (network) =>
+    `Cette publication ${network} n’a presque pas de texte à lire. Pour le texte affiché sur l’image ou la vidéo, faites une capture d’écran et partagez-la vers Squiggle. Pour ce qui est dit dans la vidéo, enregistrez-la, puis partagez la vidéo vers Squiggle : il en transcrit le son. Ou collez le texte ici.`,
+  not_a_post: () =>
+    'Squiggle lit une publication à la fois, pas un profil ni un fil. Ouvrez la publication elle-même (touchez sa date ou son texte), puis relancez Squiggle. Si un bandeau de cookies ou de connexion la cache, fermez-le d’abord. Ou copiez son texte et collez-le ici.',
+};
 const CAPTURES_LOST = 'Les fichiers partagés n’ont pas été retrouvés. Importez-les ici.';
 const TOO_MANY_CAPTURES = `${MAX_CAPTURES} captures au plus à la fois : un article tient d’ordinaire en moins de dix.`;
 
@@ -409,7 +420,8 @@ function AnalyserPage() {
         setArticle({ title: read.title, source: read.url, text: read.text });
         if (read.text) return void setAutoRun(true);
         setPhase({ kind: 'edit' });
-        setNotice(FAVORI_UNREAD);
+        if (read.problem === 'video') return void findByLink(read.url);
+        setNotice(read.problem ? POST_UNREAD[read.problem](read.network ?? 'Le réseau') : FAVORI_UNREAD);
       },
       () => {
         if (!readingPage.current) return;
@@ -1022,6 +1034,15 @@ function AnalyserPage() {
                 onChange={pickFiles}
                 data-testid="fichier"
               />
+              {/* First, before the drop zone: on a phone, what to do next is the one thing on screen. */}
+              {notice ? (
+                <p
+                  role="status"
+                  className="mt-2 mb-0 rounded-control border border-border bg-accentSoft px-4 py-3 text-sm"
+                >
+                  {notice}
+                </p>
+              ) : null}
               {reading ? (
                 <ReadingPanel reading={reading} onCancel={() => controller.current?.abort()} />
               ) : transcribing ? (
@@ -1080,16 +1101,9 @@ function AnalyserPage() {
                   </div>
                 </div>
               ) : null}
-              {notice ? (
-                <p
-                  role="status"
-                  className="mt-2 mb-0 rounded-control border border-border bg-accentSoft px-4 py-3 text-sm"
-                >
-                  {notice}
-                </p>
-              ) : null}
               {longPdf && !reading ? <PdfPages pdf={longPdf} onKeep={keepPages} /> : null}
-              {!article.text && webAddress(article.source) ? (
+              {/* A social post was opened from where it is read: opening it again would only loop. */}
+              {!article.text && webAddress(article.source) && !isSocialHost(new URL(article.source).hostname) ? (
                 <OpenInBrowser address={webAddress(article.source)!} />
               ) : null}
               <textarea

@@ -8,6 +8,9 @@
  * session stages on the reader's cookie and never asks for the source page;
  * the report highlights the passages it discusses; a refusal says what to do.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -513,6 +516,46 @@ describe('Analyser, from the bookmark that brings the page', () => {
     render(<Analyser />);
     expect(await screen.findByText(/Squiggle n’a pas trouvé d’article dans la page que le favori a apportée/)).toBeInTheDocument();
     await analyseButton();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  const social = (name: string) => readFileSync(join(__dirname, '../../tests/fixtures/social', `${name}.html`), 'utf8');
+
+  it('analyses a social post as the message it is, titled with its network', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(social('instagram-signed-out-post'), 'https://www.instagram.com/p/DcqkO2BljsL/')}`);
+    render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    const audit = seen.find((s) => s.url === '/web/analyze/audit');
+    expect(audit?.body).toMatchObject({ url: 'https://www.instagram.com/p/DcqkO2BljsL/', title: 'Publication Instagram de NASA' });
+  });
+
+  it('says what to do with a Facebook post cut after its first line, and analyses nothing', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(social('facebook-signed-out-post'), 'https://www.facebook.com/story.php?story_fbid=1672153010946735')}`);
+    render(<Analyser />);
+    expect(await screen.findByText(/Facebook ne montre que le début de cette publication sans connexion/)).toBeInTheDocument();
+    expect(screen.getByText(/capture d’écran de la publication/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
+    await analyseButton();
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  it('never analyses a consent wall the bookmark read on a social site', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(social('facebook-consent'), 'https://www.facebook.com/cookie/consent')}`);
+    render(<Analyser />);
+    expect(await screen.findByText(/Squiggle lit une publication à la fois/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  it('looks a YouTube Short up by its link, as a shared link', async () => {
+    const seen = serve(account());
+    at(`/analyser${await pageFragment(social('youtube-short'), 'https://m.youtube.com/shorts/-62C9R_41Sc')}`);
+    render(<Analyser />);
+    expect(await screen.findByText(/Cette vidéo n’a pas encore de rapport/)).toBeInTheDocument();
+    expect(seen.some((s) => s.url.startsWith('/web/anon/link?'))).toBe(true);
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
   });
 
