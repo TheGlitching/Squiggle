@@ -746,6 +746,18 @@
     .run-mark {
       animation: run-mark 2.4s var(--ease-out) calc(var(--i, 0) * 400ms) infinite;
     }
+
+    /* The bar under the scene (`RunBar`): it slides between ticks, and once
+       full a glow goes to and fro along it. */
+    .run-bar {
+      transition: width 250ms linear;
+    }
+
+    .run-bar-full {
+      background-image: linear-gradient(90deg, transparent 30%, var(--color-accentInk) 50%, transparent 70%);
+      background-size: 250% 100%;
+      animation: run-glow 1.6s ease-in-out infinite alternate;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -910,6 +922,15 @@
   to {
     transform: translateY(138px);
     opacity: 0;
+  }
+}
+
+@keyframes run-glow {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
   }
 }
 
