@@ -57,9 +57,19 @@ describe('Fourches Caudines Engine', () => {
 
   it('keeps the borrowed method name out of reader-facing text', () => {
     // The prompt version is shown to readers and is part of the cache key.
-    expect(PROMPT_VERSION).toBe('1.4.0');
+    expect(PROMPT_VERSION).toBe('1.4.1');
     expect(FOURCHES_CAUDINES_SYSTEM_PROMPT).not.toMatch(/fourches|caudines/i);
     expect(buildFourchesCaudinesUserPrompt(sampleInput)).not.toMatch(/fourches|caudines/i);
+  });
+
+  it('tells the audit where a language defect goes, since no finding category fits one', () => {
+    // Every defect named in a domain's weaknesses must also be a finding, but no
+    // finding category fits a typo or a repeated paragraph. On a live blog full
+    // of both, the hosted model spent its whole output budget choosing one, and
+    // the reader got « La réponse du modèle n'a pas pu être lue » on both tries.
+    const userPrompt = buildFourchesCaudinesUserPrompt(sampleInput);
+    expect(userPrompt).toContain('Seule exception : un défaut de langue');
+    expect(userPrompt).toMatch(/"weaknesses" de "orthographe_grammaire" et ne figure jamais dans "findings"/);
   });
 
   it('calculates score and bands correctly', () => {
