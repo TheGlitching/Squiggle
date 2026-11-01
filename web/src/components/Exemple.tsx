@@ -115,7 +115,7 @@ function FindingCard({ index, current }: { index: number; current: boolean }) {
   );
 }
 
-function Report({ selected, cardRef, live }: { selected: number; cardRef: RefObject<HTMLDivElement>; live: boolean }) {
+function Report({ selected, cardRef, live }: { selected: number; cardRef: RefObject<HTMLDivElement | null>; live: boolean }) {
   return (
     <div
       data-ui
