@@ -4,9 +4,9 @@
  * Driven through the worker like every other suite, so the counters are fed by
  * the real stage handlers and the answer is read the way the owner reads it.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { articleTextHash, generateSigningKeyPair } from '@squiggle/shared';
+import { articleTextHash, generateSigningKeyPair, OpenRouterClient } from '@squiggle/shared';
 
 import { ownerEmailsOf } from '../src/index';
 import { TRIAL_ANALYSES } from '../src/billing/quota';
@@ -133,7 +133,11 @@ describe('GET /admin/metrics', () => {
     expect(status).toBe(200);
     expect(body.metrics.accounts).toEqual({ total: 0, perWeek: [0, 0] });
     expect(body.metrics.cache).toEqual({ checks: 0, hits: 0, hitRate: null });
-    expect(body.metrics.analyses).toEqual({ finalized: 0, costPerAnalysisUsd: null });
+    expect(body.metrics.analyses).toEqual({
+      finalized: 0,
+      costPerAnalysisUsd: null,
+      spent: { auditUsd: 0, researchUsd: 0, sourceCheckUsd: 0, totalUsd: 0, webSearches: 0 },
+    });
   });
 
   it('counts accounts, activation, cache hits, stage failures and cost from real traffic', async () => {
@@ -159,7 +163,25 @@ describe('GET /admin/metrics', () => {
     expect(m.cache).toEqual({ checks: 2, hits: 1, hitRate: 0.5 });
     expect(m.stages.audit).toEqual({ calls: 2, failed: 1, failureRate: 0.5, truncated: 0 });
     expect(m.stages.research).toEqual({ calls: 0, failed: 0, failureRate: null });
-    expect(m.analyses).toEqual({ finalized: 1, costPerAnalysisUsd: 0.5 });
+    expect(m.analyses).toMatchObject({ finalized: 1, costPerAnalysisUsd: 0.5 });
+  });
+
+  it('reads the cost per analysis from the counted spend when no invoice is given', async () => {
+    const env = makeTestEnv({ adminToken: 'admin-secret' });
+    const marie = await signedIn(env, 'marie@example.org');
+    const { json } = await audit(env, marie);
+    expect((await call(env, marie, '/v1/analyze/finalize', { runId: json.runId })).status).toBe(200);
+    await env.db.bumpMetric('cost_audit', T0, 8_301);
+    await env.db.bumpMetric('cost_research', T0, 13_874);
+    await env.db.bumpMetric('cost_source_check', T0, 1_000);
+    await env.db.bumpMetric('web_searches', T0, 2);
+
+    const { body } = await metrics(env, '?weeks=1');
+    expect(body.metrics.analyses).toEqual({
+      finalized: 1,
+      costPerAnalysisUsd: 0.0232,
+      spent: { auditUsd: 0.0083, researchUsd: 0.0139, sourceCheckUsd: 0.001, totalUsd: 0.0232, webSearches: 2 },
+    });
   });
 
   it('answers with counts only: no account, address or article', async () => {
@@ -464,5 +486,21 @@ describe('paid and free subscriptions', () => {
     });
     expect(res.status).toBe(200);
     expect((await env.db.getUserById(user.id))!.plan).toBe('active');
+  });
+});
+
+describe('the spend OpenRouter reports', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reaches the sink with the cost and the searches, and leaves the answer readable', async () => {
+    const reply = { choices: [{ message: { content: 'ok' } }], usage: { cost: 0.0138736, server_tool_use_details: { web_search_requests: 2 } } };
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify(reply), { headers: { 'content-type': 'application/json' } }));
+    const spends: Array<{ costUsd: number; webSearches: number }> = [];
+    const client = new OpenRouterClient({ provider: 'openrouter', apiKey: 'k', model: 'm' }).withSpendSink((spend) => spends.push(spend));
+
+    const answer = await client.complete({ messages: [{ role: 'user', content: 'x' }] });
+
+    expect(answer.content).toBe('ok');
+    expect(spends).toEqual([{ costUsd: 0.0138736, webSearches: 2 }]);
   });
 });

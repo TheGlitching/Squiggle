@@ -893,10 +893,11 @@ async function analyzeRoute(
   if (!s.llm) {
     return finish(apiError('internal', "Le mode hébergé n'est pas configuré sur ce serveur."));
   }
+  const spend = { micros: 0, searches: 0 };
   const analyze: AnalyzeServices = {
     db: s.db,
     clock: s.clock,
-    llm: s.llm,
+    llm: SPEND_COUNTERS[stage] ? () => withSpendAdded(s.llm!(), spend) : s.llm,
     promptVersion: s.promptVersion ?? PROMPT_VERSION,
     fetchImpl: s.fetchImpl as typeof fetch | undefined,
     requestId,
@@ -946,19 +947,19 @@ async function analyzeRoute(
     const schema = caller === 'install' ? AuditRequestSchema : PastedAuditRequestSchema;
     const parsed = schema.safeParse(parseJson(rawBody));
     if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
-    return finish(await analyzeAudit(analyze, reader, parsed.data));
+    return finish(await countingSpend(s, stage, spend, requestId, analyzeAudit(analyze, reader, parsed.data)));
   }
 
   if (stage === '/research' && method === 'POST') {
     const parsed = ResearchRequestSchema.safeParse(parseJson(rawBody));
     if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
-    return finish(await analyzeResearch(analyze, reader, parsed.data));
+    return finish(await countingSpend(s, stage, spend, requestId, analyzeResearch(analyze, reader, parsed.data)));
   }
 
   if (stage === '/source-check' && method === 'POST') {
     const parsed = SourceCheckRequestSchema.safeParse(parseJson(rawBody));
     if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
-    return finish(await analyzeSourceCheck(analyze, reader, parsed.data));
+    return finish(await countingSpend(s, stage, spend, requestId, analyzeSourceCheck(analyze, reader, parsed.data)));
   }
 
   if (stage === '/finalize' && method === 'POST') {
@@ -968,6 +969,44 @@ async function analyzeRoute(
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/** The counter each paid stage adds its cost to. */
+const SPEND_COUNTERS: Record<string, MetricName | undefined> = {
+  '/audit': 'cost_audit',
+  '/research': 'cost_research',
+  '/source-check': 'cost_source_check',
+};
+
+/** The model client, adding what each of its requests costs, in millionths of a dollar, to `spend`. */
+function withSpendAdded(client: BaseLLMClient, spend: { micros: number; searches: number }): BaseLLMClient {
+  if (!(client instanceof OpenRouterClient)) return client;
+  return client.withSpendSink(({ costUsd, webSearches }) => {
+    spend.micros += Math.round(costUsd * 1e6);
+    spend.searches += webSearches;
+  });
+}
+
+/**
+ * Run a paid stage, then add what its requests cost to the stage's counter:
+ * once the stage is over, so a Worker that has answered is not cut off
+ * mid-write. A stage that fails halfway was still billed for the calls it made.
+ */
+async function countingSpend<T>(
+  s: Services,
+  stage: string,
+  spend: { micros: number; searches: number },
+  requestId: string,
+  run: Promise<T>,
+): Promise<T> {
+  try {
+    return await run;
+  } finally {
+    const counter = SPEND_COUNTERS[stage];
+    const now = s.clock.now();
+    if (counter && spend.micros > 0) await countMetric(s.db, counter, now, requestId, spend.micros);
+    if (spend.searches > 0) await countMetric(s.db, 'web_searches', now, requestId, spend.searches);
+  }
 }
 
 /**

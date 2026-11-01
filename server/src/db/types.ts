@@ -376,6 +376,13 @@ export const METRIC_NAMES = [
   'transcription_failed',
   'refused_transcription_limit',
   'refused_transcription_closed',
+  // What the analyses cost at OpenRouter, in millionths of a dollar, by stage,
+  // as each response reports it (web search included), and the web searches
+  // among them. The audit's figure holds its critique pass.
+  'cost_audit',
+  'cost_research',
+  'cost_source_check',
+  'web_searches',
 ] as const;
 export type MetricName = (typeof METRIC_NAMES)[number];
 
