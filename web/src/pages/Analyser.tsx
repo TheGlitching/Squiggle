@@ -1081,10 +1081,10 @@ function AnalyserPage() {
       ) : null}
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-16">
-        <form onSubmit={analyse} noValidate>
-          <fieldset className="m-0 grid gap-6 border-0 p-0">
+        <form onSubmit={analyse} noValidate className="min-w-0">
+          <fieldset className="m-0 grid grid-cols-[minmax(0,1fr)] gap-6 border-0 p-0">
             <div>
-              <div className="flex items-baseline justify-between gap-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
                 <label htmlFor="texte" className="text-base font-medium">
                   Texte de l’article ou du message
                 </label>
