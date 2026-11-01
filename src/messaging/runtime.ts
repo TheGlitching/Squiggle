@@ -262,7 +262,7 @@ export class UnifiedRuntime {
    */
   public static onTabActivated(listener: (activeInfo: { tabId: number; windowId?: number }) => void): () => void {
     const tabs = this.getTabs();
-    const callback = (activeInfo: chrome.tabs.TabActiveInfo) => listener(activeInfo);
+    const callback = (activeInfo: chrome.tabs.OnActivatedInfo) => listener(activeInfo);
     tabs.onActivated.addListener(callback);
     return () => tabs.onActivated.removeListener(callback);
   }
@@ -278,7 +278,7 @@ export class UnifiedRuntime {
     listener: (tabId: number, changeInfo: { status?: string; url?: string }, tab: ExtensionTab) => void
   ): () => void {
     const tabs = this.getTabs();
-    const callback = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) =>
+    const callback = (tabId: number, changeInfo: chrome.tabs.OnUpdatedInfo, tab: chrome.tabs.Tab) =>
       listener(tabId, changeInfo, tab as unknown as ExtensionTab);
     tabs.onUpdated.addListener(callback);
     return () => tabs.onUpdated.removeListener(callback);

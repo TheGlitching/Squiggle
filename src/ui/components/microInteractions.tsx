@@ -133,7 +133,7 @@ Pressable.displayName = 'Pressable';
    2. Card Expansion Wrapper (Zero-jank accordion / expansion with smooth height)
    ========================================================================= */
 
-export interface ExpandableCardProps extends HTMLAttributes<HTMLDivElement> {
+export interface ExpandableCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onToggle'> {
   isExpanded: boolean;
   header: ReactNode;
   children: ReactNode;
