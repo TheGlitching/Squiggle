@@ -16,9 +16,11 @@ describe('article extraction recovery', () => {
   let receiverMissing: boolean;
   /** What the content script answers once it is reachable. */
   let extraction: Record<string, unknown>;
+  let tabUrl: string | undefined;
 
   beforeEach(() => {
     injected = [];
+    tabUrl = undefined;
     extractCalls = 0;
     receiverMissing = true;
     extraction = {
@@ -40,7 +42,7 @@ describe('article extraction recovery', () => {
       runtime,
       tabs: {
         query: vi.fn((_q: unknown, cb: (t: unknown[]) => void) => cb([{ id: TAB, active: true }])),
-        get: vi.fn().mockResolvedValue({ id: TAB, windowId: 1 }),
+        get: vi.fn().mockImplementation(async () => ({ id: TAB, windowId: 1, url: tabUrl })),
         sendMessage: vi.fn((_tabId: number, msg: unknown, cb?: (r?: unknown) => void) => {
           const type = (msg && typeof msg === 'object' && 'type' in msg ? msg.type : undefined) as
             | string
@@ -119,6 +121,19 @@ describe('article extraction recovery', () => {
     expect(res.success).toBe(false);
     expect(res.error).toContain('110 mots');
     expect(res.error).toContain('abonnés');
+  });
+
+  it('says a short social page is too short to judge, not paywalled', async () => {
+    receiverMissing = false;
+    tabUrl = 'https://x.com/someone';
+    extraction = { ...extraction, fullText: 'Un profil.', cleanText: 'Un profil.', wordCount: 40, detectionMethod: 'text-density' };
+
+    const sw = new BackgroundServiceWorker();
+    const res = await sw.runAnalysisForTab(TAB);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('trop peu pour juger');
+    expect(res.error).not.toContain('abonnés');
   });
 
   it('analyses a full-length article without injecting anything', async () => {

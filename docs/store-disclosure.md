@@ -15,7 +15,7 @@ dashboards in the same release that ships the server, not before.
 
 | Question | Today (BYOK only) | With hosted mode |
 |---|---|---|
-| Single purpose | Analyse the news article in the active tab against an explicit editorial grid, and show the result beside it. | *unchanged* |
+| Single purpose | Analyse the news article in the active tab against an explicit editorial grid, and show the result beside it. | Analyse the text the reader has in front of them (a news article, a social media post or thread, a selected message) against an explicit editorial grid, and show the result beside it. |
 | Does it collect **personally identifiable information**? | No | **Yes** — email address, for the account |
 | **Health information** | No | No |
 | **Financial and payment information** | No | No — payment is handled entirely by Stripe; we never see a card number |
@@ -112,8 +112,9 @@ must go out with the release that ships it. The summary is the manifest `descrip
 - [x] AMO source package and build instructions (`docs/RELEASING.md`)
 - [x] French listing copy for the hosted offer (`store/listing.fr.md`)
 - [ ] update the CWS privacy practices to the right-hand column above
-- [ ] update the CWS single purpose only if it actually changed (it does not: the
-      purpose is the same, the infrastructure is not part of a purpose)
+- [ ] update the CWS single purpose to the right-hand wording above, in the same release
+      that announces social posts (the infrastructure is not part of a purpose, the
+      text being read now includes posts and selections)
 - [ ] update the AMO description and `data_collection_permissions`
 - [ ] point both privacy policy URLs at the published policy rather than the repository
 - [x] screenshots and promotional tiles, generated from the shipped panel
