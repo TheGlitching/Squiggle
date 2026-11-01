@@ -1,7 +1,9 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { detectSocialPlatform } from '../src/content/socialPlatform';
 import { ContentScriptController } from '../src/content/contentScript';
-import { SocialExtractor } from '../src/content/socialExtractor';
+import { SocialExtractor, unreadSocialPost } from '../src/content/socialExtractor';
 
 describe('social platform classification', () => {
   it('classifies an X status page as x', () => {
@@ -117,5 +119,22 @@ describe('ContentScriptController - social routing', () => {
     const ctl = new ContentScriptController(doc, 'https://example.com/article');
     const article = ctl.detectAndExtract();
     expect(article.detectionMethod).not.toBe('social-thread');
+  });
+});
+describe('SocialExtractor - X without a session', () => {
+  // The article node of https://x.com/jack/status/20 as served to a signed-out
+  // browser: no data-testid anywhere, and an inline script beside the text.
+  const html = readFileSync(join(__dirname, 'fixtures', 'x-signed-out-post.html'), 'utf8');
+
+  it('reads nothing rather than the page chrome', () => {
+    const doc = document.implementation.createHTMLDocument('X');
+    doc.body.innerHTML = `<main>${html}</main>`;
+    expect(new SocialExtractor(doc, 'x', 'https://x.com/jack/status/20').extract()).toBeNull();
+  });
+
+  it('hands the background an empty social read, never script text', () => {
+    const empty = unreadSocialPost('https://x.com/jack/status/20');
+    expect(empty.fullText).toBe('');
+    expect(empty.detectionMethod).toBe('social-thread');
   });
 });

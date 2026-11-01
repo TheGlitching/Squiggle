@@ -111,7 +111,8 @@ function collectThreadPosts(doc: Document): Element[] {
 
 function parsePost(el: Element, pageHost: string): ParsedPost {
   const textEl = el.querySelector('[data-testid="tweetText"]');
-  const text = clean(textEl?.textContent ?? el.textContent ?? '');
+  // Never fall back to the whole node: it holds scripts and chrome, not the post.
+  const text = clean(textEl?.textContent ?? '');
 
   const links: { text: string; href: string }[] = [];
   const seen = new Set<string>();
@@ -299,3 +300,32 @@ export class SocialExtractor {
   }
 }
 
+
+/**
+ * A classified social page whose post text could not be found (X's signed-out
+ * layout carries no test ids). Empty on purpose: the background tells the reader
+ * the post could not be read, and nothing from the page's chrome reaches a model.
+ */
+export function unreadSocialPost(url: string): ExtractedArticle {
+  return {
+    metadata: {
+      title: '',
+      byline: null,
+      siteName: 'X (Twitter)',
+      publishedTime: null,
+      modifiedTime: null,
+      description: null,
+      lang: null,
+      canonicalUrl: url,
+      estimatedReadTimeMinutes: 1,
+    },
+    fullText: '',
+    cleanText: '',
+    wordCount: 0,
+    blocks: [],
+    detectionMethod: 'social-thread',
+    extractionConfidence: 0,
+    rootContainerSelector: 'main',
+    citedSources: [],
+  };
+}

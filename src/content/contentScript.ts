@@ -11,7 +11,7 @@
 import { ArticleExtractor } from '../../shared/src/extract/extractor';
 import { detectSocialPlatform } from './socialPlatform';
 import { selectedMessage } from './selection';
-import { SocialExtractor } from './socialExtractor';
+import { SocialExtractor, unreadSocialPost } from './socialExtractor';
 import { RangeTracker } from './rangeTracker';
 import { ShadowHighlightOverlay } from './shadowOverlay';
 import {
@@ -73,7 +73,7 @@ export class ContentScriptController {
         if (!this.socialExtractor) {
           this.socialExtractor = new SocialExtractor(this.doc, match.platform, this.url);
         }
-        article = this.socialExtractor.extract();
+        article = this.socialExtractor.extract() ?? unreadSocialPost(this.url);
       }
     }
     this.currentArticle = article ?? this.extractor.extract();

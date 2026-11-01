@@ -47,3 +47,7 @@ export function detectSocialPlatform(hostname: string, pathname: string): Social
   const host = normalizeHost(hostname);
   return classifyX(host, pathname);
 }
+/** True for a social host whatever the path: a profile or a lone post opened as a page. */
+export function isSocialHost(hostname: string): boolean {
+  return X_HOSTS.has(normalizeHost(hostname));
+}
