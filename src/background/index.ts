@@ -28,6 +28,7 @@ import {
 } from '../podcast/transcript';
 import { recordFinalizedAnalysis } from '../review/reviewPrompt';
 import { hasSiteAccess } from '../permissions/siteAccess';
+import { isSocialHost } from '../content/socialPlatform';
 import {
   captureYoutubeCaptions,
   cuesToBlocks,
@@ -628,7 +629,10 @@ export class BackgroundServiceWorker {
       // the first: an answer that came back empty means the page was read fine, so
       // telling the reader to reload it sends them round a loop that cannot help.
       const readButEmpty = Boolean(extracted);
-      const err = readButEmpty
+      const err = extracted?.detectionMethod === 'social-thread'
+        ? 'Cette publication n’a pas pu être lue : le réseau ne l’affiche pas à un lecteur non ' +
+          'connecté. Connectez-vous, ou collez le texte dans Squiggle pour l’analyser.'
+        : readButEmpty
         ? 'Cette page a été lue, mais aucun article n’y a été trouvé. Squiggle ' +
           'analyse un article de presse : sur un fil de réseau social, une page ' +
           'd’accueil ou une liste de résultats, il n’y a rien à évaluer. Ouvrez ' +
@@ -649,10 +653,20 @@ export class BackgroundServiceWorker {
     // A selected message or a social post is short by nature, not cut short.
     const whole = extracted?.detectionMethod === 'selection' || extracted?.detectionMethod === 'social-thread';
     if (extracted && !whole && extracted.wordCount > 0 && extracted.wordCount < MIN_ANALYSABLE_WORDS) {
-      const err =
-        `Seuls ${extracted.wordCount} mots ont pu être lus sur cette page : ` +
-        'l’article est probablement réservé aux abonnés. ' +
-        'Ouvrez la version complète pour lancer l’analyse.';
+      // On a social page the text is short by nature, not cut short by a paywall.
+      let social = false;
+      try {
+        social = isSocialHost(new URL((await UnifiedRuntime.getTabUrl(tabId)) ?? '').hostname);
+      } catch {
+        // No readable URL: keep the paywall wording.
+      }
+      const err = social
+        ? `Seuls ${extracted.wordCount} mots ont pu être lus sur cette page : ` +
+          'trop peu pour juger ce qui y est affirmé. ' +
+          'Ouvrez une publication ou un fil pour lancer l’analyse, ou sélectionnez le texte à analyser.'
+        : `Seuls ${extracted.wordCount} mots ont pu être lus sur cette page : ` +
+          'l’article est probablement réservé aux abonnés. ' +
+          'Ouvrez la version complète pour lancer l’analyse.';
       this.stateManager.updateTabState(tabId, { status: 'error', error: err });
       return { success: false, error: err };
     }
