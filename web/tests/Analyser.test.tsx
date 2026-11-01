@@ -52,6 +52,9 @@ const TEXT = [
   'La mairie promet un bilan chiffré à la fin du trimestre, en reconnaissant qu’il est trop tôt pour conclure.',
 ].join('\n\n');
 
+/** An article as long as a real one: below 200 words a page read by the bookmark is an excerpt. */
+const FULL = [TEXT, ...Array.from({ length: 12 }, (_, i) => `Paragraphe ${i + 1} : ${'les élèves, les familles et les agents de la ville ont donné leur avis sur ce nouveau menu '.repeat(2).trim()}.`)].join('\n\n');
+
 const REPORT: AnalysisReport = {
   schemaVersion: 1,
   score: 58,
@@ -329,9 +332,7 @@ describe('Analyser, from a share', () => {
     render(<Analyser />);
     expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines');
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue('');
-    await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent(/pas encore de rapport. Collez maintenant le texte de l’article/),
-    );
+    expect(await screen.findByRole('heading', { name: 'Un lien ne suffit pas, voici le chemin qui marche' })).toBeInTheDocument();
   });
 
   it('serves the report a reader made with the extension from a shared video link, sending only the link', async () => {
@@ -438,7 +439,7 @@ describe('Analyser, from the bookmark', () => {
 
   it('analyses the article the bookmark read, and wipes it from the address bar', async () => {
     const seen = serve(account());
-    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: FULL }));
     render(<Analyser />);
     expect(await screen.findByText('58')).toBeInTheDocument();
     expect(window.location.hash).toBe('');
@@ -461,7 +462,7 @@ describe('Analyser, from the bookmark', () => {
 
   it('shows the analysis as started from the first frame, with nothing to tap', async () => {
     const seen = serve(account());
-    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: FULL }));
     render(<Analyser />);
     // The account is still being checked, and the page already says the analysis is running.
     expect(screen.getByRole('status')).toHaveTextContent('Analyse lancée automatiquement');
@@ -475,7 +476,7 @@ describe('Analyser, from the bookmark', () => {
 
   it('can be cancelled before the account has answered', async () => {
     const seen = serve(account());
-    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: FULL }));
     render(<Analyser />);
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(await screen.findByText('Analyse annulée. Votre texte est toujours là.')).toBeInTheDocument();
@@ -485,18 +486,130 @@ describe('Analyser, from the bookmark', () => {
 
   it('leaves the article in the form when the account cannot analyse it', async () => {
     const seen = serve(account({ usage: { used: 3, limit: 3, remaining: 0, resetsAt: null } }));
-    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: TEXT }));
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: FULL }));
     render(<Analyser />);
     await screen.findByText('Essai épuisé');
-    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
+    expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(FULL);
     expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+});
+
+describe('Analyser, a link written in the field', () => {
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36';
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+  const original = navigator.userAgent;
+  const agent = (value: string) => Object.defineProperty(navigator, 'userAgent', { value, configurable: true });
+  const HEADING = 'Un lien ne suffit pas, voici le chemin qui marche';
+  const LINK = 'https://presse.example/cantines';
+
+  afterEach(() => agent(original));
+
+  it('says what works on a computer before any tap, and why a link alone does not', () => {
+    serve(account());
+    render(<Analyser />);
+    expect(screen.queryByRole('heading', { name: HEADING })).toBeNull();
+    paste(LINK);
+    const guide = screen.getByRole('region', { name: HEADING });
+    expect(guide).toHaveTextContent(/ne va jamais chercher un article à partir de son adresse/);
+    expect(guide).toHaveTextContent(/extension Squiggle/);
+    expect(within(guide).getByRole('link', { name: 'Installer le favori' })).toHaveAttribute('href', '/favori');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('points an Android phone to the app, then the bookmark', () => {
+    agent(ANDROID);
+    serve(account());
+    render(<Analyser />);
+    paste(LINK);
+    const guide = screen.getByRole('region', { name: HEADING });
+    expect(within(guide).getByRole('link', { name: 'Télécharger l’application' })).toHaveAttribute(
+      'href',
+      'https://github.com/TheGlitching/Squiggle/releases',
+    );
+    expect(guide).toHaveTextContent(/le favori/);
+    expect(within(guide).getByRole('link', { name: 'Ouvrir dans le navigateur' })).toBeInTheDocument();
+  });
+
+  it('points an iPhone to the bookmark while the shortcut is not published', () => {
+    agent(IPHONE);
+    serve(account());
+    render(<Analyser />);
+    paste(LINK);
+    const guide = screen.getByRole('region', { name: HEADING });
+    expect(guide).toHaveTextContent(/favori/);
+    expect(within(guide).queryByRole('link', { name: 'Ajouter le raccourci' })).toBeNull();
+  });
+
+  it('opens the report already made for that link, sending only the link', async () => {
+    const seen = serve(account(), { link: true });
+    render(<Analyser />);
+    paste(LINK);
+    expect(await screen.findByRole('link', { name: 'Lire l’article sur presse.example' })).toBeInTheDocument();
+    const lookup = seen.find((s) => s.url.startsWith('/web/anon/link') || s.url.includes('/link'))!;
+    expect(new URL(lookup.url, 'https://squiggle.example').searchParams.get('url')).toBe(LINK);
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/') && !s.url.includes('/link'))).toEqual([]);
+  });
+
+  it('stays out of the way of a video, which has its own way in', () => {
+    serve(account());
+    render(<Analyser />);
+    paste('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    expect(screen.queryByRole('region', { name: HEADING })).toBeNull();
+  });
+
+  it('leaves a post on X or Instagram to its own path', () => {
+    serve(account());
+    render(<Analyser />);
+    for (const post of ['https://x.com/a/status/1', 'https://www.instagram.com/p/abc/']) {
+      paste(post);
+      expect(screen.queryByRole('region', { name: HEADING })).toBeNull();
+    }
+  });
+
+  it('waits for an address that looks finished', () => {
+    serve(account());
+    render(<Analyser />);
+    paste('https://p');
+    expect(screen.queryByRole('region', { name: HEADING })).toBeNull();
+  });
+});
+
+describe('Analyser, an excerpt of a paywalled article', () => {
+  const favori = (payload: Record<string, string>) => `/analyser#${new URLSearchParams({ ...payload, via: 'favori' })}`;
+
+  it('says so before analysing, and does not start by itself', async () => {
+    const seen = serve(account());
+    at(favori({ title: 'Sahara', url: 'https://presse.example/sahara', text: `${TEXT}\n\nRéservé aux abonnés. Il vous reste 80 % de cet article à lire.` }));
+    render(<Analyser />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Seul un extrait de l’article a été lu/);
+    expect(alert).toHaveTextContent(/connectez-vous au journal dans la fenêtre du navigateur/);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(seen.filter((s) => s.url.startsWith('/web/analyze/'))).toEqual([]);
+  });
+
+  it('says it again in the report when the reader analyses the excerpt', async () => {
+    serve(account());
+    at(favori({ title: 'Sahara', url: 'https://presse.example/sahara', text: TEXT }));
+    render(<Analyser />);
+    fireEvent.click(await analyseButton());
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent(/ne porte que sur un extrait de l’article/);
+  });
+
+  it('lets a whole article through', async () => {
+    serve(account());
+    at(favori({ title: 'Cantines', url: 'https://presse.example/cantines', text: FULL }));
+    render(<Analyser />);
+    expect(await screen.findByText('58')).toBeInTheDocument();
+    expect(screen.queryByRole('note')).toBeNull();
   });
 });
 
 describe('Analyser, from the bookmark that brings the page', () => {
   const html = (body: string) =>
     `<html><head><title>Cantines</title><link rel="canonical" href="https://presse.example/cantines"></head><body>${body}</body></html>`;
-  const articlePage = html(`<article><h1>Cantines</h1>${TEXT.split('\n').map((line) => `<p>${line}</p>`).join('')}</article>`);
+  const articlePage = html(`<article><h1>Cantines</h1>${FULL.split('\n').map((line) => `<p>${line}</p>`).join('')}</article>`);
 
   it('reads the article out of the page, then analyses it at once', async () => {
     const seen = serve(account());
@@ -961,7 +1074,7 @@ describe('Analyser, from the clipboard', () => {
     render(<Analyser />);
     fireEvent.click(screen.getByRole('button', { name: 'Coller le texte copié' }));
     await waitFor(() => expect(screen.getByLabelText(/Adresse de l’article/)).toHaveValue('https://presse.example/cantines'));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Collez maintenant le texte de l’article/));
+    expect(await screen.findByRole('heading', { name: 'Un lien ne suffit pas, voici le chemin qui marche' })).toBeInTheDocument();
   });
 
   it('adds the next passage copied after the text, without what it repeats', async () => {

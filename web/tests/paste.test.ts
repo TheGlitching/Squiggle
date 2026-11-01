@@ -12,6 +12,8 @@ import {
   appendPaste,
   articleFromShare,
   blocksFromPaste,
+  loneAddress,
+  partialRead,
   MIN_TEXT_CHARS,
   pasteProblem,
   readCopied,
@@ -212,5 +214,35 @@ describe('readCopied', () => {
 
   it('reads the text alone where the browser has no rich read', async () => {
     expect(await readCopied(clipboard({ readText: async () => ' Un texte. ' }))).toEqual({ kind: 'text', text: 'Un texte.' });
+  });
+});
+
+describe('loneAddress', () => {
+  it('reads a text made of a web address only, once its host has a dot', () => {
+    expect(loneAddress(' https://presse.example/cantines?xtor=RSS \n')).toBe('https://presse.example/cantines?xtor=RSS');
+    expect(loneAddress('https://p')).toBeNull();
+    expect(loneAddress('lisez https://presse.example/cantines')).toBeNull();
+    expect(loneAddress('ftp://presse.example/a')).toBeNull();
+  });
+});
+
+describe('partialRead', () => {
+  const words = (count: number) => Array.from({ length: count }, (_, i) => `mot${i}`).join(' ');
+  const PAGE = 'https://presse.example/sahara';
+
+  it('flags a page read in a few words, or a teaser with the paywall phrase', () => {
+    expect(partialRead(words(150), PAGE)).toEqual({ words: 150, wall: false });
+    expect(partialRead(`${words(300)} Il vous reste 80 % de cet article à lire.`, PAGE)).toMatchObject({ wall: true });
+  });
+
+  it('lets a whole article through, even one that links to paywalled ones', () => {
+    expect(partialRead(words(300), PAGE)).toBeNull();
+    expect(partialRead(`${words(900)} Réservé aux abonnés`, PAGE)).toBeNull();
+  });
+
+  it('leaves a message and a post alone: short by nature', () => {
+    expect(partialRead(words(30), '')).toBeNull();
+    expect(partialRead(words(30), 'https://x.com/a/status/1')).toBeNull();
+    expect(partialRead(words(30), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBeNull();
   });
 });

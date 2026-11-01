@@ -63,6 +63,7 @@ import {
 import { useBrowserValue } from '../client';
 import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
+import { LinkGuide } from '../components/LinkGuide';
 import { RunScene, type RunStep } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
@@ -78,8 +79,12 @@ import {
   MAX_TITLE_CHARS,
   MIN_TEXT_CHARS,
   PASTE_PROBLEMS,
+  isPressAddress,
+  loneAddress,
+  partialRead,
   pastedChars,
   pasteProblem,
+  type PartialRead,
   readCopied,
   saveDraft,
   sharedParams,
@@ -87,10 +92,9 @@ import {
   type PastedArticle,
   webAddress,
 } from '../paste';
-import { isSocialHost } from '../../../shared/src/extract/socialPlatform';
 import { carriesPage, readFavori, type PostProblem } from '../favori/article';
 import { APP_VALUE, FAVORI_PARAM, FAVORI_VALUE, SHORTCUT_VALUE } from '../favori/payload';
-import { browserLink, currentPhoneOs, type PhoneOs } from '../phone';
+import { currentPhoneOs, type PhoneOs } from '../phone';
 import { newSeance, saveSeance } from '../classe';
 import { Link, navigate } from '../router';
 import { readTranscript, type Start } from '../../../shared/src/extract/transcript';
@@ -116,6 +120,8 @@ type Phase =
       link?: string;
       /** The report of an e-mail the reader forwarded: its text is in their mailbox, not here. */
       mailed?: boolean;
+      /** The text analysed was only an excerpt of the article. */
+      partial?: PartialRead;
     };
 
 /** Back from the sign-in a visitor's report offered. Read before the address bar is wiped. */
@@ -139,19 +145,26 @@ const OPENING_MAILED = 'Ouverture du rapport de votre e-mail…';
 const MAILED_GONE =
   'Ce rapport n’est plus disponible. Transférez de nouveau l’e-mail à verifier@squiggle.fr, ou collez son texte ici.';
 
+/** The text a page gave is an excerpt: said before the analysis, with the way to get the rest. */
+function partialNotice({ words, wall }: PartialRead): string {
+  return `Seul un extrait de l’article a été lu (${words.toLocaleString('fr-FR')} mots)${wall ? ' : la page annonce que la suite est réservée aux abonnés' : ' : il est probablement réservé aux abonnés'}. Pour avoir le texte entier, connectez-vous au journal dans la fenêtre du navigateur, puis relancez depuis la page de l’article. Vous pouvez aussi analyser l’extrait : le rapport dira qu’il n’en juge que cette partie.`;
+}
+const PARTIAL_REPORT =
+  'Ce rapport ne porte que sur un extrait de l’article. La suite, réservée aux abonnés, n’a pas été lue : ses constats ne valent pas pour tout le texte.';
+
 const ADDRESS_ONLY = 'Adresse reçue. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
 const READING_X = 'Lien X reçu. Lecture de la publication…';
 const X_PARTIAL = 'Le fil n’a pas pu être lu en entier : l’analyse porte sur ce qui a été lu jusqu’à cette publication.';
 const LOOKING_UP = 'Adresse reçue. Recherche d’un rapport déjà fait pour ce lien…';
 
-/** What to do with a link nobody has analysed with the extension yet, in one sentence. */
-function noReportFor(link: string): string {
+/** What to do with a video nobody has analysed with the extension yet, in one sentence; an article's is the guide at the top of the page. */
+function noReportFor(link: string): string | null {
   // A phone's YouTube app shows the transcript but does not let it be copied: the next step is a computer.
   if (youtubeVideoId(link) && currentPhoneOs())
     return 'Cette vidéo n’a pas encore de rapport, et Squiggle ne lit pas encore les vidéos sur téléphone. Envoyez-vous ce lien par e-mail, puis ouvrez-le sur un ordinateur avec l’extension Squiggle : elle lit les sous-titres de la vidéo.';
   return youtubeVideoId(link)
     ? 'Cette vidéo n’a pas encore de rapport : collez ici sa transcription (« Afficher la transcription », sous la description), ou ouvrez-la avec l’extension Squiggle.'
-    : 'Cet article n’a pas encore de rapport. Collez maintenant le texte de l’article : Squiggle ne va pas le chercher.';
+    : null;
 }
 
 /** Where the publisher's link sends the reader, named in the button. */
@@ -282,6 +295,8 @@ function initialArticle(): {
   /** The counter of the entry the page opened with, if it is one that is counted. */
   entry?: AudienceMetricName;
   page?: URLSearchParams;
+  /** What the shortcut or the app brought, when it is only an excerpt: nothing starts by itself. */
+  partial?: PartialRead;
 } {
   const draft = loadDraft();
   if (typeof window === 'undefined') return { article: draft, shared: null, favori: false };
@@ -300,7 +315,8 @@ function initialArticle(): {
     return { article: article as PastedArticle, shared, favori: false, entry: 'entry_short_message' };
   }
   const entry = shared.text ? AUTO_ENTRIES.get(params.get(FAVORI_PARAM)) : undefined;
-  return { article: article as PastedArticle, shared, favori: Boolean(entry), entry };
+  const partial = (entry && partialRead(article.text ?? '', article.source ?? '')) || undefined;
+  return { article: article as PastedArticle, shared, favori: Boolean(entry) && !partial, entry, partial };
 }
 
 /**
@@ -356,7 +372,11 @@ export function Analyser() {
 }
 
 function AnalyserPage() {
-  const [{ article: start, shared, favori, entry, page }] = useState(initialArticle);
+  const [{ article: start, shared, favori, entry, page, partial: arrivedPartial }] = useState(initialArticle);
+  /** The text in the form is an excerpt of its article, told to the reader until they change it. */
+  const [partial, setPartial] = useState<PartialRead | null>(arrivedPartial ?? null);
+  /** A link whose already-made report is being looked up. */
+  const [searching, setSearching] = useState<string | null>(null);
   /** The bookmark's article is analysed as soon as it is read and the account says it can be. */
   const [autoRun, setAutoRun] = useState(favori && !page);
   /** Cleared by a cancel that comes while the bookmark's page is still being read. */
@@ -381,7 +401,9 @@ function AnalyserPage() {
         ? SHORT_MESSAGE
         : shared && !shared.text && !sharedCount
           ? shared.source
-            ? LOOKING_UP
+            ? youtubeVideoId(shared.source)
+              ? LOOKING_UP
+              : null
             : ADDRESS_ONLY
           : paymentNotice(),
   );
@@ -422,6 +444,13 @@ function AnalyserPage() {
         if (!readingPage.current) return;
         readingPage.current = false;
         setArticle({ title: read.title, source: read.url, text: read.text });
+        const excerpt = partialRead(read.text, read.url);
+        if (excerpt) {
+          // Not started by itself: the reader hears it is an excerpt first, and picks.
+          setPartial(excerpt);
+          setPhase({ kind: 'edit' });
+          return;
+        }
         if (read.text) return void setAutoRun(true);
         setPhase({ kind: 'edit' });
         if (read.problem === 'video') return void findByLink(read.url);
@@ -545,6 +574,19 @@ function AnalyserPage() {
   }, [phase.kind]);
 
   const problem = pasteProblem(article);
+  // The link a reader typed or pasted in the field, or the one a share or the button put in the source.
+  const typedLink = loneAddress(article.text);
+  const guided = typedLink ?? (article.text ? null : webAddress(article.source));
+  const guideLink = guided && isPressAddress(guided) ? guided : null;
+
+  // A link written in the field is looked up once it stops changing; the other ways in look it up themselves.
+  useEffect(() => {
+    if (!typedLink || !isPressAddress(typedLink) || phase.kind !== 'edit') return;
+    const timer = setTimeout(() => void findByLink(typedLink), 600);
+    return () => clearTimeout(timer);
+    // The lookup is of the link alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typedLink]);
   const view = account ? describeAccount(account) : null;
   const chars = pastedChars(article.text);
   const transcript = useMemo(() => readTranscript(article.text), [article.text]);
@@ -567,8 +609,11 @@ function AnalyserPage() {
       }
       return;
     }
-    setNotice(LOOKING_UP);
+    // A video's wait is a line under the field; an article's is in the guide, at the top.
+    if (youtubeVideoId(link)) setNotice(LOOKING_UP);
+    else setSearching(link);
     const found = await reportByLink(link);
+    setSearching((current) => (current === link ? null : current));
     if (!found) {
       setNotice((current) => (current === LOOKING_UP ? noReportFor(link) : current));
       return;
@@ -584,7 +629,10 @@ function AnalyserPage() {
   function edit<K extends keyof PastedArticle>(key: K, value: PastedArticle[K]) {
     setArticle((current) => ({ ...current, [key]: value }));
     setFailure(null);
-    if (key === 'text') setNotice(null);
+    if (key === 'text') {
+      setNotice(null);
+      setPartial(null);
+    }
   }
 
   /** A copy that is only markup pastes as nothing in a textarea: insert its text instead. */
@@ -867,7 +915,7 @@ function AnalyserPage() {
         abort.signal,
         visitor,
       );
-      setPhase({ kind: 'done', report, blocks, times, visitor });
+      setPhase({ kind: 'done', report, blocks, times, visitor, ...(partial ? { partial } : {}) });
       window.scrollTo?.({ top: 0 });
     } catch (err) {
       setPhase({ kind: 'edit' });
@@ -897,6 +945,7 @@ function AnalyserPage() {
 
   function startOver() {
     setArticle(EMPTY_ARTICLE);
+    setPartial(null);
     setLongPdf(null);
     setPhase({ kind: 'edit' });
     setShowProblem(false);
@@ -983,6 +1032,11 @@ function AnalyserPage() {
             </button>
           )}
         </div>
+        {phase.partial ? (
+          <p role="note" className="mt-0 mb-8 max-w-2xl rounded-control border border-border bg-accentSoft px-4 py-3 text-sm">
+            {PARTIAL_REPORT}
+          </p>
+        ) : null}
         <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} signUp={SIGN_UP_AFTER_WITHHELD} />
         {phase.visitor ? <KeepReport withheld={Boolean(phase.report.withheld?.length)} /> : null}
         {account && view ? (
@@ -1019,12 +1073,18 @@ function AnalyserPage() {
       <p className="mt-3 mb-0 max-w-[55ch] text-lg leading-relaxed text-muted">
         Collez le texte. Le rapport arrive en une à deux minutes.
       </p>
+      {guideLink ? <LinkGuide address={guideLink} searching={searching === guideLink} /> : null}
+      {partial && article.text ? (
+        <p role="alert" className="mt-6 mb-0 max-w-2xl rounded-control border border-warning bg-warningSoft px-4 py-3 text-sm">
+          {partialNotice(partial)}
+        </p>
+      ) : null}
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-16">
-        <form onSubmit={analyse} noValidate>
-          <fieldset className="m-0 grid gap-6 border-0 p-0">
+        <form onSubmit={analyse} noValidate className="min-w-0">
+          <fieldset className="m-0 grid grid-cols-[minmax(0,1fr)] gap-6 border-0 p-0">
             <div>
-              <div className="flex items-baseline justify-between gap-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
                 <label htmlFor="texte" className="text-base font-medium">
                   Texte de l’article ou du message
                 </label>
@@ -1118,10 +1178,6 @@ function AnalyserPage() {
                 </div>
               ) : null}
               {longPdf && !reading ? <PdfPages pdf={longPdf} onKeep={keepPages} /> : null}
-              {/* A social post was opened from where it is read: opening it again would only loop. */}
-              {!article.text && webAddress(article.source) && !isSocialHost(new URL(article.source).hostname) ? (
-                <OpenInBrowser address={webAddress(article.source)!} />
-              ) : null}
               <textarea
                 id="texte"
                 ref={textArea}
@@ -1243,36 +1299,6 @@ function ImportGlyph() {
         <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
       </svg>
     </span>
-  );
-}
-
-/**
- * A link received alone: Squiggle does not fetch it, so the reader opens it in
- * the browser, where the bookmark reads it, rather than in the publisher's app.
- */
-function OpenInBrowser({ address }: { address: string }) {
-  const [os] = useState(currentPhoneOs);
-  const href = browserLink(address, os, typeof navigator === 'undefined' ? '' : navigator.userAgent);
-  return (
-    <div className="mt-3">
-      <a
-        href={href}
-        {...(os ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
-        onClick={() => count('open_in_browser')}
-        className={`${SECONDARY_BUTTON} w-full sm:w-auto`}
-      >
-        {os ? 'Ouvrir dans le navigateur' : 'Ouvrir l’article'}
-      </a>
-      {os ? (
-        <p className="mt-2 mb-0 text-sm text-muted">
-          L’article s’ouvre dans {os === 'ios' ? 'Safari' : 'Chrome'}, où votre abonnement marche aussi. Touchez-y le
-          favori « Analyser avec Squiggle » : il revient ici avec le texte.{' '}
-          <Link to="/favori" className="underline underline-offset-4 hover:text-foreground">
-            Installer le favori
-          </Link>
-        </p>
-      ) : null}
-    </div>
   );
 }
 

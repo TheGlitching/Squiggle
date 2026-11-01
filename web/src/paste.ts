@@ -12,6 +12,7 @@ import type { TextBlock } from '../../shared/src/engine/types';
 import { MAX_MESSAGE_CHARS, MIN_MESSAGE_CHARS } from '../../shared/src/engine/message';
 import { articleLength, MAX_ARTICLE_CHARS } from '../../shared/src/hosted/limits';
 import { blockWriter, plainTextBlocks, splitLongLine } from '../../shared/src/hosted/pastedText';
+import { isSocialHost } from '../../shared/src/extract/socialPlatform';
 import { readTranscript, timeAt, type Start } from '../../shared/src/extract/transcript';
 
 /**
@@ -193,6 +194,52 @@ const HEADLINE_MAX_CHARS = 200;
 
 /** A share that is only an address: Android often puts the link in `text`. */
 const LONE_URL = /^\s*(https?:\/\/\S+)\s*$/i;
+
+/** The address a text is made of, when it is only that. */
+export function loneAddress(text: string): string | null {
+  const lone = LONE_URL.exec(text);
+  const address = lone ? webAddress(lone[1]) : null;
+  // "https://l" is a valid address while it is being typed: a host needs a dot.
+  return address && new URL(address).hostname.includes('.') ? address : null;
+}
+
+/** Same bar as the extension's (`MIN_ANALYSABLE_WORDS`): below it a page is a teaser, not an article. */
+const MIN_ARTICLE_WORDS = 200;
+/** Above this, a paywall phrase is a link to another article, not the wall in front of this one. */
+const MAX_TEASER_WORDS = 500;
+const PAYWALL_MARKER =
+  /réservé aux abonnés|article réservé|la suite est réservée|abonnez-vous pour (?:lire|continuer)|il vous reste \d+ ?% (?:de cet article )?à lire|déjà abonné/i;
+
+const VIDEO_HOST = /(?:^|\.)(?:youtube\.com|youtu\.be)$/i;
+
+/** Whether the address is a newspaper's, not a post or a video, which have their own way in. */
+export function isPressAddress(address: string): boolean {
+  const { hostname } = new URL(address);
+  return !VIDEO_HOST.test(hostname) && !isSocialHost(hostname);
+}
+
+/** What an article read from a page may be missing: how much was read, and whether a paywall says so. */
+export interface PartialRead {
+  words: number;
+  /** The page itself says the rest is for subscribers. */
+  wall: boolean;
+}
+
+/**
+ * Whether the text a bookmark, the app or the extension read from a page is
+ * only an excerpt: a few words, or a teaser with the journal's paywall phrase.
+ * A reader not signed in to the journal gets that, and the report would judge
+ * a paragraph as if it were the article.
+ */
+export function partialRead(text: string, source: string): PartialRead | null {
+  const words = text.split(/\s+/).filter(Boolean).length;
+  // Without the page's address it is a message that was shared, short by nature.
+  const address = webAddress(source);
+  if (!words || !address || !isPressAddress(address)) return null;
+  const wall = PAYWALL_MARKER.test(text);
+  return words < MIN_ARTICLE_WORDS || (wall && words < MAX_TEASER_WORDS) ? { words, wall } : null;
+}
+
 /** An address at the end of shared text, as news apps send "headline https://…". */
 const TRAILING_URL = /\s+(https?:\/\/\S+)\s*$/i;
 
