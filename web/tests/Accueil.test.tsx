@@ -49,6 +49,7 @@ describe('Accueil', () => {
 
   // A phone has the site first; a computer whose browser has a store, the extension,
   // with the site one link away; a computer without one (Safari), the site.
+  // The whole page is rendered once per device: several seconds on a loaded machine.
   it('leads with the way in this device has', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     const hero = () => within(screen.getByRole('heading', { level: 1 }).parentElement!);
@@ -68,7 +69,7 @@ describe('Accueil', () => {
     home();
     expect(hero().queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
     agent.mockRestore();
-  });
+  }, 30_000);
 
   // Each phone is told its own way besides the site, and never a gesture it lacks:
   // an iPhone does not list a web app in its Share menu.
@@ -360,6 +361,7 @@ describe('Accueil', () => {
   });
 
   // Safari and phones have no store: no link to one, only where it exists.
+  // The whole page is rendered once per device, as above.
   it('shows no store link where the browser has no store, on a computer or a phone', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
@@ -376,7 +378,7 @@ describe('Accueil', () => {
       cleanup();
     }
     agent.mockRestore();
-  });
+  }, 30_000);
 
   it('offers the browser’s own install prompt when it has one', async () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(MOBILE[0]);
