@@ -54,6 +54,8 @@ const MIN_ANALYSABLE_WORDS = 200;
  */
 const VIDEO_AD_WAIT_MS = 180_000;
 const VIDEO_RETRY_MS = 2_000;
+/** Inside Firefox's 30 s idle limit for an event page, with room to spare. */
+const KEEP_ALIVE_MS = 20_000;
 
 /** A transcript, or the sentence telling the reader why there is none. */
 /** A feed or a transcript larger than this is not a podcast's: it is not read. */
@@ -739,6 +741,11 @@ export class BackgroundServiceWorker {
       error: undefined,
     });
 
+    // Firefox ends an event page after ~30 s without an extension API call, and a
+    // model call can outlast that: the run dies mid-flight and the panel is left
+    // with "Receiving end does not exist". An API call resets the timer.
+    const keepAlive = setInterval(() => void UnifiedRuntime.isAndroid(), KEEP_ALIVE_MS);
+
     try {
       const result = await runner.analyze(
         video && videoId
@@ -829,6 +836,7 @@ export class BackgroundServiceWorker {
       this.safeDispatch('ANALYSIS_ERROR', { tabId, error: errorMsg });
       return { success: false, error: errorMsg };
     } finally {
+      clearInterval(keepAlive);
       // A second analysis on the same tab, started right after this one was
       // aborted, may already have installed its own pipeline under the same
       // key; only remove the entry if it is still this run's.
