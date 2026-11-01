@@ -106,11 +106,11 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * findings, reported as unverified.
  *
  * Together with the per-call caps below, they bound one analysis on the
- * production model to under 55 cents in the worst case, at the price of the
+ * production model to under 60 cents in the worst case, at the price of the
  * dearest hosts it is pinned to (Nebius, tried first, and Together AI, both
  * $0.30 / $1.20 per million tokens): under 45 cents when the hosts were
  * pinned, plus at most two audits of 100 000 characters answering in
- * `AUDIT_MAX_OUTPUT_TOKENS`, about 3 cents each, and one critique, which
+ * `AUDIT_MAX_OUTPUT_TOKENS`, about 5 cents each, and one critique, which
  * rereads the same text and answers in `CRITIQUE_MAX_OUTPUT_TOKENS`, about 2 cents;
  * the arithmetic is in the pull requests that set the caps and pinned the
  * hosts. About 12 cents of it is web searches, at half a cent each, which is

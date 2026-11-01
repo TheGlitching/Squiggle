@@ -15,9 +15,12 @@ export const PROMPT_VERSION = '1.5.0';
  * Output ceiling of the audit, reasoning included. A reasoning model thinks
  * before it writes, inside the same budget, and the report alone runs to a few
  * thousand tokens on a long article: 4096 left it a truncated report, or none
- * at all. The extension and the hosted server both audit with this ceiling.
+ * at all, and 16000 still cut about one long audit in five, whose truncated
+ * JSON is unreadable and costs a full second attempt. A report that fits uses
+ * only what it needs, so the higher ceiling costs nothing on the others. The
+ * extension and the hosted server both audit with this ceiling.
  */
-export const AUDIT_MAX_OUTPUT_TOKENS = 16000;
+export const AUDIT_MAX_OUTPUT_TOKENS = 32000;
 
 export const FOURCHES_CAUDINES_SYSTEM_PROMPT = `Tu es le moteur d'analyse critique de Squiggle, qui aide le LECTEUR d'un article de presse à juger la solidité de ce qu'il est en train de lire.
 Ton rôle est d'expliquer avec une rigueur absolue, à l'intention de ce lecteur, dans quelle mesure l'article tient debout : quels faits sont solides, quelles affirmations sont fragiles ou non étayées, où le raisonnement flanche, et où le texte l'oriente par des procédés rhétoriques plutôt que par des preuves.
