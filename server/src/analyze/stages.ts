@@ -62,6 +62,8 @@ import {
   type AnalysisInput,
   type BaseLLMClient,
   type CitedSource,
+  type CompletionOptions,
+  type CompletionResponse,
   type EvidenceSource,
   type Finding,
   type SourceCheck,
@@ -106,12 +108,13 @@ export const RUN_TTL_MS = 60 * 60 * 1000;
  * findings, reported as unverified.
  *
  * Together with the per-call caps below, they bound one analysis on the
- * production model to under 60 cents in the worst case, at the price of the
+ * production model to under 65 cents in the worst case, at the price of the
  * dearest hosts it is pinned to (Nebius, tried first, and Together AI, both
  * $0.30 / $1.20 per million tokens): under 45 cents when the hosts were
- * pinned, plus at most two audits of 100 000 characters answering in
- * `AUDIT_MAX_OUTPUT_TOKENS`, about 5 cents each, and one critique, which
- * rereads the same text and answers in `CRITIQUE_MAX_OUTPUT_TOKENS`, about 2 cents;
+ * pinned, plus at most three audits of 100 000 characters answering in
+ * `AUDIT_MAX_OUTPUT_TOKENS`, about 5 cents each (the two asked at once, both
+ * billed in full, and one more when neither is readable), and one critique,
+ * which rereads the same text and answers in `CRITIQUE_MAX_OUTPUT_TOKENS`, about 2 cents;
  * the arithmetic is in the pull requests that set the caps and pinned the
  * hosts. About 12 cents of it is web searches, at half a cent each, which is
  * why the search count is capped per finding; they are close to half the
@@ -326,6 +329,117 @@ const FINDING_IN_ANSWER = /"severity"\s*:/g;
 /** Enough of the answer's end to hold a key cut in two between chunks. */
 const FINDING_KEY_SPAN = 24;
 
+/** What one round of the audit came to: the first readable report, or whether every racer failed to answer at all. */
+type AuditRound = { report: AnalysisReport; unavailable?: undefined } | { report?: undefined; unavailable: boolean };
+
+/**
+ * One round of the audit: the same request to every racer at once, the first
+ * readable report kept and the other racers aborted. A racer that answers
+ * unreadable, or cut short, does not end the round: the others are waited for.
+ *
+ * The reader is shown the racer furthest along, and never a step back: words
+ * of reasoning until one of them writes, then the most findings any has
+ * written. What an abandoned racer cost is counted all the same; the round
+ * waits for it to wind down so the client has reported it.
+ */
+async function auditRound(
+  s: AnalyzeServices,
+  racers: BaseLLMClient[],
+  request: CompletionOptions,
+  read: (completion: CompletionResponse, startedAt: number) => AnalysisReport,
+  onProgress: (progress: AuditProgress) => void,
+): Promise<AuditRound> {
+  const abort = new AbortController();
+  let toldWords = -1;
+  let toldFindings = -1;
+  let answered = false;
+
+  const race = racers.map(async (racer): Promise<AnalysisReport | undefined> => {
+    const startedAt = Date.now();
+    await count(s, 'audit');
+    let words = 0;
+    let inWord = false;
+    let written = '';
+    let scanned = 0;
+    let findings = 0;
+    let completion: CompletionResponse;
+    try {
+      // Streamed, so the reader sees the model reason and then write rather
+      // than a minute of silence; the answer is the same text a single
+      // response would have carried.
+      completion = await racer.stream(
+        { ...request, abortSignal: abort.signal },
+        {
+          // A reasoning model thinks for most of the call before it writes a
+          // word of the answer: how far it has got is the only sign of life.
+          onReasoning: (delta) => {
+            // Counted as it comes, a word at its first letter: never the text again.
+            for (const ch of delta) {
+              const space = ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r';
+              if (!space && !inWord) words += 1;
+              inWord = !space;
+            }
+            if (toldFindings >= 0) return;
+            if (toldWords >= 0 && words < toldWords + REASONING_WORDS_STEP) return;
+            toldWords = words;
+            onProgress({ step: 'thinking', words });
+          },
+          onChunk: (delta) => {
+            written += delta;
+            // Only the new text, and the end of the last chunk a key may straddle.
+            FINDING_IN_ANSWER.lastIndex = scanned;
+            for (let m = FINDING_IN_ANSWER.exec(written); m; m = FINDING_IN_ANSWER.exec(written)) {
+              findings += 1;
+              scanned = m.index + m[0].length;
+            }
+            scanned = Math.max(scanned, written.length - FINDING_KEY_SPAN);
+            if (findings <= toldFindings) return;
+            toldFindings = findings;
+            onProgress({ step: 'writing', findings });
+          },
+        },
+      );
+    } catch {
+      // Abandoned for another racer's report: neither an answer nor a failure.
+      if (abort.signal.aborted) return undefined;
+      await count(s, 'audit_failed');
+      return undefined;
+    }
+    answered = true;
+
+    // The model ran out of output budget: the report is cut short. Counted on
+    // its own because it is the one unreadable answer a bigger budget fixes.
+    if (completion.finishReason === 'length') await count(s, 'audit_truncated');
+    try {
+      return read(completion, startedAt);
+    } catch {
+      await count(s, 'audit_failed');
+      return undefined;
+    }
+  });
+
+  try {
+    const report = await firstReport(race);
+    return report ? { report } : { unavailable: !answered };
+  } finally {
+    abort.abort();
+    await Promise.allSettled(race);
+  }
+}
+
+/** The first report any of `racers` resolves to, or undefined once all of them have resolved without one. */
+function firstReport(racers: Array<Promise<AnalysisReport | undefined>>): Promise<AnalysisReport | undefined> {
+  return new Promise((resolve, reject) => {
+    let left = racers.length;
+    for (const racer of racers) {
+      racer.then((report) => {
+        if (report) resolve(report);
+        else if ((left -= 1) === 0) resolve(undefined);
+      }, reject);
+    }
+  });
+}
+
 export async function analyzeAudit(
   s: AnalyzeServices,
   reader: Reader,
@@ -412,105 +526,58 @@ export async function analyzeAudit(
     });
   }
 
-  // An answer that comes back unreadable is asked for once more before the
-  // reader sees an error: a malformed answer is rarely repeated, and a second
-  // audit costs a few cents where the error costs the reader the whole run.
-  let audited: AnalysisReport | undefined;
-  for (let attempt = 0; attempt < 2 && !audited; attempt += 1) {
-    const startedAt = Date.now();
-    let completion;
-    await count(s, 'audit');
-    onProgress({ step: attempt === 0 ? 'sent' : 'retry' });
-    let words = 0;
-    let inWord = false;
-    let toldWords = -1;
-    let written = '';
-    let scanned = 0;
-    let findings = -1;
-    try {
-      // Streamed, so the reader sees the model reason and then write rather
-      // than a minute of silence; the answer is the same text a single
-      // response would have carried.
-      completion = await client.stream(
-        {
-          systemPrompt: auditSystemPrompt(input),
-          messages: [
-            {
-              role: 'user',
-              content: buildFourchesCaudinesUserPrompt(input, { citedSources, now: new Date(now) }),
-            },
-          ],
-          temperature: 0.1,
-          maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
-        },
-        {
-          // A reasoning model thinks for most of the call before it writes a
-          // word of the answer: how far it has got is the only sign of life.
-          onReasoning: (delta) => {
-            // Counted as it comes, a word at its first letter: never the text again.
-            for (const ch of delta) {
-              const space = ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r';
-              if (!space && !inWord) words += 1;
-              inWord = !space;
-            }
-            if (toldWords >= 0 && words < toldWords + REASONING_WORDS_STEP) return;
-            toldWords = words;
-            onProgress({ step: 'thinking', words });
-          },
-          onChunk: (delta) => {
-            written += delta;
-            // Only the new text, and the end of the last chunk a key may straddle.
-            FINDING_IN_ANSWER.lastIndex = scanned;
-            let count = Math.max(findings, 0);
-            for (let m = FINDING_IN_ANSWER.exec(written); m; m = FINDING_IN_ANSWER.exec(written)) {
-              count += 1;
-              scanned = m.index + m[0].length;
-            }
-            scanned = Math.max(scanned, written.length - FINDING_KEY_SPAN);
-            if (count === findings) return;
-            findings = count;
-            onProgress({ step: 'writing', findings: count });
-          },
-        },
-      );
-    } catch {
-      // Close the reservation: an audit that never produced anything must not
-      // hold the account's single slot for the next five minutes. The start is
-      // given back too. Hosted inference is pinned to a short list of hosts with
-      // no fallback beyond it, so "none of them can serve right now" is an
-      // expected outcome, and a reader retrying through it must not run out of
-      // starts for runs that never began. No credit was consumed either: that happens at finalize.
-      // Every audit call failure is released, a billed timeout included: the
-      // hourly global ceiling bounds that, and the release can be narrowed to
-      // provider refusals if timeouts ever show up in the failure counters.
-      await s.db.finalizeAnalysisRun(run.id, now);
-      await releaseStart(s, reader, now);
-      await count(s, 'audit_failed');
-      return apiError('provider_unavailable', 'Service momentanément indisponible. Réessayez dans quelques minutes.');
-    }
+  const request: CompletionOptions = {
+    systemPrompt: auditSystemPrompt(input),
+    messages: [
+      {
+        role: 'user',
+        content: buildFourchesCaudinesUserPrompt(input, { citedSources, now: new Date(now) }),
+      },
+    ],
+    temperature: 0.1,
+    maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
+  };
+  const read = (completion: CompletionResponse, startedAt: number) =>
+    parseAndValidateLlmOutput(completion.content, input, {
+      modelName: modelIdOf(client),
+      durationMs: Date.now() - startedAt,
+      articleSources: sourcesByBlock,
+    });
 
-    // The model ran out of output budget: the report is cut short. Counted on
-    // its own because it is the one unreadable answer a bigger budget fixes.
-    if (completion.finishReason === 'length') await count(s, 'audit_truncated');
-
-    try {
-      audited = parseAndValidateLlmOutput(completion.content, input, {
-        modelName: modelIdOf(client),
-        durationMs: Date.now() - startedAt,
-        articleSources: sourcesByBlock,
-      });
-    } catch {
-      await count(s, 'audit_failed');
-    }
+  // Hosted, the audit is asked of two racers at once and the first readable
+  // answer kept (`racers`). An answer that comes back unreadable is asked for
+  // once more, on the client alone, before the reader sees an error: a
+  // malformed answer is rarely repeated, and a second audit costs a few cents
+  // where the error costs the reader the whole run. So is a race whose racers
+  // all failed: they are pinned to a single host, and the client alone may
+  // still reach the others.
+  const racers = client.racers();
+  onProgress({ step: 'sent' });
+  let round = await auditRound(s, racers, request, read, onProgress);
+  if (!round.report && (racers.length > 1 || !round.unavailable)) {
+    onProgress({ step: 'retry' });
+    round = await auditRound(s, [client], request, read, onProgress);
   }
 
-  if (!audited) {
-    // Our failure, not the reader's: the start is given back as for a provider
-    // failure, and no credit was consumed.
+  if (!round.report) {
+    // Close the reservation: an audit that never produced anything must not
+    // hold the account's single slot for the next five minutes. The start is
+    // given back too, and no credit was consumed either: that happens at
+    // finalize. Hosted inference is pinned to a short list of hosts with no
+    // fallback beyond it, so "none of them can serve right now" is an expected
+    // outcome, and a reader retrying through it must not run out of starts for
+    // runs that never began. An unreadable answer is our failure, not the
+    // reader's, and is given back the same way.
+    // Every audit call failure is released, a billed timeout included: the
+    // hourly global ceiling bounds that, and the release can be narrowed to
+    // provider refusals if timeouts ever show up in the failure counters.
     await s.db.finalizeAnalysisRun(run.id, now);
     await releaseStart(s, reader, now);
-    return apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
+    return round.unavailable
+      ? apiError('provider_unavailable', 'Service momentanément indisponible. Réessayez dans quelques minutes.')
+      : apiError('provider_unreadable', "La réponse du modèle n'a pas pu être lue. Réessayez.");
   }
+  let audited = round.report;
 
   // The critique rereads the findings before any is researched or cached. It
   // never fails the run: a failed or unreadable critique leaves the audit as is.
