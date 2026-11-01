@@ -670,6 +670,14 @@ export interface Db {
   updateAnalysisRunState(id: string, state: string, now: number): Promise<void>;
 
   /**
+   * Replace an open run's state only if it is still `expected`, the state the
+   * caller read. False when another stage wrote in between, or the run was
+   * finalized: the caller reads it again. This is what lets several research
+   * or source-check calls of one run go at once without losing a result.
+   */
+  compareAndSetAnalysisRunState(id: string, expected: string, next: string, now: number): Promise<boolean>;
+
+  /**
    * This account's most recently touched run that is still open and was
    * touched since `since`, or null. "Touched recently" rather than "not
    * finalized" is what lets a reader who abandoned an analysis start another

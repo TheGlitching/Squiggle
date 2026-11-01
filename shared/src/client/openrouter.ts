@@ -164,20 +164,27 @@ export class OpenRouterClient extends OpenAIClient {
       ...(this.reasoning ? { reasoning: this.reasoning } : {}),
     };
     const response = await super.postJson(url, headers, routed, signal);
-    const sink = this.spendSink;
-    if (sink && response.headers.get('content-type')?.includes('application/json')) {
+    if (this.spendSink && response.headers.get('content-type')?.includes('application/json')) {
       // A copy, so the caller still reads the body it asked for. A response
       // that does not parse costs nothing to report: the answer is untouched.
       try {
-        const usage = ((await response.clone().json()) as { usage?: OpenRouterUsage }).usage;
-        if (typeof usage?.cost === 'number') {
-          sink({ costUsd: usage.cost, webSearches: usage.server_tool_use_details?.web_search_requests ?? 0 });
-        }
+        this.reportSpend(((await response.clone().json()) as { usage?: OpenRouterUsage }).usage);
       } catch {
         // see above
       }
     }
     return response;
+  }
+
+  /** A streamed answer reports its cost in its last chunk rather than in a JSON body. */
+  protected override streamedUsage(usage: unknown): void {
+    this.reportSpend(usage as OpenRouterUsage);
+  }
+
+  private reportSpend(usage: OpenRouterUsage | undefined): void {
+    if (this.spendSink && typeof usage?.cost === 'number') {
+      this.spendSink({ costUsd: usage.cost, webSearches: usage.server_tool_use_details?.web_search_requests ?? 0 });
+    }
   }
 
   /**

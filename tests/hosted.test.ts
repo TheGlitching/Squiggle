@@ -12,7 +12,7 @@ import {
   type HostedAccount,
 } from '../src/hosted/session';
 import { HostedRunner } from '../src/hosted/runner';
-import { base64urlDecode, buildSigningInput, type AnalysisReport } from '@squiggle/shared';
+import { AUDIT_SILENCE_MS, base64urlDecode, buildSigningInput, HostedAnalysisClient, type AnalysisReport } from '@squiggle/shared';
 
 function localStorageMock() {
   const map: Record<string, string> = {};
@@ -46,6 +46,7 @@ function jsonResponse(body: unknown, status = 200) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers({ 'content-type': 'application/json' }),
     json: async () => body,
   } as unknown as Response;
 }
@@ -291,6 +292,39 @@ describe('startHostedCheckout', () => {
       'Le paiement n’a pas pu s’ouvrir'
     );
     expect(created).toEqual([]);
+  });
+});
+
+describe('HostedAnalysisClient — a streamed audit', () => {
+  it('gives up with a clear error when the server falls silent, never waits forever', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const encoder = new TextEncoder();
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes('/check')) return jsonResponse({ ok: true, hit: false });
+        // One progress line, then nothing: no heartbeat, no answer.
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('{"progress":{"step":"sent"}}\n'));
+          },
+        });
+        return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
+      });
+      const client = new HostedAnalysisClient({
+        baseUrl: 'https://squiggle.example',
+        session: 'none',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      });
+      const run = client.analyze({ url: 'https://presse.example/a', title: 'T', blocks: [{ id: 'b1', type: 'paragraph', text: 'Texte.', charStart: 0 }] });
+      const outcome = expect(run).rejects.toMatchObject({ code: 'audit_silent' });
+      while (fetchMock.mock.calls.length < 2) await new Promise((resolve) => setImmediate(resolve));
+      await vi.advanceTimersByTimeAsync(AUDIT_SILENCE_MS - 1_000);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

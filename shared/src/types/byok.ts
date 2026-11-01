@@ -25,6 +25,8 @@ export interface CompletionOptions {
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void;
+  /** The model's reasoning as it streams, before the answer, where the provider sends it. */
+  onReasoning?: (delta: string) => void;
   onError?: (error: Error) => void;
   onComplete?: (fullText: string) => void;
 }

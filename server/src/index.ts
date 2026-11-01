@@ -76,6 +76,8 @@ import {
   analyzeSourceCheck,
   analyzeLink,
   type AnalyzeServices,
+  type AuditProgress,
+  type AuditResult,
   type Reader,
 } from './analyze/stages';
 import {
@@ -970,7 +972,10 @@ async function analyzeRoute(
     const schema = caller === 'install' ? AuditRequestSchema : PastedAuditRequestSchema;
     const parsed = schema.safeParse(parseJson(rawBody));
     if (!parsed.success) return finish(invalidPayload(parsed.error, requestId, userId));
-    return finish(await countingSpend(s, stage, spend, requestId, analyzeAudit(analyze, reader, parsed.data)));
+    const audit = (onProgress?: (progress: AuditProgress) => void) =>
+      countingSpend(s, stage, spend, requestId, analyzeAudit(analyze, reader, parsed.data, onProgress));
+    if (req.headers.get('accept')?.includes(PROGRESS_STREAM)) return streamedAudit(audit, requestId);
+    return finish(await audit());
   }
 
   if (stage === '/research' && method === 'POST') {
@@ -992,6 +997,55 @@ async function analyzeRoute(
   }
 
   return finish(apiError('not_found', 'No such endpoint.'));
+}
+
+/** What a client asks for to watch the audit as it goes: one JSON object per line. */
+const PROGRESS_STREAM = 'application/x-ndjson';
+/** A line at least this often, so the client can tell an audit at work from a lost connection. */
+const AUDIT_HEARTBEAT_MS = 10_000;
+
+/**
+ * The audit, answered as it goes: `{"progress": …}` lines while the model
+ * reasons and writes, `{"alive": true}` when nothing else was said for a
+ * while, then `{"status", "body"}`, the response a plain request would have
+ * had. An audit runs for a minute or more on a long article, and a reader
+ * shown nothing for that long takes the analysis for stuck.
+ */
+function streamedAudit(
+  run: (onProgress: (progress: AuditProgress) => void) => Promise<Outcome<AuditResult>>,
+  requestId: string,
+): Response {
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+  let open = true;
+  const send = (line: object) => {
+    if (!open) return;
+    // A reader who closed the panel stops the writes, never the audit: its run is already paid for.
+    writer.write(encoder.encode(`${JSON.stringify(line)}\n`)).catch(() => {
+      open = false;
+    });
+  };
+  const heartbeat = setInterval(() => send({ alive: true }), AUDIT_HEARTBEAT_MS);
+  void (async () => {
+    let outcome: Outcome<AuditResult>;
+    try {
+      outcome = await run((progress) => send({ progress }));
+    } catch {
+      logEvent({ event: 'unhandled_error', requestId, method: 'POST', path: '/audit' });
+      outcome = apiError('internal', 'Something went wrong. Please try again.');
+    } finally {
+      clearInterval(heartbeat);
+    }
+    const res = finish(outcome);
+    send({ status: res.status, body: await res.json() });
+    open = false;
+    await writer.close().catch(() => {});
+  })();
+  return new Response(readable, {
+    status: 200,
+    headers: { 'content-type': `${PROGRESS_STREAM}; charset=utf-8`, 'cache-control': 'no-store' },
+  });
 }
 
 /** The counter each paid stage adds its cost to. */

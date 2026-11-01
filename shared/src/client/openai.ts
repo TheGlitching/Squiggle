@@ -110,6 +110,7 @@ export class OpenAIClient extends BaseLLMClient {
     let fullText = '';
     let inputTokens = 0;
     let outputTokens = 0;
+    let finishReason: string | undefined;
 
     try {
       const response = await this.postJson(
@@ -122,7 +123,7 @@ export class OpenAIClient extends BaseLLMClient {
       await this.readServerSentEvents(response, (event) => {
         const parsed = event as {
           error?: unknown;
-          choices?: Array<{ delta?: { content?: string } }>;
+          choices?: Array<{ delta?: { content?: string; reasoning?: string }; finish_reason?: string | null }>;
           usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
 
@@ -132,15 +133,19 @@ export class OpenAIClient extends BaseLLMClient {
           throw providerError(this.providerName, event);
         }
 
-        const delta = parsed.choices?.[0]?.delta?.content;
+        const choice = parsed.choices?.[0];
+        if (choice?.delta?.reasoning) callbacks.onReasoning?.(choice.delta.reasoning);
+        const delta = choice?.delta?.content;
         if (delta) {
           fullText += delta;
           callbacks.onChunk(delta);
         }
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
 
         if (parsed.usage) {
           inputTokens = parsed.usage.prompt_tokens || inputTokens;
           outputTokens = parsed.usage.completion_tokens || outputTokens;
+          this.streamedUsage(parsed.usage);
         }
       });
     } catch (err: unknown) {
@@ -160,8 +165,12 @@ export class OpenAIClient extends BaseLLMClient {
         totalTokens: inputTokens + outputTokens,
       },
       provider: this.providerName,
+      finishReason,
     };
   }
+
+  /** What a streamed answer's last chunk says it used; the JSON answers carry it in their body. */
+  protected streamedUsage(_usage: unknown): void {}
 
   /**
    * Search runs through the Responses API's `web_search` tool, which every

@@ -56,12 +56,22 @@ export interface AnalysisRunState {
   /** The links the article offers as its own backing. */
   citedSources: CitedSource[];
 
-  /** Accumulated by the research stage, one call at a time. */
+  /** Accumulated by the research stage, in the order of the findings they test. */
   claims: FactualClaim[];
-  /** Accumulated by the source-check stage, one page at a time. */
+  /** Accumulated by the source-check stage, in the order of the claims, then of the article's links. */
   sourceChecks: SourceCheck[];
-  /** Search queries actually issued, for the report's research record. */
+  /**
+   * The findings a research call was started for, whatever came of it: what
+   * the per-run cap counts, reserved before the call so that several calls at
+   * once cannot all pass it. Absent on a run that predates it.
+   */
+  researched?: string[];
+  /** The same for source checks, as `sourceCheckKey` of a claim and a page. */
+  sourceChecked?: string[];
+  /** Search queries actually issued, for the report's research record, in the findings' order. */
   queries: string[];
+  /** How many of `queries` each finding's research issued, to file the next ones in place. */
+  queryCounts?: Record<string, number>;
   /** Whether any research call actually ran (the report must never imply more). */
   researchPerformed: boolean;
   researchProvider?: string;
@@ -69,6 +79,10 @@ export interface AnalysisRunState {
 
 /** The audit report as it is handed back to the client, before research. */
 export type AuditSnapshot = Pick<AnalysisReport, 'summary' | 'categories' | 'findings' | 'score' | 'scoreBand'>;
+
+export function sourceCheckKey(claimId: string, url: string): string {
+  return `${claimId} ${url}`;
+}
 
 export function serializeRunState(state: AnalysisRunState): string {
   return JSON.stringify(state);

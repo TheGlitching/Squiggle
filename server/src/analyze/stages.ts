@@ -63,6 +63,8 @@ import {
   type BaseLLMClient,
   type CitedSource,
   type EvidenceSource,
+  type Finding,
+  type SourceCheck,
   type PageFetcher,
 } from '@squiggle/shared';
 
@@ -87,7 +89,7 @@ import { articleUrlHash, canonicalAddress, PASTED_TEXT_KEY } from './canonicalUr
 import { shortQuotes } from './citations';
 import { withholdForVisitor } from './withhold';
 import type { AuditRequest } from './schemas';
-import { parseRunState, serializeRunState, type AnalysisRunState } from './runState';
+import { parseRunState, serializeRunState, sourceCheckKey, type AnalysisRunState } from './runState';
 
 /** A run is abandoned if the extension stops driving it for this long. */
 export const RUN_TTL_MS = 60 * 60 * 1000;
@@ -305,10 +307,30 @@ export interface AuditResult {
   researchable: string[];
 }
 
+/**
+ * How far the audit has got, for a reader watching it: the model was asked,
+ * it is reasoning, it is writing its findings (how many so far), it is asked a
+ * second time, or the critique rereads the findings. Counts only, never a
+ * word of what the model wrote: a visitor's findings are withheld.
+ */
+export type AuditProgress =
+  | { step: 'sent' | 'retry' | 'critique' }
+  | { step: 'thinking'; words: number }
+  | { step: 'writing'; findings: number };
+
+/** How many more words of reasoning before the reader is told again: often enough to see it move. */
+const REASONING_WORDS_STEP = 150;
+
+/** Only a finding has a severity in the audit's answer: counting them counts the findings written. */
+const FINDING_IN_ANSWER = /"severity"\s*:/g;
+/** Enough of the answer's end to hold a key cut in two between chunks. */
+const FINDING_KEY_SPAN = 24;
+
 export async function analyzeAudit(
   s: AnalyzeServices,
   reader: Reader,
   payload: AuditRequest,
+  onProgress: (progress: AuditProgress) => void = () => {},
 ): Promise<Outcome<AuditResult>> {
   // The address is only ever a key and a line of the prompt: whatever it
   // names, this server never requests it.
@@ -398,18 +420,59 @@ export async function analyzeAudit(
     const startedAt = Date.now();
     let completion;
     await count(s, 'audit');
+    onProgress({ step: attempt === 0 ? 'sent' : 'retry' });
+    let words = 0;
+    let inWord = false;
+    let toldWords = -1;
+    let written = '';
+    let scanned = 0;
+    let findings = -1;
     try {
-      completion = await client.complete({
-        systemPrompt: auditSystemPrompt(input),
-        messages: [
-          {
-            role: 'user',
-            content: buildFourchesCaudinesUserPrompt(input, { citedSources, now: new Date(now) }),
+      // Streamed, so the reader sees the model reason and then write rather
+      // than a minute of silence; the answer is the same text a single
+      // response would have carried.
+      completion = await client.stream(
+        {
+          systemPrompt: auditSystemPrompt(input),
+          messages: [
+            {
+              role: 'user',
+              content: buildFourchesCaudinesUserPrompt(input, { citedSources, now: new Date(now) }),
+            },
+          ],
+          temperature: 0.1,
+          maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
+        },
+        {
+          // A reasoning model thinks for most of the call before it writes a
+          // word of the answer: how far it has got is the only sign of life.
+          onReasoning: (delta) => {
+            // Counted as it comes, a word at its first letter: never the text again.
+            for (const ch of delta) {
+              const space = ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r';
+              if (!space && !inWord) words += 1;
+              inWord = !space;
+            }
+            if (toldWords >= 0 && words < toldWords + REASONING_WORDS_STEP) return;
+            toldWords = words;
+            onProgress({ step: 'thinking', words });
           },
-        ],
-        temperature: 0.1,
-        maxTokens: AUDIT_MAX_OUTPUT_TOKENS,
-      });
+          onChunk: (delta) => {
+            written += delta;
+            // Only the new text, and the end of the last chunk a key may straddle.
+            FINDING_IN_ANSWER.lastIndex = scanned;
+            let count = Math.max(findings, 0);
+            for (let m = FINDING_IN_ANSWER.exec(written); m; m = FINDING_IN_ANSWER.exec(written)) {
+              count += 1;
+              scanned = m.index + m[0].length;
+            }
+            scanned = Math.max(scanned, written.length - FINDING_KEY_SPAN);
+            if (count === findings) return;
+            findings = count;
+            onProgress({ step: 'writing', findings: count });
+          },
+        },
+      );
     } catch {
       // Close the reservation: an audit that never produced anything must not
       // hold the account's single slot for the next five minutes. The start is
@@ -451,6 +514,7 @@ export async function analyzeAudit(
 
   // The critique rereads the findings before any is researched or cached. It
   // never fails the run: a failed or unreadable critique leaves the audit as is.
+  onProgress({ step: 'critique' });
   audited = await critiqueReport({ client, input, report: audited, citedSources, articleSources: sourcesByBlock });
 
   const state: AnalysisRunState = {
@@ -677,7 +741,7 @@ async function loadRun(
   s: AnalyzeServices,
   reader: Reader,
   runId: string,
-): Promise<Outcome<{ state: AnalysisRunState; urlHash: string; finalized: boolean }>> {
+): Promise<Outcome<{ state: AnalysisRunState; raw: string; urlHash: string; finalized: boolean }>> {
   const run = await s.db.getAnalysisRun(runId);
   // One error for "unknown", "someone else's" and "expired": a client that
   // guesses run ids learns nothing from which of the three it hit. An account
@@ -685,7 +749,46 @@ async function loadRun(
   if (!run || run.userId !== ownerOf(reader) || run.expiresAt <= s.clock.now()) {
     return apiError('run_not_found', "Cette analyse n'est plus en cours. Relancez-la.");
   }
-  return { ok: true, state: parseRunState(run.state), urlHash: run.urlHash, finalized: run.finalizedAt !== null };
+  return { ok: true, state: parseRunState(run.state), raw: run.state, urlHash: run.urlHash, finalized: run.finalizedAt !== null };
+}
+
+/** How many times a stage rereads a run another stage wrote to before giving up. */
+const RUN_WRITE_ATTEMPTS = 10;
+
+/**
+ * What a stage does to the run's latest state: the answer it gives, and
+ * whether the state it changed must be written for that answer to hold.
+ */
+type RunChange<T> = { answer: Outcome<T>; write: boolean };
+
+/**
+ * Apply `change` to the run's latest state and write it, unless another stage
+ * of the same run wrote in between: then the run is read again and `change`
+ * applied to that. Research and source checks of one run go several at once,
+ * and each rewrites the whole state, so a plain write would drop what the
+ * other ones added.
+ */
+async function changeRun<T>(
+  s: AnalyzeServices,
+  reader: Reader,
+  runId: string,
+  change: (state: AnalysisRunState) => RunChange<T>,
+): Promise<Outcome<T>> {
+  for (let attempt = 0; attempt < RUN_WRITE_ATTEMPTS; attempt += 1) {
+    const loaded = await loadRun(s, reader, runId);
+    if (!loaded.ok) return loaded;
+    if (loaded.finalized) {
+      // The credit for this run has already been consumed. Left open, a stage
+      // would keep buying provider calls against a run that is already paid for.
+      return apiError('run_already_finalized', 'Cette analyse est déjà terminée.');
+    }
+    const { answer, write } = change(loaded.state);
+    if (!write) return answer;
+    if (await s.db.compareAndSetAnalysisRunState(runId, loaded.raw, serializeRunState(loaded.state), s.clock.now())) {
+      return answer;
+    }
+  }
+  return apiError('internal', "Cette analyse n'a pas pu être mise à jour. Réessayez.");
 }
 
 // ---------------------------------------------------------------------------
@@ -697,26 +800,28 @@ export async function analyzeResearch(
   reader: Reader,
   payload: { runId: string; findingId: string },
 ): Promise<Outcome<{ claim: AnalysisRunState['claims'][number] | null }>> {
-  const loaded = await loadRun(s, reader, payload.runId);
-  if (!loaded.ok) return loaded;
-  const { state } = loaded;
-
-  if (loaded.finalized) {
-    // The credit for this run has already been consumed. Left open, this stage
-    // would keep buying provider calls against a run that is already paid for.
-    return apiError('run_already_finalized', 'Cette analyse est déjà terminée.');
-  }
-
-  const finding = state.findings.find((f) => f.id === payload.findingId);
-  if (!finding) return apiError('not_found', 'Ce constat ne fait pas partie de cette analyse.');
-
-  if (state.claims.length >= MAX_RESEARCH_CALLS_PER_RUN) {
-    return apiError('rate_limited', 'Cette analyse a atteint son nombre de vérifications.');
-  }
-
-  // Already researched: return what we have rather than paying twice.
-  const existing = state.claims.find((claim) => claim.findingId === finding.id);
-  if (existing) return { ok: true, claim: claimFor(reader, existing) };
+  // The call is reserved before it is made, so that the per-run cap holds
+  // however many calls the client sends at once, and a finding is never paid
+  // for twice. A finding already researched answers what it found, or nothing
+  // when that call failed or is still running.
+  type Reserved = { finding: Finding; state: AnalysisRunState } | { claim: FactualClaim | null };
+  const reserved = await changeRun<Reserved>(s, reader, payload.runId, (state) => {
+    const finding = state.findings.find((f) => f.id === payload.findingId);
+    if (!finding) return { answer: apiError('not_found', 'Ce constat ne fait pas partie de cette analyse.'), write: false };
+    const researched = state.researched ?? state.claims.flatMap((claim) => (claim.findingId ? [claim.findingId] : []));
+    if (researched.includes(finding.id)) {
+      const existing = state.claims.find((claim) => claim.findingId === finding.id) ?? null;
+      return { answer: { ok: true, claim: existing }, write: false };
+    }
+    if (researched.length >= MAX_RESEARCH_CALLS_PER_RUN) {
+      return { answer: apiError('rate_limited', 'Cette analyse a atteint son nombre de vérifications.'), write: false };
+    }
+    state.researched = [...researched, finding.id];
+    return { answer: { ok: true, finding, state }, write: true };
+  });
+  if (!reserved.ok) return reserved;
+  if ('claim' in reserved) return { ok: true, claim: reserved.claim && claimFor(reader, reserved.claim) };
+  const { finding, state } = reserved;
 
   const client = s.llm();
   let result;
@@ -742,14 +847,24 @@ export async function analyzeResearch(
     return apiError('provider_unavailable', "La vérification de ce constat n'a pas abouti.");
   }
 
-  state.researchPerformed = state.researchPerformed || result.research.performed;
-  state.researchProvider = result.research.provider ?? state.researchProvider;
-  state.queries.push(...result.research.queries);
   const claim = result.claims[0] ?? null;
-  if (claim) state.claims.push(claim);
-
-  await s.db.updateAnalysisRunState(payload.runId, serializeRunState(state), s.clock.now());
-  return { ok: true, claim: claim && claimFor(reader, claim) };
+  const written = await changeRun(s, reader, payload.runId, (latest) => {
+    latest.researchPerformed = latest.researchPerformed || result.research.performed;
+    latest.researchProvider = result.research.provider ?? latest.researchProvider;
+    // Claims and queries in the findings' order, as one call at a time would have filed them.
+    const rank = (findingId: string | undefined) => latest.findings.findIndex((f) => f.id === findingId);
+    const counts = latest.queryCounts ?? {};
+    const at = Object.entries(counts)
+      .filter(([id]) => rank(id) < rank(finding.id))
+      .reduce((sum, [, n]) => sum + n, 0);
+    latest.queries.splice(at, 0, ...result.research.queries);
+    latest.queryCounts = { ...counts, [finding.id]: result.research.queries.length };
+    if (claim && !latest.claims.some((c) => c.findingId === claim.findingId)) {
+      latest.claims = [...latest.claims, claim].sort((a, b) => rank(a.findingId) - rank(b.findingId));
+    }
+    return { answer: { ok: true, claim: claim && claimFor(reader, claim) }, write: true };
+  });
+  return written;
 }
 
 /**
@@ -771,29 +886,32 @@ export async function analyzeSourceCheck(
   reader: Reader,
   payload: { runId: string; claimId: string; sourceUrl: string },
 ): Promise<Outcome<{ check: AnalysisRunState['sourceChecks'][number] | null }>> {
-  const loaded = await loadRun(s, reader, payload.runId);
-  if (!loaded.ok) return loaded;
-  const { state } = loaded;
+  type Reserved = { claim: FactualClaim; source: CitedSource } | { check: SourceCheck | null };
+  const reserved = await changeRun<Reserved>(s, reader, payload.runId, (state) => {
+    const claim = state.claims.find((c) => c.id === payload.claimId);
+    if (!claim) return { answer: apiError('not_found', "Cette affirmation ne fait pas partie de cette analyse."), write: false };
 
-  if (loaded.finalized) {
-    return apiError('run_already_finalized', 'Cette analyse est déjà terminée.');
-  }
+    // The URL must be one the ARTICLE cited, as recorded at audit time. A URL a
+    // client invents is refused here, before any fetch: this endpoint reads the
+    // article's sources, it is not a fetch proxy.
+    const source = state.citedSources.find((candidate) => candidate.href === payload.sourceUrl);
+    if (!source) return { answer: apiError('not_found', "Ce lien ne fait pas partie des sources citées par l'article."), write: false };
 
-  const claim = state.claims.find((c) => c.id === payload.claimId);
-  if (!claim) return apiError('not_found', "Cette affirmation ne fait pas partie de cette analyse.");
-
-  if (state.sourceChecks.length >= MAX_SOURCE_CHECKS_PER_RUN) {
-    return apiError('rate_limited', 'Cette analyse a atteint son nombre de sources lues.');
-  }
-
-  // The URL must be one the ARTICLE cited, as recorded at audit time. A URL a
-  // client invents is refused here, before any fetch: this endpoint reads the
-  // article's sources, it is not a fetch proxy.
-  const source = state.citedSources.find((candidate) => candidate.href === payload.sourceUrl);
-  if (!source) return apiError('not_found', "Ce lien ne fait pas partie des sources citées par l'article.");
-
-  const already = state.sourceChecks.find((check) => check.claimId === claim.id && check.url === source.href);
-  if (already) return { ok: true, check: already };
+    const key = sourceCheckKey(claim.id, source.href);
+    const checked = state.sourceChecked ?? state.sourceChecks.map((check) => sourceCheckKey(check.claimId ?? '', check.url));
+    if (checked.includes(key)) {
+      const already = state.sourceChecks.find((check) => check.claimId === claim.id && check.url === source.href) ?? null;
+      return { answer: { ok: true, check: already }, write: false };
+    }
+    if (checked.length >= MAX_SOURCE_CHECKS_PER_RUN) {
+      return { answer: apiError('rate_limited', 'Cette analyse a atteint son nombre de sources lues.'), write: false };
+    }
+    state.sourceChecked = [...checked, key];
+    return { answer: { ok: true, claim, source }, write: true };
+  });
+  if (!reserved.ok) return reserved;
+  if ('check' in reserved) return { ok: true, check: reserved.check };
+  const { claim, source } = reserved;
 
   const client = s.llm();
   let result;
@@ -817,15 +935,23 @@ export async function analyzeSourceCheck(
   }
 
   const check = result.checks[0] ?? null;
-  if (check) state.sourceChecks.push(check);
   // The engine re-rates the claim against what the page actually said.
   const reconciled = result.claims[0];
-  if (reconciled) {
-    state.claims = state.claims.map((c) => (c.id === reconciled.id ? reconciled : c));
-  }
-
-  await s.db.updateAnalysisRunState(payload.runId, serializeRunState(state), s.clock.now());
-  return { ok: true, check };
+  return changeRun(s, reader, payload.runId, (latest) => {
+    if (check && !latest.sourceChecks.some((c) => c.claimId === check.claimId && c.url === check.url)) {
+      // In the claims' order, then the article's links', as one page at a
+      // time would have filed them.
+      const claimRank = (c: SourceCheck) => latest.claims.findIndex((x) => x.id === c.claimId);
+      const pageRank = (c: SourceCheck) => latest.citedSources.findIndex((x) => x.href === c.url);
+      latest.sourceChecks = [...latest.sourceChecks, check].sort(
+        (a, b) => claimRank(a) - claimRank(b) || pageRank(a) - pageRank(b),
+      );
+    }
+    if (reconciled) {
+      latest.claims = latest.claims.map((c) => (c.id === reconciled.id ? reconciled : c));
+    }
+    return { answer: { ok: true, check }, write: true };
+  });
 }
 
 // ---------------------------------------------------------------------------
