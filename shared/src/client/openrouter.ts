@@ -1,5 +1,5 @@
 import { BYOKError } from '../types/byok';
-import type { CompletionOptions, ProviderConfig } from '../types/byok';
+import type { CompletionOptions, CompletionResponse, ProviderConfig, StreamCallbacks } from '../types/byok';
 import type { GroundedAnswer, SearchResult } from './base';
 import { OpenAIClient } from './openai';
 
@@ -106,6 +106,15 @@ interface OpenRouterUsage {
   server_tool_use_details?: { web_search_requests?: number };
 }
 
+/**
+ * How many requests `racers` sends at once, and the one host they are all
+ * pinned to, whatever `order` the other requests of the client follow.
+ */
+export interface OpenRouterRace {
+  host: string;
+  count: number;
+}
+
 /** What one OpenRouter request cost, as its response reports it. */
 export interface OpenRouterSpend {
   /** Everything billed for the request, web search included, in US dollars. */
@@ -115,19 +124,65 @@ export interface OpenRouterSpend {
 }
 
 export class OpenRouterClient extends OpenAIClient {
-  private readonly providerPreferences?: OpenRouterProviderPreferences;
+  private providerPreferences?: OpenRouterProviderPreferences;
   private readonly reasoning?: OpenRouterReasoning;
   private spendSink?: (spend: OpenRouterSpend) => void;
+  private readonly race?: OpenRouterRace;
+  /** Shared by the racers of one race: what the first of them to finish was billed. */
+  private raceBill?: { costUsd?: number };
 
   /**
    * Without preferences OpenRouter picks among every host of the model, and
    * the model reasons as much as it likes, which is what a BYOK reader gets on
-   * their own key. Hosted mode passes both.
+   * their own key. Hosted mode passes both, and a race for the audit.
    */
-  constructor(config: ProviderConfig, providerPreferences?: OpenRouterProviderPreferences, reasoning?: OpenRouterReasoning) {
+  constructor(
+    config: ProviderConfig,
+    providerPreferences?: OpenRouterProviderPreferences,
+    reasoning?: OpenRouterReasoning,
+    race?: OpenRouterRace
+  ) {
     super(config);
     this.providerPreferences = providerPreferences;
     this.reasoning = reasoning;
+    this.race = race;
+  }
+
+  /**
+   * `race.count` copies of this client pinned to `race.host` alone, every other
+   * preference kept. They share a bill: a host that does not stop on an
+   * abandoned stream (Nebius does not) charges it to the end, but the stream
+   * never gets to its last chunk, which is where the cost is reported. The
+   * abandoned racer reports what the first one to finish was billed instead,
+   * the same prompt on the same host: an estimate, a little short, since the
+   * racer that lost was the one still reasoning.
+   */
+  override racers(): OpenRouterClient[] {
+    if (!this.race) return [this];
+    const pinned: OpenRouterProviderPreferences = {
+      ...this.providerPreferences,
+      order: [this.race.host],
+      only: [this.race.host],
+      allow_fallbacks: false,
+    };
+    const bill: { costUsd?: number } = {};
+    return Array.from({ length: this.race.count }, () => {
+      const racer = Object.create(this) as OpenRouterClient;
+      racer.providerPreferences = pinned;
+      racer.raceBill = bill;
+      return racer;
+    });
+  }
+
+  override async stream(options: CompletionOptions, callbacks: StreamCallbacks): Promise<CompletionResponse> {
+    try {
+      return await super.stream(options, callbacks);
+    } catch (err) {
+      if (this.raceBill?.costUsd !== undefined && options.abortSignal?.aborted) {
+        this.reportSpend({ cost: this.raceBill.costUsd });
+      }
+      throw err;
+    }
   }
 
   protected override get defaultBaseUrl(): string {
@@ -182,9 +237,9 @@ export class OpenRouterClient extends OpenAIClient {
   }
 
   private reportSpend(usage: OpenRouterUsage | undefined): void {
-    if (this.spendSink && typeof usage?.cost === 'number') {
-      this.spendSink({ costUsd: usage.cost, webSearches: usage.server_tool_use_details?.web_search_requests ?? 0 });
-    }
+    if (typeof usage?.cost !== 'number') return;
+    if (this.raceBill && this.raceBill.costUsd === undefined) this.raceBill.costUsd = usage.cost;
+    this.spendSink?.({ costUsd: usage.cost, webSearches: usage.server_tool_use_details?.web_search_requests ?? 0 });
   }
 
   /**

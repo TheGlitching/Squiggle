@@ -254,7 +254,10 @@ extract -> audit -> critique -> research -> reconcile -> score
 
 2. **Audit** (`shared/src/engine/pipeline.ts`, `prompts.ts`) asks the model once, from the
    article alone, for domain marks and findings. Each finding quotes the text it is
-   about and names a block.
+   about and names a block. The hosted server asks twice at once, both calls on Nebius,
+   and keeps the first readable answer (`auditRound` in `server/src/analyze/stages.ts`):
+   how long the model reasons is a draw, and two draws cut the long tail. A BYOK
+   reader's audit stays a single call, since it is spent on their own key.
 
    A second call, the **critique** (`shared/src/engine/critique.ts`), rereads those
    findings against the text and keeps, recalibrates or withdraws each one, before any

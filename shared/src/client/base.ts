@@ -107,6 +107,15 @@ export abstract class BaseLLMClient {
   }
 
   /**
+   * The clients one answer is asked of at once when how long it takes matters
+   * more than what it costs: the caller keeps the first good answer and aborts
+   * the others. Just this client, unless whoever built it asked for a race.
+   */
+  racers(): BaseLLMClient[] {
+    return [this];
+  }
+
+  /**
    * Whether this provider/model combination can run server-side web search.
    * Defaults to false so an unsupporting provider is never silently treated
    * as one that searched and simply found nothing.

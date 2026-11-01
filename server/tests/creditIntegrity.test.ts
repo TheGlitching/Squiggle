@@ -509,7 +509,8 @@ describe('when none of the pinned hosts can run the model', () => {
       vi.unstubAllGlobals();
     }
 
-    expect(refusal).toHaveBeenCalledTimes(STARTS_PER_CREDIT * TRIAL_ANALYSES + 1);
+    // Each audit: the two racers pinned to Nebius, then one call on the whole host list.
+    expect(refusal).toHaveBeenCalledTimes(3 * (STARTS_PER_CREDIT * TRIAL_ANALYSES + 1));
     expect(await env.db.sumUsage(who.userId)).toBe(0);
 
     // The host is back: the reader still has the whole trial.
