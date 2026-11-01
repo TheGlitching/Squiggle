@@ -18,9 +18,9 @@ import type { PostRow } from './posts';
 import type { CommentRow } from './replies';
 import type { Facts, StrategyResult } from './strategy';
 
-export const NETWORK_NAME: Record<Network, string> = { bluesky: 'Bluesky', threads: 'Threads', facebook: 'Facebook', instagram: 'Instagram', x: 'X' };
+export const NETWORK_NAME: Record<Network, string> = { bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads', facebook: 'Facebook', instagram: 'Instagram', x: 'X' };
 /** Each network's own colour, for its dot: what the eye looks for in a list of posts. */
-const NETWORK_DOT: Record<Network, string> = { bluesky: '#1185fe', threads: '#1c1b1f', facebook: '#1877f2', instagram: '#e1306c', x: '#1c1b1f' };
+const NETWORK_DOT: Record<Network, string> = { bluesky: '#1185fe', mastodon: '#6364ff', threads: '#1c1b1f', facebook: '#1877f2', instagram: '#e1306c', x: '#1c1b1f' };
 const PILLAR_NAME: Record<string, string> = { notion: 'notion du glossaire', fond: 'contenu de la semaine', produit: 'le site', classe: 'pour les enseignants' };
 
 const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', ...o });

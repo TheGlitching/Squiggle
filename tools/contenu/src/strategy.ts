@@ -196,7 +196,7 @@ export function acceptTest(ctx: Pick<Ctx, 'db'>, t: { network?: string; kind?: s
   if (!TEST_KINDS.includes(t.kind as (typeof TEST_KINDS)[number])) return false;
   if (t.kind === 'heure' && !/^[+-]?(30|60|90|120)$/.test(t.value ?? '')) return false;
   if (t.kind !== 'heure' && t.value !== 'avec' && t.value !== 'sans') return false;
-  if (t.kind === 'image' && t.network !== 'threads' && t.network !== 'facebook') return false;
+  if (t.kind === 'image' && t.network !== 'threads' && t.network !== 'facebook' && t.network !== 'mastodon') return false;
   if (!t.hypothesis?.trim()) return false;
   return !ctx.db.get("SELECT id FROM tests WHERE network = ? AND status = 'en_cours'", t.network);
 }

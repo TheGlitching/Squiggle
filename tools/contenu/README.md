@@ -41,10 +41,10 @@ Monday in order:
    waiting list; else a draft already in `web/src/blog/`; else nothing. Always a pull
    request from `contenu/<slug>`, at most two open, no audience figure in it, with
    Squiggle's own analysis of the text in its description.
-5. **Posts** (`src/posts.ts`, `src/calendar.ts`): 13 slots a week on Bluesky, Threads,
-   Facebook, Instagram and X. At the start the queue fills one week at a time, two days
-   ahead at the least, and each Monday one week further, until it reaches four weeks
-   and the three-week review window (`fillWindow`). A post on Instagram or Facebook
+5. **Posts** (`src/posts.ts`, `src/calendar.ts`): 16 slots a week on Bluesky, Mastodon,
+   Threads, Facebook, Instagram and X. At the start the queue fills one week at a time,
+   two days ahead at the least, and each Monday one week further, until it reaches four
+   weeks and the three-week review window (`fillWindow`). A post on Instagram or Facebook
    gets its story the same evening (`post_type: story`), the 9:16 image the site's build
    draws beside each carousel (`/og/social/<slug>/story.png`). Each post
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),

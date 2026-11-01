@@ -159,6 +159,7 @@ const ANGLE_BRIEF: Record<Angle, string> = {
 
 const LINK_RULE: Record<Network, (url: string) => string> = {
   bluesky: (url) => `Termine par ce lien, recopié exactement : ${url}`,
+  mastodon: (url) => `Mets ce lien, recopié exactement, avant les mots-dièse : ${url}`,
   threads: (url) => `Mets ce lien, recopié exactement, en fin de texte : ${url}`,
   facebook: (url) => `Mets ce lien, recopié exactement, en fin de texte : ${url}`,
   instagram: () => 'Aucune adresse : termine par « Lien dans la bio. »',
@@ -167,6 +168,7 @@ const LINK_RULE: Record<Network, (url: string) => string> = {
 
 const FORMAT: Record<Network, string> = {
   bluesky: '300 caractères au plus, lien compris.',
+  mastodon: '500 caractères au plus, lien compris ; termine par 2 ou 3 mots-dièse sans sigle, par exemple #EspritCritique #ÉducationAuxMédias.',
   threads: '500 caractères au plus, ton de conversation.',
   facebook: '3 à 6 phrases.',
   instagram: 'Une légende de 2 à 4 phrases.',
@@ -179,7 +181,7 @@ function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; c
   if (network === 'instagram') return imgs.slides.length ? imgs.slides.slice(0, 10) : imgs.card ? [imgs.card] : [];
   // X shows no link, so the picture carries the page; Bluesky shows no card unless one is given.
   if (network === 'x' || network === 'bluesky') return example ? [angle === 'reperer' && imgs.slides[3] ? imgs.slides[3] : example] : [];
-  // Threads and Facebook draw the page's card from its link, unless a test says otherwise.
+  // Threads, Facebook and Mastodon draw the page's card from its link, unless a test says otherwise.
   return t.image === 'avec' && example ? [example] : [];
 }
 

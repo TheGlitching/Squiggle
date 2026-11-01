@@ -14,6 +14,7 @@ import { ORIGIN, REPO, type Network } from './config';
 export const MAX_LENGTH: Record<Network, number> = {
   x: 280,
   bluesky: 300,
+  mastodon: 500,
   threads: 500,
   facebook: 2000,
   instagram: 2200,
@@ -22,6 +23,7 @@ export const MAX_LENGTH: Record<Network, number> = {
 /** Where a link to the site is required, refused, or only the bare domain is allowed. */
 export const LINK_POLICY: Record<Network, 'required' | 'none' | 'domain'> = {
   bluesky: 'required',
+  mastodon: 'required',
   threads: 'required',
   facebook: 'required',
   // An Instagram caption has no clickable link: « lien dans la bio ».

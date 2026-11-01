@@ -1,10 +1,11 @@
 /**
  * The weekly calendar and how its slots are filled. The starting strategy
  * speaks first to the curious general public (Threads, Instagram, Facebook, X,
- * Bluesky alike), teachers being one audience among others: the glossary's
- * questions are worded for any reader, and teachers get one slot in two weeks.
+ * Bluesky and Mastodon alike), teachers being one audience among others: the
+ * glossary's questions are worded for any reader, and teachers get one slot in two
+ * weeks on each network that carries them.
  *
- * Starting shares, over a week of 13 posts: a glossary notion about half, the
+ * Starting shares, over a week of 16 posts: a glossary notion about half, the
  * week's piece of substance about a quarter (more when one has just been
  * merged), product and teachers the rest. They are starting points: a test
  * moves an hour, the owner moves a share (rule 7).
@@ -31,15 +32,18 @@ export interface Slot {
 export const CALENDAR: readonly Slot[] = [
   { network: 'x', weekday: 1, time: '12:00', pillar: 'notion', angle: 'exemple', notion: 'A' },
   { network: 'bluesky', weekday: 1, time: '12:15', pillar: 'notion', angle: 'exemple', notion: 'A' },
+  { network: 'mastodon', weekday: 1, time: '12:30', pillar: 'notion', angle: 'exemple', notion: 'A' },
   { network: 'threads', weekday: 1, time: '18:30', pillar: 'notion', angle: 'question', notion: 'A' },
   { network: 'facebook', weekday: 2, time: '18:30', pillar: 'notion', angle: 'long', notion: 'A' },
   { network: 'bluesky', weekday: 3, time: '12:15', pillar: 'fond', angle: 'page' },
+  { network: 'mastodon', weekday: 3, time: '12:30', pillar: 'fond', angle: 'page' },
   { network: 'threads', weekday: 3, time: '18:30', pillar: 'fond', angle: 'page' },
   { network: 'instagram', weekday: 3, time: '19:00', pillar: 'notion', angle: 'carrousel', notion: 'A' },
   { network: 'x', weekday: 4, time: '12:00', pillar: 'fond', angle: 'page' },
   { network: 'bluesky', weekday: 4, time: '18:30', pillar: 'notion', angle: 'reperer', notion: 'A' },
   { network: 'facebook', weekday: 4, time: '18:30', pillar: 'fond', angle: 'page' },
   { network: 'bluesky', weekday: 5, time: '12:15', pillar: 'produit-ou-classe', angle: 'page' },
+  { network: 'mastodon', weekday: 5, time: '12:30', pillar: 'produit-ou-classe', angle: 'page' },
   { network: 'threads', weekday: 5, time: '18:30', pillar: 'notion', angle: 'exemple', notion: 'B' },
   { network: 'instagram', weekday: 5, time: '19:00', pillar: 'produit-ou-classe', angle: 'page' },
 ];
@@ -89,11 +93,15 @@ export function slotAt(monday: string, slot: Pick<Slot, 'weekday' | 'time'>): Da
   return parisTime(day(addDays(new Date(`${monday}T00:00:00Z`), slot.weekday - 1)), slot.time);
 }
 
-/** Product or teachers, alternating by week, and the opposite on the two networks that share the slot. */
+/**
+ * Product or teachers, alternating by week. Instagram and Mastodon take the
+ * opposite of Bluesky, so both pillars go out every week and the two networks
+ * that post a quarter of an hour apart on Friday never say the same thing.
+ */
 export function resolvePillar(slot: Slot, monday: string): Pillar {
   if (slot.pillar !== 'produit-ou-classe') return slot.pillar;
   const week = Math.floor(Date.parse(`${monday}T00:00:00Z`) / (7 * 86_400_000));
-  const even = (week + (slot.network === 'instagram' ? 1 : 0)) % 2 === 0;
+  const even = (week + (slot.network === 'instagram' || slot.network === 'mastodon' ? 1 : 0)) % 2 === 0;
   return even ? 'produit' : 'classe';
 }
 

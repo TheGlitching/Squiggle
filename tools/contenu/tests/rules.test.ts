@@ -22,15 +22,18 @@ describe('the calendar', () => {
     expect(parisTime('2026-11-30', '00:30').toISOString()).toBe('2026-11-29T23:30:00.000Z');
   });
 
-  it('starts with the general public: about half notions, a quarter or more substance, one teachers’ slot', () => {
+  it('starts with the general public: about half notions, a quarter or more substance, product and teachers every week', () => {
     const notion = CALENDAR.filter((s) => s.pillar === 'notion').length;
     const fond = CALENDAR.filter((s) => s.pillar === 'fond').length;
     expect(notion / CALENDAR.length).toBeGreaterThanOrEqual(0.5);
     expect(fond / CALENDAR.length).toBeGreaterThanOrEqual(0.25);
-    const monday = '2026-11-30';
-    const pillars = CALENDAR.map((s) => resolvePillar(s, monday));
-    expect(pillars.filter((p) => p === 'classe')).toHaveLength(1);
-    expect(pillars.filter((p) => p === 'produit')).toHaveLength(1);
+    for (const monday of ['2026-11-30', '2026-12-07']) {
+      const friday = CALENDAR.filter((s) => s.pillar === 'produit-ou-classe').map((s) => [s.network, resolvePillar(s, monday)] as const);
+      expect(new Set(friday.map(([, p]) => p))).toEqual(new Set(['produit', 'classe']));
+      const of = (network: string) => friday.find(([n]) => n === network)![1];
+      expect(of('mastodon')).not.toBe(of('bluesky'));
+      expect(of('instagram')).not.toBe(of('bluesky'));
+    }
   });
 
   it('starts with the next week, then fills one week further each Monday until four weeks out', () => {
@@ -67,7 +70,7 @@ describe('the decision rules', () => {
   });
 
   it('proposes the minimal rhythm under five per cent of the networks’ visits, never a closure', () => {
-    const shares = networkShares({ bluesky: 60, threads: 25, facebook: 11, instagram: 3, x: 1 });
+    const shares = networkShares({ bluesky: 60, mastodon: 0, threads: 25, facebook: 11, instagram: 3, x: 1 });
     expect(shares.x.proposal).toBe('rythme minimal');
     expect(shares.bluesky.proposal).toBe('garder');
     expect(shares.facebook.proposal).toBe('garder');
@@ -85,7 +88,7 @@ describe('the decision rules', () => {
     expect(acceptTest({ db }, { network: 'threads', kind: 'heure', value: '+60', hypothesis: 'le soir plus tard' })).toBe(true);
     expect(acceptTest({ db }, { network: 'threads', kind: 'pilier', value: 'x', hypothesis: 'h' })).toBe(false);
     expect(acceptTest({ db }, { network: 'x', kind: 'image', value: 'avec', hypothesis: 'h' })).toBe(false);
-    expect(acceptTest({ db }, { network: 'mastodon', kind: 'heure', value: '+60', hypothesis: 'h' })).toBe(false);
+    expect(acceptTest({ db }, { network: 'linkedin', kind: 'heure', value: '+60', hypothesis: 'h' })).toBe(false);
     db.run("INSERT INTO tests (network, kind, value, hypothesis, start, end, status) VALUES ('threads', 'heure', '+60', 'h', '2026-11-30', '2026-12-27', 'en_cours')");
     expect(acceptTest({ db }, { network: 'threads', kind: 'question_finale', value: 'avec', hypothesis: 'h' })).toBe(false);
   });
