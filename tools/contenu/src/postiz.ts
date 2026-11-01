@@ -11,6 +11,7 @@
  */
 import type { Network } from './config';
 import { fetchJson, type Ctx } from './context';
+import { isVideo, still } from './sources';
 
 const BUDGET = { read: 25, create: 80 } as const;
 const HOUR = 3_600_000;
@@ -47,6 +48,8 @@ export interface Media {
   id: string;
   path: string;
   alt: string;
+  /** A video's cover: the poster the build publishes beside it. Instagram shows it on the Reel. */
+  thumbnail?: string;
 }
 
 /** The settings each network's post needs (docs.postiz.com, providers). */
@@ -104,13 +107,14 @@ export class Postiz {
     return this.call('read', `/analytics/${encodeURIComponent(integrationId)}?date=${days}`);
   }
 
-  /** An image, uploaded once from the site's public address and reused from then on. */
+  /** An image or a video, uploaded once from the site's public address and reused from then on. */
   async media(url: string, alt: string): Promise<Media> {
+    const cover = isVideo(url) ? { thumbnail: still(url) } : {};
     const known = this.ctx.db.get<{ postiz_id: string; postiz_path: string }>('SELECT postiz_id, postiz_path FROM media WHERE url = ?', url);
-    if (known) return { id: known.postiz_id, path: known.postiz_path, alt };
+    if (known) return { id: known.postiz_id, path: known.postiz_path, alt, ...cover };
     const file = await this.call<{ id: string; path: string }>('read', '/upload-from-url', { method: 'POST', body: JSON.stringify({ url }) });
     this.ctx.db.run('INSERT INTO media (url, postiz_id, postiz_path) VALUES (?, ?, ?)', url, file.id, file.path);
-    return { id: file.id, path: file.path, alt };
+    return { id: file.id, path: file.path, alt, ...cover };
   }
 
   /**
@@ -126,7 +130,7 @@ export class Postiz {
       posts: [
         {
           integration: { id: post.integrationId },
-          value: [{ content: post.text, image: post.images.map((m) => ({ id: m.id, path: m.path, alt: m.alt })) }],
+          value: [{ content: post.text, image: post.images.map((m) => ({ id: m.id, path: m.path, alt: m.alt, ...(m.thumbnail ? { thumbnail: m.thumbnail } : {}) })) }],
           settings: settings(post.network, post.story === true),
         },
       ],

@@ -17,7 +17,7 @@ qu'aucune mauvaise position dans Google.
 3. **Les exemples sont inventés.** Un exemple est un article fictif qui ne nomme
    aucun média, aucun journaliste, aucune personnalité, aucun parti, aucune marque.
    Sur le site (glossaire, blog), il est annoncé comme inventé. **Dans les
-   publications et les carrousels, il ne l'est pas** : on le montre comme un passage
+   publications, les carrousels et les vidéos, il ne l'est pas** : on le montre comme un passage
    d'article à lire (« Dans cet article : … », « Un titre : … »), ce qui donne envie de
    chercher ce qui cloche. Il n'est pour autant jamais présenté comme réel : ni « paru
    hier », ni « lu dans la presse », ni rattaché à un média, une date ou un lieu réels.

@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { CALENDAR, fillWindow, resolvePillar, rotate, slotAt, weeksToFill, type Angle, type Pillar, type Slot, type Usage } from './calendar';
+import { CALENDAR, fillWindow, resolvePillar, rotate, slotAt, weeksToFill, withoutVideo, type Angle, type Pillar, type Slot, type Usage } from './calendar';
 import { FACEBOOK_LINKS_PER_MONTH, FRESH_NOTICE_HOURS, NETWORKS, ORIGIN, X_PRICES, type Network } from './config';
 import { addDays, day, weekOf, type Ctx } from './context';
 import { contentReasons, filterPost, linkPolicy, type LinkPolicy } from './filter';
@@ -19,7 +19,7 @@ import { askJson, BudgetExceeded } from './llm';
 import { avoided, consigne, directives, lessonsBlock, networkDirective, type Directive } from './memory';
 import { Postiz, type Integration } from './postiz';
 import { EVERY_NETWORK, testValue } from './strategy';
-import { ARTICLE_SOURCES, NOTION_SOURCES, PRODUCT_PAGES, TEACHER_PAGES, imagesFor, online, pageSource, type Image, type Source } from './sources';
+import { ARTICLE_SOURCES, NOTION_SOURCES, PRODUCT_PAGES, TEACHER_PAGES, imagesFor, isVideo, online, pageSource, still, type Image, type Source } from './sources';
 
 export interface PostRow {
   id: string;
@@ -169,6 +169,8 @@ const ANGLE_BRIEF: Record<Angle, string> = {
   question: 'Angle « la question » : la question de la fiche, posée au lecteur, avec juste assez de l’exemple pour y répondre.',
   long: 'Angle « texte long » : trois à six phrases, l’exemple puis sa lecture.',
   carrousel: 'Légende d’un carrousel qui montre la fiche en images : deux ou trois phrases qui donnent envie de faire défiler, puis « Lien dans la bio ».',
+  video:
+    'Légende d’une courte vidéo sans voix qui montre l’exemple de la fiche, marque le passage fautif, puis nomme le piège : une ou deux phrases qui invitent à le chercher avant la fin, sans le nommer ni recopier les mots de la vidéo, puis la question de la fiche posée au lecteur.',
   page: 'Ce que la page apporte au lecteur, en partant d’un exemple ou d’un geste qu’elle contient.',
   story: 'Une story : l’image parle seule, sans légende.',
 };
@@ -195,11 +197,13 @@ const FORMAT: Record<Network, string> = {
 const MAX_IMAGES: Record<Network, number> = { bluesky: 4, mastodon: 4, x: 4, threads: 10, facebook: 10, instagram: 10 };
 
 /**
- * The images a post carries: on Instagram the carousel, elsewhere one picture
- * or none when the link shows its card. A format test turns a post that carries
- * a picture into the carousel, or the carousel into its one picture.
+ * The images a post carries: its video on a video slot; on Instagram the
+ * carousel, elsewhere one picture or none when the link shows its card. A format
+ * test turns a post that carries a picture into the carousel, or the carousel
+ * into its one picture; it leaves a video as it is.
  */
-export function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null }, t: Tweaks, link: LinkPolicy): Image[] {
+export function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null; video?: Image | null }, t: Tweaks, link: LinkPolicy): Image[] {
+  if (angle === 'video') return imgs.video ? [imgs.video] : [];
   const chosen = defaultImages(network, angle, imgs, t, link);
   if (network === 'instagram' || !t.format || chosen.length === 0) return chosen;
   if (t.format === 'image') return chosen.slice(0, 1);
@@ -255,10 +259,14 @@ async function review(ctx: Ctx, network: Network, text: string, source: Source, 
     user: [
       `Publication pour ${network} :\n"""\n${text}\n"""`,
       `Page source :\n"""\n${source.text.slice(0, 6000)}\n"""`,
-      images.length ? `Images jointes (${images.length}), texte alternatif : ${images.map((i) => i.alt).join(' | ')}` : 'Aucune image.',
+      images.some((i) => isVideo(i.url))
+        ? `Vidéo jointe, sans voix ; son image finale est montrée. Tous les mots qu’elle affiche : ${images.map((i) => i.alt).join(' | ')}`
+        : images.length
+          ? `Images jointes (${images.length}), texte alternatif : ${images.map((i) => i.alt).join(' | ')}`
+          : 'Aucune image.',
       'Réponds {"conforme": true} ou {"conforme": false, "raison": "..."}.',
     ].join('\n\n'),
-    images: images.slice(0, 2).map((i) => i.url),
+    images: images.slice(0, 2).map((i) => still(i.url)),
     maxTokens: 4000,
   });
   return { conforme: answer.conforme === true, raison: String(answer.raison ?? '') };
@@ -290,11 +298,14 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
   const others = journal(ctx, addDays(ctx.now, -56)).map((p) => ({ network: p.network, text: p.text, day: p.slot_at.slice(0, 10), sourceId: p.source_id }));
   const tags = planned.some((p) => p.slot.network === 'mastodon') ? await weekTags(ctx) : [];
   const drafts: Draft[] = [];
-  for (const p of planned) {
+  for (const next of planned) {
+    const imgs = await imagesFor(ctx, next.source);
+    // A notion whose video is not online, or shows older words than the glossary's, keeps the slot's format from before the videos.
+    const p = next.angle === 'video' && !imgs.video ? { ...next, angle: withoutVideo(next.slot.network) } : next;
     const t = tweaks(ctx, p.slot.network, p.at);
     const link = linkFor(ctx, p, others, t);
     const postTags = t.tags === 'sans' ? [] : tags;
-    const images = chooseImages(p.slot.network, p.angle, await imagesFor(ctx, p.source), t, link);
+    const images = chooseImages(p.slot.network, p.angle, imgs, t, link);
     if (p.slot.network === 'instagram' && images.length === 0) {
       drafts.push({ planned: p, text: '', images, status: 'refuse', reason: 'aucune image pour Instagram' });
       continue;
@@ -330,7 +341,7 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
     drafts.push({ planned: p, text: filtered.text, images, status: 'propose', reason: null });
     others.push({ network: p.slot.network, text: filtered.text, day: day(p.at), sourceId: p.source.id });
     // A post on Instagram or Facebook gets its story the same evening, when the build drew one.
-    const story = (p.slot.network === 'instagram' || p.slot.network === 'facebook') && p.source.kind !== 'page' ? (await imagesFor(ctx, p.source)).story : null;
+    const story = (p.slot.network === 'instagram' || p.slot.network === 'facebook') && p.source.kind !== 'page' ? imgs.story : null;
     if (story) drafts.push(await storyDraft(ctx, p, story));
   }
   return drafts;

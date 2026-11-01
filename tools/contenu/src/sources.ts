@@ -26,9 +26,18 @@ export interface Source {
 }
 
 export interface Image {
+  /** An image, or a notion's short video (`.mp4`). */
   url: string;
   alt: string;
 }
+
+/**
+ * What can be looked at of an image or a video: the image itself, or the video's
+ * poster the build publishes beside it (`video.mp4`, `video.jpg`). The Reel's
+ * cover, the reviewer's picture and the report's thumbnail.
+ */
+export const still = (url: string): string => url.replace(/\/video\.mp4$/, '/video.jpg');
+export const isVideo = (url: string): boolean => url.endsWith('.mp4');
 
 export const flat = (segments: Segments): string => segments.map((s) => (typeof s === 'string' ? s : s[0])).join('');
 const texte = (t: Texte): string => (typeof t === 'string' ? t : t.map((p) => (typeof p === 'string' ? p : p.texte)).join(''));
@@ -124,12 +133,15 @@ export async function pageSource(ctx: Pick<Ctx, 'fetch'>, path: string): Promise
 /**
  * The images a post on this source shows: the carousel's slides when the build
  * drew them (`/og/social/<slug>/slides.json`), else the page's share card,
- * else none; and the story drawn beside the carousel (`story.json`), if any. The alternative text always comes from the site, never the model.
+ * else none; the story drawn beside the carousel (`story.json`), if any; and a
+ * notion's short video (`video.json`), published only while it shows the
+ * glossary's current words. The alternative text always comes from the site, never the model.
  */
-export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promise<{ slides: Image[]; card: Image | null; story: Image | null }> {
+export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promise<{ slides: Image[]; card: Image | null; story: Image | null; video: Image | null }> {
   const slug = source.path.split('/').pop();
   let slides: Image[] = [];
   let story: Image | null = null;
+  let video: Image | null = null;
   if (source.kind !== 'page' && slug) {
     try {
       const response = await ctx.fetch(`${ORIGIN}/og/social/${slug}/slides.json`, { signal: AbortSignal.timeout(20_000) });
@@ -142,6 +154,13 @@ export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promis
       if (storyJson.ok) {
         const s = (await storyJson.json()) as { image: string; alt: string };
         if (s.image?.startsWith('/og/social/') && s.alt) story = { url: `${ORIGIN}${s.image}`, alt: s.alt };
+      }
+      if (source.kind === 'notion') {
+        const videoJson = await ctx.fetch(`${ORIGIN}/og/social/${slug}/video.json`, { signal: AbortSignal.timeout(20_000) });
+        if (videoJson.ok) {
+          const v = (await videoJson.json()) as { video: string; alt: string };
+          if (v.video?.startsWith('/og/social/') && isVideo(v.video) && v.alt) video = { url: `${ORIGIN}${v.video}`, alt: v.alt };
+        }
       }
     } catch {
       slides = [];
@@ -156,5 +175,5 @@ export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promis
     const alt = /<meta property="og:image:alt" content="([^"]+)"/.exec(html)?.[1];
     if (url?.startsWith(`${ORIGIN}/`) && alt) card = { url, alt: htmlText(`<body>${alt}</body>`).text };
   }
-  return { slides, card, story };
+  return { slides, card, story, video };
 }
