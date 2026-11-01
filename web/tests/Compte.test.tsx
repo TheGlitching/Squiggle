@@ -29,6 +29,15 @@ function renderWith(account: ReturnType<typeof makeAccount>) {
 }
 
 describe('Compte', () => {
+  it('holds the page open while the account loads, so the footer does not move when it arrives', () => {
+    vi.stubGlobal('fetch', () => new Promise(() => {}));
+    window.history.pushState({}, '', '/compte');
+    const { container } = render(<Compte />);
+    expect(screen.getByRole('status')).toHaveTextContent('Chargement de votre compte');
+    // jsdom has no layout: the reserved height is the classes that stand for it.
+    expect(container.querySelector('.min-h-\\[44rem\\]')).not.toBeNull();
+  });
+
   it('lets a reader subscribe during the trial, before the free analyses run out', async () => {
     renderWith(makeAccount({ usage: { used: 1, limit: 3, remaining: 2, resetsAt: null } }));
     expect(await screen.findByText('Analyse d’essai')).toBeInTheDocument();

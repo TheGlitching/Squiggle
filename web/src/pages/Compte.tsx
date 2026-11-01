@@ -102,8 +102,20 @@ export function Compte() {
   }
 
   if (loading) {
+    // Sized like the loaded page (title, then the three sections), so the footer
+    // does not jump from the viewport's edge to the page's end when the account arrives.
     return (
-      <p className={`${PAGE} py-16 text-muted`}>Chargement de votre compte…</p>
+      <div className={`${PAGE} py-12 md:py-20`} aria-busy="true">
+        <div className="max-w-[55ch]">
+          <h1 className={TITLE}>Mon compte</h1>
+          <p role="status" className="mt-3 mb-0 text-lg text-muted">
+            Chargement de votre compte…
+          </p>
+          <div className="mt-12 min-h-[15rem] border-t border-lineSoft" />
+          <div className="mt-12 min-h-[11rem] border-t border-lineSoft" />
+          <div className="mt-12 min-h-[44rem] border-t border-lineSoft" />
+        </div>
+      </div>
     );
   }
 
