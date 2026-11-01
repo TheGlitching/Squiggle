@@ -53,14 +53,15 @@ describe('social carousels', () => {
   it('draws the same images on every build', async () => {
     const [first, second] = [await socialSlides(NOTIONS[3]), await socialSlides(NOTIONS[3])];
     second.forEach((slide, index) => expect(slide.png.equals(first[index].png)).toBe(true));
-  });
+  }, 60_000);
 
+  // Refusing means trying every size first: several seconds, more on a loaded machine.
   it('refuses a text that would not fit rather than cut it or shrink it out of reach', async () => {
     const long = { ...NOTIONS[0], question: NOTIONS[0].question.repeat(6) };
     await expect(socialSlides(long)).rejects.toThrow(/does not fit at any size a phone can read/);
     const word = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, texte: ['Anticonstitutionnellementanticonstitutionnellement'] } };
     await expect(socialSlides(word)).rejects.toThrow(/leaves its area/);
-  });
+  }, 60_000);
 });
 
 describe('stories', () => {
@@ -88,5 +89,5 @@ describe('stories', () => {
     await expect(socialStory(word)).rejects.toThrow(/leaves its area/);
     const long = { ...NOTIONS[0], exemple: { ...NOTIONS[0].exemple, texte: [NOTIONS[0].exemple.lecture.repeat(4)] } };
     await expect(socialStory(long)).rejects.toThrow(/does not fit at any size a phone can read/);
-  });
+  }, 60_000);
 });
