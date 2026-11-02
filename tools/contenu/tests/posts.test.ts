@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CALENDAR } from '../src/calendar';
 import type { Ctx } from '../src/context';
 import { MASTODON_TAGS, pickTags, weekTags } from '../src/hashtags';
-import { chooseImages, linkFor, type Tweaks } from '../src/posts';
+import { chooseImages, linkFor, videoSlotOf, type Tweaks } from '../src/posts';
 import type { Image } from '../src/sources';
 
 // The routine's database is Node's own SQLite (22.13 and later, the VPS runs 24).
@@ -117,5 +117,27 @@ describe('Mastodon’s hashtags', () => {
     expect(calls).toHaveLength(MASTODON_TAGS.length * 3);
     fail = true;
     expect(await weekTags({ ...ctx, now: new Date('2026-11-09T04:00:00.000Z') } as Ctx)).toEqual(['Éducation', 'EspritCritique', 'Enseignement']);
+  });
+});
+
+describe('a video slot filled without its video', () => {
+  const row = (network: 'bluesky' | 'instagram' | 'facebook' | 'threads' | 'mastodon', slot_at: string, angle: 'exemple' | 'carrousel' | 'long' | 'story' | 'video' = 'exemple') => ({ network, week: '2026-11-09', slot_at, pillar: 'notion' as const, angle });
+
+  it('finds the four video slots of a week, Paris time, whatever format stood in for the video', () => {
+    expect(videoSlotOf(row('bluesky', '2026-11-09T11:15:00.000Z'))?.weekday).toBe(1);
+    expect(videoSlotOf(row('instagram', '2026-11-09T18:00:00.000Z', 'carrousel'))?.weekday).toBe(1);
+    expect(videoSlotOf(row('facebook', '2026-11-10T17:30:00.000Z', 'long'))?.weekday).toBe(2);
+    expect(videoSlotOf(row('threads', '2026-11-13T17:30:00.000Z'))?.weekday).toBe(5);
+    // Moved by an hour's test, still its slot.
+    expect(videoSlotOf(row('threads', '2026-11-13T18:30:00.000Z'))?.weekday).toBe(5);
+  });
+
+  it('leaves every other post alone', () => {
+    expect(videoSlotOf(row('instagram', '2026-11-09T20:00:00.000Z', 'story'))).toBeNull();
+    expect(videoSlotOf(row('bluesky', '2026-11-09T11:15:00.000Z', 'video'))).toBeNull();
+    expect(videoSlotOf(row('mastodon', '2026-11-09T11:30:00.000Z'))).toBeNull();
+    expect(videoSlotOf(row('threads', '2026-11-09T17:30:00.000Z'))).toBeNull();
+    expect(videoSlotOf(row('instagram', '2026-11-11T18:00:00.000Z', 'carrousel'))).toBeNull();
+    expect(videoSlotOf({ ...row('bluesky', '2026-11-09T11:15:00.000Z'), pillar: 'fond' })).toBeNull();
   });
 });

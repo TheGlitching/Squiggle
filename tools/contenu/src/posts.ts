@@ -20,7 +20,7 @@ import { weekTags } from './hashtags';
 import { askJson, BudgetExceeded } from './llm';
 import { avoided, consigne, directives, lessonsBlock, networkDirective, type Directive } from './memory';
 import { Postiz, type Integration } from './postiz';
-import { EVERY_NETWORK, testValue } from './strategy';
+import { EVERY_NETWORK, testValue, weekGuidance } from './strategy';
 import { ARTICLE_SOURCES, NOTION_SOURCES, PRODUCT_PAGES, TEACHER_PAGES, imagesFor, isVideo, online, pageSource, still, type Image, type Source } from './sources';
 
 export interface PostRow {
@@ -99,6 +99,8 @@ export interface Planned {
   pillar: Pillar;
   angle: Angle;
   source: Source;
+  /** The post this one takes the place of (`upgradeVideoSlots`): its text does not count as a repeat, and its story stays. */
+  replaces?: string;
 }
 
 /** Search Console impressions of a source's page over 28 days: what puts a known notion first in rotation. */
@@ -372,7 +374,11 @@ export function linkFor(ctx: Pick<Ctx, 'db'>, p: Pick<Planned, 'slot' | 'pillar'
 /** Drafts, filters and reviews a list of planned posts, in order, each judged against those already accepted. */
 export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string): Promise<Draft[]> {
   const paths = await sitePaths(ctx);
-  const others = journal(ctx, addDays(ctx.now, -56)).map((p) => ({ network: p.network, text: p.text, day: p.slot_at.slice(0, 10), sourceId: p.source_id }));
+  const replaced = new Set(planned.map((p) => p.replaces));
+  // A story is the picture that goes with a post, not a post of its own: it never makes another one a repeat.
+  const others = journal(ctx, addDays(ctx.now, -56))
+    .filter((p) => !replaced.has(p.id) && p.angle !== 'story')
+    .map((p) => ({ network: p.network, text: p.text, day: p.slot_at.slice(0, 10), sourceId: p.source_id }));
   const tags = planned.some((p) => p.slot.network === 'mastodon') ? await weekTags(ctx) : [];
   const drafts: Draft[] = [];
   for (const next of planned) {
@@ -419,7 +425,7 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
     if (settled.status !== 'propose') continue;
     others.push({ network: p.slot.network, text: settled.text, day: day(p.at), sourceId: p.source.id });
     // A post on Instagram or Facebook gets its story the same evening, when the build drew one.
-    const story = (p.slot.network === 'instagram' || p.slot.network === 'facebook') && p.source.kind !== 'page' ? imgs.story : null;
+    const story = (p.slot.network === 'instagram' || p.slot.network === 'facebook') && p.source.kind !== 'page' && !p.replaces ? imgs.story : null;
     if (story) drafts.push(await storyDraft(ctx, p, story));
   }
   return drafts;
@@ -611,6 +617,51 @@ export async function declineFresh(ctx: Ctx, source: Source): Promise<PostRow[]>
     }
   }
   return schedule(ctx, drafts, integrations, true);
+}
+
+/**
+ * A video slot filled while its notion had no video online (`withoutVideo`)
+ * takes the video once it is there (`contenu videos`): same notion, same hour,
+ * redrafted as a video. The new post waits for the owner's « ok » like every
+ * other (D8), so only slots at least 48 hours out are redone; the post it
+ * replaces leaves Postiz and goes back to the journal as `rendu`, and stays
+ * where its video was refused. `except` keeps some posts as they are, by number.
+ */
+export async function upgradeVideoSlots(ctx: Ctx, except: readonly number[]): Promise<PostRow[]> {
+  const earliest = addDays(ctx.now, FRESH_NOTICE_HOURS / 24).toISOString();
+  const held = ctx.db.all<PostRow>("SELECT * FROM posts WHERE slot_at >= ? AND status IN ('en_attente', 'programme', 'brouillon_postiz') ORDER BY slot_at", earliest);
+  const planned: Planned[] = [];
+  for (const row of held) {
+    const slot = videoSlotOf(row);
+    const source = NOTION_SOURCES.find((s) => s.id === row.source_id);
+    if (!slot || !source || (row.num !== null && except.includes(row.num))) continue;
+    if (!(await imagesFor(ctx, source)).video) continue;
+    planned.push({ slot, at: new Date(row.slot_at), week: row.week, pillar: 'notion', angle: 'video', source, replaces: row.id });
+  }
+  const postiz = new Postiz(ctx);
+  const replacing: Draft[] = [];
+  for (const d of await writePosts(ctx, planned, weekGuidance(ctx))) {
+    if (d.status !== 'propose' || d.planned.angle !== 'video') continue;
+    const old = held.find((r) => r.id === d.planned.replaces)!;
+    if (!ctx.dry) {
+      try {
+        if (old.postiz_id) await postiz.delete(old.postiz_id);
+      } catch (error) {
+        ctx.log(`  ${old.network} ${day(new Date(old.slot_at))} : gardée, Postiz ne l’a pas supprimée (${(error as Error).message})`);
+        continue;
+      }
+      ctx.db.run("UPDATE posts SET status = 'rendu', reason = 'cède la place à sa vidéo' WHERE id = ?", old.id);
+    }
+    replacing.push(d);
+  }
+  return schedule(ctx, replacing, [], true);
+}
+
+/** The calendar's video slot a notion post holds without its video, if it holds one: the same network, within two hours (a test may move it). */
+export function videoSlotOf(row: Pick<PostRow, 'network' | 'week' | 'slot_at' | 'pillar' | 'angle'>): Slot | null {
+  if (row.pillar !== 'notion' || row.angle === 'video' || row.angle === 'story') return null;
+  const at = Date.parse(row.slot_at);
+  return CALENDAR.find((s) => s.angle === 'video' && s.network === row.network && Math.abs(slotAt(row.week, s).getTime() - at) <= 2 * 3_600_000) ?? null;
 }
 
 /** The stop lever: every future post the routine scheduled is deleted from Postiz. Posts placed by hand stay. */

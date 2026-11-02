@@ -10,8 +10,9 @@
 import { typo } from '../../../web/src/glossaire';
 import type { Pillar } from './calendar';
 import { ORIGIN, REPO, type Network } from './config';
+import { postizLength } from './postiz';
 
-/** Longest text each network takes, counted in graphemes, link included. */
+/** Longest text each network takes, counted in graphemes, link included, and as Postiz counts it. */
 export const MAX_LENGTH: Record<Network, number> = {
   x: 280,
   bluesky: 300,
@@ -209,7 +210,8 @@ export function filterPost(input: FilterInput): FilterResult {
   const text = typography(input.text.trim());
   const reasons: string[] = [];
 
-  const length = graphemes(text);
+  // Postiz refuses on its own count, which can exceed the network's (a byte per accent on Threads).
+  const length = Math.max(graphemes(text), postizLength(input.network, text));
   if (length > MAX_LENGTH[input.network]) reasons.push(`trop long pour ${input.network} : ${length} sur ${MAX_LENGTH[input.network]}`);
   if (length < 40) reasons.push('trop court pour dire quelque chose');
 

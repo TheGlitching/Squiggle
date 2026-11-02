@@ -61,6 +61,27 @@ function settings(network: Network, story: boolean): Record<string, unknown> {
   return { __type: network };
 }
 
+/**
+ * The text as it is sent to Postiz. Postiz v2.25.3 measures a post on its HTML
+ * serialisation (parse5, `posts.service` then `count.length`), where a no-break
+ * space becomes `&nbsp;`, six characters: a Bluesky post of 293 graphemes counted
+ * 308 and was refused. The narrow no-break space is not escaped, so it keeps the
+ * French spacing unbroken and counts one. Publication is not affected either way:
+ * a text without tags reaches the network as stored.
+ */
+export function postizText(text: string): string {
+  return text.replace(/ /g, ' ');
+}
+
+/** A post's length as Postiz counts it before refusing it (`count.length.ts`): UTF-16 units, bytes on Threads. */
+export function postizLength(network: Network, text: string): number {
+  const html = postizText(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (network === 'threads') return new TextEncoder().encode(html).length;
+  // ponytail: X's weighting (twitter-text) is approximated by its one case the routine writes, the narrow space weighing 2; an emoji weighs 2 too.
+  if (network === 'x') return [...new Intl.Segmenter('fr', { granularity: 'grapheme' }).segment(html)].length + (html.match(/ /g)?.length ?? 0);
+  return html.length;
+}
+
 export class Postiz {
   constructor(private readonly ctx: Ctx) {}
 
@@ -130,7 +151,7 @@ export class Postiz {
       posts: [
         {
           integration: { id: post.integrationId },
-          value: [{ content: post.text, image: post.images.map((m) => ({ id: m.id, path: m.path, alt: m.alt, ...(m.thumbnail ? { thumbnail: m.thumbnail } : {}) })) }],
+          value: [{ content: postizText(post.text), image: post.images.map((m) => ({ id: m.id, path: m.path, alt: m.alt, ...(m.thumbnail ? { thumbnail: m.thumbnail } : {}) })) }],
           settings: settings(post.network, post.story === true),
         },
       ],
