@@ -69,6 +69,18 @@ describe('a post’s pictures', () => {
     expect(chooseImages('bluesky', 'video', imgs, none, 'required')).toEqual([]);
   });
 
+  it('sends the spoken video to Bluesky alone, and the silent one in a voice test’s silent weeks', () => {
+    const [video, spoken]: Image[] = ['video', 'video-voix'].map((name) => ({ url: `https://squiggle.fr/og/social/faux-dilemme/${name}.mp4`, alt: 'Où est le piège ?' }));
+    expect(chooseImages('bluesky', 'video', { ...imgs, video, spoken }, none, 'required')).toEqual([spoken]);
+    expect(chooseImages('bluesky', 'video', { ...imgs, video, spoken }, { ...none, voice: 'parlee' }, 'required')).toEqual([spoken]);
+    expect(chooseImages('bluesky', 'video', { ...imgs, video, spoken }, { ...none, voice: 'muette' }, 'required')).toEqual([video]);
+    expect(chooseImages('bluesky', 'video', { ...imgs, video }, none, 'required')).toEqual([video]);
+    // Meta wants its label on a synthetic voice, which Postiz cannot set: never spoken there.
+    for (const network of ['instagram', 'facebook', 'threads'] as const) {
+      expect(chooseImages(network, 'video', { ...imgs, video, spoken }, { ...none, voice: 'parlee' }, 'none')).toEqual([video]);
+    }
+  });
+
   it('turns one picture into the carousel, or the carousel into one picture, under a format test', () => {
     expect(chooseImages('bluesky', 'exemple', imgs, { ...none, format: 'carrousel' }, 'required')).toEqual(imgs.slides);
     expect(chooseImages('facebook', 'long', imgs, { ...none, format: 'image' }, 'none')).toEqual([img(1)]);

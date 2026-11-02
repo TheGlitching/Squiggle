@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Homme de paille. Déformer la position de quelqu’un pour la réfuter plus facilement.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 6.0825,
+  "heard": "le piège homme de paille déformer la position de quelqu'un pour la réfuter plus facilement"
+}

@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Pente savonneuse. Affirmer qu’un premier pas mènera forcément, de proche en proche, à une catastrophe.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 7.842958,
+  "heard": "le piège pente savonneuse affirmez qu'un premier pas mènera forcément de proche en proche à une catastrophe"
+}
