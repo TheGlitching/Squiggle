@@ -1109,9 +1109,10 @@ describe('Analyser, from the clipboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
     await waitFor(() => expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(`${first}\n${second}\n${third}`));
 
+    // The notice of the first passage is still on screen: wait for the next one, not for any.
     clipboard(async () => '');
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la suite' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(/appuyez longuement à la fin du texte, puis Coller/);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/appuyez longuement à la fin du texte, puis Coller/));
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveFocus();
   });
 
@@ -1191,7 +1192,7 @@ describe('Analyser, from screenshots', () => {
     render(<Analyser />);
     await userEvent.upload(screen.getByTestId('fichier'), [image('capture-1.png'), image('capture-2.png')]);
 
-    expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu sur 2 captures, sur cet appareil : aucune image n’a été envoyée/);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Texte lu sur 2 captures, sur cet appareil : aucune image n’a été envoyée/));
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(TEXT);
     expect(vi.mocked(readCaptures).mock.calls[0][0].map((file) => (file as File).name)).toEqual(['capture-1.png', 'capture-2.png']);
     // Nothing is analysed, and no image goes anywhere: only the counters, by kind and by bucket.
@@ -1298,7 +1299,7 @@ describe('Analyser, from a PDF', () => {
     render(<Analyser />);
     await userEvent.upload(screen.getByTestId('fichier'), file());
 
-    expect(await screen.findByRole('status')).toHaveTextContent(/Texte lu dans le PDF \(3 pages\), sur cet appareil : le fichier n’a pas été envoyé/);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Texte lu dans le PDF \(3 pages\), sur cet appareil : le fichier n’a pas été envoyé/));
     expect(screen.getByLabelText('Texte de l’article ou du message')).toHaveValue(paragraphs.join('\n'));
     expect(screen.getByLabelText(/Titre/)).toHaveValue('Bilan démographique 2025');
     expect(seen.some((s) => s.url.startsWith('/web/analyze/'))).toBe(false);
