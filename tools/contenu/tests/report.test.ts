@@ -27,6 +27,7 @@ function post(num: number, network: PostRow['network'], slot: string, text: stri
     postiz_id: null,
     created_at: '2026-11-02T05:00:00Z',
     num,
+    attempts: 1,
     ...extra,
   };
 }
@@ -94,6 +95,21 @@ describe('the weekly report', () => {
   it('says a refused post plainly, at the bottom', () => {
     expect(report.text).toContain('Bluesky jeudi 26 novembre, refusée par le contrôle : trop longue pour ce réseau');
     expect(plainReason('relecture : relecture impossible : réponse coupée')).toBe('la relecture n’a pas pu se faire');
+  });
+
+  it('tells a post rewritten then accepted from one set aside after its tries', () => {
+    const r = buildReport(
+      input({
+        entering: [
+          post(1, 'x', '2026-11-23T11:00:00.000Z', 'Écrans : il faut choisir.', { attempts: 2, reason: 'filtre : trop long pour x : 291 sur 280' }),
+          post(2, 'bluesky', '2026-11-26T17:30:00.000Z', 'Encore trop long', { status: 'refuse', reason: 'filtre : trop long pour bluesky : 302 sur 300', num: null, attempts: 3 }),
+        ],
+      }),
+      null,
+    );
+    expect(r.text).toContain('Réécrites puis acceptées (1) : X lundi 23 novembre, au 2e essai (la première version était refusée par le contrôle : trop longue pour ce réseau).');
+    expect(r.text).toContain('Bluesky jeudi 26 novembre, refusée par le contrôle : trop longue pour ce réseau, après 3 essais');
+    expect(report.text).not.toContain('Réécrites puis acceptées');
   });
 
   it('keeps empty sections to one line, and says too little data once', () => {

@@ -128,8 +128,13 @@ export async function chooseSubject(ctx: Ctx, gsc: GscData | undefined): Promise
   return null;
 }
 
-const Segments = z.array(z.union([z.string(), z.tuple([z.string()])]));
-const Exemple = z.object({ rubrique: z.string().min(2), titre: Segments.min(1), texte: Segments.min(1), lecture: z.string().min(20) });
+/**
+ * A title or a text in segments, a fragile passage set apart in its own array, as
+ * the glossary stores it. A title without a fragile passage often comes back as a
+ * plain string: it is the same text, one segment long.
+ */
+const Segments = z.preprocess((v) => (typeof v === 'string' ? [v] : v), z.array(z.union([z.string(), z.tuple([z.string()])])).min(1));
+const Exemple = z.object({ rubrique: z.string().min(2), titre: Segments, texte: Segments, lecture: z.string().min(20) });
 const Texte = z.union([z.string(), z.array(z.union([z.string(), z.object({ texte: z.string(), vers: z.string() })]))]);
 const Bloc = z.union([
   z.object({ intertitre: z.string() }).strict(),
@@ -151,7 +156,7 @@ const ArticleShape = z.object({
   notions: z.array(z.string()).min(1),
   corps: z.array(Bloc).min(6),
 });
-const Enrichment = z.object({
+export const Enrichment = z.object({
   exemples: z.array(Exemple).max(3).default([]),
   aussi: z.array(z.string().min(2).max(60)).max(4).default([]),
   description: z.string().max(160).optional(),
@@ -184,7 +189,7 @@ function links(corps: readonly z.infer<typeof Bloc>[]): string[] {
 async function produceFiche(ctx: Ctx, subject: Subject): Promise<Production> {
   const n = findNotion(subject.slug)!;
   const source = notionSource(n);
-  const answer = await askJson<unknown>(ctx, {
+  const parsed = await askJson(ctx, {
     purpose: 'enrichissement',
     system: [consigne(ctx, 'ligne-editoriale'), consigne(ctx, 'contenu-de-fond'), lessonsBlock(ctx)].filter(Boolean).join('\n\n---\n\n'),
     user: [
@@ -196,8 +201,7 @@ async function produceFiche(ctx: Ctx, subject: Subject): Promise<Production> {
       .filter(Boolean)
       .join('\n\n'),
     maxTokens: 5000,
-  });
-  const parsed = Enrichment.parse(answer);
+  }, Enrichment);
   const set = (s: string) => typography(s);
   const exemples = parsed.exemples.map((e) => ({
     rubrique: set(e.rubrique),
@@ -237,7 +241,7 @@ async function produceArticle(ctx: Ctx, subject: Subject): Promise<Production> {
   });
   const material = related.slice(0, 6);
   const paths = await sitePaths(ctx);
-  const answer = await askJson<unknown>(ctx, {
+  const parsed = await askJson(ctx, {
     purpose: 'article',
     system: [consigne(ctx, 'ligne-editoriale'), consigne(ctx, 'contenu-de-fond'), lessonsBlock(ctx)].filter(Boolean).join('\n\n---\n\n'),
     user: [
@@ -247,8 +251,7 @@ async function produceArticle(ctx: Ctx, subject: Subject): Promise<Production> {
       'Écris un article de méthode selon la structure de la consigne, dans la forme JSON d’un `Article` sans slug ni date : {"titre", "titreCourt": "le titre de la couverture du carrousel, quelques mots", "description", "chapo", "notions": [slugs], "corps": [blocs]}. Les blocs permis : {"intertitre"}, {"sousTitre"}, {"paragraphe"}, {"liste"}, {"etapes"}, {"encadre": {"titre", "points"}}, {"tableau": {"legende", "colonnes", "lignes"}}, {"questions": [{"question", "reponse"}]}, {"sommaire": true}, {"exemple": {"rubrique", "titre", "texte", "lecture"}}. Un lien dans un texte : ["avant ", {"texte": "...", "vers": "/glossaire/..."}, " après"].',
     ].join('\n\n'),
     maxTokens: 12000,
-  });
-  const parsed = ArticleShape.parse(answer);
+  }, ArticleShape);
   const article: Article = { slug: subject.slug, publie: day(ctx.now), ...(JSON.parse(typographyDeep(JSON.stringify(parsed))) as typeof parsed) };
   const source = articleSource(article);
   const problems = [
