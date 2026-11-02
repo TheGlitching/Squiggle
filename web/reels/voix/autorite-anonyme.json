@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Autorité non nommée. « Des experts », « une étude » : une autorité invoquée sans que l’on sache qui parle.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 8.472417
+  "seconds": 8.768708,
+  "heard": "le piège autorité non nommée des experts une étude une autorité invoquée sans que l'on sache qui parle"
 }

@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Source absente. Un fait vérifiable avancé sans dire d’où il vient.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 5.420167
+  "seconds": 5.298875,
+  "heard": "le piège source absente un fait vérifiable avancé sans dire d'où il vient"
 }

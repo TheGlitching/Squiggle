@@ -9,7 +9,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { NOTIONS, typo, type Segments } from '../src/glossaire';
-import { REEL_FPS, REEL_HEIGHT, REEL_WIDTH, VOICE, narration, reel, reelSource, reelText, spokenAt, spokenSource, timeline } from '../src/reel';
+import { REEL_FPS, REEL_HEIGHT, REEL_WIDTH, VOICE, misheard, narration, reel, reelSource, reelText, spokenAt, spokenSource, spokenWords, timeline } from '../src/reel';
 
 const plain = (segments: Segments) => segments.map((part) => (typeof part === 'string' ? part : part[0])).join('');
 const folded = (text: string) => text.replace(/[\u00a0\u202f]/g, ' ');
@@ -69,13 +69,30 @@ describe('the short video of a notion', () => {
       expect(NOTIONS.some((notion) => notion.slug === slug), record).toBe(true);
       expect(existsSync(new URL(`${name}.mp4`, dir)), name).toBe(true);
       expect(existsSync(new URL(`${slug}.jpg`, dir)), slug).toBe(true);
-      expect(Object.keys(JSON.parse(readFileSync(new URL(record, dir), 'utf8')))).toEqual(['source', 'seconds']);
+      expect(Object.keys(JSON.parse(readFileSync(new URL(record, dir), 'utf8')))).toEqual(name === slug ? ['source', 'seconds'] : ['source', 'seconds', 'takes']);
     }
     expect(files.every((file) => /^[a-z-]+(\.voix)?\.(mp4|json)$|^[a-z-]+\.jpg$/.test(file)), files.join(' ')).toBe(true);
   });
 });
 
 describe('its spoken version', () => {
+  it('holds a transcript against its line, word for word, case, accents and punctuation aside', () => {
+    const line = 'Le piège : Faux dilemme. Présenter deux options comme les seules possibles, alors que d’autres existent.';
+    expect(misheard(line, "le piège faux dilemme présenter deux options comme les seules possibles alors que d'autres existent")).toBeNull();
+    expect(misheard(line, 'Le piège : faux dilemme. Présenter des options comme les seules possibles, alors que d’autres existent.')).toBe('« deux » heard as « des »');
+    expect(misheard(line, 'Le piège : faux dilemme. Présenter deux options comme les seules possibles.')).toBe('« alors que d autres existent » heard as «  »');
+    expect(misheard('Où est le piège ?', 'Lisez ceci. Où est le piège ?')).toBe('«  » heard as « lisez ceci »');
+    expect(spokenWords('L’argument d’autorité')).toEqual(['l', 'argument', 'd', 'autorite']);
+    // Homophones the transcript chose are what the listener hears: not a fault of the voice.
+    expect(misheard(line, 'Le piège : faux dilemme. Présenté deux options comme les seuls possibles, alors que d’autres exist.')).toBeNull();
+    expect(misheard('Où est le piège ?', 'Où elle piège')).toBeNull();
+    expect(misheard('Le piège : Attaque ad hominem.', 'le piège attaque a dominem')).toBeNull();
+    expect(misheard('Un titre ou un chapô', 'un titre ou un chapeau')).toBeNull();
+    expect(misheard('Opinion présentée comme un fait', 'opinion présenté comme un fait')).toBeNull();
+    expect(misheard('Le piège : Procès d’intention. Prêter à quelqu’un', 'le piège procède intention prêtez à quelqu un')).toBeNull();
+    expect(misheard('Où est le piège ?', 'Où est le piège ? Où est le piège ?')).not.toBeNull();
+  });
+
   it('says only words the screen shows, so they stay its subtitles', () => {
     for (const notion of NOTIONS) {
       const { question, answer } = narration(notion);
@@ -99,14 +116,16 @@ describe('its spoken version', () => {
     expect(spokenSource({ ...notion, question: 'Autre chose ?' })).toBe(spokenSource(notion));
   });
 
-  it('keeps each line it said with the voice that said it', () => {
+  it('keeps each line with the voice that said it, and a transcript that says it word for word', () => {
     const dir = new URL('../reels/voix/', import.meta.url);
     if (!existsSync(dir)) return;
     for (const record of readdirSync(dir).filter((file) => file.endsWith('.json'))) {
-      const { said, seconds } = JSON.parse(readFileSync(new URL(record, dir), 'utf8'));
+      const { said, seconds, heard } = JSON.parse(readFileSync(new URL(record, dir), 'utf8'));
       expect(existsSync(new URL(record.replace(/\.json$/, '.m4a'), dir)), record).toBe(true);
-      expect(said.voice, record).toEqual(VOICE);
+      expect(said.voice, record).toEqual({ model: VOICE.model, name: VOICE.name, language: VOICE.language });
+      expect(Object.values(VOICE.prompts), record).toContain(said.prompt);
       expect(seconds, record).toBeGreaterThan(0);
+      expect(misheard(said.text, heard ?? ''), record).toBeNull();
     }
   });
 });

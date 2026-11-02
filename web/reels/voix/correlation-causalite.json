@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Corrélation prise pour causalité. Conclure qu’une chose cause l’autre parce qu’elles vont ensemble.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 6.520333
+  "seconds": 6.692667,
+  "heard": "le piège corrélation prise pour causalité conclure qu'une chose cause l'autre parce qu'elles vont ensemble"
 }

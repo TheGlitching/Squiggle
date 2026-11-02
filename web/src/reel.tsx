@@ -68,13 +68,84 @@ export const VOICE = {
   model: 'gemini-2.5-flash-tts',
   name: 'Kore',
   language: 'fr-FR',
-  // A calm reading came out at ten characters a second, too slow for a short video; this one at about sixteen.
-  prompt: 'Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases.',
+  prompts: {
+    // Given the answers' longer prompt, the model said the four words of the question again and again,
+    // once with a piece of the prompt among them; a prompt this short, it says them once.
+    question: 'Pose cette question une seule fois, d’un ton naturel et intrigué.',
+    // A calm reading came out at ten characters a second, too slow for a short video; this one at
+    // about sixteen. Without « une seule fois », some lines came out twice, every take.
+    answer: 'Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.',
+  },
 } as const;
 
 /** What the voice says, word for word what the screen shows: the question, then the answer. */
 export function narration(notion: Notion): { question: string; answer: string } {
   return { question: 'Où est le piège ?', answer: `Le piège : ${ended(notion.nom)} ${notion.resume}` };
+}
+
+/**
+ * The words of a line as a listener hears them: case, accents, punctuation and
+ * apostrophes do not count, so a transcript can be held against the text.
+ */
+export function spokenWords(text: string): string[] {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * A word as French says it, roughly: the endings it does not pronounce dropped
+ * (« seules » and « seuls », « présenter » and « présenté », « existent » and
+ * « exist », « procès d’ » and « procède » sound the same), so a transcript that
+ * wrote a homophone is not taken for a voice that misspoke. It works on the
+ * accented word: an « è » is said, a plain final « e » is not.
+ */
+function sound(word: string): string {
+  return (
+    word
+      // « ad hominem » and « a dominem »: an h is silent, the d of « ad » is not.
+      .replace(/(?<![cpst])h/g, '')
+      // « chapô » and « chapeau ».
+      .replace(/e?au/g, 'o')
+      .replace(/^(..+?)[sx]$/, '$1')
+      .replace(/(.{3,})ent$/, '$1')
+      .replace(/e[rzt]$/, 'é')
+      // A final t or d is silent only where it ends the word: the d of « procède » is said.
+      .replace(/(..)[td]$/, '$1')
+      .replace(/(.)s$/, '$1')
+      .replace(/(.)e+$/, '$1')
+  );
+}
+
+/** A line as one run of sounds: where the words break does not count (« est le » is heard as « elle »). */
+const sounds = (text: string) =>
+  text
+    .normalize('NFC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .map(sound)
+    .join('')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/(.)\1+/g, '$1');
+
+/**
+ * How a transcript of a take differs from its line, or null when it sounds the
+ * same: a word added, left out or said as another is a take to throw away; a
+ * homophone the transcript chose is not.
+ */
+export function misheard(text: string, heard: string): string | null {
+  const [want, got] = [spokenWords(text), spokenWords(heard)];
+  if (sounds(text) === sounds(heard)) return null;
+  let start = 0;
+  while (start < want.length && want[start] === got[start]) start += 1;
+  let end = 0;
+  while (end < want.length - start && end < got.length - start && want[want.length - 1 - end] === got[got.length - 1 - end]) end += 1;
+  return `« ${want.slice(start, want.length - end).join(' ')} » heard as « ${got.slice(start, got.length - end).join(' ')} »`;
 }
 
 /** When each line starts, in seconds: with the heading, and with the answer. */

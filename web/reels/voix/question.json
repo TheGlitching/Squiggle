@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Où est le piège ?",
+    "prompt": "Pose cette question une seule fois, d’un ton naturel et intrigué.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 2.633417
+  "seconds": 1.264125,
+  "heard": "où est le piège"
 }

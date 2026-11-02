@@ -15,13 +15,15 @@
  * It needs ffmpeg on the PATH (`brew install ffmpeg`), and runs on a computer,
  * not on the VPS: a video takes a minute or so to draw. A spoken line not yet in
  * `reels/voix/` is synthesised by Google Cloud's Text-to-Speech (`VOICE` in
- * `src/reel.tsx`), which needs gcloud logged in and, in the environment,
+ * `src/reel.tsx`), and a take is kept only once Speech-to-Text hears in it the
+ * line's words and nothing else (`misheard`). Both need gcloud logged in and, in the environment,
  * `SQUIGGLE_TTS_PROJECT`, the Google Cloud project that pays for it (and
  * `SQUIGGLE_GCLOUD_ACCOUNT`, the gcloud account to ask with, when it is not the
  * active one). Without them, the silent videos are still rendered and the
  * spoken ones that need a new line are left as they were.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 
 import { createServer } from 'vite';
@@ -106,49 +108,99 @@ function probe(file) {
 /** Text-to-Speech is not set up here: the spoken versions that need a new line wait. */
 class NoVoice extends Error {}
 
-/** One line said by `voice`, as WAV audio, from Google Cloud's Text-to-Speech. */
-async function synthesize(text, voice) {
+/** A call to a Google Cloud API, on the project and with the gcloud account the environment names. */
+async function google(url, body) {
   const project = process.env.SQUIGGLE_TTS_PROJECT;
   if (!project) throw new NoVoice('SQUIGGLE_TTS_PROJECT is not set');
   const account = process.env.SQUIGGLE_GCLOUD_ACCOUNT;
   const token = spawnSync('gcloud', ['auth', 'print-access-token', ...(account ? [`--account=${account}`] : [])], { encoding: 'utf8' });
   if (token.status !== 0) throw new NoVoice(`gcloud: ${token.stderr.trim()}`);
-  const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { authorization: `Bearer ${token.stdout.trim()}`, 'x-goog-user-project': project, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      input: { prompt: voice.prompt, text },
-      voice: { languageCode: voice.language, name: voice.name, modelName: voice.model },
-      audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000 },
-    }),
+    body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Text-to-Speech: HTTP ${response.status} ${(await response.text()).slice(0, 300)}`);
-  return Buffer.from((await response.json()).audioContent, 'base64');
+  if (!response.ok) throw new Error(`${new URL(url).hostname}: HTTP ${response.status} ${(await response.text()).slice(0, 300)}`);
+  return response.json();
+}
+
+/** One line said by `voice` as `prompt` asks, as WAV audio, from Google Cloud's Text-to-Speech. */
+async function synthesize(text, prompt, voice) {
+  const answer = await google('https://texttospeech.googleapis.com/v1/text:synthesize', {
+    input: { prompt, text },
+    voice: { languageCode: voice.language, name: voice.name, modelName: voice.model },
+    audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000 },
+  });
+  return Buffer.from(answer.audioContent, 'base64');
+}
+
+/**
+ * What Google Cloud's Speech-to-Text hears in a take, its best guess first and
+ * its alternatives after: the check that the voice said the line, all of it and
+ * nothing else.
+ */
+async function transcribe(file, language, hints = []) {
+  const flac = `${file}.flac`;
+  // A take is cut to its first and last sound; without silence after it, the last word went unheard (« croient »).
+  await ffmpeg(['-i', file, '-af', 'adelay=300:all=1,apad=pad_dur=0.8', '-ac', '1', '-ar', '16000', '-c:a', 'flac', flac]);
+  const content = readFileSync(flac).toString('base64');
+  rmSync(flac);
+  const answer = await google('https://speech.googleapis.com/v1/speech:recognize', {
+    config: {
+      ...{ encoding: 'FLAC', sampleRateHertz: 16000, languageCode: language, model: 'latest_long', maxAlternatives: 5 },
+      // The notion's name, a rare phrase the recogniser would otherwise turn into common words (« procès d’intention » as « procédé intention »).
+      ...(hints.length ? { speechContexts: [{ phrases: hints, boost: 10 }] } : {}),
+    },
+    audio: { content },
+  });
+  const results = answer.results ?? [];
+  const most = Math.max(1, ...results.map((result) => result.alternatives?.length ?? 0));
+  return Array.from({ length: most }, (_, index) =>
+    results
+      .map((result) => result.alternatives?.[Math.min(index, result.alternatives.length - 1)]?.transcript ?? '')
+      .join(' ')
+      .trim(),
+  );
+}
+
+/** The guess that says the line, if one does, else the best one with what it got wrong. */
+function closest(text, guesses) {
+  const fits = guesses.find((guess) => !reelModule.misheard(text, guess));
+  return fits !== undefined ? { heard: fits, wrong: null } : { heard: guesses[0] ?? '', wrong: reelModule.misheard(text, guesses[0] ?? '') };
 }
 
 /**
  * A spoken line, synthesised once and kept in `reels/voix/<id>.m4a` with what was
- * said and by which voice: the same line by the same voice is never asked for
- * twice, and a re-rendered video keeps the take it had.
+ * said, by which voice, and what Speech-to-Text heard in it: the same line by the
+ * same voice is never asked for twice, a re-rendered video keeps the take it had,
+ * and no take is kept that does not say the line word for word.
  */
-async function line(id, text, voice) {
+async function line(id, text, prompt, voice, hints = []) {
   const [audio, meta] = ['m4a', 'json'].map((type) => new URL(`${id}.${type}`, lines).pathname);
-  const said = { text, voice };
+  const said = { text, prompt, voice: { model: voice.model, name: voice.name, language: voice.language } };
   if (existsSync(audio) && existsSync(meta)) {
     const kept = JSON.parse(readFileSync(meta, 'utf8'));
-    if (JSON.stringify(kept.said) === JSON.stringify(said)) return { file: audio, seconds: kept.seconds };
+    if (JSON.stringify(kept.said) === JSON.stringify(said)) {
+      // A take kept before transcripts were checked is checked now, once.
+      const { heard, wrong } = kept.heard === undefined ? closest(text, await transcribe(audio, voice.language, hints)) : { heard: kept.heard, wrong: reelModule.misheard(text, kept.heard) };
+      if (!wrong) {
+        if (kept.heard === undefined) writeFileSync(meta, `${JSON.stringify({ ...kept, heard }, null, 2)}\n`);
+        return { file: audio, seconds: kept.seconds };
+      }
+      console.warn(`${id}: the kept take says ${wrong}, asked again`);
+    }
   }
   mkdirSync(lines, { recursive: true });
   const wav = new URL(`${id}.part.wav`, lines).pathname;
   // The silence the voice leaves before and after its line is cut: the scene sets when it speaks.
   const trim = 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse';
-  // A take the length of its text, or another one. The model sometimes says more than it
-  // was given (a 7-second « Où est le piège ? »), or drags (9 characters a second where
-  // its takes run at 14 to 17); a take that long, or too short to hold the words, is not
-  // the one. Its length is no proof of its words: listen once.
+  // A take the length of its text and saying it word for word, or another one. The model
+  // sometimes says more than it was given (« Où est le piège ? » three times over), or
+  // drags (9 characters a second where its takes run at 14 to 17): the length catches
+  // most of it at no cost, the transcript the rest.
   const [shortest, longest] = [text.length / 25, Math.max(3.5, text.length / 12)];
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    writeFileSync(wav, await synthesize(text, voice));
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    writeFileSync(wav, await synthesize(text, prompt, voice));
     await ffmpeg(['-i', wav, '-af', trim, '-c:a', 'aac', '-b:a', '128k', `${audio}.part.m4a`]);
     rmSync(wav);
     const { seconds } = probe(`${audio}.part.m4a`);
@@ -156,28 +208,42 @@ async function line(id, text, voice) {
       console.warn(`${id}: a take of ${seconds.toFixed(1)} s for ${text.length} characters, asked again`);
       continue;
     }
+    const { heard, wrong } = closest(text, await transcribe(`${audio}.part.m4a`, voice.language, hints));
+    if (wrong) {
+      console.warn(`${id}: a take that says ${wrong}, asked again`);
+      continue;
+    }
     renameSync(`${audio}.part.m4a`, audio);
-    writeFileSync(meta, `${JSON.stringify({ said, seconds }, null, 2)}\n`);
+    writeFileSync(meta, `${JSON.stringify({ said, seconds, heard }, null, 2)}\n`);
     return { file: audio, seconds };
   }
-  rmSync(`${audio}.part.m4a`);
-  throw new Error(`${id}: three takes, none the length of « ${text} »`);
+  rmSync(`${audio}.part.m4a`, { force: true });
+  throw new Error(`${id}: four takes, none saying « ${text} » word for word at its length`);
 }
+
+/** The takes a spoken video was mixed from: a new take of one of its lines makes it out of date. */
+const takes = (said) => createHash('sha256').update(Buffer.concat(said.map((line) => readFileSync(line.file)))).digest('hex').slice(0, 16);
+
+/** `src/reel.tsx`, loaded through Vite. */
+let reelModule;
 
 try {
   const { NOTIONS } = await server.ssrLoadModule('/src/glossaire.ts');
-  const { REEL_FPS, REEL_HEIGHT, REEL_WIDTH, VOICE, narration, reel, reelSource, spokenAt, spokenSource } = await server.ssrLoadModule('/src/reel.tsx');
+  reelModule = await server.ssrLoadModule('/src/reel.tsx');
+  const { REEL_FPS, REEL_HEIGHT, REEL_WIDTH, VOICE, narration, reel, reelSource, spokenAt, spokenSource } = reelModule;
   const size = { width: REEL_WIDTH, height: REEL_HEIGHT, fps: REEL_FPS };
   const asked = process.argv.slice(2);
   const unknown = asked.filter((slug) => !NOTIONS.some((notion) => notion.slug === slug));
   if (unknown.length) throw new Error(`no notion ${unknown.join(', ')}`);
-  /** Whether `<name>.mp4` exists and its record says it was rendered from `source`. */
-  const current = (name, source) => {
+  /** Whether `<name>.mp4` exists and its record says it was rendered from `source` (and, for a spoken one, mixed from these takes). */
+  const current = (name, source, mixed) => {
     const meta = new URL(`${name}.json`, dir);
-    return existsSync(meta) && existsSync(new URL(`${name}.mp4`, dir)) && JSON.parse(readFileSync(meta, 'utf8')).source === source;
+    if (!existsSync(meta) || !existsSync(new URL(`${name}.mp4`, dir))) return false;
+    const record = JSON.parse(readFileSync(meta, 'utf8'));
+    return record.source === source && (mixed === undefined || record.takes === mixed);
   };
   /** Checks a rendered video, then moves it and its poster in place of the previous ones and records what it shows. */
-  const keep = (name, part, source, seconds, longest) => {
+  const keep = (name, part, source, seconds, longest, more = {}) => {
     const found = probe(part.video);
     if (found.video?.codec_name !== 'h264' || found.video.width !== REEL_WIDTH || found.video.height !== REEL_HEIGHT || found.audio?.codec_name !== 'aac') {
       throw new Error(`${name}: ffmpeg wrote ${JSON.stringify(found)}`);
@@ -185,7 +251,7 @@ try {
     if (found.seconds < 8 || found.seconds > longest + 0.2) throw new Error(`${name}: ${found.seconds} s, outside 8 to ${longest}`);
     renameSync(part.video, new URL(`${name}.mp4`, dir).pathname);
     if (part.poster) renameSync(part.poster, new URL(`${name}.jpg`, dir).pathname);
-    writeFileSync(new URL(`${name}.json`, dir), `${JSON.stringify({ source, seconds }, null, 2)}\n`);
+    writeFileSync(new URL(`${name}.json`, dir), `${JSON.stringify({ source, seconds, ...more }, null, 2)}\n`);
     console.log(`${name}: ${seconds.toFixed(1)} s, ${Math.round(readFileSync(new URL(`${name}.mp4`, dir)).length / 1024)} KB`);
   };
   mkdirSync(dir, { recursive: true });
@@ -205,16 +271,17 @@ try {
       done += 1;
     }
     const spoken = `${notion.slug}.voix`;
-    if (forced || !current(spoken, spokenSource(notion))) {
-      let said;
-      try {
-        const { question, answer } = narration(notion);
-        said = [await line('question', question, VOICE), await line(notion.slug, answer, VOICE)];
-      } catch (error) {
-        if (!(error instanceof NoVoice)) throw error;
-        waiting.push(`${notion.slug} (${error.message})`);
-        continue;
-      }
+    // Its lines first, each checked against what it should say: a new take makes the video out of date.
+    let said;
+    try {
+      const { question, answer } = narration(notion);
+      said = [await line('question', question, VOICE.prompts.question, VOICE), await line(notion.slug, answer, VOICE.prompts.answer, VOICE, [notion.nom])];
+    } catch (error) {
+      if (!(error instanceof NoVoice)) throw error;
+      waiting.push(`${notion.slug} (${error.message})`);
+      continue;
+    }
+    if (forced || !current(spoken, spokenSource(notion), takes(said))) {
       const at = spokenAt(notion);
       const video = await reel(notion, said[1].seconds);
       const files = part(spoken, false);
@@ -224,7 +291,7 @@ try {
       ]);
       // The voice reads the answer at its own pace: the spoken version holds its last frame
       // until it has finished, 15 to 19 seconds for the glossary's names and summaries.
-      keep(spoken, files, spokenSource(notion), video.seconds, 20);
+      keep(spoken, files, spokenSource(notion), video.seconds, 20, { takes: takes(said) });
       done += 1;
     }
   }

@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Titre qui en dit plus que l’article. Un titre ou un chapô qui affirme plus, ou autre chose, que ce que le texte démontre.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 8.517542
+  "seconds": 9.2265,
+  "heard": "le piège titre qui en dit plus que l'article un titre ou un chapeau qui affirme plus ou autre chose que ce que le texte démontre"
 }

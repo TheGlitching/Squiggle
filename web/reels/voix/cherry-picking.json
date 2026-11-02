@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Sélection des faits. Ne retenir que les faits qui vont dans le sens voulu et taire les autres.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 6.408458
+  "seconds": 7.000542,
+  "heard": "le piège sélection des faits ne retenir que les faits qui vont dans le sens voulu et taire les autres"
 }

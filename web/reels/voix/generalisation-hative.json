@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Généralisation hâtive. Tirer une règle générale de quelques cas, parfois d’un seul.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 6.846708
+  "seconds": 6.858542,
+  "heard": "le piège généralisation hâtive tirer une règle générale de quelques cas parfois d'un seul"
 }

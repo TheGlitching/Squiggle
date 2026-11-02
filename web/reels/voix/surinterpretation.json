@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Surinterprétation. Tirer d’une étude ou d’un fait une conclusion plus large ou plus forte que ce qu’ils permettent.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 8.329667
+  "seconds": 8.143375,
+  "heard": "le piège surinterprétation tirés d'une étude ou d'un fait une conclusion plus large ou plus forte que ce qu'ils permettent"
 }

@@ -1,12 +1,13 @@
 {
   "said": {
     "text": "Le piège : Opinion présentée comme un fait. Un jugement formulé avec la grammaire d’un fait établi.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
     "voice": {
       "model": "gemini-2.5-flash-tts",
       "name": "Kore",
-      "language": "fr-FR",
-      "prompt": "Voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier, sans pause entre les phrases."
+      "language": "fr-FR"
     }
   },
-  "seconds": 6.457875
+  "seconds": 6.931917,
+  "heard": "le piège opinion présenté comme un fait un jugement formulé avec la grammaire d'un fait établi"
 }
