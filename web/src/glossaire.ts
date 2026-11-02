@@ -1008,6 +1008,39 @@ export const NOTIONS: readonly Notion[] = [
         lecture:
           'La date de parution du livre est un fait. Le lien avec l’alerte n’en est pas un : l’article laisse entendre que la chercheuse parle pour vendre, sans discuter ce qu’elle dit des écrans. C’est la différence avec l’attaque ad hominem, toute proche : l’ad hominem s’en prend à la personne, le procès d’intention prétend savoir pourquoi elle agit.',
       },
+      {
+        rubrique: 'Vie locale',
+        titre: ['La place du marché fermée aux voitures'],
+        texte: [
+          'La mairie a annoncé que la place du marché serait fermée aux voitures à partir du printemps. ',
+          [
+            'Une décision prise surtout pour faire oublier le dossier du parking, qui traîne depuis deux ans.',
+          ],
+        ],
+        lecture: 'La mairie a peut-être donné ses raisons : sécurité des enfants à la sortie de l’école, terrasses des commerçants, circulation. L’article n’en rapporte aucune et affirme connaître la vraie. Le dossier du parking est un fait, le lien avec la décision n’en est pas un.',
+      },
+      {
+        rubrique: 'Sport',
+        titre: ['Le club change d’entraîneur'],
+        texte: [
+          'Le club a annoncé qu’il changeait d’entraîneur pour la saison prochaine. ',
+          [
+            'Ce changement vise surtout à calmer les supporters mécontents, pas à faire évoluer le jeu.',
+          ],
+        ],
+        lecture: 'Le club a peut-être expliqué son choix : résultats de la saison, projet de jeu, fin de contrat. L’article ne cite aucune de ces raisons et prête au club une intention invérifiable. Les supporters mécontents, eux, existent peut-être : ce n’est pas une raison pour en faire les vrais décideurs.',
+      },
+      {
+        rubrique: 'Travail',
+        titre: ['Les entretiens annuels remplacés par des points réguliers'],
+        texte: [
+          'Une entreprise a remplacé les entretiens annuels par des points tous les deux mois. ',
+          [
+            'Derrière ce changement présenté comme un suivi plus attentif se cache l’envie d’éviter les discussions sur les salaires.',
+          ],
+        ],
+        lecture: 'L’entreprise a peut-être donné ses raisons, et il est possible qu’elle cherche aussi à écourter ces rendez-vous. L’article pourrait le montrer, par exemple en comparant ce qui était abordé avant et après. Il préfère révéler une intention, sans dire d’où il la tient.',
+      },
     ],
     reperer: [
       '« En réalité », « surtout », « ce qu’il cherche vraiment », « derrière cette décision ».',
