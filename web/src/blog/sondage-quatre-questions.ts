@@ -8,7 +8,7 @@ const article: Article = {
     'Un pourcentage en titre, et l’article bâti dessus. Qui a posé la question, à qui, laquelle, et que dit vraiment la réponse ? Une méthode en quatre questions.',
   chapo:
     'Un chiffre en titre, un article construit autour, et l’impression que la question est tranchée. Avant de le croire ou de le rejeter, quatre questions suffisent pour savoir ce qu’il mesure vraiment.',
-  publie: '2026-11-06',
+  publie: '2026-11-02',
   notions: ['chiffre-sans-origine', 'generalisation-hative', 'appel-a-la-popularite', 'titre-trompeur'],
   corps: [
     {
