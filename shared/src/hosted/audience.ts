@@ -98,6 +98,7 @@ export const AUDIENCE_METRIC_NAMES = [
   // The call to analyse followed from a blog article, one name per published
   // article (`blogCounter` in web/src/blog.ts): `blog_` and its slug.
   'blog_conclusion_hative',
+  'blog_sondage_quatre_questions',
 ] as const;
 export type AudienceMetricName = (typeof AUDIENCE_METRIC_NAMES)[number];
 
