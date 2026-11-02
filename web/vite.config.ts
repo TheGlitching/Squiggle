@@ -347,7 +347,7 @@ function prerender(): Plugin {
         appType: 'custom',
       });
       try {
-        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOTIONS, NOT_FOUND_TITLE, PUBLIC_PAGES, SOCIAL_SOURCES, appHeadFor, feed, headFor, pageSources, posterPath, redirects, reelPath, reelSource, reelText, render, shareImage, shareImagePath, sitemap, socialPath, socialSlides, socialStory, spokenPath, spokenSource, storyPath, titleFor } =
+        const { APP_PATHS, BLOG_OPEN, FEED_PATH, NOTIONS, NOT_FOUND_TITLE, PUBLIC_PAGES, SOCIAL_SOURCES, appHeadFor, feed, headFor, pageSources, posterPath, redirects, reelPath, reelSource, reelText, render, shareImage, shareImagePath, sitemap, socialPath, socialSlides, socialStory, storyPath, titleFor } =
           (await server.ssrLoadModule('/src/prerender.tsx')) as Entry;
         const pages: string[] = [];
         const write = (file: string, content: string | Buffer) => {
@@ -379,8 +379,7 @@ function prerender(): Plugin {
           write(`${dir}/story.json`, JSON.stringify({ image: storyPath(source), alt: story.alt }, null, 2));
         }
         // A notion's short video, rendered once and committed (`reels.mjs`), published while
-        // the glossary still says what it shows, and its spoken version while it also says
-        // what it is meant to; `video.json` gives them their text.
+        // the glossary still says what it shows; `video.json` gives it its text.
         for (const notion of NOTIONS) {
           const meta = new URL(`./reels/${notion.slug}.json`, import.meta.url);
           if (!existsSync(meta)) continue;
@@ -390,14 +389,7 @@ function prerender(): Plugin {
           }
           write(reelPath(notion).slice(1), readFileSync(new URL(`./reels/${notion.slug}.mp4`, import.meta.url)));
           write(posterPath(notion).slice(1), readFileSync(new URL(`./reels/${notion.slug}.jpg`, import.meta.url)));
-          const spoken = new URL(`./reels/${notion.slug}.voix.json`, import.meta.url);
-          const voiced = existsSync(spoken) && (JSON.parse(readFileSync(spoken, 'utf8')) as { source: string }).source === spokenSource(notion);
-          if (voiced) write(spokenPath(notion).slice(1), readFileSync(new URL(`./reels/${notion.slug}.voix.mp4`, import.meta.url)));
-          else this.warn(`reels/${notion.slug}.voix.mp4 is missing or out of date, so only the silent video is published: npm run reels -w @squiggle/web`);
-          write(
-            `${socialPath(notion).slice(1)}/video.json`,
-            JSON.stringify({ video: reelPath(notion), poster: posterPath(notion), alt: reelText(notion), ...(voiced ? { voix: spokenPath(notion) } : {}) }, null, 2),
-          );
+          write(`${socialPath(notion).slice(1)}/video.json`, JSON.stringify({ video: reelPath(notion), poster: posterPath(notion), alt: reelText(notion) }, null, 2));
         }
         // The pricing anchor is the home page, under its own address.
         write(pageFile('/tarifs'), page(headFor(PUBLIC_PAGES[0]), rendered('/tarifs')));
