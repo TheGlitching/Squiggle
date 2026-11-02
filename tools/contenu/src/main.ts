@@ -9,6 +9,7 @@
  *   vider-la-file   pause, and delete every future post the routine scheduled
  *   lancement       prepare the first posts and send them for approval (nothing is scheduled)
  *   lancement-ok    schedule every post waiting for approval, as the owner's « ok » does; `lancement-ok sauf 3 5` sets some aside
+ *   videos          redraft as videos the video slots filled before their notion's video was online, held for the « ok »; `videos sauf 3 5` keeps some
  *   liberer         leave draft mode (D2 b) after too many removals
  *   lecon-retirer N stop applying lesson N
  *   etat            what the routine holds, without calling anything
@@ -26,10 +27,10 @@ import { pauseFile, paused, type Ctx } from './context';
 import { daily } from './daily';
 import { Db } from './db';
 import { approveHeld, prepareLaunch } from './launch';
-import { emptyQueue } from './posts';
+import { emptyQueue, upgradeVideoSlots } from './posts';
 import { weekly } from './weekly';
 
-const COMMANDS = ['quotidien', 'hebdo', 'lancement', 'lancement-ok', 'pause', 'reprendre', 'vider-la-file', 'liberer', 'lecon-retirer', 'etat'] as const;
+const COMMANDS = ['quotidien', 'hebdo', 'lancement', 'lancement-ok', 'pause', 'reprendre', 'vider-la-file', 'videos', 'liberer', 'lecon-retirer', 'etat'] as const;
 
 function lock(dir: string): () => void {
   const file = join(dir, 'contenu.lock');
@@ -83,6 +84,10 @@ async function main(): Promise<number> {
     if (command === 'hebdo') await weekly(ctx);
     if (command === 'lancement') console.log(`${(await prepareLaunch(ctx)).filter((p) => p.status === 'en_attente').length} publications en attente d’accord`);
     if (command === 'lancement-ok') console.log(await approveHeld(ctx, args.slice(args.indexOf('sauf') + 1).filter((a) => args.includes('sauf') && /^\d+$/.test(a)).map(Number)));
+    if (command === 'videos') {
+      const rows = await upgradeVideoSlots(ctx, args.slice(args.indexOf('sauf') + 1).filter((a) => args.includes('sauf') && /^\d+$/.test(a)).map(Number));
+      console.log(`${rows.filter((r) => r.status === 'en_attente').length} vidéos en attente d’accord : \`contenu hebdo --renvoyer\` les envoie`);
+    }
     if (command === 'vider-la-file') {
       writeFileSync(pauseFile(ctx), `Suspendu et vidé à la main le ${started.toISOString()}\n`);
       console.log(`${await emptyQueue(ctx)} publications supprimées de Postiz`);
