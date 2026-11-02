@@ -6,9 +6,11 @@
  * writes the words, never the substance. A post passes the deterministic
  * filter, then a separate review that sees only the text, its source, its
  * image and the editorial line, without the drafting context. A post refused by
- * either leaves its slot empty: it is never rewritten automatically.
+ * either is rewritten with the reason, and checked again, up to `POST_TRIES`
+ * times; one still refused then leaves its slot empty.
  */
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 
 import { CALENDAR, fillWindow, resolvePillar, rotate, slotAt, weeksToFill, withoutVideo, type Angle, type Pillar, type Slot, type Usage } from './calendar';
 import { FACEBOOK_LINKS_PER_MONTH, FRESH_NOTICE_HOURS, NETWORKS, ORIGIN, X_PRICES, type Network } from './config';
@@ -39,6 +41,8 @@ export interface PostRow {
   postiz_id: string | null;
   created_at: string;
   num: number | null;
+  /** How many versions the drafting wrote before this one was kept or set aside; null before the rewrites existed. */
+  attempts: number | null;
 }
 
 /** The posts that count as being in the queue or out: what rotation and repeats are judged on. */
@@ -246,10 +250,80 @@ export interface Draft {
   text: string;
   images: Image[];
   status: 'propose' | 'refuse';
+  /** Why it was refused; for a post accepted on a later try, why its first version was. */
   reason: string | null;
+  /** How many versions were written: 1 when the first passed. */
+  attempts: number;
 }
 
-async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks, link: LinkPolicy, tags: readonly string[]): Promise<string> {
+/** A version that was refused, handed to the next try. */
+export interface Retry {
+  text: string;
+  reason: string;
+}
+
+/** How many versions of a post are written before its slot is left empty: the first and two rewrites. */
+export const POST_TRIES = 3;
+
+/** What the two checks say of one version: its text once filtered, and why it was refused, if it was. */
+export interface Check {
+  text: string;
+  reason: string | null;
+  /** The review laid the refusal on the picture, not the words. */
+  image?: boolean;
+}
+
+/**
+ * One slot's post: written, checked, and on a refusal rewritten with the
+ * reason, up to `POST_TRIES` versions. When the review lays the refusal on the
+ * picture, the next version tries the next set of `fallbacks` (another picture,
+ * or none where a post may go without). A call that fails (the model, the
+ * review) leaves the slot empty at once: a rewrite would not mend it. Throws
+ * `BudgetExceeded` so the caller stops drafting.
+ */
+export async function settle(
+  images: Image[],
+  fallbacks: Image[][],
+  write: (retry: Retry | null) => Promise<string>,
+  check: (text: string, images: Image[]) => Promise<Check>,
+): Promise<Pick<Draft, 'text' | 'images' | 'status' | 'reason' | 'attempts'>> {
+  let retry: Retry | null = null;
+  let first: string | null = null;
+  let pictures = images;
+  const others = fallbacks.slice();
+  for (let attempt = 1; ; attempt += 1) {
+    let text: string;
+    try {
+      text = await write(retry);
+    } catch (error) {
+      if (error instanceof BudgetExceeded) throw error;
+      return { text: retry?.text ?? '', images: pictures, status: 'refuse', reason: `rédaction impossible : ${(error as Error).message}`, attempts: attempt };
+    }
+    let verdict: Check;
+    try {
+      verdict = await check(text, pictures);
+    } catch (error) {
+      if (error instanceof BudgetExceeded) throw error;
+      return { text, images: pictures, status: 'refuse', reason: `relecture impossible : ${(error as Error).message}`, attempts: attempt };
+    }
+    if (!verdict.reason) return { text: verdict.text, images: pictures, status: 'propose', reason: first, attempts: attempt };
+    first ??= verdict.reason;
+    if (attempt >= POST_TRIES) return { text: verdict.text, images: pictures, status: 'refuse', reason: verdict.reason, attempts: attempt };
+    if (verdict.image && others.length) pictures = others.shift()!;
+    retry = { text: verdict.text, reason: verdict.reason };
+  }
+}
+
+/** The pictures a post may fall back on when the review finds its own off topic: another one, or none where the slot allows it. */
+export function imageFallbacks(network: Network, angle: Angle, chosen: Image[], imgs: { slides: Image[]; card: Image | null }): Image[][] {
+  // A video slot keeps its video: only its words are rewritten.
+  if (angle === 'video' || chosen.length === 0) return [];
+  const used = new Set(chosen.map((i) => i.url));
+  const other = [imgs.card, ...imgs.slides].find((i): i is Image => !!i && !used.has(i.url));
+  return [...(other ? [[other]] : []), ...(network === 'instagram' ? [] : [[]])];
+}
+
+async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks, link: LinkPolicy, tags: readonly string[], retry: Retry | null): Promise<string> {
   const url = `${ORIGIN}${p.source.path}?ref=${p.slot.network}`;
   const question = t.question === 'avec' ? 'Termine par une question au lecteur.' : t.question === 'sans' ? 'Ne termine pas par une question.' : '';
   const answer = await askJson<{ texte: string }>(ctx, {
@@ -262,18 +336,19 @@ async function draft(ctx: Ctx, p: Planned, thisWeek: string, t: Tweaks, link: Li
       p.slot.network === 'mastodon' ? (tags.length ? `Termine par ces mots-dièse, exactement et dans cet ordre : ${tags.map((tag) => `#${tag}`).join(' ')}` : 'Aucun mot-dièse.') : '',
       question,
       `Source, la seule matière permise (page ${p.source.path}) :\n"""\n${p.source.text.slice(0, 6000)}\n"""`,
+      retry ? `Une version précédente a été refusée :\n"""\n${retry.text}\n"""\nMotif : ${retry.reason}. Réécris la publication en corrigeant ce point, sans enfreindre aucune autre consigne.` : '',
       'Réponds {"texte": "..."}.',
     ]
       .filter(Boolean)
       .join('\n\n'),
     maxTokens: 2500,
-  });
-  return String(answer.texte ?? '');
+  }, z.object({ texte: z.string().min(1) }));
+  return answer.texte;
 }
 
 /** The separate review: only the text, its source, its images and the editorial line. */
-async function review(ctx: Ctx, network: Network, text: string, source: Source, images: Image[]): Promise<{ conforme: boolean; raison: string }> {
-  const answer = await askJson<{ conforme: boolean; raison?: string }>(ctx, {
+async function review(ctx: Ctx, network: Network, text: string, source: Source, images: Image[]): Promise<{ conforme: boolean; raison: string; image: boolean }> {
+  const answer = await askJson(ctx, {
     purpose: 'relecture',
     system: `${consigne(ctx, 'ligne-editoriale')}\n\n---\n\n${consigne(ctx, 'relecture')}`,
     user: [
@@ -284,13 +359,15 @@ async function review(ctx: Ctx, network: Network, text: string, source: Source, 
         : images.length
           ? `Images jointes (${images.length}), texte alternatif : ${images.map((i) => i.alt).join(' | ')}`
           : 'Aucune image.',
-      'Réponds {"conforme": true} ou {"conforme": false, "raison": "..."}.',
+      'Réponds {"conforme": true} ou {"conforme": false, "raison": "...", "image": true si seule l’image est en cause, false sinon}.',
     ].join('\n\n'),
     images: images.slice(0, 2).map((i) => still(i.url)),
     maxTokens: 4000,
-  });
-  return { conforme: answer.conforme === true, raison: String(answer.raison ?? '') };
+  }, Verdict);
+  return { conforme: answer.conforme, raison: answer.raison ?? '', image: answer.image === true };
 }
+
+const Verdict = z.object({ conforme: z.boolean(), raison: z.string().optional(), image: z.boolean().optional() });
 
 type Other = { network: Network; text: string; day: string };
 
@@ -327,39 +404,40 @@ export async function writePosts(ctx: Ctx, planned: Planned[], thisWeek: string)
     const postTags = t.tags === 'sans' ? [] : tags;
     const images = chooseImages(p.slot.network, p.angle, imgs, t, link);
     if (p.slot.network === 'instagram' && images.length === 0) {
-      drafts.push({ planned: p, text: '', images, status: 'refuse', reason: 'aucune image pour Instagram' });
+      drafts.push({ planned: p, text: '', images, status: 'refuse', reason: 'aucune image pour Instagram', attempts: 0 });
       continue;
     }
-    let text = '';
+    let settled: Awaited<ReturnType<typeof settle>>;
     try {
-      text = await draft(ctx, p, thisWeek, t, link, postTags);
+      settled = await settle(
+        images,
+        imageFallbacks(p.slot.network, p.angle, images, imgs),
+        (retry) => draft(ctx, p, thisWeek, t, link, postTags, retry),
+        async (text, pictures) => {
+          const filtered = filterPost({
+            network: p.slot.network,
+            text,
+            source: p.source.text,
+            sitePaths: paths,
+            others,
+            day: day(p.at),
+            sourceId: p.source.id,
+            link,
+            hashtags: p.slot.network === 'mastodon' ? postTags : undefined,
+          });
+          if (filtered.reasons.length) return { text: filtered.text, reason: `filtre : ${filtered.reasons.join(' ; ')}` };
+          const verdict = await review(ctx, p.slot.network, filtered.text, p.source, pictures);
+          return { text: filtered.text, reason: verdict.conforme ? null : `relecture : ${verdict.raison || 'non conforme'}`, image: verdict.image };
+        },
+      );
     } catch (error) {
-      drafts.push({ planned: p, text: '', images, status: 'refuse', reason: `rédaction impossible : ${(error as Error).message}` });
-      if (error instanceof BudgetExceeded) break;
-      continue;
+      drafts.push({ planned: p, text: '', images, status: 'refuse', reason: `rédaction impossible : ${(error as Error).message}`, attempts: 1 });
+      break;
     }
-    const filtered = filterPost({
-      network: p.slot.network,
-      text,
-      source: p.source.text,
-      sitePaths: paths,
-      others,
-      day: day(p.at),
-      sourceId: p.source.id,
-      link,
-      hashtags: p.slot.network === 'mastodon' ? postTags : undefined,
-    });
-    if (filtered.reasons.length) {
-      drafts.push({ planned: p, text: filtered.text, images, status: 'refuse', reason: `filtre : ${filtered.reasons.join(' ; ')}` });
-      continue;
-    }
-    const verdict = await review(ctx, p.slot.network, filtered.text, p.source, images).catch((e: Error) => ({ conforme: false, raison: `relecture impossible : ${e.message}` }));
-    if (!verdict.conforme) {
-      drafts.push({ planned: p, text: filtered.text, images, status: 'refuse', reason: `relecture : ${verdict.raison || 'non conforme'}` });
-      continue;
-    }
-    drafts.push({ planned: p, text: filtered.text, images, status: 'propose', reason: null });
-    others.push({ network: p.slot.network, text: filtered.text, day: day(p.at), sourceId: p.source.id });
+    if (settled.attempts > 1) ctx.log(`  ${p.slot.network} ${day(p.at)} : ${settled.status === 'propose' ? `réécrite, acceptée au ${settled.attempts}e essai` : `laissée de côté après ${settled.attempts} essais`}`);
+    drafts.push({ planned: p, ...settled });
+    if (settled.status !== 'propose') continue;
+    others.push({ network: p.slot.network, text: settled.text, day: day(p.at), sourceId: p.source.id });
     // A post on Instagram or Facebook gets its story the same evening, when the build drew one.
     const story = (p.slot.network === 'instagram' || p.slot.network === 'facebook') && p.source.kind !== 'page' ? imgs.story : null;
     if (story) drafts.push(await storyDraft(ctx, p, story));
@@ -376,12 +454,14 @@ async function storyDraft(ctx: Ctx, p: Planned, story: Image): Promise<Draft> {
   const at = new Date(p.at.getTime() + STORY_DELAY_HOURS * 3_600_000);
   const planned: Planned = { ...p, at, angle: 'story', slot: { ...p.slot, angle: 'story' } };
   const reasons = contentReasons(story.alt.replace(/squiggle\.fr\/\S+/g, ' '), p.source.text);
-  if (reasons.length) return { planned, text: story.alt, images: [story], status: 'refuse', reason: `filtre : ${reasons.join(' ; ')}` };
+  // Its words are the image's own: there is nothing to rewrite, so a story is judged once.
+  if (reasons.length) return { planned, text: story.alt, images: [story], status: 'refuse', reason: `filtre : ${reasons.join(' ; ')}`, attempts: 1 };
   const verdict = await review(ctx, p.slot.network, `Story (une image plein écran, sans légende). Son texte : ${story.alt}`, p.source, [story]).catch((e: Error) => ({
     conforme: false,
+    image: false,
     raison: `relecture impossible : ${e.message}`,
   }));
-  return { planned, text: story.alt, images: [story], status: verdict.conforme ? 'propose' : 'refuse', reason: verdict.conforme ? null : `relecture : ${verdict.raison || 'non conforme'}` };
+  return { planned, text: story.alt, images: [story], status: verdict.conforme ? 'propose' : 'refuse', reason: verdict.conforme ? null : `relecture : ${verdict.raison || 'non conforme'}`, attempts: 1 };
 }
 
 /** A story goes out the same day as its post, in the evening, when stories are watched. */
@@ -419,6 +499,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       postiz_id: null,
       created_at: new Date().toISOString(),
       num: null,
+      attempts: d.attempts,
     };
     if (d.status === 'propose' && hold) row.status = 'en_attente';
     else if (d.status === 'propose' && !ctx.dry) {
@@ -442,8 +523,8 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
     // Every post that enters the queue gets the next short number, never reused.
     if (row.status !== 'refuse') row.num = (ctx.db.get<{ n: number | null }>('SELECT MAX(num) AS n FROM posts')?.n ?? 0) + 1;
     ctx.db.run(
-      `INSERT INTO posts (id, week, network, slot_at, pillar, angle, source_id, source_title, text, image_url, alt, status, reason, postiz_id, created_at, num)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO posts (id, week, network, slot_at, pillar, angle, source_id, source_title, text, image_url, alt, status, reason, postiz_id, created_at, num, attempts)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       row.id,
       row.week,
       row.network,
@@ -460,6 +541,7 @@ export async function schedule(ctx: Ctx, drafts: Draft[], integrations: Integrat
       row.postiz_id,
       row.created_at,
       row.num,
+      row.attempts,
     );
     rows.push(row);
   }

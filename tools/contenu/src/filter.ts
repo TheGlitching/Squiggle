@@ -2,7 +2,7 @@
  * The deterministic filter every post passes before anything else looks at it.
  * No model is involved: these are the editorial line's absolute rules written as
  * code, so a post that breaks one is refused whatever a reviewer would have said.
- * A refused post leaves its slot empty; it is never rewritten automatically.
+ * A refused post is rewritten with the reason, then checked again (`posts.ts`).
  *
  * The filter first sets the site's typography (straight apostrophes, spaces
  * inside « », a narrow space before `: ; ? !`), which is form, not content.
