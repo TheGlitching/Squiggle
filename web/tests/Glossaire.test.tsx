@@ -136,15 +136,16 @@ describe('the glossary pages', () => {
 
   it('gives the notions a search already finds more made-up examples, under the words the search uses', () => {
     const enriched = ['proces-d-intention', 'generalisation-hative', 'citation-tronquee', 'affirmation-non-etayee', 'correlation-causalite', 'pente-savonneuse', 'appel-a-la-popularite', 'fausse-analogie', 'debat-presente-comme-clos'];
-    expect(NOTIONS.filter((item) => item.exemples).map((item) => item.slug).sort()).toEqual([...enriched].sort());
+    // The content routine enriches more notions over time: these are the ones that must stay enriched, not the only ones.
     for (const slug of enriched) {
       const item = NOTIONS.find((notion) => notion.slug === slug)!;
       expect(item.exemples!.length, slug).toBeGreaterThanOrEqual(2);
       expect(item.description!.length, slug).toBeLessThanOrEqual(160);
     }
+    for (const item of NOTIONS.filter((notion) => notion.exemples)) expect(item.exemples!.length, item.slug).toBeGreaterThan(0);
     render(<App path="/glossaire/proces-d-intention" />);
     const part = within(screen.getByRole('region', { name: 'Autres exemples de procès d’intention' }));
-    expect(part.getAllByText(/, un article inventé$/)).toHaveLength(3);
+    expect(part.getAllByText(/, un article inventé$/)).toHaveLength(NOTIONS.find((notion) => notion.slug === 'proces-d-intention')!.exemples!.length);
     cleanup();
     render(<App path="/glossaire/affirmation-non-etayee" />);
     expect(screen.getByRole('heading', { level: 2, name: 'Autres exemples d’affirmation non étayée' })).toBeInTheDocument();

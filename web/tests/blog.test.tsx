@@ -99,11 +99,9 @@ describe('the formatting of an article', () => {
 });
 
 describe('a draft', () => {
+  // The repository holds no draft once the last one is published, so the rendering is
+  // shown on an article marked as one rather than on whatever draft is waiting.
   const drafts = ALL_ARTICLES.filter((item) => item.brouillon);
-
-  it('exists, to show how an article renders', () => {
-    expect(drafts.length).toBeGreaterThan(0);
-  });
 
   it('is never built: no page, no sitemap entry, no feed item, a 404 at its address', () => {
     for (const item of drafts) {
@@ -117,7 +115,7 @@ describe('a draft', () => {
   });
 
   it('renders as an article, marked as a draft, with the call to analyse and its notions', () => {
-    const item = drafts[0];
+    const item: Article = { ...ALL_ARTICLES[0], brouillon: true };
     render(<ArticlePage item={item} />);
     expect(screen.getByRole('heading', { level: 1, name: typo(item.titre) })).toBeInTheDocument();
     expect(screen.getByText(/cet article n’est pas publié/)).toBeInTheDocument();
