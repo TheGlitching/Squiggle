@@ -13,6 +13,8 @@
  * data. Each system prompt says so, and every answer is JSON the program reads
  * field by field: a reply can only ever land in one of the closed categories.
  */
+import type { z } from 'zod';
+
 import { CAPS, MODEL } from './config';
 import { fetchJson, type Ctx } from './context';
 
@@ -37,6 +39,13 @@ export interface Ask {
 }
 
 /**
+ * How many times one question is put to the model when its answer is not the
+ * JSON asked for: the first answer and two corrections. Each try is priced and
+ * counts against the caps like any call.
+ */
+export const TRIES = 3;
+
+/**
  * Even at `low` effort the model sometimes reasons for thousands of tokens, and
  * the reasoning counts against the ceiling: a low ceiling cut a third of the
  * posts short in the dry runs. Output costs 0.50 $ a million tokens, so room
@@ -56,19 +65,50 @@ export async function monthlySpend(ctx: Pick<Ctx, 'fetch' | 'secrets'>): Promise
   return { used: key.data.usage_monthly ?? key.data.usage, limit: key.data.limit };
 }
 
-/** One call, answered in JSON. Throws `BudgetExceeded` rather than spend past a cap. An answer cut short is asked once more. */
-export async function askJson<T>(ctx: Ctx, ask: Ask): Promise<T> {
+/**
+ * One call, answered in JSON. Throws `BudgetExceeded` rather than spend past a cap.
+ * An answer cut short is asked once more. With a schema, an answer that is not JSON
+ * or does not match it is asked again with the validation error, up to `TRIES` in
+ * all; the last error is thrown.
+ */
+export async function askJson<T>(ctx: Ctx, ask: Ask, schema?: z.ZodType<T>): Promise<T> {
+  let question = ask;
+  for (let attempt = 1; ; attempt += 1) {
+    let answer: unknown;
+    try {
+      answer = await askCompleted(ctx, question);
+    } catch (error) {
+      if (!(error instanceof Unreadable) || !schema || attempt >= TRIES) throw error;
+      question = { ...ask, user: `${ask.user}\n\n${correction(error.text, error.message)}` };
+      continue;
+    }
+    if (!schema) return answer as T;
+    const parsed = schema.safeParse(answer);
+    if (parsed.success) return parsed.data;
+    const problems = parsed.error.issues.map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`).join(' ; ');
+    if (attempt >= TRIES) throw new Error(`${ask.purpose} : réponse invalide après ${TRIES} essais (${problems})`);
+    ctx.log(`  ${ask.purpose} : réponse invalide, redemandée (${problems.slice(0, 200)})`);
+    question = { ...ask, user: `${ask.user}\n\n${correction(JSON.stringify(answer), problems)}` };
+  }
+}
+
+/** What a new try is told about the previous answer. */
+function correction(previous: string, problems: string): string {
+  return `Ta réponse précédente :\n"""\n${previous.slice(0, 4000)}\n"""\nn’a pas la forme demandée : ${problems}. Réponds de nouveau, avec un objet JSON de la forme demandée.`;
+}
+
+async function askCompleted(ctx: Ctx, ask: Ask): Promise<unknown> {
   try {
-    return await askOnce<T>(ctx, ask);
+    return await askOnce(ctx, ask);
   } catch (error) {
-    if (error instanceof Truncated) return askOnce<T>(ctx, ask);
+    if (error instanceof Truncated) return askOnce(ctx, ask);
     throw error;
   }
 }
 
 class Truncated extends Error {}
 
-async function askOnce<T>(ctx: Ctx, ask: Ask): Promise<T> {
+async function askOnce(ctx: Ctx, ask: Ask): Promise<unknown> {
   if (runCost(ctx) >= CAPS.openrouterPerRun) throw new BudgetExceeded(`plafond par exécution atteint (${CAPS.openrouterPerRun} $)`);
   const monthStarted = ctx.db.getKv<{ checkedAt: string; used: number }>('openrouter_month');
   if (!monthStarted || Date.now() - Date.parse(monthStarted.checkedAt) > 3_600_000) {
@@ -115,7 +155,21 @@ async function askOnce<T>(ctx: Ctx, ask: Ask): Promise<T> {
   );
   const text = answer.choices[0]?.message.content ?? '';
   if (answer.choices[0]?.finish_reason === 'length') throw new Truncated(`${ask.purpose} : réponse coupée par la limite de longueur`);
-  return parseJson<T>(text, ask.purpose);
+  try {
+    return parseJson<unknown>(text, ask.purpose);
+  } catch (error) {
+    throw new Unreadable((error as Error).message, text);
+  }
+}
+
+/** An answer with no JSON object to read in it. */
+class Unreadable extends Error {
+  constructor(
+    message: string,
+    readonly text: string,
+  ) {
+    super(message);
+  }
 }
 
 /** The JSON object in an answer, tolerating a fence the model added around it. */

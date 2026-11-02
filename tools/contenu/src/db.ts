@@ -78,6 +78,7 @@ const ADDED: ReadonlyArray<[table: string, column: string, type: string, backfil
   ['comments', 'link', 'TEXT'],
   // Comments read before the daily e-mail existed were shown in a Monday report already.
   ['comments', 'mailed_at', 'TEXT', 'UPDATE comments SET mailed_at = seen_at'],
+  ['posts', 'attempts', 'INTEGER'],
 ];
 
 export class Db {

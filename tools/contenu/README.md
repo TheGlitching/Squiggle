@@ -72,7 +72,12 @@ Monday in order:
    Instagram, Facebook and Threads get the silent version (`SPOKEN_NETWORKS`). Each post
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),
    then a separate review that sees only the text, its source, its image and the
-   editorial line. A refused post leaves its slot empty and is never rewritten.
+   editorial line. A refused post is rewritten with the reason and checked again, three
+   versions at most (`POST_TRIES`); when the review lays the refusal on the picture, the
+   next version tries another one, or none where the slot allows it. A post still
+   refused after its tries leaves its slot empty. Every model answer read against a
+   schema is asked again with the validation error when it does not match, three tries
+   at most (`TRIES` in `src/llm.ts`). Every try is priced and counts against the caps.
 6. **Report** (`src/report.ts`, `src/summary.ts`): an HTML e-mail in the site's colours,
    one column for a phone, with a plain-text version. It opens on three or four sentences
    in plain French (the model's, checked: only computed numbers, no internal word) and on
@@ -81,8 +86,9 @@ Monday in order:
    every post waiting for approval as it will look, this week's and any still unanswered,
    grouped by day, with its thumbnail and a short number; then the week's comments,
    lessons, refused posts, health and spending, one line each. It is also kept on the VPS
-   under `donnees/comptes-rendus/`. One report a week at most: a run started again the
-   same week keeps its report there and sends nothing.
+   under `donnees/comptes-rendus/`. It tells a post rewritten then accepted from one set
+   aside after its tries. One report a week at most: a run started again the same week
+   keeps its report there and sends nothing, unless it is run with `--renvoyer`.
 
 ## Comments, every day
 
@@ -140,6 +146,11 @@ sudo systemctl enable --now contenu-quotidien.timer contenu-hebdo.timer   # only
 
 Every command takes `--a-blanc`: a dry run collects, calls the model, filters, reviews
 and sends the report, but writes nothing to Postiz or GitHub, on a database of its own.
+
+A Monday that left the queue short (a step failed, posts were set aside) is run again by
+hand with `~/contenu/bin/contenu hebdo --renvoyer`. It fills only the slots still empty,
+since a slot held by a post waiting for the « ok » is taken, and `--renvoyer` sends the
+new report, which shows every post waiting for approval, the earlier ones included.
 
 `.env` holds `POSTIZ_API_KEY`, `POSTIZ_API_URL`, `CF_API_TOKEN`, `CF_ACCOUNT_ID`,
 `SQUIGGLE_METRICS_TOKEN`, `OPENROUTER_API_KEY`, `BREVO_API_KEY`, `GITHUB_TOKEN`,

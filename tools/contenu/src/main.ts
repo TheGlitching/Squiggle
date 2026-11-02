@@ -15,7 +15,8 @@
  *
  * `--a-blanc` runs for real (collection, model, filter, review, e-mail) but
  * writes nothing to Postiz or GitHub, on a database of its own. `--sans-courriel`
- * prints the e-mails instead of sending them.
+ * prints the e-mails instead of sending them. `hebdo --renvoyer` sends the report
+ * even when this week's already left: a Monday run again by hand to fill the queue.
  */
 import { closeSync, openSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,7 +47,7 @@ async function main(): Promise<number> {
   const noMail = args.includes('--sans-courriel');
   const command = args.find((a) => !a.startsWith('--')) as (typeof COMMANDS)[number] | undefined;
   if (!command || !COMMANDS.includes(command)) {
-    console.error(`usage : contenu <${COMMANDS.join('|')}> [--a-blanc] [--sans-courriel]`);
+    console.error(`usage : contenu <${COMMANDS.join('|')}> [--a-blanc] [--sans-courriel] [--renvoyer]`);
     return 2;
   }
   const p = paths();
@@ -72,6 +73,7 @@ async function main(): Promise<number> {
     console.error((error as Error).message);
     return command === 'quotidien' ? 0 : 1;
   }
+  if (command === 'hebdo' && args.includes('--renvoyer')) db.run("DELETE FROM kv WHERE key = 'compte_rendu_envoye'");
   const started = new Date();
   const runId = db.run('INSERT INTO runs (kind, started) VALUES (?, ?)', dry ? `${command}-a-blanc` : command, started.toISOString());
   const ctx: Ctx = { db, secrets: secrets(), paths: p, dry, noMail, now: started, runId, steps: [], fetch: globalThis.fetch, log: (line) => console.log(line) };

@@ -154,6 +154,11 @@ export function plainReason(reason: string | null): string {
   return `refusée par le contrôle : ${rules.find(([re]) => re.test(r))?.[1] ?? 'une règle de la ligne éditoriale'}`;
 }
 
+/** How many versions a refused post went through, when it was rewritten at all. */
+function tries(x: PostRow): string {
+  return (x.attempts ?? 1) > 1 ? `, après ${x.attempts} essais` : '';
+}
+
 /** Posts in order, grouped under their day in Paris. */
 function byDay(posts: PostRow[]): Array<{ day: string; posts: PostRow[] }> {
   const days = new Map<string, PostRow[]>();
@@ -219,6 +224,7 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
   const older = accepted.filter((x) => !fresh.has(x.id)).length;
   const example = accepted.find((x) => x.angle !== 'story')?.num ?? accepted[0]?.num ?? null;
   const refused = input.entering.filter((x) => x.status === 'refuse');
+  const rewritten = input.entering.filter((x) => x.status !== 'refuse' && (x.attempts ?? 1) > 1);
   const decisions = decisionsFor(input);
   // The seven days the figures cover: from a week ago to yesterday.
   const period = `du ${shortDay(new Date(input.now.getTime() - 7 * 86_400_000).toISOString())} au ${shortDay(new Date(input.now.getTime() - 86_400_000).toISOString())}`;
@@ -270,8 +276,11 @@ export function reportModel(input: ReportInput, summary: Summary | null): Report
   const failedSteps = input.steps.filter((s) => !s.ok);
   const footer = [
     refused.length
-      ? `Publications laissées de côté (${refused.length}), leur créneau reste vide : ${refused.map((x) => `${NETWORK_NAME[x.network]} ${parisDay(x.slot_at).toLowerCase()}, ${plainReason(x.reason)}`).join(' ; ')}.`
+      ? `Publications laissées de côté (${refused.length}), leur créneau reste vide : ${refused.map((x) => `${NETWORK_NAME[x.network]} ${parisDay(x.slot_at).toLowerCase()}, ${plainReason(x.reason)}${tries(x)}`).join(' ; ')}.`
       : 'Publications laissées de côté : aucune.',
+    ...(rewritten.length
+      ? [`Réécrites puis acceptées (${rewritten.length}) : ${rewritten.map((x) => `${NETWORK_NAME[x.network]} ${parisDay(x.slot_at).toLowerCase()}, au ${x.attempts}e essai (la première version était ${plainReason(x.reason)})`).join(' ; ')}.`]
+      : []),
     problems.length ? `Santé : ${problems.join(', ')}.` : `Santé : tout va bien.${started ? ` La file couvre ${plural(minReserve, 'jour')}.` : ''}`,
     `Dépenses du mois : ${money(input.health.spend.openrouter)} pour la rédaction (plafond ${money(CAPS.openrouterMonthly)}), ${money(input.health.spend.x)} pour X (plafond ${money(CAPS.xMonthly)}).`,
     ...(failedSteps.length ? [`À noter : ${failedSteps.map((s) => s.name).join(', ')} n’${failedSteps.length > 1 ? 'ont' : 'a'} pas pu se faire cette semaine.`] : []),
