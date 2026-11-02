@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Euphémisme. Des mots choisis pour adoucir un fait et le rendre plus acceptable.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 6.319792,
+  "heard": "le piège euphémisme des mots choisis pour adoucir un fait et le rendre plus acceptable"
+}

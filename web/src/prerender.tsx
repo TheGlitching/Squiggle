@@ -7,7 +7,7 @@ export { APP_PATHS, NOT_FOUND_TITLE, PUBLIC_PAGES, appHeadFor, feed, headFor, pa
 export { BLOG_OPEN, FEED_PATH } from './blog';
 export { SOCIAL_SOURCES, shareImage, socialPath, socialSlides, socialStory, storyPath } from './share';
 export { NOTIONS } from './glossaire';
-export { posterPath, reelPath, reelSource, reelText } from './reel';
+export { posterPath, reelPath, reelSource, reelText, spokenPath, spokenSource } from './reel';
 
 // Node 25 has a `localStorage` of its own, which warns when read without a file to keep it
 // in. The build is not a reader's browser: a page reading it here must find none.

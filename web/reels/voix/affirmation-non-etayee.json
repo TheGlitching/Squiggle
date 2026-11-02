@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Affirmation non étayée. Une affirmation importante avancée sans preuve ni raisonnement pour la soutenir.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 7.991042,
+  "heard": "le piège affirmation non étayée une affirmation importante avancée sans preuve ni raisonnements pour la soutenir"
+}

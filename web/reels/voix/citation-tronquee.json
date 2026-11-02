@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Citation tronquée. Une citation coupée ou sortie de son contexte, qui fait dire à quelqu’un autre chose que ce qu’il a dit.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 8.510542,
+  "heard": "le piège citation tronquée une citation coupée ou sortie de son contexte qui fait dire à quelq'un autre chose que ce qu'il a dit"
+}

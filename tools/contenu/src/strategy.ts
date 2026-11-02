@@ -32,7 +32,7 @@ export const TEST_WEEKS = 8;
 /** A network's own setting: tested on that network alone, against the weeks before. */
 export const NETWORK_KINDS = ['heure', 'lien', 'mots_diese'] as const;
 /** The writing or the pictures: tested on every network at once, one week each way (A, B, A, B). */
-export const CONTENT_KINDS = ['question_finale', 'image', 'format'] as const;
+export const CONTENT_KINDS = ['question_finale', 'image', 'format', 'voix'] as const;
 export const TEST_KINDS = [...NETWORK_KINDS, ...CONTENT_KINDS] as const;
 export type TestKind = (typeof TEST_KINDS)[number];
 /** The `network` of a content test. */
@@ -45,6 +45,7 @@ export const TEST_VALUES: Record<TestKind, readonly string[]> = {
   question_finale: ['avec', 'sans'],
   image: ['avec', 'sans'],
   format: ['image', 'carrousel'],
+  voix: ['parlee', 'muette'],
 };
 
 /** The networks where a kind of test means something: an image beside a link card, a link where one is optional, hashtags where they are read. */
@@ -55,9 +56,11 @@ export const TEST_NETWORKS: Record<TestKind, readonly Network[]> = {
   question_finale: NETWORKS,
   image: ['threads', 'facebook', 'mastodon'],
   format: ['bluesky', 'mastodon', 'threads', 'facebook', 'x'],
+  // Where a video may be spoken (`SPOKEN_NETWORKS` in posts.ts).
+  voix: ['bluesky'],
 };
 
-const OPPOSITE: Record<string, string> = { avec: 'sans', sans: 'avec', image: 'carrousel', carrousel: 'image' };
+const OPPOSITE: Record<string, string> = { avec: 'sans', sans: 'avec', image: 'carrousel', carrousel: 'image', parlee: 'muette', muette: 'parlee' };
 
 /**
  * What a running test sets on one network's post at a given instant, or null

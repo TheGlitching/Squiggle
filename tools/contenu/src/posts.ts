@@ -19,7 +19,7 @@ import { askJson, BudgetExceeded } from './llm';
 import { avoided, consigne, directives, lessonsBlock, networkDirective, type Directive } from './memory';
 import { Postiz, type Integration } from './postiz';
 import { EVERY_NETWORK, testValue } from './strategy';
-import { ARTICLE_SOURCES, NOTION_SOURCES, PRODUCT_PAGES, TEACHER_PAGES, imagesFor, isVideo, online, pageSource, still, type Image, type Source } from './sources';
+import { ARTICLE_SOURCES, NOTION_SOURCES, PRODUCT_PAGES, TEACHER_PAGES, imagesFor, isSpoken, isVideo, online, pageSource, still, type Image, type Source } from './sources';
 
 export interface PostRow {
   id: string;
@@ -56,7 +56,7 @@ export async function sitePaths(ctx: Ctx): Promise<Set<string>> {
   return new Set([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname.replace(/\/$/, '') || '/'));
 }
 
-/** The running tests' effect on a network (`strategy.ts`): an hour moved, a closing question, an image, one picture or several, a link, hashtags. */
+/** The running tests' effect on a network (`strategy.ts`): an hour moved, a closing question, an image, one picture or several, a link, hashtags, a voice. */
 export interface Tweaks {
   minutes: number;
   question: 'avec' | 'sans' | null;
@@ -64,6 +64,7 @@ export interface Tweaks {
   format?: 'image' | 'carrousel' | null;
   link?: 'avec' | 'sans' | null;
   tags?: 'avec' | 'sans' | null;
+  voice?: 'parlee' | 'muette' | null;
 }
 
 export function tweaks(ctx: Pick<Ctx, 'db'>, network: Network, at: Date): Tweaks {
@@ -74,7 +75,7 @@ export function tweaks(ctx: Pick<Ctx, 'db'>, network: Network, at: Date): Tweaks
     day(at),
     day(at),
   );
-  const t: Tweaks = { minutes: 0, question: null, image: null, format: null, link: null, tags: null };
+  const t: Tweaks = { minutes: 0, question: null, image: null, format: null, link: null, tags: null, voice: null };
   const either = (v: string | null) => (v === 'avec' || v === 'sans' ? v : null);
   for (const r of rows) {
     const v = testValue(r, network, at);
@@ -84,6 +85,7 @@ export function tweaks(ctx: Pick<Ctx, 'db'>, network: Network, at: Date): Tweaks
     if (r.kind === 'lien') t.link = either(v);
     if (r.kind === 'mots_diese') t.tags = either(v);
     if (r.kind === 'format') t.format = v === 'image' || v === 'carrousel' ? v : null;
+    if (r.kind === 'voix') t.voice = v === 'parlee' || v === 'muette' ? v : null;
   }
   return t;
 }
@@ -197,13 +199,31 @@ const FORMAT: Record<Network, string> = {
 const MAX_IMAGES: Record<Network, number> = { bluesky: 4, mastodon: 4, x: 4, threads: 10, facebook: 10, instagram: 10 };
 
 /**
+ * Where a video goes out spoken. Meta asks for its « AI info » label on a Reel or a
+ * video narrated by a synthetic voice, and Postiz cannot set it yet: Instagram,
+ * Facebook and Threads get the silent version until it can. Bluesky asks for no
+ * label, so none is added: no mention of the voice anywhere else either.
+ */
+export const SPOKEN_NETWORKS: readonly Network[] = ['bluesky'];
+
+/**
  * The images a post carries: its video on a video slot; on Instagram the
  * carousel, elsewhere one picture or none when the link shows its card. A format
  * test turns a post that carries a picture into the carousel, or the carousel
  * into its one picture; it leaves a video as it is.
  */
-export function chooseImages(network: Network, angle: Angle, imgs: { slides: Image[]; card: Image | null; video?: Image | null }, t: Tweaks, link: LinkPolicy): Image[] {
-  if (angle === 'video') return imgs.video ? [imgs.video] : [];
+export function chooseImages(
+  network: Network,
+  angle: Angle,
+  imgs: { slides: Image[]; card: Image | null; video?: Image | null; spoken?: Image | null },
+  t: Tweaks,
+  link: LinkPolicy,
+): Image[] {
+  if (angle === 'video') {
+    // The spoken version where it may go, unless a voice test's week says silent.
+    if (SPOKEN_NETWORKS.includes(network) && t.voice !== 'muette' && imgs.spoken) return [imgs.spoken];
+    return imgs.video ? [imgs.video] : [];
+  }
   const chosen = defaultImages(network, angle, imgs, t, link);
   if (network === 'instagram' || !t.format || chosen.length === 0) return chosen;
   if (t.format === 'image') return chosen.slice(0, 1);
@@ -260,7 +280,7 @@ async function review(ctx: Ctx, network: Network, text: string, source: Source, 
       `Publication pour ${network} :\n"""\n${text}\n"""`,
       `Page source :\n"""\n${source.text.slice(0, 6000)}\n"""`,
       images.some((i) => isVideo(i.url))
-        ? `Vidéo jointe, sans voix ; son image finale est montrée. Tous les mots qu’elle affiche : ${images.map((i) => i.alt).join(' | ')}`
+        ? `Vidéo jointe, ${images.some((i) => isSpoken(i.url)) ? 'avec une voix qui lit deux de ses lignes, sa question puis sa réponse' : 'sans voix'} ; son image finale est montrée. Tous les mots qu’elle affiche : ${images.map((i) => i.alt).join(' | ')}`
         : images.length
           ? `Images jointes (${images.length}), texte alternatif : ${images.map((i) => i.alt).join(' | ')}`
           : 'Aucune image.',

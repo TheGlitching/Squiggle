@@ -36,7 +36,9 @@ export interface Image {
  * poster the build publishes beside it (`video.mp4`, `video.jpg`). The Reel's
  * cover, the reviewer's picture and the report's thumbnail.
  */
-export const still = (url: string): string => url.replace(/\/video\.mp4$/, '/video.jpg');
+export const still = (url: string): string => url.replace(/\/video(-voix)?\.mp4$/, '/video.jpg');
+/** A video's spoken version, where a voice reads two of its lines. */
+export const isSpoken = (url: string): boolean => url.endsWith('/video-voix.mp4');
 export const isVideo = (url: string): boolean => url.endsWith('.mp4');
 
 export const flat = (segments: Segments): string => segments.map((s) => (typeof s === 'string' ? s : s[0])).join('');
@@ -135,13 +137,15 @@ export async function pageSource(ctx: Pick<Ctx, 'fetch'>, path: string): Promise
  * drew them (`/og/social/<slug>/slides.json`), else the page's share card,
  * else none; the story drawn beside the carousel (`story.json`), if any; and a
  * notion's short video (`video.json`), published only while it shows the
- * glossary's current words. The alternative text always comes from the site, never the model.
+ * glossary's current words, with its spoken version when there is one. The
+ * alternative text always comes from the site, never the model.
  */
-export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promise<{ slides: Image[]; card: Image | null; story: Image | null; video: Image | null }> {
+export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promise<{ slides: Image[]; card: Image | null; story: Image | null; video: Image | null; spoken: Image | null }> {
   const slug = source.path.split('/').pop();
   let slides: Image[] = [];
   let story: Image | null = null;
   let video: Image | null = null;
+  let spoken: Image | null = null;
   if (source.kind !== 'page' && slug) {
     try {
       const response = await ctx.fetch(`${ORIGIN}/og/social/${slug}/slides.json`, { signal: AbortSignal.timeout(20_000) });
@@ -158,8 +162,10 @@ export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promis
       if (source.kind === 'notion') {
         const videoJson = await ctx.fetch(`${ORIGIN}/og/social/${slug}/video.json`, { signal: AbortSignal.timeout(20_000) });
         if (videoJson.ok) {
-          const v = (await videoJson.json()) as { video: string; alt: string };
+          const v = (await videoJson.json()) as { video: string; alt: string; voix?: string };
           if (v.video?.startsWith('/og/social/') && isVideo(v.video) && v.alt) video = { url: `${ORIGIN}${v.video}`, alt: v.alt };
+          // The voice says only words the video shows, so the spoken version's text is the same.
+          if (video && v.voix?.startsWith('/og/social/') && isSpoken(v.voix)) spoken = { url: `${ORIGIN}${v.voix}`, alt: v.alt };
         }
       }
     } catch {
@@ -175,5 +181,5 @@ export async function imagesFor(ctx: Pick<Ctx, 'fetch'>, source: Source): Promis
     const alt = /<meta property="og:image:alt" content="([^"]+)"/.exec(html)?.[1];
     if (url?.startsWith(`${ORIGIN}/`) && alt) card = { url, alt: htmlText(`<body>${alt}</body>`).text };
   }
-  return { slides, card, story, video };
+  return { slides, card, story, video, spoken };
 }
