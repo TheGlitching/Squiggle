@@ -153,6 +153,10 @@ deployed yet) is caught up with `~/contenu/bin/contenu videos`: every video slot
 for the « ok », and the post it replaces leaves Postiz (`videos sauf 4` keeps post 4).
 Then `contenu hebdo --renvoyer` sends them for approval.
 
+A post approved but refused by Postiz stays waiting, and the « ok » report names it as
+« non programmée ». Once the cause is fixed, `~/contenu/bin/contenu programmer 26 34`
+sends those posts, and only those, to Postiz at their own slot.
+
 `.env` holds `POSTIZ_API_KEY`, `POSTIZ_API_URL`, `CF_API_TOKEN`, `CF_ACCOUNT_ID`,
 `SQUIGGLE_METRICS_TOKEN`, `OPENROUTER_API_KEY`, `BREVO_API_KEY`, `GITHUB_TOKEN`,
 `GSC_CREDENTIALS` (the key file's path), `GSC_SITE`, and, once the reply address is set

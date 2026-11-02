@@ -80,10 +80,11 @@ export async function prepareLaunch(ctx: Ctx): Promise<PostRow[]> {
 /**
  * The owner's « ok » (D8): every held post goes into Postiz, but those set
  * aside. A post whose hour came while it waited does not go out (`expireHeld`).
+ * With `only`, just those posts: an approved post Postiz refused, sent again by hand.
  */
-export async function approveHeld(ctx: Ctx, except: number[]): Promise<string> {
+export async function approveHeld(ctx: Ctx, except: number[], only?: number[]): Promise<string> {
   const late = expireHeld(ctx);
-  const held = pendingApproval(ctx).filter((p) => p.slot_at > new Date(ctx.now.getTime() + APPROVAL_MARGIN_MS).toISOString());
+  const held = pendingApproval(ctx).filter((p) => p.slot_at > new Date(ctx.now.getTime() + APPROVAL_MARGIN_MS).toISOString() && (!only || (p.num !== null && only.includes(p.num))));
   if (!held.length) return late ? `${late} publication${late > 1 ? 's' : ''} arrivée${late > 1 ? 's' : ''} à son heure sans accord, rien d’autre en attente` : 'aucune publication en attente';
   const integrations = await new Postiz(ctx).integrations();
   let scheduled = 0;

@@ -30,7 +30,7 @@ import { approveHeld, prepareLaunch } from './launch';
 import { emptyQueue, upgradeVideoSlots } from './posts';
 import { weekly } from './weekly';
 
-const COMMANDS = ['quotidien', 'hebdo', 'lancement', 'lancement-ok', 'pause', 'reprendre', 'vider-la-file', 'videos', 'liberer', 'lecon-retirer', 'etat'] as const;
+const COMMANDS = ['quotidien', 'hebdo', 'lancement', 'lancement-ok', 'programmer', 'pause', 'reprendre', 'vider-la-file', 'videos', 'liberer', 'lecon-retirer', 'etat'] as const;
 
 function lock(dir: string): () => void {
   const file = join(dir, 'contenu.lock');
@@ -88,6 +88,7 @@ async function main(): Promise<number> {
       const rows = await upgradeVideoSlots(ctx, args.slice(args.indexOf('sauf') + 1).filter((a) => args.includes('sauf') && /^\d+$/.test(a)).map(Number));
       console.log(`${rows.filter((r) => r.status === 'en_attente').length} vidéos en attente d’accord : \`contenu hebdo --renvoyer\` les envoie`);
     }
+    if (command === 'programmer') console.log(await approveHeld(ctx, [], args.filter((a) => /^\d+$/.test(a)).map(Number)));
     if (command === 'vider-la-file') {
       writeFileSync(pauseFile(ctx), `Suspendu et vidé à la main le ${started.toISOString()}\n`);
       console.log(`${await emptyQueue(ctx)} publications supprimées de Postiz`);
