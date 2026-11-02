@@ -13,6 +13,10 @@
  * `web/reels.mjs` encodes the frames with ffmpeg, once per notion; the build
  * publishes a video only while the glossary still says what it shows
  * (`reelSource`).
+ *
+ * A spoken version sits beside the silent one: a synthetic voice reads two of
+ * the lines on screen, the question as the video opens and the answer as it
+ * appears, and nothing else, so the words on screen remain its subtitles.
  */
 import { createHash } from 'node:crypto';
 
@@ -32,6 +36,8 @@ const SIDE = 96;
 
 /** Where a notion's video is published, beside its carousel: `/og/social/faux-dilemme/video.mp4`. */
 export const reelPath = (notion: Notion) => `/og/social/${notion.slug}/video.mp4`;
+/** Its spoken version, beside it. */
+export const spokenPath = (notion: Notion) => `/og/social/${notion.slug}/video-voix.mp4`;
 /** Its last frame, everything shown: the Reel's cover, and what an e-mail or a reviewer sees of it. */
 export const posterPath = (notion: Notion) => `/og/social/${notion.slug}/video.jpg`;
 
@@ -53,6 +59,105 @@ export function reelText(notion: Notion): string {
   return typo(`Où est le piège ? ${ended(plain(titre))} ${plain(texte)} Le piège : ${ended(notion.nom)} ${notion.resume} squiggle.fr/glossaire/${notion.slug}`);
 }
 
+/**
+ * The voice of the spoken version: Gemini TTS through Google Cloud's
+ * Text-to-Speech, generated once per line by `reels.mjs` and committed with the
+ * videos. Changing any of it makes every spoken video out of date.
+ */
+export const VOICE = {
+  model: 'gemini-2.5-flash-tts',
+  name: 'Kore',
+  language: 'fr-FR',
+  prompts: {
+    // Given the answers' longer prompt, the model said the four words of the question again and again,
+    // once with a piece of the prompt among them; a prompt this short, it says them once.
+    question: 'Pose cette question une seule fois, d’un ton naturel et intrigué.',
+    // A calm reading came out at ten characters a second, too slow for a short video; this one at
+    // about sixteen. Without « une seule fois », some lines came out twice, every take.
+    answer: 'Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.',
+  },
+} as const;
+
+/** What the voice says, word for word what the screen shows: the question, then the answer. */
+export function narration(notion: Notion): { question: string; answer: string } {
+  return { question: 'Où est le piège ?', answer: `Le piège : ${ended(notion.nom)} ${notion.resume}` };
+}
+
+/**
+ * The words of a line as a listener hears them: case, accents, punctuation and
+ * apostrophes do not count, so a transcript can be held against the text.
+ */
+export function spokenWords(text: string): string[] {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * A word as French says it, roughly: the endings it does not pronounce dropped
+ * (« seules » and « seuls », « présenter » and « présenté », « existent » and
+ * « exist », « procès d’ » and « procède » sound the same), so a transcript that
+ * wrote a homophone is not taken for a voice that misspoke. It works on the
+ * accented word: an « è » is said, a plain final « e » is not.
+ */
+function sound(word: string): string {
+  return (
+    word
+      // « ad hominem » and « a dominem »: an h is silent, the d of « ad » is not.
+      .replace(/(?<![cpst])h/g, '')
+      // « chapô » and « chapeau ».
+      .replace(/e?au/g, 'o')
+      .replace(/^(..+?)[sx]$/, '$1')
+      .replace(/(.{3,})ent$/, '$1')
+      .replace(/e[rzt]$/, 'é')
+      // A final t or d is silent only where it ends the word: the d of « procède » is said.
+      .replace(/(..)[td]$/, '$1')
+      .replace(/(.)s$/, '$1')
+      .replace(/(.)e+$/, '$1')
+  );
+}
+
+/** A line as one run of sounds: where the words break does not count (« est le » is heard as « elle »). */
+const sounds = (text: string) =>
+  text
+    .normalize('NFC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .map(sound)
+    .join('')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/(.)\1+/g, '$1');
+
+/**
+ * How a transcript of a take differs from its line, or null when it sounds the
+ * same: a word added, left out or said as another is a take to throw away; a
+ * homophone the transcript chose is not.
+ */
+export function misheard(text: string, heard: string): string | null {
+  const [want, got] = [spokenWords(text), spokenWords(heard)];
+  if (sounds(text) === sounds(heard)) return null;
+  let start = 0;
+  while (start < want.length && want[start] === got[start]) start += 1;
+  let end = 0;
+  while (end < want.length - start && end < got.length - start && want[want.length - 1 - end] === got[got.length - 1 - end]) end += 1;
+  return `« ${want.slice(start, want.length - end).join(' ')} » heard as « ${got.slice(start, got.length - end).join(' ')} »`;
+}
+
+/** When each line starts, in seconds: with the heading, and with the answer. */
+export function spokenAt(notion: Notion): { question: number; answer: number } {
+  return { question: 0.3, answer: timeline(notion).reveal + ANSWER_DELAY };
+}
+
+/** The spoken version's fingerprint: what it shows, what it says, and the voice that says it. */
+export function spokenSource(notion: Notion): string {
+  return createHash('sha256').update(JSON.stringify([reelSource(notion), narration(notion), VOICE])).digest('hex').slice(0, 16);
+}
+
 /** How far each part has come in, from 0 to 1. */
 interface State {
   heading: number;
@@ -65,14 +170,22 @@ interface State {
   signature: number;
 }
 
-/** The moments of the scene, in seconds: reading time follows the length of the text, within bounds a feed keeps watching. */
-export function timeline(notion: Notion) {
+/** The answer comes in this long after the reveal starts; in the spoken version, so does its line. */
+const ANSWER_DELAY = 0.4;
+
+/**
+ * The moments of the scene, in seconds: reading time follows the length of the
+ * text, within bounds a feed keeps watching. With `spoken`, the length of the
+ * answer's spoken line, the last frame holds until the voice has finished.
+ */
+export function timeline(notion: Notion, spoken?: number) {
   const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
   const read = clamp((plain(notion.exemple.titre).length + plain(notion.exemple.texte).length) / 32, 5, 6.5);
   const answer = clamp((notion.nom.length + notion.resume.length) / 24, 3, 4);
   const marked = 1 + read;
   const reveal = marked + 1.2;
-  return { read, marked, reveal, end: reveal + 1 + answer };
+  const end = reveal + 1 + answer;
+  return { read, marked, reveal, end: spoken === undefined ? end : Math.max(end, reveal + ANSWER_DELAY + spoken + 0.8) };
 }
 
 const ease = (value: number) => 1 - (1 - Math.min(1, Math.max(0, value))) ** 3;
@@ -88,7 +201,7 @@ function stateAt(t: number, notion: Notion): State {
     mark: enter(t, marked, 1.1, (value) => Math.min(1, Math.max(0, value))),
     glass: enter(t, reveal, 0.6),
     lift: 1 - enter(t, reveal, 0.7),
-    answer: enter(t, reveal + 0.4, 0.6),
+    answer: enter(t, reveal + ANSWER_DELAY, 0.6),
     signature: enter(t, reveal + 0.8, 0.6),
   };
 }
@@ -170,8 +283,9 @@ export interface Reel {
   frames: () => AsyncGenerator<Buffer>;
 }
 
-export async function reel(notion: Notion): Promise<Reel> {
-  const { end } = timeline(notion);
+/** The video's frames; with `spoken`, the length of the answer's spoken line, those of its spoken version. */
+export async function reel(notion: Notion, spoken?: number): Promise<Reel> {
+  const { end } = timeline(notion, spoken);
   const { scale, lift } = await fit(notion);
   const count = Math.round(end * REEL_FPS);
   return {

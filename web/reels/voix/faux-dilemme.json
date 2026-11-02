@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Faux dilemme. Présenter deux options comme les seules possibles, alors que d’autres existent.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 6.955875,
+  "heard": "le piège faux dilemme présenté deux options comme les seules possibles alors que d'autres existent"
+}

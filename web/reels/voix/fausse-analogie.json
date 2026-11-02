@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Fausse analogie. Rapprocher deux situations qui se ressemblent en surface pour conclure de l’une à l’autre.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 7.8095,
+  "heard": "le piège fausse analogie rapprochez deux situations qui se ressemblent en surface pour conclure de l'une à l'autre"
+}

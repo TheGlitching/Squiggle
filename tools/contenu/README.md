@@ -64,7 +64,12 @@ Monday in order:
    (`/og/social/<slug>/video.mp4`, rendered once per notion on a computer by
    `npm run reels -w @squiggle/web` and published by the build while it shows the
    glossary's current words). A notion without one keeps the slot's format from before
-   (`withoutVideo`). Each post
+   (`withoutVideo`). On Bluesky the video goes out in its spoken version, where a
+   synthetic voice reads its question and its answer (Gemini TTS through Google Cloud,
+   generated with the videos on that computer, with `SQUIGGLE_TTS_PROJECT` set; no key
+   on the VPS); a `voix` test sets it against the silent one, a week each way. Meta asks
+   for its « AI info » label on a synthetic voice and Postiz cannot set it yet, so
+   Instagram, Facebook and Threads get the silent version (`SPOKEN_NETWORKS`). Each post
    is drafted from one online page, passes the deterministic filter (`src/filter.ts`),
    then a separate review that sees only the text, its source, its image and the
    editorial line. A refused post leaves its slot empty and is never rewritten.

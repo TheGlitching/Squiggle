@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Attaque ad hominem. Disqualifier un argument en attaquant la personne qui le porte.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 6.678958,
+  "heard": "le piège attaque à dominem disqualifié un argument en attaquant la personne qui le porte"
+}

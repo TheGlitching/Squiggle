@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Appel à la popularité. Présenter une idée comme vraie parce que beaucoup de gens y croient.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 6.699792,
+  "heard": "le piège appel à la popularité présenter une idée comme vraie parce que beaucoup de gens y croient"
+}

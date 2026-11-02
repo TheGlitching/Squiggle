@@ -48,7 +48,8 @@ récompenser (`networks.<réseau>`) :
     juger sur assez de publications ; une seule à la fois :
     - `{"network": "tous", "kind": "question_finale", "value": "avec" | "sans", "hypothesis"}` : finir ou non par une question ;
     - `{"network": "tous", "kind": "image", "value": "avec" | "sans", "hypothesis"}` : une image en plus de l'aperçu du lien (Threads, Facebook, Mastodon) ;
-    - `{"network": "tous", "kind": "format", "value": "image" | "carrousel", "hypothesis"}` : une image, ou plusieurs.
+    - `{"network": "tous", "kind": "format", "value": "image" | "carrousel", "hypothesis"}` : une image, ou plusieurs ;
+    - `{"network": "tous", "kind": "voix", "value": "parlee" | "muette", "hypothesis"}` : la courte vidéo d'une notion avec la voix qui lit sa question et sa réponse, ou sans voix (Bluesky seulement pour l'instant ; sans test, Bluesky reçoit la version parlée).
   Ne propose un test que s'il y a déjà des publications parties sur les réseaux concernés.
 
 Ce qui est entendu dans la semaine (commentaires, réponses et gestes du propriétaire)

@@ -1,0 +1,13 @@
+{
+  "said": {
+    "text": "Le piège : Vocabulaire chargé. Des mots choisis pour faire ressentir un jugement plutôt que pour décrire.",
+    "prompt": "Lis ce texte une seule fois, en voix off d’une courte vidéo explicative : ton naturel et assuré, débit vif et régulier.",
+    "voice": {
+      "model": "gemini-2.5-flash-tts",
+      "name": "Kore",
+      "language": "fr-FR"
+    }
+  },
+  "seconds": 7.060125,
+  "heard": "le piège vocabulaire chargé des mots choisis pour faire ressentir un jugement plutôt que pour décrire"
+}
