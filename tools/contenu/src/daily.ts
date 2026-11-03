@@ -36,19 +36,18 @@ export async function spendThisMonth(ctx: Ctx): Promise<{ openrouter: number; x:
 const FAILED_LOOKBACK_DAYS = 7;
 
 /**
- * One e-mail per post Postiz left in error, ever, whoever scheduled it. A
- * Postiz notification names no post, so the post itself is the only thing a
- * failure can be counted once against; the routine's own post keeps the key
- * it has always been alerted under.
+ * One e-mail per post Postiz left in error, whoever scheduled it. A Postiz
+ * notification names no post, so the post itself, at its date, is what a
+ * failure is counted once against: a post rescheduled after a failure is
+ * alerted again only if it fails again.
  */
 export async function alertFailures(ctx: Ctx, queue: readonly PostizPost[]): Promise<number> {
   let sent = 0;
   for (const p of queue.filter((q) => q.state === 'ERROR')) {
-    const ours = ctx.db.get<{ id: string; text: string }>('SELECT id, text FROM posts WHERE postiz_id = ?', p.id);
-    const key = `echec:${ours?.id ?? p.id}`;
+    const key = `echec:${p.id}@${p.publishDate}`;
     if (ctx.db.get('SELECT 1 FROM alerts WHERE key = ?', key)) continue;
     const network = p.integration.providerIdentifier;
-    const text = ours?.text ?? p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const text = p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     await alert(ctx, key, `publication échouée sur ${network}`, `La publication du ${parisDate(p.publishDate)} sur ${network} n’est pas partie.\nMotif donné par Postiz : ${p.error ?? 'aucun'}\n\nTexte :\n${text}\n\nLa reprogrammer dans Postiz (social.squiggle.fr) une fois la cause réglée.`);
     sent += 1;
   }
