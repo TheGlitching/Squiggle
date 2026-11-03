@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { CALENDAR } from '../src/calendar';
 import type { Ctx } from '../src/context';
 import { MASTODON_TAGS, pickTags, weekTags } from '../src/hashtags';
-import { chooseImages, linkFor, videoSlotOf, type Tweaks } from '../src/posts';
-import type { Image } from '../src/sources';
+import { chooseImages, freshSlots, linkFor, videoSlotOf, type Planned, type Tweaks } from '../src/posts';
+import type { Image, Source } from '../src/sources';
 
 // The routine's database is Node's own SQLite (22.13 and later, the VPS runs 24).
 const sqlite = await import('node:sqlite').then(
@@ -139,5 +139,43 @@ describe('a video slot filled without its video', () => {
     expect(videoSlotOf(row('threads', '2026-11-09T17:30:00.000Z'))).toBeNull();
     expect(videoSlotOf(row('instagram', '2026-11-11T18:00:00.000Z', 'carrousel'))).toBeNull();
     expect(videoSlotOf({ ...row('bluesky', '2026-11-09T11:15:00.000Z'), pillar: 'fond' })).toBeNull();
+  });
+});
+
+describe('a fresh page’s slots', () => {
+  // 3 November, 06:03 UTC: « Procès d’intention » and « Un sondage dans un article » went online in the same daily run.
+  const earliest = new Date('2026-11-05T06:03:00.000Z');
+  const first = { id: 'glossaire/proces-d-intention' } as Source;
+  const second = { id: 'blog/sondage-quatre-questions' } as Source;
+  const at = (planned: Planned[]) => planned.map((p) => `${p.slot.network}@${p.at.toISOString()}`).sort();
+  // The X slots held before the run: Monday 9, 16 (waiting for « ok »), Thursday 12 and 19.
+  const held = ['x@2026-11-09T11:00:00.000Z', 'x@2026-11-12T11:00:00.000Z', 'x@2026-11-16T11:00:00.000Z', 'x@2026-11-19T11:00:00.000Z', 'threads@2026-11-13T17:30:00.000Z'];
+
+  it('takes the week’s « contenu de la semaine » slots when no other fresh page holds them', () => {
+    expect(at(freshSlots(first, earliest, new Set(), new Set(held)))).toEqual([
+      'bluesky@2026-11-11T11:15:00.000Z',
+      'facebook@2026-11-05T17:30:00.000Z',
+      'mastodon@2026-11-11T11:30:00.000Z',
+      'threads@2026-11-11T17:30:00.000Z',
+      'x@2026-11-05T11:00:00.000Z',
+    ]);
+  });
+
+  it('leaves a slot to the page declined before it, and takes its network’s next free slot', () => {
+    const taken = new Set(held);
+    const rivals = new Set(at(freshSlots(first, earliest, new Set(), taken)));
+    const planned = freshSlots(second, earliest, rivals, taken);
+    expect(at(planned)).toEqual([
+      // Thursday 18:30 Paris, Bluesky's next slot after Wednesday's.
+      'bluesky@2026-11-12T17:30:00.000Z',
+      // Tuesday, the next Facebook slot not already taken.
+      'facebook@2026-11-10T17:30:00.000Z',
+      'mastodon@2026-11-13T11:30:00.000Z',
+      // Friday 13 is taken: the following Monday.
+      'threads@2026-11-16T17:30:00.000Z',
+      'x@2026-11-23T11:00:00.000Z',
+    ]);
+    expect(planned.every((p) => !rivals.has(`${p.slot.network}@${p.at.toISOString()}`))).toBe(true);
+    expect(planned.find((p) => p.slot.network === 'x')?.week).toBe('2026-11-23');
   });
 });

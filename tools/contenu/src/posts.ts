@@ -589,24 +589,59 @@ export async function fillQueue(ctx: Ctx, thisWeek: string, weight: Weight): Pro
   return rows;
 }
 
+/** How far a fresh page's post looks for a free slot of its network when its own is held by another fresh page. */
+const FRESH_SLOT_WEEKS = 6;
+
+/**
+ * Where a fresh page's posts go: the « contenu de la semaine » slots of the
+ * seven days from `earliest`. A slot another fresh page's post already holds,
+ * waiting for the same « ok » (`rivals`), stays that page's: this post takes
+ * its network's next free calendar slot instead (`taken`: the journal and
+ * Postiz, as the weekly planner sees them), so two pages declined in one run
+ * never post on one network at the same minute. Fills `taken` as it goes.
+ */
+export function freshSlots(source: Source, earliest: Date, rivals: ReadonlySet<string>, taken: Set<string>): Planned[] {
+  const key = (network: Network, at: Date) => `${network}@${at.toISOString()}`;
+  const nextFree = (network: Network, after: Date): Date | null => {
+    const candidates: Date[] = [];
+    for (let w = 0; w <= FRESH_SLOT_WEEKS; w += 1) {
+      const monday = weekOf(addDays(after, 7 * w));
+      for (const s of CALENDAR.filter((c) => c.network === network)) candidates.push(slotAt(monday, s));
+    }
+    return candidates.sort((a, b) => a.getTime() - b.getTime()).find((at) => at > after && !taken.has(key(network, at))) ?? null;
+  };
+  const planned: Planned[] = [];
+  const seen = new Set<string>();
+  for (let d = 0; d < 9; d += 1) {
+    const monday = weekOf(addDays(earliest, d));
+    for (const slot of CALENDAR.filter((s) => s.pillar === 'fond')) {
+      const own = slotAt(monday, slot);
+      if (own < earliest || own > addDays(earliest, 7) || seen.has(key(slot.network, own))) continue;
+      seen.add(key(slot.network, own));
+      const at = rivals.has(key(slot.network, own)) ? nextFree(slot.network, own) : own;
+      if (!at) continue;
+      taken.add(key(slot.network, at));
+      planned.push({ slot, at, week: weekOf(at), pillar: 'fond', angle: 'page', source });
+    }
+  }
+  return planned;
+}
+
 /**
  * A piece of substance just went online (3.4): its posts take the « contenu de
  * la semaine » slots of the next seven days, at least 48 hours after the e-mail
  * that shows them, and wait for the owner's « ok » like every other (D8). A post already in such a slot is taken out of Postiz and
- * goes back to the journal as `rendu`; nothing the owner placed by hand is moved.
+ * goes back to the journal as `rendu`; nothing the owner placed by hand is moved,
+ * and a slot another fresh page holds stays that page's (`freshSlots`).
  */
 export async function declineFresh(ctx: Ctx, source: Source): Promise<PostRow[]> {
   const earliest = addDays(ctx.now, FRESH_NOTICE_HOURS / 24);
   const integrations = await new Postiz(ctx).integrations();
-  const planned: Planned[] = [];
-  for (let d = 0; d < 9; d += 1) {
-    const monday = weekOf(addDays(earliest, d));
-    for (const slot of CALENDAR.filter((s) => s.pillar === 'fond')) {
-      const at = slotAt(monday, slot);
-      if (at < earliest || at > addDays(earliest, 7) || planned.some((p) => p.slot === slot && p.at.getTime() === at.getTime())) continue;
-      planned.push({ slot, at, week: monday, pillar: 'fond', angle: 'page', source });
-    }
-  }
+  const rivals = new Set(
+    ctx.db.all<{ network: string; slot_at: string }>("SELECT network, slot_at FROM posts WHERE status = 'en_attente' AND source_id <> ? AND slot_at >= ?", source.id, earliest.toISOString()).map((r) => `${r.network}@${r.slot_at}`),
+  );
+  const taken = await takenSlots(ctx, earliest, addDays(earliest, 7 * (FRESH_SLOT_WEEKS + 2)));
+  const planned = freshSlots(source, earliest, rivals, taken);
   const drafts = await writePosts(ctx, planned, '');
   const postiz = new Postiz(ctx);
   for (const d of drafts.filter((x) => x.status === 'propose')) {
