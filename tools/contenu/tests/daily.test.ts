@@ -44,13 +44,11 @@ describe.skipIf(!sqlite)('a failed post’s alert', () => {
     expect(mails).toHaveLength(2);
   });
 
-  it('keeps the key a post the routine scheduled was already alerted under', async () => {
+  it('goes again for a post rescheduled after a failure that fails again', async () => {
     const { ctx, mails } = setup();
-    ctx.db.run(
-      "INSERT INTO posts (id, week, network, slot_at, pillar, angle, source_id, text, status, postiz_id, created_at) VALUES ('b099c2c5', '2026-W45', 'x', '2026-11-02T11:00:00.000Z', 'fond', 'page', 's', 'Le texte de la routine', 'echec', 'cmvwzp8ja0008o8872hy1mrfm', '2026-11-02')",
-    );
-    ctx.db.run("INSERT INTO alerts (key, sent_at) VALUES ('echec:b099c2c5', '2026-11-03T06:00:00.000Z')");
-    expect(await alertFailures(ctx, QUEUE)).toBe(1);
-    expect(mails.join('\n')).not.toMatch(/sur x/);
+    await alertFailures(ctx, QUEUE);
+    const again = { ...QUEUE[0], publishDate: '2026-11-23T11:00:00.000Z' };
+    expect(await alertFailures(ctx, [again, QUEUE[1]])).toBe(1);
+    expect(mails).toHaveLength(3);
   });
 });
