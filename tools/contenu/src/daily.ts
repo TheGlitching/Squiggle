@@ -17,13 +17,12 @@ import { readOwnerMail } from './inbox';
 import { expireHeld, pendingApproval } from './launch';
 import { monthlySpend } from './llm';
 import { alert, sendMail } from './mail';
-import { Postiz } from './postiz';
+import { Postiz, type PostizPost } from './postiz';
 import { declineFresh, reconcile, reserve, sitePaths } from './posts';
 import { classifyComments, collectBlueskyComments, collectMastodonComments, learnFromReplies, markMailed, metaComments, rememberMeta, unmailed } from './replies';
 import { buildNotice, buildReplies, parisDate, reserveDays } from './report';
 
-/** Notifications that mean a post did not go out, or a network needs reconnecting. */
-const FAILED = /fail|error|échou|erreur|could not|impossible/i;
+/** Notifications that mean a network needs reconnecting. A post that did not go out is read on the post itself. */
 const DISCONNECTED = /disconnect|reconnect|refresh|expired|expir|token|déconnect/i;
 
 export async function spendThisMonth(ctx: Ctx): Promise<{ openrouter: number; x: number }> {
@@ -31,6 +30,29 @@ export async function spendThisMonth(ctx: Ctx): Promise<{ openrouter: number; x:
   const month = ctx.now.toISOString().slice(0, 7);
   const x = ctx.db.get<{ usd: number | null }>("SELECT SUM(usd) AS usd FROM spend WHERE service = 'x' AND at LIKE ?", `${month}%`)?.usd ?? 0;
   return { openrouter, x };
+}
+
+/** How far back a failed post is still worth an alert: a week covers a missed daily run. */
+const FAILED_LOOKBACK_DAYS = 7;
+
+/**
+ * One e-mail per post Postiz left in error, ever, whoever scheduled it. A
+ * Postiz notification names no post, so the post itself is the only thing a
+ * failure can be counted once against; the routine's own post keeps the key
+ * it has always been alerted under.
+ */
+export async function alertFailures(ctx: Ctx, queue: readonly PostizPost[]): Promise<number> {
+  let sent = 0;
+  for (const p of queue.filter((q) => q.state === 'ERROR')) {
+    const ours = ctx.db.get<{ id: string; text: string }>('SELECT id, text FROM posts WHERE postiz_id = ?', p.id);
+    const key = `echec:${ours?.id ?? p.id}`;
+    if (ctx.db.get('SELECT 1 FROM alerts WHERE key = ?', key)) continue;
+    const network = p.integration.providerIdentifier;
+    const text = ours?.text ?? p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    await alert(ctx, key, `publication échouée sur ${network}`, `La publication du ${parisDate(p.publishDate)} sur ${network} n’est pas partie.\nMotif donné par Postiz : ${p.error ?? 'aucun'}\n\nTexte :\n${text}\n\nLa reprogrammer dans Postiz (social.squiggle.fr) une fois la cause réglée.`);
+    sent += 1;
+  }
+  return sent;
 }
 
 export async function daily(ctx: Ctx): Promise<void> {
@@ -60,9 +82,6 @@ export async function daily(ctx: Ctx): Promise<void> {
 
   const rec = await step(ctx, 'état de la file', () => reconcile(ctx));
   if (rec) {
-    for (const p of rec.failed) {
-      await alert(ctx, `echec:${p.id}`, `publication échouée sur ${p.network}`, `La publication du ${parisDate(p.slot_at)} sur ${p.network} n’est pas partie.\nMotif donné par le réseau : ${p.reason}\n\nTexte :\n${p.text}\n\nSouvent, rien à faire. Sinon, la reprogrammer dans Postiz.`);
-    }
     const removedThisWeek = ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM posts WHERE status = 'retire' AND checked_at >= ?", addDays(ctx.now, -7).toISOString())?.n ?? 0;
     if (removedThisWeek > MAX_REMOVALS_PER_WEEK && ctx.db.getKv<boolean>('mode_brouillon') !== true) {
       if (!ctx.dry) ctx.db.setKv('mode_brouillon', true);
@@ -70,12 +89,13 @@ export async function daily(ctx: Ctx): Promise<void> {
     }
   }
 
+  await step(ctx, 'publications en échec', async () => alertFailures(ctx, await postiz.posts(addDays(ctx.now, -FAILED_LOOKBACK_DAYS), ctx.now)), (n) => (n ? `${n} signalée${n > 1 ? 's' : ''}` : 'aucune nouvelle'));
+
   await step(ctx, 'notifications Postiz', async () => {
     const since = ctx.db.getKv<string>('notifications_vues') ?? addDays(ctx.now, -1).toISOString();
     const fresh = (await postiz.notifications()).filter((n) => n.createdAt > since);
     for (const n of fresh) {
       if (DISCONNECTED.test(n.content)) await alert(ctx, `deconnecte:${n.id}`, 'réseau à reconnecter', `Postiz signale : « ${n.content} »\n\nÀ faire : reconnecter ce réseau dans Postiz (social.squiggle.fr, Ajouter un canal).`);
-      else if (FAILED.test(n.content)) await alert(ctx, `notif:${n.id}`, 'publication échouée', `Postiz signale : « ${n.content} »\n\nLire le motif dans Postiz ; souvent, rien à faire.`);
     }
     if (fresh.length && !ctx.dry) ctx.db.setKv('notifications_vues', fresh.map((n) => n.createdAt).sort().pop());
     return fresh.length;
