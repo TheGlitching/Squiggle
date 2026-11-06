@@ -19,7 +19,7 @@
     "@fontsource-variable/newsreader": "5.3.0",
     "@squiggle/shared": "*",
     "@tesseract.js-data/fra": "^1.0.0",
-    "pdfjs-dist": "^6.4.299",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tesseract.js": "^7.0.0"
