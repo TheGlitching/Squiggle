@@ -27,7 +27,7 @@ recherche dans la boutique : la seconde moitié porte les mots qu’un lecteur t
 **Chrome Web Store** (132 caractères au plus ; c’est la `description` des manifestes, et
 `tests/packaging.test.ts` vérifie la limite) :
 
-Un deuxième avis sur l’article que vous lisez : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre clé d’API.
+Vérifiez un article avant d’y croire. Passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre clé d’API.
 
 **AMO** (250 caractères au plus ; champ « Résumé » de la fiche) :
 
