@@ -17,7 +17,7 @@ import { SCORE_DOMAINS } from '../../shared/src/engine/types';
 import { App } from '../src/App';
 import { MEASURE } from '../src/components/Landing';
 import { CONTACT_URL } from '../src/components/Layout';
-import { CHROME_URL, FIREFOX_URL } from '../src/install';
+import { CHROME_URL, EDGE_URL, FIREFOX_URL } from '../src/install';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
 import { TAGLINE } from '../src/offer';
 import { CRITERIA, FAQ } from '../src/pages/Accueil';
@@ -349,7 +349,7 @@ describe('Accueil', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     for (const [ua, label, href] of [
       ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36', 'Ajouter à Chrome', CHROME_URL],
-      ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0', 'Ajouter à Edge', CHROME_URL],
+      ['Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0', 'Ajouter à Edge', EDGE_URL],
       ['Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0', 'Ajouter à Firefox', FIREFOX_URL],
     ]) {
       agent.mockReturnValue(ua);
