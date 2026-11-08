@@ -16,12 +16,12 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
     "@squiggle/shared": "*",
-    "postal-mime": "^4.1.4"
+    "postal-mime": "^4.2.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
     "typescript": "^5.7.3",
     "vitest": "^4.1.12",
-    "wrangler": "^4.156.0"
+    "wrangler": "^4.157.0"
   }
 }
