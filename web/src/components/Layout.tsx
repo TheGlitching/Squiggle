@@ -17,7 +17,7 @@ const NAV = [
   ['Tarifs', '/#tarifs'],
 ] as const;
 
-const NAV_LINK = 'inline-block py-2 text-base text-muted transition-colors duration-160 ease-out hover:text-foreground';
+const NAV_LINK = 'inline-flex min-h-11 items-center py-2 text-base text-muted transition-colors duration-160 ease-out hover:text-foreground';
 
 /**
  * Every page's chrome: one header, one footer. `account` is the reader's way in:
@@ -56,7 +56,7 @@ export function Layout({
             </Link>
             <Link
               to={account === 'Se connecter' ? '/connexion' : '/compte'}
-              className="inline-block py-2 text-base font-medium whitespace-nowrap text-foreground transition-colors duration-160 ease-out hover:text-accentInk sm:rounded-control sm:border sm:border-borderControl sm:px-4 sm:hover:border-accent"
+              className="inline-flex min-h-11 items-center py-2 text-base font-medium whitespace-nowrap text-foreground transition-colors duration-160 ease-out hover:text-accentInk sm:rounded-control sm:border sm:border-borderControl sm:px-4 sm:hover:border-accent"
             >
               {account}
             </Link>

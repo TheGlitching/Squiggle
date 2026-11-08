@@ -177,7 +177,7 @@ describe('Analyser, signed out', () => {
     const seen = serve(null);
     const first = render(<Analyser />);
     paste(TEXT);
-    expect(await screen.findByText(/Une analyse offerte sans compte\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Une analyse offerte sans compte : la note et le premier constat\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion?next=/analyser');
     fireEvent.click(await analyseButton());
 
@@ -223,6 +223,9 @@ describe('Analyser, signed out', () => {
     // Nothing of the second finding is on the page: the server never sent it.
     expect(screen.queryByText('Formule appuyée')).toBeNull();
     expect(screen.getByText('Créez un compte gratuit pour voir l’autre constat.')).toBeInTheDocument();
+    // One offer, under the findings it opens: not a second card just below.
+    expect(screen.getAllByRole('link', { name: 'Créer un compte gratuit' })).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: /Gardez ce rapport/ })).toBeNull();
     for (const link of screen.getAllByRole('link', { name: 'Créer un compte gratuit' })) {
       expect(link).toHaveAttribute('href', '/connexion?next=%2Fanalyser%3Fapres%3Dflou');
     }

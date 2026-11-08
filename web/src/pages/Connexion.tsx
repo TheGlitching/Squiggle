@@ -123,8 +123,12 @@ export function Connexion() {
   return (
     <div className={`${PAGE} grid gap-14 py-12 md:py-20 lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] lg:gap-24`}>
       <div>
-        <h1 className={TITLE}>Se connecter</h1>
-        <p className="mt-3 mb-0 text-lg text-muted">Un code par e-mail. Pas de mot de passe.</p>
+        <h1 className={TITLE}>Se connecter ou créer un compte</h1>
+        {/* The same form for both: an unknown address opens its account at the first code. */}
+        <p className="mt-3 mb-0 text-lg text-muted">
+          Un code par e-mail, pas de mot de passe. Pas encore de compte ? Il s’ouvre à la première connexion, avec{' '}
+          {FREE_ANALYSES} analyses offertes, sans carte bancaire.
+        </p>
 
         {error ? (
           <p
@@ -218,7 +222,7 @@ export function Connexion() {
         </p>
       </div>
 
-      {/* What a new account opens: the offer, and what an analysis gives back. */}
+      {/* What an analysis gives back, and where the account works. */}
       <aside
         aria-label="Ce que vous obtenez"
         className="grid content-start gap-6 max-lg:border-t max-lg:border-lineSoft max-lg:pt-12"
@@ -226,10 +230,7 @@ export function Connexion() {
         <div className="max-w-80">
           <StepFigure step="rapport" />
         </div>
-        <ul className="m-0 grid list-none gap-3 p-0 text-lg">
-          <li>{FREE_ANALYSES} analyses offertes, sans carte bancaire.</li>
-          <li className="text-muted">Un compte pour le site, l’appli et l’extension.</li>
-        </ul>
+        <p className="m-0 text-lg text-muted">Un compte pour le site, l’appli et l’extension.</p>
       </aside>
     </div>
   );

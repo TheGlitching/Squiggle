@@ -31,6 +31,7 @@ import {
 import { count } from '../count';
 import { frenchDate } from '../format';
 import { glossaryLink } from '../glossaire';
+import { FREE_ANALYSES } from '../offer';
 import { locateFindings, passageTone, type Segment } from '../report';
 import { Link } from '../router';
 import { PRIMARY_BUTTON } from './Landing';
@@ -430,7 +431,8 @@ function Withheld({ withheld, signUp }: { withheld: NonNullable<AnalysisReport['
       <div className="mt-4 rounded-card border border-accent/50 bg-surface p-5">
         <p className="m-0 text-base font-semibold">Créez un compte gratuit pour voir {others}.</p>
         <p className="mt-1 mb-4 text-sm text-muted">
-          Sans carte bancaire. Le rapport complet s’affiche dès votre retour, sans nouvelle analyse.
+          {FREE_ANALYSES} analyses offertes, sans carte bancaire. Le rapport complet s’affiche dès votre retour, sans
+          nouvelle analyse.
         </p>
         <Link to={signUp} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
           Créer un compte gratuit

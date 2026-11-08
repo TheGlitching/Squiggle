@@ -21,6 +21,14 @@ function renderAt(path: string) {
 }
 
 describe('Connexion', () => {
+  // A newcomer sent here by "Créer un compte gratuit" must recognise what was promised.
+  it('says that the same form opens an account, and what a new one comes with', () => {
+    installFetch(() => undefined);
+    renderAt('/connexion');
+    expect(screen.getByRole('heading', { level: 1, name: 'Se connecter ou créer un compte' })).toBeInTheDocument();
+    expect(screen.getByText(/Il s’ouvre à la première connexion, avec 3 analyses offertes, sans carte bancaire\./)).toBeInTheDocument();
+  });
+
   it('turns a typed e-mail into a code, then the code into a session', async () => {
     const user = userEvent.setup();
     const { calls } = installFetch((call) => {

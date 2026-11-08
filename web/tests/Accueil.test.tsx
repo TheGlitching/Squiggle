@@ -280,10 +280,12 @@ describe('Accueil', () => {
       /qui dépend du modèle choisi\. Avec un modèle haut de gamme, par exemple Claude Opus : environ 25 à 30 € par mois pour 60 analyses\./,
     );
     // One way to start, the analysis, where the trial without an account comes first.
-    for (const link of pricing.getAllByRole('link', { name: /S’abonner|Commencer|Essayer/ })) {
+    for (const link of pricing.getAllByRole('link', { name: /Commencer|Essayer/ })) {
       expect(link).toHaveTextContent('Essayer gratuitement');
       expect(link).toHaveAttribute('href', '/analyser');
     }
+    // Whoever has already tried pays from the account page, behind the sign-in.
+    expect(pricing.getByRole('link', { name: 'Déjà essayé ? S’abonner' })).toHaveAttribute('href', '/connexion?next=/compte');
     expect(pricing.getAllByText(/3 analyses offertes.*sans carte bancaire/).length).toBeGreaterThan(0);
     expect(pricing.getByText(/Une clé d’API, c’est le code d’accès personnel/)).toHaveTextContent(
       /La clé reste dans votre navigateur, rien ne passe par nos serveurs/,
@@ -295,6 +297,36 @@ describe('Accueil', () => {
     expect(teachers.getByRole('link', { name: 'L’offre enseignants' })).toHaveAttribute('href', '/enseignants');
     expect(screen.queryByText(/€\/jour/)).toBeNull();
   });
+
+  // What the subscription buys comes first; the trial is said apart, beside its button.
+  it('lists what the subscription gives before the way to try it', () => {
+    home();
+    const pricing = region('Tarifs');
+    const card = pricing.getByRole('heading', { name: 'Avec un compte Squiggle', level: 3 }).closest('div')!.parentElement!;
+    expect(within(card).getAllByRole('list')[0].firstElementChild).toHaveTextContent('60 analyses par mois');
+    expect(within(card).getAllByRole('list')[0].textContent).not.toMatch(/essai|offertes/i);
+    expect(pricing.getByText(/^Pour essayer : une analyse sans compte, puis 3 analyses offertes avec un compte/)).toBeInTheDocument();
+  });
+
+  // Whoever opened the example, or reached the last question, is offered the device's way in.
+  it('leads from the example and from the questions to the device’s way in', () => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get');
+    const nextStep = (name: RegExp) => within(region2(name).getByRole('heading', { name: 'Essayez sur un article que vous lisez' }).parentElement!);
+    const region2 = (name: RegExp) => within(screen.getByRole('region', { name }));
+    agent.mockReturnValue('Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36');
+    home();
+    for (const name of [/un passage surligné/, /Questions fréquentes/]) {
+      expect(nextStep(name).getByRole('link', { name: 'Ajouter à Chrome' })).toHaveAttribute('href', CHROME_URL);
+      expect(nextStep(name).getByRole('link', { name: 'Coller un texte sur le site' })).toHaveAttribute('href', '/analyser');
+    }
+    cleanup();
+    agent.mockReturnValue(MOBILE[0]);
+    home();
+    expect(nextStep(/un passage surligné/).queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
+    expect(nextStep(/un passage surligné/).getAllByRole('link', { name: 'Analyser un article' })[0]).toHaveAttribute('href', '/analyser');
+    expect(nextStep(/un passage surligné/).getByText('Essai gratuit, sans compte ni carte. Puis 4,99 € par mois.')).toBeInTheDocument();
+    agent.mockRestore();
+  }, 30_000);
 
   it('offers the store to install the extension from, where this browser has one', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
