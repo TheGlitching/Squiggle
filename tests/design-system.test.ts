@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { darkTheme } from '../src/ui/tokens/colors';
+import { readFileSync } from 'node:fs';
+import { darkTheme, lightTheme, themeVars, type ThemeColors } from '../src/ui/tokens/colors';
 import { TYPOGRAPHY, GOOGLE_FONTS_URL, typographyTokens } from '../src/ui/tokens/typography';
 import { formatPoints, getScoreBandColor } from '../src/ui/components/ScoreGauges';
 import { determineScoreBand } from '@squiggle/shared';
@@ -25,9 +26,9 @@ function contrastRatio(a: string, b: string): number {
 }
 
 describe('Editorial Design System & Tokens', () => {
-  // The extension is dark-only and colour means severity only: there is one
-  // theme, and it exposes four severity tones and no category hues at all.
-  it('defines the single dark theme with severity as the only colour channel', () => {
+  // Colour means severity only: the dark theme exposes four severity tones and no
+  // category hues at all.
+  it('defines the dark theme with severity as the only colour channel', () => {
     expect(darkTheme.bg).toBe('#0a0a0b');
     expect(darkTheme.accent).toBe('#9061f0');
 
@@ -68,12 +69,94 @@ describe('Editorial Design System & Tokens', () => {
       return (h * 60 + 360) % 360;
     };
     const gap = (a: string, b: string) => Math.min(Math.abs(hue(a) - hue(b)), 360 - Math.abs(hue(a) - hue(b)));
-    for (const tone of Object.values(darkTheme.severity)) {
-      for (const accent of [darkTheme.accent, darkTheme.accentHover]) {
-        expect(gap(accent, tone.fill)).toBeGreaterThanOrEqual(30);
-        expect(gap(accent, tone.text)).toBeGreaterThanOrEqual(30);
+    for (const palette of [darkTheme, lightTheme]) {
+      for (const tone of Object.values(palette.severity)) {
+        for (const accent of [palette.accent, palette.accentHover]) {
+          expect(gap(accent, tone.fill)).toBeGreaterThanOrEqual(30);
+          expect(gap(accent, tone.text)).toBeGreaterThanOrEqual(30);
+        }
       }
     }
+  });
+
+  describe('the light theme', () => {
+    const css = readFileSync('src/index.css', 'utf8');
+    const lightBlock = css.slice(css.indexOf('@media (prefers-color-scheme: light)'));
+    const themeBlock = css.slice(css.indexOf('@theme'), css.indexOf('--font-display'));
+    const tokenIn = (block: string, name: string) => block.match(new RegExp(`--color-${name}:\\s*(#[0-9a-f]{6});`))?.[1];
+
+    /** A translucent severity tint flattened onto its ground, as `bg-severity-x/15` renders. */
+    const onTint = (fill: string, ground: string, alpha: number) =>
+      `#${[1, 3, 5]
+        .map((i) => {
+          const channel = (hex: string) => parseInt(hex.slice(i, i + 2), 16);
+          return Math.round(channel(fill) * alpha + channel(ground) * (1 - alpha))
+            .toString(16)
+            .padStart(2, '0');
+        })
+        .join('')}`;
+
+    // A value edited in one place only would make inline styles and utility
+    // classes disagree on the same screen.
+    it.each([
+      ['@theme', darkTheme, themeBlock],
+      ['light override', lightTheme, lightBlock],
+    ] as Array<[string, ThemeColors, string]>)('keeps %s equal to its palette in colors.ts', (_, palette, block) => {
+      const expected: Record<string, string> = {
+        ground: palette.bg,
+        panel: palette.surface,
+        'panel-elevated': palette.surfaceElevated,
+        'panel-hover': palette.surfaceHover,
+        'panel-muted': palette.surfaceMuted,
+        ink: palette.text,
+        muted: palette.textMuted,
+        faint: palette.textFaint,
+        line: palette.border,
+        'line-soft': palette.borderSubtle,
+        'line-heavy': palette.borderHeavy,
+        accent: palette.accent,
+        'accent-hover': palette.accentHover,
+        'accent-foreground': palette.accentForeground,
+      };
+      for (const [name, tone] of Object.entries(palette.severity)) {
+        expected[`severity-${name}`] = tone.fill;
+        expected[`severity-${name}-ink`] = tone.text;
+      }
+      for (const [name, value] of Object.entries(expected)) {
+        expect(tokenIn(block, name), name).toBe(value);
+      }
+    });
+
+    it('overrides every @theme colour, so no dark value leaks onto the paper', () => {
+      const names = [...themeBlock.matchAll(/--color-([\w-]+):/g)].map((m) => m[1]);
+      expect(names.length).toBeGreaterThan(15);
+      for (const name of names) expect(tokenIn(lightBlock, name), name).toBeDefined();
+    });
+
+    it.each([
+      ['dark', darkTheme],
+      ['light', lightTheme],
+    ] as Array<[string, ThemeColors]>)('passes AA for text and primary buttons in the %s theme', (_, palette) => {
+      const grounds = [palette.bg, palette.surface, palette.surfaceElevated, palette.surfaceHover, palette.surfaceMuted];
+      for (const ground of grounds) {
+        for (const ink of [palette.text, palette.textMuted, palette.textFaint, palette.accentHover]) {
+          expect(contrastRatio(ink, ground), `${ink} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+        }
+        for (const tone of Object.values(palette.severity)) {
+          expect(contrastRatio(tone.text, ground), `${tone.text} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+          expect(contrastRatio(tone.text, onTint(tone.fill, ground, 0.15))).toBeGreaterThanOrEqual(4.5);
+          expect(contrastRatio(tone.fill, ground), `${tone.fill} on ${ground}`).toBeGreaterThanOrEqual(3);
+        }
+      }
+      expect(contrastRatio(palette.accentForeground, palette.accent)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(palette.accentForeground, palette.accentHover)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('never hard-codes a theme value in rendered inline styles', () => {
+      for (const file of ['OnboardingTour', 'RunScene', 'ScoreRevelationOrchestrator', 'microInteractions', 'ConnectingGuideLines']) {
+        expect(readFileSync(`src/ui/components/${file}.tsx`, 'utf8'), file).not.toMatch(/\b(darkTheme|lightTheme)\b/);
+      }
+    });
   });
 
   it('configures typography tokens for Bricolage Grotesque, Newsreader, and IBM Plex Mono', () => {
@@ -99,7 +182,7 @@ describe('Editorial Design System & Tokens', () => {
     expect(determineScoreBand(30)).toBe('problematique');
 
     const solideColors = getScoreBandColor('solide');
-    expect(solideColors.stroke).toBe('#059669');
+    expect(solideColors.stroke).toBe(themeVars.severity.positive.fill);
   });
 
   it('exposes exactly the five reader-facing score domains, weighted to 100 points', () => {

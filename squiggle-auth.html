@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Connexion à Squiggle</title>
+    <meta name="color-scheme" content="light dark" />
     <style>
       body {
         margin: 0;
@@ -12,7 +13,7 @@
         align-items: center;
         justify-content: center;
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-        background: #fbfbfa;
+        background: #f6f3ec;
         color: #1c1917;
       }
       main {
@@ -33,7 +34,22 @@
         color: #15803d;
       }
       body[data-state="error"] h1 {
-        color: #b3402f;
+        color: #b91c1c;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0a0a0b;
+          color: #ece9e3;
+        }
+        p {
+          color: #948f88;
+        }
+        body[data-state="ok"] h1 {
+          color: #34d399;
+        }
+        body[data-state="error"] h1 {
+          color: #f87171;
+        }
       }
     </style>
   </head>

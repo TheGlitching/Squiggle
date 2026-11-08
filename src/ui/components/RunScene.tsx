@@ -12,7 +12,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { PipelineStage } from '@squiggle/shared';
 
-import { darkTheme } from '../tokens/colors';
+import { themeVars } from '../tokens/colors';
 
 /** The three stages an analysis really goes through in the panel. */
 export type RunStep = 'lecture' | 'recherche' | 'verification';
@@ -88,7 +88,7 @@ function squiggle(x: number, y: number, width: number, amp = 2, step = 6): strin
 
 /** A passage marked on Squiggle's sheet: its tint, and the squiggle under it. */
 function Mark({ x, y, w, severity, h = 9 }: { x: number; y: number; w: number; severity: Severity; h?: number }) {
-  const tone = darkTheme.severity[severity];
+  const tone = themeVars.severity[severity];
   return (
     <g>
       <rect x={x - 2} y={y - (h - 4) / 2} width={w + 4} height={h} rx={2.5} fill={tone.border} fillOpacity={0.8} />
@@ -152,7 +152,7 @@ export function RunScene({ step }: { step: RunStep }) {
                     [30, 9, 38],
                     [39, 9, 30],
                   ]}
-                  fill="#55555d"
+                  fill="var(--iso-solid-edge)"
                   h={3.5}
                 />
                 {step === 'verification' ? (

@@ -27,7 +27,9 @@ describe('CategoryFilterBar Definitions & Logic', () => {
     const sophisme = CATEGORY_DEFINITIONS.find((c) => c.id === 'sophisme');
     expect(sophisme?.frenchLabel).toBe('Sophisme');
     expect(sophisme?.shortCode).toBe('SOPH');
-    expect(sophisme?.icon).toBe('⚡');
+    // The text-presentation selector: without it the bolt renders as a yellow emoji,
+    // a hue that is not a severity.
+    expect(sophisme?.icon).toBe('⚡\uFE0E');
 
     const unsupported = CATEGORY_DEFINITIONS.find((c) => c.id === 'unsupported');
     expect(unsupported?.frenchLabel).toBe('Affirmation non étayée');

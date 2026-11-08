@@ -43,14 +43,16 @@ bright `text` tone, not the darker fill that only clears 3:1 as text.
 
 ## The extension UI design system
 
-The extension sidepanel is **dark-only**, like the landing: there is no light theme and
-no `prefers-color-scheme` branch. Colour carries exactly one kind of meaning — severity
+The extension has two themes, dark and warm paper, chosen by the device through
+`prefers-color-scheme`; there is no manual switch. Colour carries exactly one kind of meaning — severity
 (critical/warning/info/positive) — so a finding *category* is identified by its label and
-glyph, never by a hue of its own. The single token source is `src/ui/tokens/colors.ts`,
-mirrored by the Tailwind palette (the `@theme` block) and the CSS variables in
-`src/index.css`; the in-page overlay's severity palette in `src/content/shadowOverlay.ts`
-is the reference for tints and borders. A primary button on the accent uses the dark ink
-(`accentForeground`), not white, to pass AA.
+glyph, never by a hue of its own. The single token source is `src/ui/tokens/colors.ts`
+(`darkTheme`, `lightTheme`), mirrored by the Tailwind palette (the `@theme` block) and its
+light override in `src/index.css`; rendered inline styles read `themeVars`, never a theme's
+literal values. The in-page overlay's severity palette in `src/content/shadowOverlay.ts` is
+the reference for the dark theme's tints and borders; it sits on the publisher's page, not
+on ours, so it stays the same in both themes. A primary button's label is `accentForeground`: dark ink on the bright violet of
+the dark theme, light ink on the deeper violet of the light one, to pass AA in both.
 
 ## Hosted mode in the extension
 

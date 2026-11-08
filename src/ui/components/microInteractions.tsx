@@ -10,7 +10,7 @@ import React, {
   HTMLAttributes,
 } from 'react';
 import { durationTokens, easingCurves } from '../../tokens';
-import { darkTheme } from '../tokens/colors';
+import { themeVars } from '../tokens/colors';
 import { useReducedMotion } from '../../useReducedMotion';
 
 /* =========================================================================
@@ -266,9 +266,9 @@ export function TabSwitcher<T extends string = string>({
   activeTab,
   onChange,
   variant = 'pill',
-  activeColor = darkTheme.accentForeground,
-  activeBg = darkTheme.accent,
-  inactiveColor = darkTheme.textMuted,
+  activeColor = themeVars.accentForeground,
+  activeBg = themeVars.accent,
+  inactiveColor = themeVars.textMuted,
   reducedMotion,
   className,
   style,

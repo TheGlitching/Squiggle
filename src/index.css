@@ -2,7 +2,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
+@theme static {
   --color-ground: #0a0a0b;
 
   --color-panel: #0f0f11;
@@ -70,24 +70,9 @@
 
 @layer base {
   :root {
-    /* Dark-only palette, mirroring src/ui/tokens/colors.ts. */
-    --bg: #0a0a0b;
-    --panel: #0f0f11;
-    --panel-elevated: #141417;
-    --fg: #ece9e3;
-    --muted: #948f88;
-    --faint: #938e86;
-    --line: #2a2a2f;
-    --line-soft: #1b1b1f;
-    --stroke: #4a4742;
-    --accent: #9061f0;
-    --accent-hover: #b196f7;
-    --accent-foreground: #0a0a0b;
-
-    --sev-critical: #dc2626;
-    --sev-warning: #d97706;
-    --sev-info: #2563eb;
-    --sev-positive: #059669;
+    --bg: var(--color-ground);
+    --fg: var(--color-ink);
+    --accent: var(--color-accent);
 
     /* The loading scene's two materials, as the site draws them: paper for the
        article, violet glass for Squiggle's reading (`RunScene`). */
@@ -95,8 +80,60 @@
     --paper-ink: #1c1b1f;
     --paper-edge: #c9c6bf;
     --accent-ink: #cdbdfb;
+    --iso-solid: #17171a;
+    --iso-solid-side: #0f0f11;
+    --iso-solid-edge: #55555d;
 
     color-scheme: dark;
+  }
+
+  /* The light theme follows the device, and mirrors `lightTheme` in
+     src/ui/tokens/colors.ts. It overrides the @theme tokens, so every utility
+     and every `themeVars` reference follows with no second code path. */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --color-ground: #f6f3ec;
+
+      --color-panel: #fbf9f4;
+      --color-panel-elevated: #fffdf8;
+      --color-panel-hover: #efebe2;
+      --color-panel-muted: #f1ede4;
+
+      --color-ink: #1c1917;
+      --color-muted: #57534e;
+      --color-faint: #68625a;
+
+      --color-line: #d8d2c6;
+      --color-line-soft: #e7e2d8;
+      --color-line-heavy: #b9b2a4;
+
+      --color-stroke: #8c857a;
+
+      --color-accent: #6d3fd6;
+      --color-accent-hover: #5a30bd;
+      --color-accent-foreground: #fdfcf9;
+
+      --color-severity-critical: #dc2626;
+      --color-severity-critical-ink: #991b1b;
+
+      --color-severity-warning: #b45309;
+      --color-severity-warning-ink: #92400e;
+
+      --color-severity-info: #2563eb;
+      --color-severity-info-ink: #1e40af;
+
+      --color-severity-positive: #047857;
+      --color-severity-positive-ink: #065f46;
+
+      --paper: #ffffff;
+      --paper-edge: #a39c8e;
+      --accent-ink: #6d3fd6;
+      --iso-solid: #e6e0d3;
+      --iso-solid-side: #d6cfc0;
+      --iso-solid-edge: #93897a;
+
+      color-scheme: light;
+    }
   }
 
   html {
@@ -133,13 +170,13 @@
   }
 
   .iso-solid {
-    fill: #17171a;
-    stroke: #55555d;
+    fill: var(--iso-solid);
+    stroke: var(--iso-solid-edge);
   }
 
   .iso-solid-side {
-    fill: #0f0f11;
-    stroke: #55555d;
+    fill: var(--iso-solid-side);
+    stroke: var(--iso-solid-edge);
   }
 
   .iso-glass {

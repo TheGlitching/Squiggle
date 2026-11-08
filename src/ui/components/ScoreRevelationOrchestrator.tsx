@@ -10,7 +10,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { useReducedMotion } from '../../useReducedMotion';
-import { darkTheme } from '../tokens/colors';
+import { themeVars } from '../tokens/colors';
 /* =========================================================================
    1. Types & Timeline Specifications (§6.3 Specs)
    ========================================================================= */
@@ -520,16 +520,16 @@ export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
   const isReducedMotion = ctx?.isReducedMotion ?? false;
 
   // Determine score color band
-  let bandColor = darkTheme.severity.critical.text; // problematique
+  let bandColor = themeVars.severity.critical.text; // problematique
   let bandLabel = 'PROBLÉMATIQUE';
   if (displayScore >= 80) {
-    bandColor = darkTheme.severity.positive.text;
+    bandColor = themeVars.severity.positive.text;
     bandLabel = 'SOLIDE';
   } else if (displayScore >= 65) {
-    bandColor = darkTheme.severity.info.text;
+    bandColor = themeVars.severity.info.text;
     bandLabel = 'PERFECTIBLE';
   } else if (displayScore >= 45) {
-    bandColor = darkTheme.severity.warning.text;
+    bandColor = themeVars.severity.warning.text;
     bandLabel = 'FRAGILE';
   }
 
@@ -559,7 +559,7 @@ export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     marginTop: '6px',
-    color: darkTheme.textMuted,
+    color: themeVars.textMuted,
   };
 
   const bandBadgeStyle: CSSProperties = {
@@ -572,7 +572,7 @@ export const AnimatedScoreCounter: React.FC<AnimatedScoreCounterProps> = ({
     padding: '2px 8px',
     borderRadius: '4px',
     marginTop: '4px',
-    backgroundColor: `${bandColor}1F`,
+    backgroundColor: `color-mix(in srgb, ${bandColor} 12%, transparent)`,
     color: bandColor,
   };
 
@@ -671,7 +671,7 @@ export const StaggeredGaugeBar: React.FC<StaggeredGaugeBarProps> = ({
   index,
   label,
   score,
-  color = darkTheme.severity.info.fill,
+  color = themeVars.severity.info.fill,
   style = {},
 }) => {
   const ctx = useContext(ScoreRevelationContext);
@@ -682,7 +682,7 @@ export const StaggeredGaugeBar: React.FC<StaggeredGaugeBarProps> = ({
   const animatedScore = isReduced ? score : Math.round(progressRatio * score);
   const barWidthPercent = isReduced ? score : progressRatio * score;
 
-  const trackBg = darkTheme.surfaceMuted;
+  const trackBg = themeVars.surfaceMuted;
 
   return (
     <div
@@ -700,7 +700,7 @@ export const StaggeredGaugeBar: React.FC<StaggeredGaugeBarProps> = ({
       data-progress={progressRatio}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: darkTheme.text, fontWeight: 500 }}>{label}</span>
+        <span style={{ color: themeVars.text, fontWeight: 500 }}>{label}</span>
         <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color }}>{animatedScore}%</span>
       </div>
       <div
