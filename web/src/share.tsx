@@ -29,8 +29,9 @@ export const SHARE_WIDTH = 1200;
 export const SHARE_HEIGHT = 630;
 
 const css = readFileSync(new URL('./index.css', import.meta.url), 'utf8');
-/** The palette, from the `@theme` block: a drawing names its colours `var(--color-…)`. */
-const TOKENS = Object.fromEntries([...css.matchAll(/--color-(\w+):\s*(#[0-9a-f]{3,8});/gi)].map((m) => [m[1], m[2]]));
+/** The palette, from the `@theme` block, the dark theme: a share image has no reader's device to follow. A drawing names its colours `var(--color-…)`. */
+const THEME = /@theme static \{[\s\S]*?\n\}/.exec(css)![0];
+const TOKENS = Object.fromEntries([...THEME.matchAll(/--color-(\w+):\s*(#[0-9a-f]{3,8});/gi)].map((m) => [m[1], m[2]]));
 export function color(name: string): string {
   if (!TOKENS[name]) throw new Error(`no --color-${name} in index.css`);
   return TOKENS[name];
@@ -41,8 +42,8 @@ const ISO_STYLE = `
   .iso-face { stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .iso-paper { fill: ${color('paper')}; stroke: ${color('paperEdge')}; }
   .iso-paper-edge { fill: ${color('paperEdge')}; stroke: ${color('paperEdge')}; }
-  .iso-solid { fill: #17171a; stroke: #55555d; }
-  .iso-solid-side { fill: #0f0f11; stroke: #55555d; }
+  .iso-solid { fill: ${color('isoSolid')}; stroke: ${color('isoEdge')}; }
+  .iso-solid-side { fill: ${color('isoSolidSide')}; stroke: ${color('isoEdge')}; }
   .iso-glass { fill: ${color('accent')}; fill-opacity: 0.1; stroke: ${color('accent')}; }
   .iso-warn { fill: ${AMBER}; stroke: ${SEVERITY_COLORS.warning.text}; }
   .iso-warn-side { fill: ${AMBER_SIDE}; stroke: ${SEVERITY_COLORS.warning.text}; }

@@ -148,7 +148,7 @@ describe('Connexion', () => {
     const google = screen.getByRole('link', { name: 'Continuer avec Google' });
     const fills = [...google.querySelectorAll('svg path')].map((path) => path.getAttribute('fill'));
     expect(fills).toEqual(['#EA4335', '#4285F4', '#FBBC05', '#34A853']);
-    expect(google.className).toContain('bg-[#131314]');
+    expect(google.className).toContain('bg-googleFill');
   });
 
   it('sends the Google link without a destination when there is none', () => {
