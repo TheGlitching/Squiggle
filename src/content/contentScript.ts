@@ -22,6 +22,9 @@ import {
   AnchoredHighlight,
 } from './types';
 
+/** A live DOM Range cannot cross a message: Firefox throws DataCloneError on the whole reply. */
+const withoutRange = ({ range: _range, ...highlight }: AnchoredHighlight) => highlight;
+
 export class ContentScriptController {
   private extractor: ArticleExtractor;
   private rangeTracker: RangeTracker;
@@ -187,7 +190,7 @@ export class ContentScriptController {
       case 'FC_APPLY_HIGHLIGHTS': {
         const targets = (message.payload as FindingHighlightTarget[]) || [];
         const anchored = this.applyHighlights(targets);
-        return { success: true, data: anchored };
+        return { success: true, data: anchored.map(withoutRange) };
       }
 
       case 'FC_CLEAR_HIGHLIGHTS': {
@@ -217,7 +220,7 @@ export class ContentScriptController {
           success: true,
           data: {
             article: this.currentArticle,
-            anchoredHighlights: this.currentAnchoredHighlights,
+            anchoredHighlights: this.currentAnchoredHighlights.map(withoutRange),
           },
         };
       }

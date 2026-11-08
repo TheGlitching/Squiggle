@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScoreBand, ScoreDomainKey, SCORE_DOMAINS } from '@squiggle/shared';
 import { determineScoreBand, getScoreBandLabel, type ReportSubject } from '@squiggle/shared';
+import { themeVars } from '../tokens/colors';
 
 export interface ScoreGaugeProps {
   score: number; // 0 to 100
@@ -24,13 +25,13 @@ export function formatPoints(value: number): string {
 export function getScoreBandColor(band: ScoreBand): { stroke: string; text: string; bg: string } {
   switch (band) {
     case 'solide':
-      return { stroke: '#059669', text: 'text-severity-positive-ink', bg: 'bg-severity-positive/15' };
+      return { stroke: themeVars.severity.positive.fill, text: 'text-severity-positive-ink', bg: 'bg-severity-positive/15' };
     case 'perfectible':
-      return { stroke: '#2563EB', text: 'text-severity-info-ink', bg: 'bg-severity-info/15' };
+      return { stroke: themeVars.severity.info.fill, text: 'text-severity-info-ink', bg: 'bg-severity-info/15' };
     case 'fragile':
-      return { stroke: '#D97706', text: 'text-severity-warning-ink', bg: 'bg-severity-warning/15' };
+      return { stroke: themeVars.severity.warning.fill, text: 'text-severity-warning-ink', bg: 'bg-severity-warning/15' };
     case 'problematique':
-      return { stroke: '#DC2626', text: 'text-severity-critical-ink', bg: 'bg-severity-critical/15' };
+      return { stroke: themeVars.severity.critical.fill, text: 'text-severity-critical-ink', bg: 'bg-severity-critical/15' };
   }
 }
 

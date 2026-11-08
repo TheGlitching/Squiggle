@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ArticleExtractor } from '../shared/src/extract/extractor';
 import { RangeTracker } from '../src/content/rangeTracker';
 import { ContentScriptController } from '../src/content/contentScript';
@@ -130,6 +130,12 @@ describe('Range Tracking & Anchoring Unit Tests', () => {
     const pingRes = controller.handleMessage({ type: 'FC_PING' });
     expect(pingRes.success).toBe(true);
     expect(pingRes.data).toBeDefined();
+
+    // Firefox throws DataCloneError on a reply holding a live Range, and the reply is lost.
+    const applySpy = vi.spyOn(controller, 'applyHighlights').mockReturnValue([{ id: 'h1', range: document.createRange() } as never]);
+    const applyRes = controller.handleMessage({ type: 'FC_APPLY_HIGHLIGHTS', payload: [] });
+    expect(applyRes.data).toEqual([{ id: 'h1' }]);
+    applySpy.mockRestore();
 
     const clearRes = controller.handleMessage({ type: 'FC_CLEAR_HIGHLIGHTS' });
     expect(clearRes.success).toBe(true);

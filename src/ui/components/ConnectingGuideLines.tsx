@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { durationTokens, easingCurves } from '../../tokens';
 import { useReducedMotion } from '../../useReducedMotion';
-import { darkTheme, ThemeColors } from '../tokens/colors';
+import { themeVars, ThemeColors } from '../tokens/colors';
 
 /* =========================================================================
    1. Types & Coordinate Interfaces
@@ -389,7 +389,7 @@ export const ConnectingGuideLine: React.FC<ConnectingGuideLineProps> = ({
   showEndpoints = true,
   sourceEndpointSize = 4,
   targetEndpointSize = 5,
-  theme = darkTheme,
+  theme = themeVars,
   className,
   style,
   ...rest
@@ -536,7 +536,7 @@ export interface ConnectingGuideLinesProps {
 export const ConnectingGuideLines: React.FC<ConnectingGuideLinesProps> = ({
   items,
   enabled = true,
-  theme = darkTheme,
+  theme = themeVars,
   className = '',
   style,
   zIndex = 9999,

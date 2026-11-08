@@ -36,7 +36,7 @@ export const CATEGORY_DEFINITIONS: CategoryPillConfig[] = [
     label: 'Fallacy',
     frenchLabel: 'Sophisme',
     shortCode: 'SOPH',
-    icon: '⚡',
+    icon: '⚡\uFE0E',
   },
   {
     id: 'unsupported',

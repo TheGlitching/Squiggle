@@ -3,7 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useR
 import { SCORE_DOMAINS, type ScoreBand } from '@squiggle/shared';
 import { determineScoreBand, getScoreBandLabel } from '@squiggle/shared';
 import { CATEGORY_LABELS_FR } from '../../adapters/findingAdapters';
-import { darkTheme } from '../tokens/colors';
+import { themeVars } from '../tokens/colors';
 import { OWN_KEY_BILLING } from '../ownKeyWording';
 
 export interface TourStep {
@@ -387,11 +387,11 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
 
   if (!visible || !step) return null;
 
-  const surface = darkTheme.surface;
-  const border = darkTheme.border;
-  const primaryText = darkTheme.text;
-  const mutedText = darkTheme.textMuted;
-  const subtle = darkTheme.surfaceMuted;
+  const surface = themeVars.surface;
+  const border = themeVars.border;
+  const primaryText = themeVars.text;
+  const mutedText = themeVars.textMuted;
+  const subtle = themeVars.surfaceMuted;
 
   const centered = !highlightBox;
 
@@ -419,7 +419,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
             height: highlightBox.height,
             borderRadius: highlightBox.radius,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
-            border: `2px solid ${darkTheme.text}`,
+            border: `2px solid ${themeVars.text}`,
             pointerEvents: step.preventInteraction ? 'auto' : 'none',
           }}
         />
@@ -534,8 +534,8 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
               onClick={() => (isLast ? finish(false) : setStepIndex((i) => i + 1))}
               style={{
                 border: 'none',
-                background: darkTheme.accent,
-                color: darkTheme.accentForeground,
+                background: themeVars.accent,
+                color: themeVars.accentForeground,
                 borderRadius: 10,
                 padding: '6px 14px',
                 fontSize: 12.5,

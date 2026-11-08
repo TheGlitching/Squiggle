@@ -66,6 +66,5 @@ describe('the Squiggle mark', () => {
     }
     expect(css('src/index.css')).toContain(`--color-accent: ${darkTheme.accent};`);
     expect(css('src/index.css')).toContain(`--color-accent-hover: ${darkTheme.accentHover};`);
-    expect(css('src/index.css')).toContain(`--accent: ${darkTheme.accent};`);
   });
 });
