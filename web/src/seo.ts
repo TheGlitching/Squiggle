@@ -347,6 +347,18 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     },
   },
   {
+    path: '/meme-grille',
+    title: 'Même grille, deux camps : deux textes opposés - Squiggle',
+    description:
+      'Deux textes inventés, pour et contre le même impôt, construits phrase pour phrase. Leurs deux rapports Squiggle, tels quels, et ce qui les sépare.',
+    share: {
+      kicker: 'Même grille, deux camps',
+      title: 'Deux textes opposés, les mêmes questions',
+      text: 'Les deux rapports, tels quels, et ce qui les sépare.',
+      figure: 'rapport',
+    },
+  },
+  {
     path: '/confidentialite',
     title: 'Politique de confidentialité - Squiggle',
     description:
@@ -552,6 +564,7 @@ const PAGE_SOURCES: Record<string, string[]> = {
   '/classe': ['src/pages/Classe.tsx'],
   '/classe/mode-emploi': ['src/components/ModeEmploi.tsx'],
   '/transparence': ['src/pages/Transparence.tsx'],
+  '/meme-grille': ['src/pages/MemeGrille.tsx', 'src/memeGrille.ts'],
   '/confidentialite': ['src/pages/Legal.tsx'],
   '/conditions': ['src/pages/Legal.tsx'],
   '/cgv': ['src/pages/Legal.tsx'],

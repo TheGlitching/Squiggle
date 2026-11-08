@@ -17,6 +17,7 @@ import { ArticlePage, Blog } from './pages/Blog';
 import { Exercices, Glossaire, NotionPage } from './pages/Glossaire';
 import { FicheActivite, GrilleLecture } from './pages/Kit';
 import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal';
+import { MemeGrille } from './pages/MemeGrille';
 import { Pilotage } from './pages/Pilotage';
 import { Pont } from './pages/Pont';
 import { Raccourci } from './pages/Raccourci';
@@ -145,6 +146,9 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/transparence':
       page = <Transparence />;
+      break;
+    case '/meme-grille':
+      page = <MemeGrille />;
       break;
     case '/mentions-legales':
       page = <MentionsLegales />;

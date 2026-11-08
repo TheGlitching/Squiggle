@@ -2,7 +2,7 @@
  * The home page, also at `/tarifs`. Its first screen keeps the first landing's
  * proportions and its isometric drawing, the reading played in a loop the reader can
  * pause; the rest is said with drawings rather than paragraphs: how a report is made,
- * the same grid for every article, the three ways in, the price and what it pays for,
+ * the same grid for every article and its proof on two opposite texts, the three ways in, the price and what it pays for,
  * teachers, the data and the open code, every question.
  *
  * Its first action is the analysis on the site, which needs nothing installed and no
@@ -46,6 +46,7 @@ import {
   PRICE_MONTHLY,
   TAGLINE,
 } from '../offer';
+import { MemeGrilleApercu } from './MemeGrille';
 import { Link } from '../router';
 
 /** Who bills an own-key analysis, named so a reader knows which key to bring. */
@@ -620,6 +621,15 @@ export function Accueil() {
             Glossaire de l’esprit critique
           </Link>
         </p>
+      </Section>
+
+      {/* The grid's promise, tested: the full comparison has its own address, for a message. */}
+      <Section
+        id="meme-grille"
+        title="Même grille, deux camps"
+        intro="Deux textes inventés, pour et contre le même impôt, construits phrase pour phrase. Squiggle y relève les mêmes procédés."
+      >
+        <MemeGrilleApercu />
       </Section>
 
       {/* The three ways in, the reader's own device first, each drawn as it is on that device. */}
