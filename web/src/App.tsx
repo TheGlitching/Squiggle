@@ -182,8 +182,9 @@ export function App({ path: at }: { path?: string }) {
   // Inside the app, the header leads to the reader's account rather than to sign-in.
   const inApp = route === '/analyser' || route === '/compte' || route === '/account' || route === '/pont';
   // The home offers the app and the bookmark where each applies: no second invitation over it.
-  // The analysis offers the app under a report, not over the form a first visit is filling in.
-  const ownInvitation = route === '/' || route === '/tarifs' || route === '/analyser';
+  // The analysis offers the app under a report, not over the form a first visit is filling in,
+  // and the sign-in keeps the bottom of a phone's screen for its own form.
+  const ownInvitation = route === '/' || route === '/tarifs' || route === '/analyser' || route === '/connexion';
   return (
     <Layout account={inApp ? 'Mon compte' : 'Se connecter'} installHint={!ownInvitation}>
       {page}

@@ -47,6 +47,17 @@ afterEach(async () => {
 });
 
 describe('InstallHint', () => {
+  // A first visit is filling in a form on these two: nothing lies over the bottom of the screen.
+  it('stays off the analysis form and the sign-in', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(IPHONE);
+    for (const path of ['/analyser', '/connexion']) {
+      window.history.pushState({}, '', path);
+      render(<App />);
+      expect(hint(), path).toBeNull();
+      cleanup();
+    }
+  });
+
   it('shows iOS Safari where its install lives, over the bottom of the screen', () => {
     at(IPHONE);
     const banner = within(hint()!);

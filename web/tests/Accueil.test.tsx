@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOSTED_ANALYSIS } from '../../shared/src/hosted/disclosure';
 import { SCORE_DOMAINS } from '../../shared/src/engine/types';
 import { App } from '../src/App';
-import { MEASURE } from '../src/components/Landing';
+import { MEASURE, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../src/components/Landing';
 import { CONTACT_URL } from '../src/components/Layout';
 import { CHROME_URL, EDGE_URL, FIREFOX_URL } from '../src/install';
 import { DOMAINS, VERIFICATION_STATES } from '../src/demo';
@@ -47,8 +47,8 @@ describe('Accueil', () => {
     expect(screen.getByRole('link', { name: 'Se connecter' })).toHaveAttribute('href', '/connexion');
   });
 
-  // A phone has the site first; a computer whose browser has a store, the extension,
-  // with the site one link away; a computer without one (Safari), the site.
+  // The site comes first everywhere; a computer whose browser has a store gets the
+  // extension beside it, named for that browser; a computer without one (Safari), the site alone.
   // The whole page is rendered once per device: several seconds on a loaded machine.
   it('leads with the way in this device has', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
@@ -56,14 +56,19 @@ describe('Accueil', () => {
     for (const ua of MOBILE) {
       agent.mockReturnValue(ua);
       home();
-      expect(hero().getAllByRole('link', { name: 'Analyser un article' })[0]).toHaveAttribute('href', '/analyser');
+      expect(hero().getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
       expect(hero().queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
       cleanup();
     }
     agent.mockReturnValue('Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36');
     home();
+    expect(hero().getByRole('link', { name: 'Analyser un article' }).className).toContain(PRIMARY_BUTTON);
     expect(hero().getByRole('link', { name: 'Ajouter à Chrome' })).toHaveAttribute('href', CHROME_URL);
-    expect(hero().getByRole('link', { name: 'collez le texte sur le site' })).toHaveAttribute('href', '/analyser');
+    expect(hero().getByRole('link', { name: 'Ajouter à Chrome' }).className).toContain(SECONDARY_BUTTON);
+    cleanup();
+    agent.mockReturnValue('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0');
+    home();
+    expect(hero().getByRole('link', { name: 'Ajouter à Firefox' })).toHaveAttribute('href', FIREFOX_URL);
     cleanup();
     agent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15');
     home();
@@ -95,11 +100,14 @@ describe('Accueil', () => {
 
   // The model is named where it runs, from the disclosure the transparency page uses,
   // so a reader who wonders which AI and where reads both together.
-  it('names the model only with where it runs, and keeps the plumbing off the page', () => {
+  it('names the model only with where it runs, in its own question, and keeps the plumbing off the page', () => {
     const { container } = home();
     const text = container.textContent ?? '';
     const where = `${HOSTED_ANALYSIS.modelLabel}, servie aux Pays-Bas d’abord, sinon aux États-Unis.`;
-    expect(text).toContain(where);
+    // The answer to the question that asks, and nowhere else on the page: the steps say what is done, not by which model.
+    expect(text.split(where)).toHaveLength(2);
+    expect(region('Questions fréquentes').getByText(/^Quelle IA, et où/).closest('details')!.textContent).toContain(where);
+    expect(screen.getByRole('region', { name: 'Comment ça marche' }).textContent).not.toMatch(/Pays-Bas|États-Unis/);
     expect(text.replaceAll(where, '')).not.toContain(HOSTED_ANALYSIS.modelLabel);
     // The own-key option names the providers a reader can bring a key from; outside
     // that list, the gateway hosted analyses go through stays off the page.
@@ -254,7 +262,7 @@ describe('Accueil', () => {
   it('states the offer in one line under the buttons, and no daily analysis', () => {
     const { container } = home();
     const hero = within(screen.getByRole('heading', { level: 1 }).parentElement!);
-    expect(hero.getByText('Essai gratuit, sans carte. Puis 4,99 € par mois.')).toBeInTheDocument();
+    expect(hero.getByText('Essai gratuit, sans compte ni carte. Puis 4,99 € par mois.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/par jour/);
   });
 
@@ -308,22 +316,22 @@ describe('Accueil', () => {
     expect(pricing.getByText(/^Pour essayer : une analyse sans compte, puis 3 analyses offertes avec un compte/)).toBeInTheDocument();
   });
 
-  // Whoever opened the example, or reached the last question, is offered the device's way in.
-  it('leads from the example and from the questions to the device’s way in', () => {
+  // Whoever opened the example, or reached the last question, is offered the same actions as the hero.
+  it('leads from the example and from the questions to the analysis, and the extension beside it', () => {
     const agent = vi.spyOn(navigator, 'userAgent', 'get');
     const nextStep = (name: RegExp) => within(region2(name).getByRole('heading', { name: 'Essayez sur un article que vous lisez' }).parentElement!);
     const region2 = (name: RegExp) => within(screen.getByRole('region', { name }));
     agent.mockReturnValue('Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36');
     home();
     for (const name of [/un passage surligné/, /Questions fréquentes/]) {
+      expect(nextStep(name).getByRole('link', { name: 'Analyser un article' }).className).toContain(PRIMARY_BUTTON);
       expect(nextStep(name).getByRole('link', { name: 'Ajouter à Chrome' })).toHaveAttribute('href', CHROME_URL);
-      expect(nextStep(name).getByRole('link', { name: 'Coller un texte sur le site' })).toHaveAttribute('href', '/analyser');
     }
     cleanup();
     agent.mockReturnValue(MOBILE[0]);
     home();
     expect(nextStep(/un passage surligné/).queryByRole('link', { name: /^Ajouter à/ })).toBeNull();
-    expect(nextStep(/un passage surligné/).getAllByRole('link', { name: 'Analyser un article' })[0]).toHaveAttribute('href', '/analyser');
+    expect(nextStep(/un passage surligné/).getByRole('link', { name: 'Analyser un article' })).toHaveAttribute('href', '/analyser');
     expect(nextStep(/un passage surligné/).getByText('Essai gratuit, sans compte ni carte. Puis 4,99 € par mois.')).toBeInTheDocument();
     agent.mockRestore();
   }, 30_000);
@@ -447,11 +455,13 @@ describe('Accueil', () => {
 
   it('keeps the example one tap away, and the analysis the hero’s one primary action', () => {
     home();
+    // A button on a phone, a line under the buttons on a computer: one is shown at a time.
     expect(screen.getByRole('link', { name: 'Voir un exemple' })).toHaveAttribute('href', '#exemple');
+    expect(screen.getByRole('link', { name: 'voir un exemple' })).toHaveAttribute('href', '#exemple');
     const hero = screen.getByRole('heading', { level: 1 }).parentElement!;
-    // One primary a device: the computer's (here without a store) and the phone's, shown one at a time.
+    // One primary, the same on every device.
     const primaries = [...hero.querySelectorAll('a, button')].filter((el) => el.className.includes('bg-accent '));
-    expect(primaries.map((el) => el.textContent)).toEqual(['Analyser un article', 'Analyser un article']);
+    expect(primaries.map((el) => el.textContent)).toEqual(['Analyser un article']);
   });
 
   it('walks through the passages while left alone, and stops under the pointer', () => {

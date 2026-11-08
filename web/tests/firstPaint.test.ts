@@ -17,7 +17,7 @@ const BEACON = 'https://static.cloudflareinsights.com/beacon.min.js';
 const STARTED = page.includes(BEACON) ? 3 : 2;
 
 /** Runs the page's loader against a browser whose paint, timers and DOM the test drives. */
-function boot({ paintTiming = true, rootText = 'Un deuxième avis sur votre lecture.' } = {}) {
+function boot({ paintTiming = true, rootText = 'Vérifiez un article avant d’y croire.' } = {}) {
   const fetched: string[] = [];
   const timers: Array<{ at: number; run: () => void }> = [];
   const listeners: Record<string, () => void> = {};
