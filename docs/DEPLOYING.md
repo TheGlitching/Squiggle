@@ -59,11 +59,9 @@ Run the `wrangler` commands from `server/`, with `--env staging` or `--env produ
    repository never carries one, so it is set like a secret. CORS is pinned to it:
    without it every Chrome reader is refused, and `npm run deploy:production` refuses
    to run while `wrangler secret list` does not show it. `EXTENSION_EDGE_ORIGIN` is set
-   the same way once the Edge listing exists: Edge gives the same package an id of its
-   own, so it is a second pinned origin. Unset, no Edge origin is accepted, and the
-   deploy does not require it. The site's Edge install link
-   (`EDGE_STORE_URL` in `shared/src/stores.ts`) stays empty until the listing's address is
-   known; Edge readers are sent to the Chrome Web Store meanwhile. Firefox needs nothing here:
+   the same way: Edge gives the same package an id of its own, so it is a second pinned
+   origin. Unset, no Edge origin is accepted, and the deploy does not require it. The
+   site's Edge install link is `EDGE_STORE_URL` in `shared/src/stores.ts`. Firefox needs nothing here:
    its extension origin is `moz-extension://<uuid>` with a UUID drawn on every
    install, so the server accepts any origin of that shape, on the endpoints the
    extension signs or redeems a code on and nowhere else (`server/src/lib/cors.ts`).

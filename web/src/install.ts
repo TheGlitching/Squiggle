@@ -7,9 +7,9 @@ import { useBrowserValue } from './client';
 /**
  * Where the install button sends the reader. One named constant per store,
  * routed by user agent so the button is never dead: Firefox goes to AMO, Edge goes to
- * its own add-ons store once that listing's address is known, any other Chromium browser
- * (and Edge until then) goes to the Chrome Web Store, and anything else (Safari, a
- * phone) gets no store at all, so the page leads with the analysis on the site.
+ * its own add-ons store, any other Chromium browser goes to the Chrome Web Store, and
+ * anything else (Safari, a phone) gets no store at all, so the page leads with the
+ * analysis on the site.
  */
 export const CHROME_URL = CHROME_STORE_URL;
 export const FIREFOX_URL = FIREFOX_STORE_URL;
@@ -24,20 +24,19 @@ export function isMobile(userAgent: string): boolean {
 export function installUrlFor(userAgent: string): string | null {
   if (isMobile(userAgent)) return null;
   if (/Firefox\//i.test(userAgent)) return FIREFOX_URL;
-  if (EDGE_URL && /Edg\//.test(userAgent)) return EDGE_URL;
-  if (/Chrome\//.test(userAgent) || /Edg\//.test(userAgent) || /OPR\//.test(userAgent) || /Brave/.test(userAgent)) {
+  if (/Edg\//.test(userAgent)) return EDGE_URL;
+  if (/Chrome\//.test(userAgent) || /OPR\//.test(userAgent) || /Brave/.test(userAgent)) {
     return CHROME_URL;
   }
   return null;
 }
 /**
- * The install button names the reader's own browser: Edge, Opera and Brave
- * install from the Chrome Web Store, but their readers know their browser's name.
+ * The install button names the reader's own browser: Opera and Brave install
+ * from the Chrome Web Store, but their readers know their browser's name.
  */
 export function installLabelFor(url: string, userAgent = ''): string {
   if (url === FIREFOX_URL) return 'Ajouter à Firefox';
-  if (EDGE_URL && url === EDGE_URL) return 'Ajouter à Edge';
-  if (/Edg\//.test(userAgent)) return 'Ajouter à Edge';
+  if (url === EDGE_URL) return 'Ajouter à Edge';
   if (/OPR\//.test(userAgent)) return 'Ajouter à Opera';
   if (/Brave/.test(userAgent)) return 'Ajouter à Brave';
   return 'Ajouter à Chrome';
