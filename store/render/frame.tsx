@@ -29,7 +29,7 @@ interface Shot {
 /** One idea per image, in the order the listing tells the story. */
 const SHOTS: Record<string, Shot> = {
   'shot-1': {
-    title: 'Un deuxième avis sur votre lecture.',
+    title: 'Vérifiez un article avant d’y croire.',
     lead: 'Un clic sur l’article ouvert : les passages fragiles surlignés, leur raison, et une note sur 100.',
     figure: <HeroFigure pins={false} />,
     panel: 'state=report',

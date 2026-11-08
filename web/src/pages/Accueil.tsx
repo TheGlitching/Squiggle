@@ -5,15 +5,16 @@
  * the same grid for every article, the three ways in, the price and what it pays for,
  * teachers, the data and the open code, every question.
  *
- * The way in it puts first follows the reader's device, and it only draws or names
- * gestures that exist there: the extension on a computer, the site and the app's place
- * in the Share menu on Android, the site and the bookmark on an iPhone. The device is
+ * Its first action is the analysis on the site, which needs nothing installed and no
+ * account. What comes beside it follows the reader's device, and the page only draws or
+ * names gestures that exist there: the extension on a computer, the app's place in the
+ * Share menu on Android, the bookmark on an iPhone. The device is
  * read from `<html data-device>` (set before the first paint, `index.html`), so the
  * page the build renders is right from its first paint; only the browser's own install
  * prompt, which arrives later, changes a button.
  *
- * A reader who has just seen the example, or reached the last question, is offered that
- * same way in again: the page never leaves its reader with nothing to do next.
+ * A reader who has just seen the example, or reached the last question, is offered the
+ * same actions again: the page never leaves its reader with nothing to do next.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -255,8 +256,6 @@ const ON_COMPUTER = '[html[data-device=android]_&]:hidden [html[data-device=ios]
 const ON_PHONE = 'hidden [html[data-device=android]_&]:block [html[data-device=ios]_&]:block';
 const ON_ANDROID = 'hidden [html[data-device=android]_&]:block';
 const ON_IOS = 'hidden [html[data-device=ios]_&]:block';
-/** A phone-only part of a row of buttons: it takes its place in the row, as `contents` does on a computer. */
-const ON_PHONE_INLINE = 'hidden [html[data-device=android]_&]:contents [html[data-device=ios]_&]:contents';
 
 const BODY = 'm-0 text-lg leading-relaxed text-foreground';
 const ACTIONS = 'flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch';
@@ -292,58 +291,29 @@ function StoreAction({ className, fallback }: { className: string; fallback: Rea
   );
 }
 
-/** The one primary action of this device: the store of this computer's browser, the analysis on a phone. */
-function MainAction() {
+/** The page's first action, and beside it, on a computer, the extension for this browser if it has a store. */
+function MainActions() {
   return (
     <>
+      <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+        Analyser un article
+      </Link>
       <span className={`contents ${ON_COMPUTER}`}>
-        <StoreAction
-          className={`${PRIMARY_BUTTON} max-sm:w-full`}
-          fallback={
-            <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-              Analyser un article
-            </Link>
-          }
-        />
-      </span>
-      <span className={ON_PHONE_INLINE}>
-        <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-          Analyser un article
-        </Link>
+        <StoreAction className={`${SECONDARY_BUTTON} max-sm:w-full`} fallback={null} />
       </span>
     </>
   );
 }
 
-/** The offer in one line. On a phone the first analysis is on the site, without an account; the extension needs one. */
-function Offer() {
-  return (
-    <>
-      <p className={`mt-2 mb-0 text-lg text-foreground ${ON_COMPUTER}`}>{OFFER}</p>
-      <p className={`mt-2 mb-0 text-lg text-foreground ${ON_PHONE}`}>{OFFER_ON_PHONE}</p>
-    </>
-  );
-}
-
-/** What comes next, once the page has shown its proof: the device's way in, then the site beside a store. */
+/** What comes next, once the page has shown its proof. */
 function TryIt() {
-  const hasStore = installUrlFor(useUserAgent()) !== null;
   return (
     <div className="mt-10">
       <h3 className={H3}>Essayez sur un article que vous lisez</h3>
       <div className={`mt-4 ${ACTIONS}`}>
-        <MainAction />
-        {hasStore ? (
-          <span className={`contents ${ON_COMPUTER}`}>
-            <Link to="/analyser" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-              Coller un texte sur le site
-            </Link>
-          </span>
-        ) : null}
+        <MainActions />
       </div>
-      <div className="mt-3">
-        <Offer />
-      </div>
+      <p className="mt-3 mb-0 text-lg text-foreground">{OFFER}</p>
     </div>
   );
 }
@@ -460,13 +430,12 @@ const WHERE = `${HOSTED_ANALYSIS.modelLabel}, servie ${inCountry(HOST_COUNTRIES[
 }.`;
 
 /** How a report is made, one drawing a stage, a line each. */
-const STAGES: Array<{ step: Step; title: string; text: string; detail?: string; then?: string }> = [
+const STAGES: Array<{ step: Step; title: string; text: string; then?: string }> = [
   { step: 'article', title: 'Vous donnez l’article', text: 'Collé, partagé ou d’un clic.', then: 'le texte' },
   {
     step: 'lecture',
     title: 'Une IA le relit en entier',
     text: 'Faits, logique, cadrage, sources et langue.',
-    detail: `Avec un compte : ${WHERE}`,
     then: 'les doutes',
   },
   {
@@ -478,7 +447,7 @@ const STAGES: Array<{ step: Step; title: string; text: string; detail?: string; 
   { step: 'rapport', title: 'Vous lisez le rapport', text: 'Passages surlignés, raisons, note sur 100.' },
 ];
 
-/** The question the named model raises, answered from the same constant. */
+/** Which model, and where: for the reader who asks, the steps above leave it out. */
 const WHICH_AI: [string, ReactNode] = [
   'Quelle IA, et où ?',
   <>
@@ -503,8 +472,7 @@ export const CRITERIA: Record<string, [Criterion, string]> = {
   'Soin de la langue': ['langue', 'Langue'],
 };
 /** A single analysis without an account: the page promises a trial, not a daily analysis. */
-const OFFER = `Essai gratuit, sans carte. Puis ${PRICE_MONTHLY} par mois.`;
-const OFFER_ON_PHONE = `Essai gratuit, sans compte ni carte. Puis ${PRICE_MONTHLY} par mois.`;
+const OFFER = `Essai gratuit, sans compte ni carte. Puis ${PRICE_MONTHLY} par mois.`;
 
 /** What the subscription pays for, shown with the stages it pays for. */
 const PAID_FOR: Array<[Step, string]> = [
@@ -517,7 +485,7 @@ export function Accueil() {
     <>
       {/* The landing's first screen, at its proportions; the drawing reads the article again and again. */}
       <div className={`${PAGE} pt-10 pb-16 md:pt-20 md:pb-24`}>
-        <h1 className={`${H1} max-w-[14ch]`}>{TAGLINE}</h1>
+        <h1 className={`${H1} max-w-[19ch]`}>{TAGLINE}</h1>
         <div className="mt-6 grid items-start gap-6 md:mt-10 md:gap-10 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-16">
           <div>
             {/* The one sentence that says what Squiggle is: in full ink, not grey. */}
@@ -526,18 +494,20 @@ export function Accueil() {
               qui tient.
             </p>
             <div className={`mt-8 ${ACTIONS}`}>
-              <MainAction />
-              <a href="#exemple" onClick={() => count('click_example')} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
-                Voir un exemple
-              </a>
+              <MainActions />
+              <span className={ON_PHONE}>
+                <a href="#exemple" onClick={() => count('click_example')} className={`${SECONDARY_BUTTON} w-full`}>
+                  Voir un exemple
+                </a>
+              </span>
             </div>
-            {/* The way in that this device has besides the button, in one line, then the offer. */}
+            {/* What this device has besides the buttons, in one line, then the offer. */}
             <p className={`mt-5 mb-0 text-lg text-foreground ${ON_COMPUTER}`}>
-              Sans extension :{' '}
-              <Link to="/analyser" className={INLINE_LINK}>
-                collez le texte sur le site
-              </Link>
-              , sans compte.
+              Ou d’abord,{' '}
+              <a href="#exemple" onClick={() => count('click_example')} className={INLINE_LINK}>
+                voir un exemple
+              </a>
+              .
             </p>
             <p className={`mt-5 mb-0 text-lg text-foreground ${ON_ANDROID}`}>
               Ou partagez l’article vers{' '}
@@ -553,7 +523,7 @@ export function Accueil() {
               </Link>
               , sur l’article ouvert dans Safari.
             </p>
-            <Offer />
+            <p className="mt-2 mb-0 text-lg text-foreground">{OFFER}</p>
           </div>
 
           <LoopingHero />
@@ -589,7 +559,7 @@ export function Accueil() {
       {/* How a report is made: the four drawings carry it, a line each. */}
       <Section id="comment" title="Comment ça marche" intro="Une à deux minutes, de l’article au rapport.">
         <ol className="m-0 grid list-none gap-0 p-0 lg:grid-cols-4 lg:gap-8">
-          {STAGES.map(({ step, title, text, detail, then }, index) => (
+          {STAGES.map(({ step, title, text, then }, index) => (
             <li
               key={step}
               className="relative grid content-start grid-cols-[7.5rem_minmax(0,1fr)] gap-x-5 lg:grid-cols-1 lg:gap-y-6"
@@ -601,7 +571,6 @@ export function Accueil() {
                 <p className="m-0 font-display text-base font-semibold text-foreground tabular-nums">{index + 1}</p>
                 <h3 className={`${H3} mt-1`}>{title}</h3>
                 <p className={`mt-2 ${BODY}`}>{text}</p>
-                {detail ? <p className="mt-2 mb-0 text-base text-muted">{detail}</p> : null}
               </div>
               {then ? <Then label={then} /> : null}
             </li>

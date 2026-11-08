@@ -27,11 +27,11 @@ recherche dans la boutique : la seconde moitié porte les mots qu’un lecteur t
 **Chrome Web Store** (132 caractères au plus ; c’est la `description` des manifestes, et
 `tests/packaging.test.ts` vérifie la limite) :
 
-Vérifiez un article avant d’y croire. Passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre clé d’API.
+Vérifiez un article avant d’y croire : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre clé d’API.
 
 **AMO** (250 caractères au plus ; champ « Résumé » de la fiche) :
 
-Un deuxième avis sur l’article de presse que vous lisez : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre propre clé d’API (votre fournisseur d’IA facture l’usage), ou avec un compte Squiggle, sans clé : 3 analyses offertes.
+Vérifiez un article de presse avant d’y croire : passages fragiles surlignés, raisons, note sur 100. Gratuit avec votre propre clé d’API (votre fournisseur d’IA facture l’usage), ou avec un compte Squiggle, sans clé : 3 analyses offertes.
 
 ## Catégorie
 
@@ -46,7 +46,7 @@ Le même texte dans les deux boutiques. Le Chrome Web Store n’affiche que du t
 les puces sont des caractères, pas du balisage.
 
 ```
-Un deuxième avis sur l’article que vous lisez.
+Vérifiez un article avant d’y croire.
 
 Un clic sur l’icône, et Squiggle relit l’article ouvert. Il surligne les passages fragiles, dit pourquoi, et montre aussi ce qui est solide. Le rapport s’ouvre à côté de l’article, avec une note sur 100.
 
@@ -113,7 +113,7 @@ aucun lecteur que l’interface n’exclut pas déjà.
 
 AMO affiche une légende sous chaque capture : reprendre le titre de l’image.
 
-1. **Un deuxième avis sur votre lecture.** Le score, les passages surlignés, la synthèse.
+1. **Vérifiez un article avant d’y croire.** Le score, les passages surlignés, la synthèse.
 2. **Chaque constat pointe sa phrase.** Un constat choisi, son passage mis en évidence.
 3. **Les chiffres confrontés aux sources.** Le chiffre mis en doute et la source lue.
 4. **Cinq questions pour chaque article.** Les notes par domaine, l’une ouverte.

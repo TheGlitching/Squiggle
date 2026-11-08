@@ -23,7 +23,7 @@ export const OWN_KEY_TOP_MODEL_MONTHLY = 'environ 25 à 30 € par mois';
  * the page title and the link preview, and a test keeps the two in step; `og.png` is a
  * rendering of the hero and is captured again when it changes.
  */
-export const TAGLINE = 'Un deuxième avis sur votre lecture.';
+export const TAGLINE = 'Vérifiez un article avant d’y croire.';
 
 export const GITHUB_URL = 'https://github.com/TheGlitching/Squiggle';
 
