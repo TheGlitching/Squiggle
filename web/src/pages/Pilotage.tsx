@@ -59,6 +59,12 @@ const LABELS: Record<string, string> = {
   anon: 'Site, sans compte',
   video: 'dont vidéos YouTube',
   message: 'dont messages courts',
+  // the plan's channels
+  demo: 'Démonstrations',
+  proches: 'Proches',
+  gads1: 'Google, annonce 1',
+  gads2: 'Google, annonce 2',
+  mads1: 'Meta, annonce 1',
   // refusals
   trial_exhausted: 'Essai épuisé',
   quota_exhausted: 'Quota épuisé',
@@ -87,10 +93,10 @@ function Tile({ label, value, children }: { label: string; value: string; childr
   );
 }
 
-/** One group of counts, largest first, each with a bar against the group's largest; zeros are left out. */
-function Counts({ title, counts }: { title: string; counts: Record<string, number> }) {
+/** One group of counts, largest first, each with a bar against the group's largest; zeros are left out unless a zero is the news. */
+function Counts({ title, counts, zeros = false }: { title: string; counts: Record<string, number>; zeros?: boolean }) {
   const rows = Object.entries(counts)
-    .filter(([, n]) => n > 0)
+    .filter(([, n]) => zeros || n > 0)
     .sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
@@ -114,6 +120,16 @@ function Counts({ title, counts }: { title: string; counts: Record<string, numbe
     </div>
   );
 }
+
+/** The campaign links whose name matches, or with `except`, every other one. */
+function campaignsOf(counts: Record<string, number>, names: RegExp, except = false): Record<string, number> {
+  return Object.fromEntries(Object.entries(counts).filter(([name]) => names.test(name) !== except));
+}
+
+const INTRODUCTIONS = /^(demo|proches)$/;
+const CREATORS = /^createur\d+$/;
+const ADS = /^[gm]ads\d+$/;
+const CHANNELS = new RegExp(`${INTRODUCTIONS.source}|${CREATORS.source}|${ADS.source}`);
 
 function Rows({ title, rows }: { title: string; rows: Array<[string, string]> }) {
   return (
@@ -162,8 +178,14 @@ function Figures({ m }: { m: OwnerMetrics }) {
         </Tile>
       </div>
 
+      <Band title="Canaux du plan : visites par lien">
+        <Counts title="Introductions" counts={campaignsOf(m.audience.campaigns, INTRODUCTIONS)} zeros />
+        <Counts title="Créateurs (par code)" counts={campaignsOf(m.audience.campaigns, CREATORS)} zeros />
+        <Counts title="Publicité" counts={campaignsOf(m.audience.campaigns, ADS)} zeros />
+      </Band>
+
       <Band title="Campagnes, boutons, textes collés">
-        <Counts title="Campagnes" counts={m.audience.campaigns} />
+        <Counts title="Campagnes" counts={campaignsOf(m.audience.campaigns, CHANNELS, true)} />
         <Counts title="Boutons" counts={m.audience.clicks} />
         <Counts title="Textes collés" counts={m.audience.pastes ?? {}} />
         <Counts title="Blog : vers l’analyse" counts={m.audience.blog ?? {}} />

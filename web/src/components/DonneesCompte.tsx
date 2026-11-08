@@ -1,7 +1,7 @@
 /**
- * "Données et compte": the three rights `PRIVACY.md` promises that a reader
- * exercises from here - change the address, revoke an install, erase the
- * account. Deletion sits last, apart, behind a confirmation that names what
+ * "Données et compte": the rights `PRIVACY.md` promises that a reader exercises
+ * from here - change the address, give or withdraw the accord for commercial
+ * e-mail, revoke an install, erase the account. Deletion sits last, apart, behind a confirmation that names what
  * goes.
  */
 import { useEffect, useState, type FormEvent } from 'react';
@@ -11,9 +11,11 @@ import {
   confirmEmailChange,
   deleteAccount,
   listInstalls,
+  MARKETING_CONSENT_LABEL,
   messageForError,
   requestEmailChange,
   revokeInstall,
+  setMarketingConsent,
   type Account,
   type Install,
 } from '../api';
@@ -50,6 +52,7 @@ export function DonneesCompte({ account, onSignOut, onEmailChanged, onDeleted }:
       </p>
 
       <EmailBlock email={account.email} onChanged={onEmailChanged} />
+      <MarketingBlock initial={account.marketingConsentAt} />
       <InstallsBlock />
 
       <div className="mt-8 border-t border-border pt-6">
@@ -60,6 +63,52 @@ export function DonneesCompte({ account, onSignOut, onEmailChanged, onDeleted }:
 
       <DeleteBlock onDeleted={onDeleted} />
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Accord for commercial e-mail
+// ---------------------------------------------------------------------------
+
+function MarketingBlock({ initial }: { initial: number | null }) {
+  const [consentAt, setConsentAt] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function change(consent: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      setConsentAt((await setMarketingConsent(consent)).marketingConsentAt);
+    } catch (err) {
+      setError(messageForError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const since = frenchDate(consentAt);
+  return (
+    <div className="mt-8">
+      <h3 className="m-0 font-display text-lg font-semibold">E-mails</h3>
+      <p className="mt-1 mb-4 text-base text-muted">Les e-mails nécessaires à votre compte partent dans tous les cas.</p>
+      <label className="flex items-start gap-3 text-base text-muted">
+        <input
+          type="checkbox"
+          checked={consentAt !== null}
+          disabled={busy}
+          onChange={(event) => void change(event.target.checked)}
+          className="mt-1 h-4.5 w-4.5 shrink-0 accent-accent"
+        />
+        <span>{MARKETING_CONSENT_LABEL}</span>
+      </label>
+      {since ? <p className="mt-2 mb-0 text-sm text-muted">Accord donné le {since}.</p> : null}
+      {error ? (
+        <p role="alert" className="mt-2 mb-0 text-base text-criticalInk">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

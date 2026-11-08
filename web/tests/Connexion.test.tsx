@@ -29,6 +29,29 @@ describe('Connexion', () => {
     expect(screen.getByText(/Il s’ouvre à la première connexion, avec 3 analyses offertes, sans carte bancaire\./)).toBeInTheDocument();
   });
 
+  it('leaves the accord unticked, sends it only when ticked, and carries it to Google', async () => {
+    const user = userEvent.setup();
+    const { calls } = installFetch((call) => {
+      if (call.url.endsWith('/web/account')) return jsonResponse({ ok: false, error: 'invalid_session' }, 401);
+      if (call.url.endsWith('/auth/magic-link')) return jsonResponse({ ok: true, sent: true });
+      return undefined;
+    });
+    renderAt('/connexion');
+
+    const box = screen.getByRole('checkbox', { name: /un exercice de lecture par semaine/ });
+    expect(box).not.toBeChecked();
+    expect(screen.getByRole('link', { name: 'Continuer avec Google' }).getAttribute('href')).not.toContain('marketing');
+
+    await user.click(box);
+    expect(screen.getByRole('link', { name: 'Continuer avec Google' }).getAttribute('href')).toContain('marketing=1');
+
+    await user.type(screen.getByLabelText('Adresse e-mail'), 'marie@example.com');
+    await user.click(screen.getByRole('button', { name: 'Recevoir mon code' }));
+    await waitFor(() => {
+      expect(calls.find((c) => c.url.endsWith('/auth/magic-link'))?.body).toEqual({ email: 'marie@example.com', marketing: true });
+    });
+  });
+
   it('turns a typed e-mail into a code, then the code into a session', async () => {
     const user = userEvent.setup();
     const { calls } = installFetch((call) => {

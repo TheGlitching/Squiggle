@@ -20,7 +20,7 @@ const METRICS: OwnerMetrics = {
   cache: { checks: 20, hits: 5, hitRate: 0.25 },
   stages: { audit: { ...stage, truncated: 0 }, research: stage, sourceCheck: stage },
   audience: {
-    campaigns: { clemi: 3, lel: 2, createur12: 1, presse: 0 },
+    campaigns: { clemi: 3, lel: 2, createur12: 1, presse: 0, demo: 0, proches: 2, gads1: 4, gads2: 0, mads1: 0 },
     clicks: {},
     flags: { categories: { sophisme: 2, cadrage: 0 }, reasons: { misread: 1, too_harsh: 1 } },
   },
@@ -105,6 +105,21 @@ describe('/tableau', () => {
     await userEvent.type(screen.getByLabelText(/Facture du fournisseur/), '1,5');
     await waitFor(() => expect(calls.at(-1)?.url).toBe('/web/tableau?weeks=4&costUsd=1.5'));
     expect(calls.filter((call) => call.url.endsWith('/web/count'))).toEqual([]);
+  });
+
+  it('shows the plan\u2019s channels apart, keeping a channel still at zero', async () => {
+    window.history.pushState({}, '', '/tableau');
+    installFetch((call) => (call.url.startsWith('/web/tableau') ? jsonResponse({ ok: true, metrics: METRICS }) : undefined));
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'Canaux du plan : visites par lien' });
+    expect(screen.getByText('Démonstrations')).toBeInTheDocument();
+    expect(screen.getByText('Meta, annonce 1')).toBeInTheDocument();
+    expect(screen.getByText('Google, annonce 1')).toBeInTheDocument();
+    // A campaign outside them stays in its own list, where a zero is left out.
+    expect(screen.getByText('clemi')).toBeInTheDocument();
+    expect(screen.queryByText('presse')).toBeNull();
+    expect(screen.getAllByText('createur12')).toHaveLength(1);
   });
 
   it('reads a figure the server left out as "-" instead of going blank', async () => {

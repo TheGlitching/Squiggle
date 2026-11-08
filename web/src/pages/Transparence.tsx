@@ -71,6 +71,7 @@ export const RETENTION = [
   ],
   ['Compteur d’analyses du jour', 'Base de données', 'Tant que le compte existe'],
   ['Adresse e-mail', 'Base de données', 'Tant que le compte existe'],
+  ['Accord pour les e-mails commerciaux, si vous l’avez donné : sa date, celle de son retrait', 'Base de données', 'Tant que le compte existe'],
   ['Identifiant Google, si connexion Google', 'Base de données', 'Tant que le compte existe'],
   ['Clé publique de votre installation', 'Base de données', 'Tant que vous ne la révoquez pas'],
   ['Jeton d’extension', 'Base de données, en empreinte SHA-256', '90 jours'],
@@ -119,7 +120,7 @@ const SUBPROCESSORS = [
   ],
   ['Neon', 'Base de données', 'Ce que décrit le tableau de conservation'],
   ['Stripe', 'Paiement', 'Votre e-mail et vos données de paiement ; nous ne voyons aucun numéro de carte'],
-  ['Brevo', 'Envoi des e-mails de connexion', 'Votre adresse e-mail'],
+  ['Brevo', 'Envoi des e-mails de connexion et, si vous les avez acceptés, des e-mails commerciaux', 'Votre adresse e-mail'],
 ] as const;
 
 /** A table that stays a table on a wide screen and becomes one block per row on a phone. */

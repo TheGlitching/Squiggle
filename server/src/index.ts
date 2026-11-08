@@ -29,6 +29,7 @@
  *   POST   /web/account/installs/revoke (session) revoke one install
  *   POST   /web/account/email          (session) send a code to a new address
  *   POST   /web/account/email/confirm  (session) switch to that address
+ *   POST   /web/account/marketing      (session) tick or untick the accord for commercial e-mail
  *   POST   /web/account/delete         (session) erase the account
  *   POST   /webhooks/stripe            (Stripe-signed) the only writer of a plan
  *   GET    /v1/analyze/check           (signed) shared-cache preflight (url + text hash), 0 credits
@@ -50,6 +51,7 @@
  *                                                from the page itself; 0 credits, nothing fetched
  *   POST   /web/transcribe             (session) a recording's text, 15 minutes at most, within the daily allowances
  *   POST   /web/count                  (no credentials) bump one audience counter from a closed list
+ *   POST   /web/unsubscribe?t=         (token from a commercial e-mail) withdraw its accord, one click, no session
  *   GET    /web/tableau                (owner session) the same metrics, for the owner's page; 404 to anyone else
  *   GET    /admin/metrics              (admin or metrics token) aggregate launch metrics, counts only
  *   POST   /admin/migrate              (admin token) apply pending migrations
@@ -96,6 +98,7 @@ import {
   deleteAccount,
   listInstalls,
   requestEmailChange,
+  setMarketingConsent,
   revokeInstall,
 } from './account/manage';
 import { claimExtensionToken } from './auth/claim';
@@ -103,6 +106,7 @@ import { issueBridgeCode, redeemBridgeCode } from './auth/bridge';
 import { completeGoogleAuth, startGoogleAuth } from './auth/google';
 import { AFTER_ANON_NEXT, AFTER_WITHHELD_NEXT, DEFAULT_NEXT } from './auth/next';
 import { requestMagicLink, verifyMagicLink } from './auth/magicLink';
+import { hasMarketingConsent } from './mail/commercial';
 import { verifySignedRequest } from './auth/requestSigning';
 import {
   cookieValue,
@@ -377,7 +381,9 @@ async function handle(
     origin === null &&
     (fetchSite === 'same-origin' || (fetchSite === null && refererOrigin(req) === s.webAppOrigin));
   if (
-    (origin !== null && !originAllowed) ||
+    // A mailbox provider posts the one-click unsubscribe (RFC 8058) from wherever
+    // it runs. No cookie is read there: the token is the whole credential.
+    (origin !== null && !originAllowed && url.pathname !== UNSUBSCRIBE_PATH) ||
     (!originAllowed && !sameOrigin && originRequired(req.method, url.pathname))
   ) {
     logEvent({ event: 'origin_rejected', requestId, method: req.method, path: url.pathname });
@@ -435,6 +441,9 @@ function finish<T extends object>(outcome: Outcome<T>, setCookie?: string | null
   return res;
 }
 
+const UNSUBSCRIBE_PATH = '/web/unsubscribe';
+const UNSUBSCRIBE_TOKEN = /^[\w-]{16,64}$/;
+
 async function route(req: Request, url: URL, s: Services, requestId: string): Promise<Response> {
   const path = url.pathname;
   const method = req.method;
@@ -460,7 +469,7 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     const ip = req.headers.get('cf-connecting-ip');
     const outcome = await requestMagicLink(
       { db: s.db, clock: s.clock, email: s.email, webAppOrigin: s.webAppOrigin, requestId },
-      { email, ip, next: body.next },
+      { email, ip, next: body.next, marketing: body.marketing },
     );
     if (outcome.ok) await count('signin_link_sent');
     return finish(outcome);
@@ -488,7 +497,12 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
         clientSecret: s.googleClientSecret,
         fetchImpl: s.fetchImpl,
       },
-      { next: url.searchParams.get('next') },
+      {
+        next: url.searchParams.get('next'),
+        // A link is enough to reach this address, so the box only counts when the
+        // navigation came from our own sign-in page. A browser says so itself.
+        marketing: url.searchParams.get('marketing') === '1' && req.headers.get('sec-fetch-site') === 'same-origin',
+      },
     );
     await count('signin_google');
     return new Response(null, { status: 302, headers: { location: started.redirectUrl } });
@@ -603,6 +617,13 @@ async function route(req: Request, url: URL, s: Services, requestId: string): Pr
     if (!isAudienceMetricName(body.name)) return finish(apiError('invalid_payload', 'Unknown counter.'));
     await count(body.name);
     return new Response(null, { status: 204 });
+  }
+
+  if (path === UNSUBSCRIBE_PATH && method === 'POST') {
+    const token = url.searchParams.get('t') ?? '';
+    if (!UNSUBSCRIBE_TOKEN.test(token)) return finish(apiError('invalid_payload', 'Requête invalide : t.'));
+    await s.db.withdrawMarketingByToken(token, s.clock.now());
+    return finish({ ok: true });
   }
 
   if (path === '/web/transcribe' && method === 'POST') {
@@ -778,6 +799,8 @@ async function accountDataRoute(
       );
     case '/web/account/email/confirm':
       return finish(await confirmEmailChange({ ...deps, stripe: s.stripe }, user, (await body()).code));
+    case '/web/account/marketing':
+      return finish(await setMarketingConsent(deps, user, (await body()).consent));
     case '/web/account/delete': {
       const outcome = await deleteAccount({ ...deps, stripe: s.stripe }, user, (await body()).confirm);
       // The session row is gone with the account; the cookie in the browser
@@ -830,6 +853,7 @@ async function accountForUser(
       // Whether the self-service teacher offer is open to this account. The
       // rule lives on the server; the web app only shows or hides a button.
       teacherOffer: teacherOfferOpen(s.stripe, user),
+      marketingConsentAt: hasMarketingConsent(user) ? user.marketingConsentAt : null,
       usage: {
         used: entitlement.used,
         limit: entitlement.limit,

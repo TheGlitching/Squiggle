@@ -9,6 +9,7 @@ import { Accueil } from './pages/Accueil';
 import { Analyser, analyserReadsReader } from './pages/Analyser';
 import { Classe } from './pages/Classe';
 import { Compte } from './pages/Compte';
+import { Desinscription } from './pages/Desinscription';
 import { Connexion } from './pages/Connexion';
 import { Enseignants } from './pages/Enseignants';
 import { Favori, FavoriEssai, favoriTried } from './pages/Favori';
@@ -142,6 +143,9 @@ export function App({ path: at }: { path?: string }) {
     case '/compte':
     case '/account':
       page = <Compte />;
+      break;
+    case '/desinscription':
+      page = <Desinscription />;
       break;
     case '/transparence':
       page = <Transparence />;

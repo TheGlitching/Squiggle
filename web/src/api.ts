@@ -18,6 +18,8 @@ export interface Account {
   planExpiresAt: number | null;
   /** The self-service teacher offer is open to this account (verified academic address, never subscribed). */
   teacherOffer: boolean;
+  /** When the live accord for commercial e-mail was given; null = none. */
+  marketingConsentAt: number | null;
   usage: { used: number; limit: number; remaining: number; resetsAt: number | null };
 }
 
@@ -83,8 +85,8 @@ export function transcribe(
 }
 
 /** `next` is only a request: the server keeps it if it is an internal destination it allows. */
-export function requestMagicLink(email: string, next?: string): Promise<{ sent: true }> {
-  return call('/auth/magic-link', { method: 'POST', body: JSON.stringify({ email, next }) });
+export function requestMagicLink(email: string, next?: string, marketing = false): Promise<{ sent: true }> {
+  return call('/auth/magic-link', { method: 'POST', body: JSON.stringify({ email, next, marketing: marketing || undefined }) });
 }
 
 /** `next` is the destination the server stored with the code, if any. */
@@ -160,8 +162,22 @@ export function deleteAccount(): Promise<{ ok: true }> {
   return call('/web/account/delete', { method: 'POST', body: JSON.stringify({ confirm: true }) });
 }
 
-export function googleSignInUrl(next?: string): string {
-  return `${API_BASE}/auth/google${next ? `?${new URLSearchParams({ next })}` : ''}`;
+export function googleSignInUrl(next?: string, marketing = false): string {
+  const query = new URLSearchParams({ ...(next ? { next } : {}), ...(marketing ? { marketing: '1' } : {}) }).toString();
+  return `${API_BASE}/auth/google${query ? `?${query}` : ''}`;
+}
+
+/** The words of the accord, the same at sign-in and on the account page. */
+export const MARKETING_CONSENT_LABEL =
+  'Recevoir par e-mail un exercice de lecture par semaine et des messages sur Squiggle et son abonnement. Vous pouvez arrêter à tout moment.';
+
+export function setMarketingConsent(consent: boolean): Promise<{ marketingConsentAt: number | null }> {
+  return call('/web/account/marketing', { method: 'POST', body: JSON.stringify({ consent }) });
+}
+
+/** The button of the page a commercial e-mail links to. */
+export function unsubscribe(token: string): Promise<{ ok: true }> {
+  return call(`/web/unsubscribe?${new URLSearchParams({ t: token })}`, { method: 'POST', body: '{}' });
 }
 
 /**

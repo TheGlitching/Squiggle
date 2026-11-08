@@ -87,6 +87,9 @@ function mapUser(r: RawRow): UserRow {
     stripeCustomerId: (r.stripe_customer_id as string | null) ?? null,
     stripeSubId: (r.stripe_sub_id as string | null) ?? null,
     subscriptionFree: Boolean(r.subscription_free),
+    marketingConsentAt: r.marketing_consent_at == null ? null : num(r.marketing_consent_at),
+    marketingWithdrawnAt: r.marketing_withdrawn_at == null ? null : num(r.marketing_withdrawn_at),
+    marketingUnsubToken: (r.marketing_unsub_token as string | null) ?? null,
     createdAt: num(r.created_at),
     updatedAt: num(r.updated_at),
   };
@@ -152,6 +155,9 @@ export class NeonDb implements Db {
       stripeCustomerId: null,
       stripeSubId: null,
       subscriptionFree: false,
+      marketingConsentAt: null,
+      marketingWithdrawnAt: null,
+      marketingUnsubToken: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -216,6 +222,29 @@ export class NeonDb implements Db {
 
   async setSubscriptionFree(userId: string, free: boolean, now: number): Promise<void> {
     await this.q`UPDATE users SET subscription_free = ${free}, updated_at = ${now} WHERE id = ${userId}`;
+  }
+
+  async setMarketingConsent(userId: string, consent: boolean, now: number): Promise<void> {
+    if (consent) {
+      await this.q`
+        UPDATE users
+        SET marketing_consent_at = ${now}, marketing_withdrawn_at = NULL,
+            marketing_unsub_token = COALESCE(marketing_unsub_token, ${randomToken(16)}), updated_at = ${now}
+        WHERE id = ${userId} AND (marketing_consent_at IS NULL OR marketing_withdrawn_at IS NOT NULL)
+      `;
+    } else {
+      await this.q`
+        UPDATE users SET marketing_withdrawn_at = ${now}, updated_at = ${now}
+        WHERE id = ${userId} AND marketing_consent_at IS NOT NULL AND marketing_withdrawn_at IS NULL
+      `;
+    }
+  }
+
+  async withdrawMarketingByToken(token: string, now: number): Promise<void> {
+    await this.q`
+      UPDATE users SET marketing_withdrawn_at = ${now}, updated_at = ${now}
+      WHERE marketing_unsub_token = ${token} AND marketing_consent_at IS NOT NULL AND marketing_withdrawn_at IS NULL
+    `;
   }
 
   async setStripeIds(
@@ -337,8 +366,8 @@ export class NeonDb implements Db {
     const id = randomToken(16);
     const expiresAt = args.now + args.ttlMs;
     await this.q`
-      INSERT INTO magic_links (id, email, code_hash, ip, change_user_id, created_at, expires_at, used_at, next_path)
-      VALUES (${id}, ${args.email}, ${args.codeHash}, ${args.ip}, ${args.changeUserId ?? null}, ${args.now}, ${expiresAt}, NULL, ${args.next})
+      INSERT INTO magic_links (id, email, code_hash, ip, change_user_id, created_at, expires_at, used_at, next_path, marketing_consent)
+      VALUES (${id}, ${args.email}, ${args.codeHash}, ${args.ip}, ${args.changeUserId ?? null}, ${args.now}, ${expiresAt}, NULL, ${args.next}, ${args.marketingConsent ?? false})
     `;
     return {
       id,
@@ -350,6 +379,7 @@ export class NeonDb implements Db {
       expiresAt,
       usedAt: null,
       next: args.next,
+      marketingConsent: args.marketingConsent ?? false,
     };
   }
 
@@ -367,6 +397,7 @@ export class NeonDb implements Db {
       expiresAt: num(r.expires_at),
       usedAt: r.used_at === null ? null : num(r.used_at),
       next: (r.next_path as string | null) ?? null,
+      marketingConsent: Boolean(r.marketing_consent),
     };
   }
 
@@ -474,8 +505,8 @@ export class NeonDb implements Db {
 
   async createOAuthPending(args: CreateOAuthPendingArgs): Promise<void> {
     await this.q`
-      INSERT INTO oauth_pending (state, code_verifier, nonce, redirect_uri, created_at, expires_at, next_path)
-      VALUES (${args.state}, ${args.codeVerifier}, ${args.nonce}, ${args.redirectUri}, ${args.now}, ${args.now + args.ttlMs}, ${args.next})
+      INSERT INTO oauth_pending (state, code_verifier, nonce, redirect_uri, created_at, expires_at, next_path, marketing_consent)
+      VALUES (${args.state}, ${args.codeVerifier}, ${args.nonce}, ${args.redirectUri}, ${args.now}, ${args.now + args.ttlMs}, ${args.next}, ${args.marketingConsent ?? false})
     `;
   }
 
@@ -491,6 +522,7 @@ export class NeonDb implements Db {
       createdAt: num(r.created_at),
       expiresAt: num(r.expires_at),
       next: (r.next_path as string | null) ?? null,
+      marketingConsent: Boolean(r.marketing_consent),
     };
   }
 

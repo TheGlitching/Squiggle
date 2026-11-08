@@ -16,7 +16,8 @@ export const AUDIENCE_METRIC_NAMES = [
   'ref_linuxfr',
   'ref_createur1',
   // The first direct outreach: Les Électrons Libres, other press and partners,
-  // the close circle, Reddit, the AFIS, and one link per video creator.
+  // the close circle, Reddit, the AFIS, and one link per video creator, who is
+  // named by a code here because this list is public.
   'ref_lel',
   'ref_sjowall',
   'ref_proches',
@@ -34,6 +35,12 @@ export const AUDIENCE_METRIC_NAMES = [
   'ref_createur10',
   'ref_createur11',
   'ref_createur12',
+  // A person shown the product by someone they know.
+  'ref_demo',
+  // A paid click. The name comes from the link alone: no pixel, no click id kept.
+  'ref_gads1',
+  'ref_gads2',
+  'ref_mads1',
   // ...and through the link on each of Squiggle's own social accounts.
   'ref_bluesky',
   'ref_mastodon',

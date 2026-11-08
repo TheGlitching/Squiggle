@@ -53,6 +53,7 @@ export function account(overrides: Partial<Account> = {}): Account {
     plan: 'trial',
     planExpiresAt: null,
     teacherOffer: false,
+    marketingConsentAt: null,
     usage: { used: 0, limit: 3, remaining: 3, resetsAt: null },
     ...overrides,
   };

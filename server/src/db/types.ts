@@ -39,6 +39,12 @@ export interface UserRow {
    * (a 100 % promotion code): subscribed, but not paying. Metrics only.
    */
   subscriptionFree: boolean;
+  /** When the reader agreed to commercial e-mail; null = never. See `mail/commercial.ts`. */
+  marketingConsentAt: number | null;
+  /** When they took it back; null = not since `marketingConsentAt`. */
+  marketingWithdrawnAt: number | null;
+  /** Printed in every commercial message: it can withdraw this accord and do nothing else. */
+  marketingUnsubToken: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -109,6 +115,8 @@ export interface MagicLinkRow {
   usedAt: number | null;
   /** Sanitised internal destination after sign-in (auth/next.ts); null = the account page. */
   next: string | null;
+  /** The accord box was ticked with this request; it takes effect at sign-in. */
+  marketingConsent: boolean;
 }
 
 export interface CreateMagicLinkArgs {
@@ -118,6 +126,7 @@ export interface CreateMagicLinkArgs {
   /** Issue the code as an email-change confirmation for this account. */
   changeUserId?: string | null;
   next: string | null;
+  marketingConsent?: boolean;
   now: number;
   ttlMs: number;
 }
@@ -193,6 +202,8 @@ export interface OAuthPendingRow {
   expiresAt: number;
   /** Sanitised internal destination after sign-in (auth/next.ts); null = the account page. */
   next: string | null;
+  /** The accord box was ticked with this request; it takes effect at sign-in. */
+  marketingConsent: boolean;
 }
 
 export interface CreateOAuthPendingArgs {
@@ -201,6 +212,7 @@ export interface CreateOAuthPendingArgs {
   nonce: string;
   redirectUri: string;
   next: string | null;
+  marketingConsent?: boolean;
   now: number;
   ttlMs: number;
 }
@@ -514,6 +526,15 @@ export interface Db {
 
   /** Record whether what the account's subscription last cost was zero. Webhook only. */
   setSubscriptionFree(userId: string, free: boolean, now: number): Promise<void>;
+
+  /**
+   * Record the reader's accord to commercial e-mail, or its withdrawal. Agreeing
+   * again while the accord is live keeps its first date.
+   */
+  setMarketingConsent(userId: string, consent: boolean, now: number): Promise<void>;
+
+  /** Withdraw the accord printed in a commercial message. An unknown token changes nothing. */
+  withdrawMarketingByToken(token: string, now: number): Promise<void>;
 
   /** Attach (or update) the Stripe customer and subscription identifiers. */
   setStripeIds(

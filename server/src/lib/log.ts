@@ -34,6 +34,7 @@ export interface LogFields {
     | 'unhandled_error'
     | 'account_deleted'
     | 'email_changed'
+    | 'marketing_consent_changed'
     | 'install_revoked'
     | 'stripe_email_sync_failed'
     | 'stripe_teacher_end_failed'

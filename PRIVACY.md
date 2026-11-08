@@ -270,6 +270,7 @@ raconte.
 | Journal d'usage : qu'un compte a lancé une analyse, et quand | base de données | 12 mois, **sans aucun contenu et sans dire de quel article** |
 | Compteur d'analyses du jour (lancées, et menées à terme) | base de données | tant que le compte existe |
 | Adresse e-mail | base de données | tant que le compte existe |
+| Accord pour les e-mails commerciaux : sa date, celle de son retrait, et le jeton du lien de désinscription | base de données | tant que le compte existe |
 | Identifiant Google (`sub`), si connexion Google | base de données | tant que le compte existe |
 | Clé publique de votre installation | base de données | tant que vous ne la révoquez pas |
 | Jeton d'extension | base de données, **en empreinte SHA-256** | 90 jours |
@@ -299,7 +300,9 @@ d'appareil. Rien ne permet de vous reconnaître d'une visite à l'autre.
 
 Le site compte aussi lui-même, jour par jour, combien de fois quelques boutons sont
 utilisés, comme « Installer l'extension » ou « S'abonner », et combien de visites
-arrivent par un lien de campagne connu (`?ref=clemi`). Chaque compte est un simple
+arrivent par un lien de campagne connu (`?ref=clemi`), y compris un lien de publicité
+(`?ref=gads1`, `?ref=mads1`) : le site ne charge aucun pixel publicitaire et ne garde
+aucun identifiant de clic. Chaque compte est un simple
 nombre par jour et par nom d'événement : sans cookie, sans identifiant, sans adresse IP,
 et sans lien avec votre compte. La page envoie à notre serveur le seul nom de
 l'événement, sans cookie (`POST /web/count`), et le serveur refuse tout nom absent de la
@@ -329,7 +332,7 @@ l'extension ne propose aucun de ces signalements : elle n'envoie toujours rien �
 | **Cloudflare** (Workers, Email Routing, Queues, Web Analytics) | hébergement du serveur et du site, réception des e-mails transférés, mesure d'audience du site | le trafic, et les e-mails transférés à `verifier@squiggle.fr`, sans contenu d'article dans les journaux ; pour l'audience, des totaux sans cookie ni empreinte |
 | **Neon** (base hébergée à Francfort, Allemagne, région AWS `eu-central-1` ; société établie aux États-Unis) | base de données | tout ce que décrit le tableau ci-dessus |
 | **Stripe** | paiement | votre e-mail et vos données de paiement — **nous ne voyons aucun numéro de carte** |
-| **Brevo** | envoi des e-mails de connexion, et des réponses aux e-mails transférés | votre adresse e-mail ; pour une réponse, l'essentiel du rapport (note, synthèse, passages relevés et leur explication, résultat des vérifications) et le titre de l'e-mail transféré |
+| **Brevo** | envoi des e-mails de connexion, des réponses aux e-mails transférés et, si vous avez donné votre accord, des e-mails commerciaux | votre adresse e-mail ; pour une réponse, l'essentiel du rapport (note, synthèse, passages relevés et leur explication, résultat des vérifications) et le titre de l'e-mail transféré |
 
 ## Vos droits
 
@@ -347,6 +350,13 @@ l'extension ne propose aucun de ces signalements : elle n'envoie toujours rien �
 - **Rectification** — l'adresse e-mail est la seule donnée personnelle que vous nous
   confiez ; elle se change depuis la page de compte, en confirmant un code envoyé à la
   nouvelle adresse. L'adresse portée par Stripe sur vos reçus suit ce changement.
+- **E-mails commerciaux** : un exercice de lecture par semaine et des messages sur Squiggle
+  et son abonnement, seulement si vous avez coché la case prévue, qui n'est jamais cochée
+  d'avance. Un compte existant n'a pas donné cet accord. Vous le retirez à tout moment
+  depuis la page de compte, ou par le lien de désinscription présent dans chacun de ces
+  messages, sans vous connecter. Sans accord, seuls partent les messages de service : le code de
+  connexion, la confirmation d'une nouvelle adresse, et la réponse à un e-mail que vous
+  avez transféré. Les reçus de paiement sont envoyés par Stripe.
 - **Révocation d'une installation** — la page de compte liste les extensions connectées
   et permet d'en révoquer une : sa clé cesse aussitôt d'être acceptée.
 - Pour tout le reste : écrivez à contact@squiggle.fr. La politique complète, avec les
@@ -368,7 +378,7 @@ l'extension ne propose aucun de ces signalements : elle n'envoie toujours rien �
   **rien n'entraîne un modèle** : nous n'avons aucun accord de ce type et l'API payante
   du fournisseur configuré n'utilise pas les requêtes pour l'entraînement.
 - Aucune donnée n'est utilisée pour évaluer une solvabilité ni pour un prêt.
-- Aucune publicité, aucun traceur : la mesure d'audience ne dépose aucun cookie.
+- Aucune publicité sur le site, aucun traceur : la mesure d'audience ne dépose aucun cookie.
 - Aucun code n'est téléchargé ni exécuté depuis l'extérieur : tout ce qui s'exécute
   est dans le paquet que vous avez installé, et lisible dans le dépôt.
 - **Votre clé personnelle n'atteint jamais notre serveur.** Dans le mode BYOK elle ne

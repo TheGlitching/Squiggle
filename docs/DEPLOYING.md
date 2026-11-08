@@ -180,7 +180,7 @@ daily event counters, a number per day and per fixed name:
   a 100 % promotion code), analyses started and finalized by surface (extension or site),
   and refusals by reason;
 - sent by the site, and by the extension in hosted mode (`POST /web/count`, no cookie,
-  closed list in `shared/src/hosted/audience.ts`): known campaign links (`?ref=clemi`),
+  closed list in `shared/src/hosted/audience.ts`): known campaign links (`?ref=clemi`, `?ref=demo`, `?ref=gads1`),
   a few buttons, and findings reported as wrong, counted by category and, apart, by the
   reason picked from a closed list.
 

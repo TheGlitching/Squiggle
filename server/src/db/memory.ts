@@ -114,6 +114,9 @@ export class MemoryDb implements Db {
       stripeCustomerId: null,
       stripeSubId: null,
       subscriptionFree: false,
+      marketingConsentAt: null,
+      marketingWithdrawnAt: null,
+      marketingUnsubToken: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -224,6 +227,27 @@ export class MemoryDb implements Db {
     user.updatedAt = now;
   }
 
+  async setMarketingConsent(userId: string, consent: boolean, now: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    const live = user.marketingConsentAt !== null && user.marketingWithdrawnAt === null;
+    if (consent === live) return;
+    if (consent) {
+      user.marketingConsentAt = now;
+      user.marketingWithdrawnAt = null;
+      user.marketingUnsubToken ??= randomToken(16);
+    } else {
+      user.marketingWithdrawnAt = now;
+    }
+    user.updatedAt = now;
+  }
+
+  async withdrawMarketingByToken(token: string, now: number): Promise<void> {
+    for (const user of this.users.values()) {
+      if (user.marketingUnsubToken === token) await this.setMarketingConsent(user.id, false, now);
+    }
+  }
+
   async setStripeIds(
     userId: string,
     ids: { customerId?: string | null; subId?: string | null },
@@ -315,6 +339,7 @@ export class MemoryDb implements Db {
       expiresAt: args.now + args.ttlMs,
       usedAt: null,
       next: args.next,
+      marketingConsent: args.marketingConsent ?? false,
     };
     this.magicLinks.set(row.codeHash, row);
     return row;
@@ -407,6 +432,7 @@ export class MemoryDb implements Db {
       createdAt: args.now,
       expiresAt: args.now + args.ttlMs,
       next: args.next,
+      marketingConsent: args.marketingConsent ?? false,
     });
   }
 

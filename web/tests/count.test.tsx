@@ -46,6 +46,9 @@ describe('campaignOf', () => {
     for (const ref of [...outreach, ...Array.from({ length: 12 }, (_, i) => `createur${i + 1}`)]) {
       expect(campaignOf(`?ref=${ref}`)).toBe(`ref_${ref}`);
     }
+    for (const ref of ['demo', 'gads1', 'gads2', 'mads1']) {
+      expect(campaignOf(`?ref=${ref}`)).toBe(`ref_${ref}`);
+    }
     expect(campaignOf('?ref=createur13')).toBeNull();
     expect(campaignOf('?ref=inconnu')).toBeNull();
     expect(campaignOf('?ref=')).toBeNull();
