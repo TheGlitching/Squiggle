@@ -21,6 +21,7 @@ import { Cgv, Conditions, Confidentialite, MentionsLegales } from './pages/Legal
 import { MemeGrille } from './pages/MemeGrille';
 import { Pilotage } from './pages/Pilotage';
 import { Pont } from './pages/Pont';
+import { Presidentielle } from './pages/Presidentielle';
 import { Raccourci } from './pages/Raccourci';
 import { Tableau } from './pages/Tableau';
 import { Transparence } from './pages/Transparence';
@@ -175,6 +176,9 @@ export function App({ path: at }: { path?: string }) {
       break;
     case '/glossaire':
       page = <Glossaire />;
+      break;
+    case '/presidentielle':
+      page = <Presidentielle />;
       break;
     default: {
       const item = route.startsWith('/glossaire/') ? notion(route.slice('/glossaire/'.length)) : undefined;

@@ -1,4 +1,6 @@
-import { SquiggleMark } from '../components/Iso';
+import type { AudienceMetricName } from '@squiggle/shared/src/hosted/audience';
+
+import { ExternalMark, SquiggleMark } from '../components/Iso';
 import { H1, LEAD, MEASURE, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { BLOG_PATH, FEED_PATH, SHOWN, ancre, blogCounter, blogPath, dateLongue, type Article, type Bloc, type Texte } from '../blog';
 import { count } from '../count';
@@ -10,6 +12,7 @@ const H2 = 'm-0 font-display text-2xl leading-tight font-semibold tracking-[-0.0
 const H3 = 'm-0 font-display text-xl leading-snug font-semibold';
 const BODY = `m-0 text-lg leading-relaxed text-pretty ${MEASURE}`;
 const BOX = `grid gap-3 rounded-card border border-border bg-surface p-5 md:p-6 ${MEASURE}`;
+const LINK = 'underline decoration-borderControl underline-offset-4 transition-colors duration-160 ease-out hover:text-accentInk hover:decoration-accentInk';
 
 function Dates({ item }: { item: Article }) {
   return (
@@ -79,12 +82,13 @@ function Run({ texte }: { texte: Texte }) {
       {texte.map((part, index) =>
         typeof part === 'string' ? (
           typo(part)
+        ) : part.vers.startsWith('https://') ? (
+          <a key={index} href={part.vers} target="_blank" rel="noreferrer noopener" className={LINK}>
+            {typo(part.texte)}
+            <ExternalMark />
+          </a>
         ) : (
-          <Link
-            key={index}
-            to={part.vers}
-            className="underline decoration-borderControl underline-offset-4 transition-colors duration-160 ease-out hover:text-accentInk hover:decoration-accentInk"
-          >
+          <Link key={index} to={part.vers} className={LINK}>
             {typo(part.texte)}
           </Link>
         ),
@@ -108,7 +112,7 @@ function Puces({ items }: { items: readonly Texte[] }) {
   );
 }
 
-function Block({ bloc, corps }: { bloc: Bloc; corps: readonly Bloc[] }) {
+function Block({ bloc, corps, counter }: { bloc: Bloc; corps: readonly Bloc[]; counter: AudienceMetricName | null }) {
   if ('intertitre' in bloc)
     return (
       <h2 id={ancre(bloc.intertitre)} className={`${H2} mt-6 scroll-mt-24`}>
@@ -206,6 +210,17 @@ function Block({ bloc, corps }: { bloc: Bloc; corps: readonly Bloc[] }) {
         ))}
       </div>
     );
+  if ('essai' in bloc)
+    return (
+      <aside aria-label={typo(bloc.essai.bouton)} className={`${BOX} gap-4`}>
+        <p className="m-0 text-lg leading-relaxed text-pretty">{typo(bloc.essai.texte)}</p>
+        <p className="m-0">
+          <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`} onClick={counter ? () => count(counter) : undefined}>
+            {typo(bloc.essai.bouton)}
+          </Link>
+        </p>
+      </aside>
+    );
   if ('sommaire' in bloc) {
     const titres = corps.flatMap((other) => ('intertitre' in other ? [other.intertitre] : []));
     return (
@@ -216,10 +231,7 @@ function Block({ bloc, corps }: { bloc: Bloc; corps: readonly Bloc[] }) {
         <ol className="m-0 grid list-none gap-2 p-0 text-lg leading-snug">
           {titres.map((titre) => (
             <li key={titre}>
-              <a
-                href={`#${ancre(titre)}`}
-                className="underline decoration-borderControl underline-offset-4 transition-colors duration-160 ease-out hover:text-accentInk hover:decoration-accentInk"
-              >
+              <a href={`#${ancre(titre)}`} className={LINK}>
                 {typo(titre)}
               </a>
             </li>
@@ -258,7 +270,7 @@ export function ArticlePage({ item }: { item: Article }) {
         </header>
 
         {item.corps.map((bloc, index) => (
-          <Block key={index} bloc={bloc} corps={item.corps} />
+          <Block key={index} bloc={bloc} corps={item.corps} counter={counter} />
         ))}
 
         <section

@@ -95,6 +95,9 @@ export function Layout({
                 Blog
               </Link>
             ) : null}
+            <Link to="/presidentielle" className={QUIET_LINK}>
+              Présidentielle
+            </Link>
             <Link to="/favori" className={QUIET_LINK}>
               Sur téléphone
             </Link>

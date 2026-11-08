@@ -6,8 +6,8 @@
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
 import { ALL_ARTICLES, BLOG_OPEN, PUBLISHED, ancre, blogCounter, blogPath, type Article, type Bloc, type Texte } from '../src/blog';
@@ -54,7 +54,7 @@ describe('the articles', () => {
     expect(item.notions.length).toBeGreaterThan(0);
     for (const slug of item.notions) expect(notion(slug), slug).toBeDefined();
     const pages = new Set([...PUBLIC_PAGES.map((page) => page.path), ...ALL_ARTICLES.map((other) => blogPath(other.slug))]);
-    for (const link of links(item)) expect(pages.has(link.vers), link.vers).toBe(true);
+    for (const link of links(item)) expect(link.vers.startsWith('https://') || pages.has(link.vers), link.vers).toBe(true);
   });
 
   it('gives every published article its counter, which the server accepts', () => {
@@ -95,6 +95,37 @@ describe('the formatting of an article', () => {
 
   it('anchors a heading without accents or punctuation', () => {
     expect(ancre('Trois façons d’aller trop loin')).toBe('trois-facons-d-aller-trop-loin');
+  });
+});
+
+describe('an article a reader comes to in order to act', () => {
+  const item = ALL_ARTICLES.find((other) => other.slug === 'repondre-proche-fausses-informations')!;
+
+  it('offers the analysis near its top, counted, and opens its sources in a new tab', () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ArticlePage item={item} />);
+    const essai = within(screen.getByRole('complementary', { name: 'Analyser le message reçu' }));
+    const link = essai.getByRole('link', { name: 'Analyser le message reçu' });
+    expect(link).toHaveAttribute('href', '/analyser');
+    expect(link.compareDocumentPosition(screen.getByRole('navigation', { name: 'Sommaire' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(link);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/web/count'),
+      expect.objectContaining({ body: JSON.stringify({ name: 'blog_repondre_proche_fausses_informations' }) }),
+    );
+    vi.unstubAllGlobals();
+    cleanup();
+    render(<ArticlePage item={item} />);
+    expect(screen.getAllByRole('link', { name: /Debunking Handbook/ })[0]).toHaveAttribute('target', '_blank');
+  });
+
+  it('never promises to change a mind', () => {
+    for (const slug of ['repondre-proche-fausses-informations', 'savoir-si-article-presse-fiable']) {
+      const text = JSON.stringify(ALL_ARTICLES.find((other) => other.slug === slug));
+      expect(text).not.toMatch(/vous (le |la |les )?convaincrez|pour convaincre|ne plus se faire avoir|détecte/i);
+    }
+    expect(JSON.stringify(item)).toMatch(/Convaincre, ce n’est pas garanti/);
   });
 });
 
