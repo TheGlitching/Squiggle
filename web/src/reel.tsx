@@ -101,6 +101,7 @@ function Scene({ notion, state, scale, lift }: { notion: Notion; state: State; s
   return (
     <div
       style={{
+        boxSizing: 'border-box',
         width: REEL_WIDTH,
         height: REEL_HEIGHT,
         display: 'flex',

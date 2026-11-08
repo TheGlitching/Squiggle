@@ -193,6 +193,7 @@ function Card({ card }: { card: ShareCard }) {
   return (
     <div
       style={{
+        boxSizing: 'border-box',
         width: SHARE_WIDTH,
         height: SHARE_HEIGHT,
         display: 'flex',
@@ -471,6 +472,8 @@ function Frame({ page, children, height = SLIDE_HEIGHT, inset = CAPTION_BAND }: 
   return (
     <div
       style={{
+        // Satori sizes a box as a browser does: without this, the padding adds to the slide's size.
+        boxSizing: 'border-box',
         width: SLIDE_WIDTH,
         height,
         display: 'flex',
