@@ -14,7 +14,7 @@ import {
   HERO_ARTICLE,
   HERO_REPORT,
   SCORE_BANDS,
-  SEVERITY_COLORS,
+  SEVERITY_TONES,
   VERIFICATION_STATES,
   findingTone,
   scoreBand,
@@ -31,7 +31,7 @@ const PASSAGES = EXAMPLES.length - STRENGTHS;
 
 /** A severity's colours as the CSS variables the highlight and card styles read. */
 export function tone(severity: HighlightSeverity): CSSProperties {
-  const { color, tint, text } = SEVERITY_COLORS[severity];
+  const { color, tint, text } = SEVERITY_TONES[severity];
   return { '--sev-color': color, '--sev-tint': tint, '--sev-text': text } as CSSProperties;
 }
 
@@ -50,7 +50,7 @@ function Score() {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={SEVERITY_COLORS[BAND.tone].color}
+          stroke={SEVERITY_TONES[BAND.tone].color}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -62,7 +62,7 @@ function Score() {
           <span className="font-display text-4xl font-semibold tracking-tight tabular-nums">{SCORE}</span>
           <span className="text-base text-muted">sur 100</span>
         </p>
-        <p className="mt-2 mb-0 text-base font-semibold" style={{ color: SEVERITY_COLORS[BAND.tone].text }}>
+        <p className="mt-2 mb-0 text-base font-semibold" style={{ color: SEVERITY_TONES[BAND.tone].text }}>
           {BAND.title}
         </p>
       </div>

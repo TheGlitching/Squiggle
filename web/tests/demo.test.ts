@@ -28,7 +28,7 @@ import {
   SEVERITY_LABELS,
   findingTone,
   scoreBand,
-  SEVERITY_COLORS,
+  SEVERITY_TONES,
   severityColor,
   severityToHighlightSeverity,
 } from '../src/demo';
@@ -63,8 +63,8 @@ describe('example -> severity -> colour', () => {
   });
 
   it('points each severity at the extension palette entry', () => {
-    expect(severityColor(byLabel['Faux dilemme'].sev)).toBe(SEVERITY_COLORS.warning);
-    expect(severityColor(byLabel['Étude non nommée'].sev)).toBe(SEVERITY_COLORS.info);
+    expect(severityColor(byLabel['Faux dilemme'].sev)).toBe(SEVERITY_TONES.warning);
+    expect(severityColor(byLabel['Étude non nommée'].sev)).toBe(SEVERITY_TONES.info);
   });
 });
 

@@ -216,6 +216,16 @@ describe('the manifest', () => {
     expect(read('index.html').toString('utf8')).toContain('<meta name="theme-color" content="#0a0a0b" />');
   });
 
+  it('colours the browser for the light theme only when the device asks for it, before the page paints', () => {
+    const html = read('index.html').toString('utf8');
+    const css = read('src/index.css').toString('utf8');
+    const lightGround = /prefers-color-scheme: light[\s\S]*?--color-background: (#[0-9a-f]{6});/.exec(css)![1];
+    expect(html).toContain(`<meta name="theme-color" media="(prefers-color-scheme: light)" content="${lightGround}" />`);
+    expect(html).toContain('<meta name="color-scheme" content="dark light" />');
+    // The first match wins: the dark colour, with no condition, comes last as the default.
+    expect(html.indexOf('media="(prefers-color-scheme: light)"')).toBeLessThan(html.indexOf('content="#0a0a0b"'));
+  });
+
   it('ships a 192 and a 512 icon, and a maskable one, at their declared sizes', () => {
     const icons = manifest.icons as Array<{ src: string; sizes: string; purpose: string }>;
     expect(icons.map((i) => [i.sizes, i.purpose])).toEqual([
