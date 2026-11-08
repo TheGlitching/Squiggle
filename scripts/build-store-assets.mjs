@@ -127,7 +127,13 @@ async function capture({ send, logs }, origin, asset) {
     mobile: false,
   });
   // The final frame of every transition, without waiting for it.
-  await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  // The site's drawings in the dark theme the listing is made in, whatever the machine's setting.
+  await call('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-reduced-motion', value: 'reduce' },
+      { name: 'prefers-color-scheme', value: 'dark' },
+    ],
+  });
   await call('Page.enable');
   await call('Runtime.enable');
   logs.length = 0;

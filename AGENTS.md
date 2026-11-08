@@ -36,14 +36,16 @@ R2-02 badge (`web/src/components/Brand.tsx` beside `src/ui/components/SquiggleBa
 plus the PNGs in `src/assets/` and the app icons in `web/public/icons/`), and the
 loading scene (`RunScene` in `web/src/components/Iso.tsx` beside
 `src/ui/components/RunScene.tsx`, with their `.run-*` animations). The design tokens themselves live in
-`web/src/index.css` (the `@theme` block). The dark theme's WCAG AA
-contract is pinned by `web/tests/contrast.test.ts`: primary buttons carry
-`accentForeground` (near-black) on `accent`, and demo severity labels use the
-bright `text` tone, not the darker fill that only clears 3:1 as text.
+`web/src/index.css`: the `@theme` block is the dark theme, the default, and a
+`prefers-color-scheme: light` block redefines every token for the light one (share
+images read only the `@theme` block and stay dark). The WCAG AA contract of both is
+pinned by `web/tests/contrast.test.ts`: primary buttons carry `accentForeground` on
+`accent`, and severity labels use the `*Label` tone, not the fill that only clears
+3:1 as text.
 
 ## The extension UI design system
 
-The extension sidepanel is **dark-only**, like the landing: there is no light theme and
+The extension sidepanel is **dark-only**, unlike the site: there is no light theme and
 no `prefers-color-scheme` branch. Colour carries exactly one kind of meaning — severity
 (critical/warning/info/positive) — so a finding *category* is identified by its label and
 glyph, never by a hue of its own. The single token source is `src/ui/tokens/colors.ts`,
