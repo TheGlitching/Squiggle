@@ -229,7 +229,10 @@ describe('verifyCitedSources - fetch, judge, reconcile', () => {
       ...verifyOptions(),
       client: new ScriptedClient([]),
       claims: [verifiedClaim],
-      citedSources
+      citedSources,
+      fetchImpl: async () => {
+        throw new Error('network unreachable');
+      }
     });
 
     expect(result.checks[0].relation).toBe('inaccessible');
@@ -249,7 +252,10 @@ describe('verifyCitedSources - fetch, judge, reconcile', () => {
       ...verifyOptions(),
       client: new ScriptedClient([]),
       claims: [verifiedClaim],
-      citedSources
+      citedSources,
+      fetchImpl: async () => {
+        throw new Error('network unreachable');
+      }
     });
 
     expect(result.claims[0].verification).toBe('verifiee');
