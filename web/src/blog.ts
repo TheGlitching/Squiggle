@@ -16,7 +16,7 @@ import { isAudienceMetricName, type AudienceMetricName } from '@squiggle/shared/
 
 import type { Notion } from './glossaire';
 
-/** A link inside a paragraph: a page of the site, written as its path (`/glossaire/faux-dilemme`). */
+/** A link inside a paragraph: a page of the site, written as its path (`/glossaire/faux-dilemme`), or a source, as its `https://` address. */
 export interface Lien {
   texte: string;
   vers: string;
@@ -39,6 +39,8 @@ export type Bloc =
   | { tableau: { legende: string; colonnes: readonly string[]; lignes: ReadonlyArray<readonly Texte[]> } }
   /** Questions a reader asks, each answered: plain headings and paragraphs, with no FAQ schema. */
   | { questions: ReadonlyArray<{ question: string; reponse: Texte }> }
+  /** The call to analyse, near the top of an article a reader came to in order to act. Counted like the one at its end. */
+  | { essai: { texte: string; bouton: string } }
   /** The table of contents: a link to every `intertitre` of the article. */
   | { sommaire: true }
   /** A made-up article, its fragile passage highlighted, as on a glossary page. */

@@ -155,12 +155,16 @@ describe('the glossary pages', () => {
     expect(glossaryLink({ label: 'Procès en intention', category: 'cadrage' })?.to).toBe('/glossaire/proces-d-intention');
   });
 
-  it('offers the analysis right after the example, and counts who takes it', () => {
+  it('offers the analysis under the first definition, before the example, and counts who takes it', () => {
     const fetch = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
     vi.stubGlobal('fetch', fetch);
     render(<App path="/glossaire/faux-dilemme" />);
     const callout = within(screen.getByRole('complementary', { name: 'Analyser un article' }));
-    expect(callout.getByText(/Ce procédé se cache peut-être dans l’article que vous lisez/)).toBeInTheDocument();
+    const box = callout.getByText(/Ce procédé se cache peut-être dans l’article que vous lisez/);
+    expect(box).toBeInTheDocument();
+    const first = screen.getByText(/^Un faux dilemme réduit une question/);
+    expect(first.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(box.compareDocumentPosition(screen.getByRole('heading', { name: 'Sur un article d’exemple' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(callout.getByRole('link', { name: 'Analyser un article' }));
     expect(fetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/web\/count$/),

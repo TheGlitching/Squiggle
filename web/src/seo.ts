@@ -208,6 +208,36 @@ export function blogPages(articles: readonly Article[]): PublicPage[] {
   ];
 }
 
+const PRESIDENTIELLE_TITLE = 'Présidentielle 2027 : lire un discours ou un programme';
+const PRESIDENTIELLE_DESCRIPTION =
+  'Lire un discours ou un programme de la présidentielle, c’est poser les mêmes questions à tous les camps. La grille, sur deux discours inventés de bords opposés.';
+const PRESIDENTIELLE_PAGE: PublicPage = {
+  path: '/presidentielle',
+  title: PRESIDENTIELLE_TITLE,
+  description: PRESIDENTIELLE_DESCRIPTION,
+  share: {
+    kicker: 'Présidentielle 2027',
+    title: 'Deux discours inventés, de bords opposés, une même grille',
+    text: 'Comment lire un discours ou un programme, quel que soit le camp.',
+    figure: 'rapport',
+  },
+  lastmod: '2026-11-08',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: PRESIDENTIELLE_TITLE,
+    description: PRESIDENTIELLE_DESCRIPTION,
+    url: `${ORIGIN}/presidentielle`,
+    mainEntityOfPage: `${ORIGIN}/presidentielle`,
+    image: `${ORIGIN}/og/presidentielle.png`,
+    datePublished: '2026-11-08',
+    dateModified: '2026-11-08',
+    inLanguage: 'fr',
+    author: ORGANISATION,
+    publisher: { ...ORGANISATION, logo: { '@type': 'ImageObject', url: `${ORIGIN}/icons/icon-512.png` } },
+  },
+};
+
 /** Every page worth finding from a search. `/tarifs` is the home page's pricing anchor, not a page. */
 export const PUBLIC_PAGES: readonly PublicPage[] = [
   {
@@ -368,6 +398,7 @@ export const PUBLIC_PAGES: readonly PublicPage[] = [
     description:
       'Qui édite Squiggle et qui l’héberge : éditeur, directeur de la publication, hébergeur, propriété intellectuelle, signalement d’un contenu illicite.',
   },
+  PRESIDENTIELLE_PAGE,
   ...GLOSSARY_PAGES,
   ...blogPages(PUBLISHED),
 ];

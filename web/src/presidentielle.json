@@ -1,0 +1,121 @@
+[
+  {
+    "id": "premier",
+    "titre": "Un pays qui protège",
+    "texte": [
+      "Mes chers amis, ce soir, le choix est simple : soit nous faisons enfin contribuer les plus grandes fortunes, soit nous laissons mourir l’hôpital public. Il n’y a pas de troisième voie.",
+      "Partout où je vais, les soignants me disent la même chose : ils n’en peuvent plus. La semaine dernière, une infirmière m’a confié qu’elle pleurait dans sa voiture avant de prendre son service. Voilà la vérité de notre pays. Huit Français sur dix réclament ce changement, et ils ont raison : quand tout le monde le demande, c’est que c’est juste.",
+      "Nos adversaires, eux, ne rêvent que d’une chose : vendre la santé aux actionnaires. Si nous les laissons faire, demain il faudra présenter sa carte bancaire avant sa carte de santé, après-demain il n’y aura plus de médecin à moins de cent kilomètres.",
+      "Notre programme prévoit une contribution de 2 % sur les patrimoines de plus de cent millions d’euros. Elle rapporterait vingt milliards par an, tous affectés aux hôpitaux. Certains contribuables pourraient quitter le pays, et cette recette n’est donc pas garantie : notre chiffrage, publié avec ses hypothèses, retient pour cela une fourchette de douze à vingt milliards."
+    ],
+    "score": 26,
+    "analyseLe": "2026-11-08",
+    "constats": [
+      {
+        "category": "affirmation-non-etayee",
+        "severity": 2,
+        "label": "Chiffrage central sans source",
+        "quote": "Notre programme prévoit une contribution de 2 % sur les patrimoines de plus de cent millions d’euros.",
+        "explanation": "Le message avance un taux, un seuil et un rendement annuel, mais ne cite aucun document ni auteur permettant de retrouver ce chiffrage. C’est l’affirmation principale à vérifier."
+      },
+      {
+        "category": "affirmation-non-etayee",
+        "severity": 2,
+        "label": "Sondage sans origine",
+        "quote": "Huit Français sur dix réclament ce changement",
+        "explanation": "Un chiffre de soutien est donné sans institut, sans date et sans méthode. Rien dans le texte ne permet de savoir d’où il vient."
+      },
+      {
+        "category": "source-absente",
+        "severity": 2,
+        "label": "Témoignage anonyme",
+        "quote": "une infirmière m’a confié qu’elle pleurait dans sa voiture avant de prendre son service",
+        "explanation": "Le témoignage est rapporté sans nom, sans lieu et sans date vérifiable. Il donne l’impression du vécu mais ne peut être retrouvé ni contrôlé."
+      },
+      {
+        "category": "sophisme",
+        "severity": 2,
+        "label": "Faux dilemme",
+        "quote": "soit nous faisons enfin contribuer les plus grandes fortunes, soit nous laissons mourir l’hôpital public",
+        "explanation": "Le texte présente deux options opposées comme les seules possibles. Cette formulation écarte par avance toute autre solution sans le démontrer."
+      },
+      {
+        "category": "sophisme",
+        "severity": 2,
+        "label": "Appel à la majorité",
+        "quote": "quand tout le monde le demande, c’est que c’est juste",
+        "explanation": "Le fait qu’une demande soit répandue n’établit pas qu’elle soit juste ou réalisable. Le raisonnement confond popularité et validité."
+      },
+      {
+        "category": "surinterpretation",
+        "severity": 2,
+        "label": "Enchaînement catastrophiste",
+        "quote": "demain il faudra présenter sa carte bancaire avant sa carte de santé",
+        "explanation": "Le texte décrit une suite de conséquences extrêmes présentées comme inévitables, sans étapes ni preuves intermédiaires."
+      },
+      {
+        "category": "cadrage",
+        "severity": 2,
+        "label": "Appel à la peur",
+        "quote": "nous laissons mourir l’hôpital public",
+        "explanation": "La formulation dramatise l’enjeu en évoquant la mort de l’hôpital public. Ce procédé vise à rendre le choix urgent et émotionnel plutôt qu’à informer."
+      }
+    ]
+  },
+  {
+    "id": "second",
+    "titre": "Un pays qui travaille",
+    "texte": [
+      "Mes chers amis, ce soir, le choix est simple : soit nous baissons enfin les charges de ceux qui travaillent, soit nous laissons mourir nos commerces et nos ateliers. Il n’y a pas de troisième voie.",
+      "Partout où je vais, les artisans me disent la même chose : ils n’en peuvent plus. La semaine dernière, un boulanger m’a confié qu’il pleurait dans sa voiture avant d’ouvrir sa boutique. Voilà la vérité de notre pays. Huit Français sur dix réclament ce changement, et ils ont raison : quand tout le monde le demande, c’est que c’est juste.",
+      "Nos adversaires, eux, ne rêvent que d’une chose : taxer tout ce qui bouge. Si nous les laissons faire, demain il faudra demander un formulaire pour embaucher un apprenti, après-demain il n’y aura plus une seule entreprise à moins de cent kilomètres.",
+      "Notre programme prévoit une baisse de 2 % des cotisations sur les salaires, financée par vingt milliards d’économies par an sur les dépenses de l’État. Certaines économies pourraient prendre du retard, et ce montant n’est donc pas garanti : notre chiffrage, publié avec ses hypothèses, retient pour cela une fourchette de douze à vingt milliards."
+    ],
+    "score": 29,
+    "analyseLe": "2026-11-08",
+    "constats": [
+      {
+        "category": "affirmation-non-etayee",
+        "severity": 1,
+        "label": "Programme chiffré sans source nommée",
+        "quote": "Notre programme prévoit une baisse de 2 % des cotisations sur les salaires, financée par vingt milliards d’économies par an",
+        "explanation": "Le message avance un chiffre précis (2 % de baisse, vingt milliards d'économies) mais ne nomme ni l'organisation, ni le document, ni l'auteur qui le porte. C'est l'affirmation principale du texte : une recherche permettra de voir ce qu'on en sait."
+      },
+      {
+        "category": "affirmation-non-etayee",
+        "severity": 2,
+        "label": "Chiffre sans origine",
+        "quote": "Huit Français sur dix réclament ce changement",
+        "explanation": "Un pourcentage est présenté comme un fait établi, sans sondage, étude ni organisme cité. Un chiffre sans origine ne peut pas être rattaché à une mesure vérifiable."
+      },
+      {
+        "category": "source-absente",
+        "severity": 2,
+        "label": "Témoignage anonyme",
+        "quote": "un boulanger m’a confié qu’il pleurait dans sa voiture avant d’ouvrir sa boutique",
+        "explanation": "Le témoin n'est pas nommé et son lieu n'est pas précisé : rien ne permet de retrouver ce boulanger ni de vérifier ce qu'il aurait dit. Ce type de détail donne l'impression du vécu sans pouvoir être contrôlé."
+      },
+      {
+        "category": "sophisme",
+        "severity": 2,
+        "label": "Appel à la majorité",
+        "quote": "quand tout le monde le demande, c’est que c’est juste",
+        "explanation": "Le texte conclut qu'une mesure est juste parce que beaucoup la demanderaient. Le nombre de partisans ne dit rien, à lui seul, du bien-fondé d'une mesure."
+      },
+      {
+        "category": "sophisme",
+        "severity": 2,
+        "label": "Faux dilemme",
+        "quote": "soit nous baissons enfin les charges de ceux qui travaillent, soit nous laissons mourir nos commerces",
+        "explanation": "Le message ne présente que deux issues possibles et affirme qu'il n'y en a pas d'autre. Cette présentation binaire écarte par avance toute autre option ou nuance."
+      },
+      {
+        "category": "cadrage",
+        "severity": 2,
+        "label": "Peur et enchaînement catastrophiste",
+        "quote": "après-demain il n’y aura plus une seule entreprise à moins de cent kilomètres",
+        "explanation": "Le texte décrit une suite de conséquences de plus en plus graves pour pousser à agir. Cette dramatisation joue sur la peur plutôt que sur des faits établis."
+      }
+    ]
+  }
+]

@@ -66,9 +66,9 @@ describe('new articles', () => {
   });
 
   it('adds the counter once, inside the closed list', () => {
-    const out = addBlogCounter(audience, 'sondage-quatre-questions');
-    expect(out).toContain("  'blog_sondage_quatre_questions',\n] as const;");
-    expect(addBlogCounter(out, 'sondage-quatre-questions')).toBe(out);
+    const out = addBlogCounter(audience, 'un-nouvel-article');
+    expect(out).toContain("  'blog_un_nouvel_article',\n] as const;");
+    expect(addBlogCounter(out, 'un-nouvel-article')).toBe(out);
   });
 
   it('dates a draft on publication', () => {

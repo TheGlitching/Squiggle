@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 import { tone } from '../components/Exemple';
 import { ExternalMark, SquiggleMark } from '../components/Iso';
@@ -25,6 +25,7 @@ import {
   type Reference,
   type Segments,
 } from '../glossaire';
+import { article, blogPath } from '../blog';
 import { count } from '../count';
 import { Link } from '../router';
 
@@ -88,6 +89,9 @@ const GENERAL_REFERENCES: Reference[] = [
   { texte: 'Normand Baillargeon, Petit cours d’autodéfense intellectuelle, Lux, 2005.' },
   { texte: 'Déclaration des devoirs et des droits des journalistes, dite charte de Munich, 1971.' },
 ];
+
+/** The articles for a reader who wants to act on what the glossary names. */
+const PRACTICE = ['savoir-si-article-presse-fiable', 'repondre-proche-fausses-informations'];
 
 /** `/glossaire`: every notion, by family. */
 export function Glossaire() {
@@ -162,6 +166,16 @@ export function Glossaire() {
             <div className="mt-4">
               <References items={GENERAL_REFERENCES} />
             </div>
+            <h3 className="mt-8 mb-0 text-base font-semibold">Passer à la pratique</h3>
+            <ul className="mt-4 mb-0 grid list-none gap-3 p-0 text-base leading-snug text-muted">
+              {PRACTICE.map((slug) => (
+                <li key={slug}>
+                  <Link to={blogPath(slug)} className={QUIET_LINK}>
+                    {typo(article(slug)!.titre)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </Section>
@@ -252,9 +266,20 @@ export function NotionPage({ item }: { item: Notion }) {
               </p>
             ) : null}
             {item.definition.map((text, index) => (
-              <p key={index} className={`m-0 leading-relaxed text-pretty ${index === 0 ? 'text-xl' : 'text-lg text-muted'}`}>
-                {typo(text)}
-              </p>
+              <Fragment key={index}>
+                <p className={`m-0 leading-relaxed text-pretty ${index === 0 ? 'text-xl' : 'text-lg text-muted'}`}>{typo(text)}</p>
+                {/* Under the first definition, before a reader who came for the word has to scroll. */}
+                {index === 0 ? (
+                  <aside aria-label="Analyser un article" className="grid gap-4 rounded-card border border-border bg-surface p-5 md:p-6">
+                    <p className="m-0 text-lg leading-relaxed">
+                      {typo('Ce procédé se cache peut-être dans l’article que vous lisez. Collez-le : Squiggle le surligne et explique pourquoi.')}
+                    </p>
+                    <p className="m-0">
+                      <AnalyseLink className={`${PRIMARY_BUTTON} max-sm:w-full`} />
+                    </p>
+                  </aside>
+                ) : null}
+              </Fragment>
             ))}
           </header>
 
@@ -273,21 +298,6 @@ export function NotionPage({ item }: { item: Notion }) {
               </ul>
             </Part>
           ) : null}
-
-          {/* Right after the example, where the reader has just seen the device at work. */}
-          <aside
-            aria-label="Analyser un article"
-            className={`grid gap-4 rounded-card border border-border bg-surface p-5 md:p-6 ${MEASURE}`}
-          >
-            <p className="m-0 text-lg leading-relaxed">
-              {typo(
-                `Ce procédé se cache peut-être dans l’article que vous lisez. Collez-le : Squiggle le surligne et explique pourquoi.`,
-              )}
-            </p>
-            <p className="m-0">
-              <AnalyseLink className={`${PRIMARY_BUTTON} max-sm:w-full`} />
-            </p>
-          </aside>
 
           <Part id="reperer" title="Comment le repérer">
             <ul className={`m-0 grid list-none gap-4 p-0 text-lg leading-snug ${MEASURE}`}>

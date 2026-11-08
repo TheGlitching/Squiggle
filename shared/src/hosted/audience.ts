@@ -50,6 +50,8 @@ export const AUDIENCE_METRIC_NAMES = [
   'click_example',
   // From a glossary notion to /analyser: does the glossary bring readers to the product?
   'click_glossaire_analyser',
+  // From /presidentielle to /analyser.
+  'click_presidentielle_analyser',
   'open_in_browser',
   // An article brought to /analyser by the bookmark "Analyser avec Squiggle",
   // by the iPhone shortcut, and a text shared to the Android app.
@@ -99,6 +101,8 @@ export const AUDIENCE_METRIC_NAMES = [
   // article (`blogCounter` in web/src/blog.ts): `blog_` and its slug.
   'blog_conclusion_hative',
   'blog_sondage_quatre_questions',
+  'blog_repondre_proche_fausses_informations',
+  'blog_savoir_si_article_presse_fiable',
 ] as const;
 export type AudienceMetricName = (typeof AUDIENCE_METRIC_NAMES)[number];
 
