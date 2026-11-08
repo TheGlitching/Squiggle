@@ -101,6 +101,9 @@ export function Layout({
             <Link to="/transparence" className={QUIET_LINK}>
               Transparence
             </Link>
+            <Link to="/meme-grille" className={QUIET_LINK}>
+              Même grille, deux camps
+            </Link>
             {LEGAL_PAGES.map(([to, label]) => (
               <Link key={to} to={to} className={QUIET_LINK}>
                 {label}

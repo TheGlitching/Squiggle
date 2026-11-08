@@ -189,6 +189,7 @@ const STALE_PAGE_GUARD =
  */
 const serifInFirstScreen = (path: string) =>
   path === '/transparence' ||
+  path === '/meme-grille' ||
   path === '/enseignants/fiche-activite' ||
   path === '/enseignants/grille-lecture' ||
   path === '/enseignants/exercices' ||
