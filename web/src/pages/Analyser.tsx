@@ -65,6 +65,7 @@ import { count } from '../count';
 import { Abonnement } from '../components/Abonnement';
 import { LinkGuide } from '../components/LinkGuide';
 import { RunBar, RunScene, type RunStep } from '../components/Iso';
+import { InstallHint } from '../components/InstallHint';
 import { FIELD, PAGE, PRIMARY_BUTTON, QUIET_LINK, SECONDARY_BUTTON, TITLE } from '../components/Landing';
 import { Rapport } from '../components/Rapport';
 import { useInstall } from '../install';
@@ -103,7 +104,7 @@ import { describeAccount, type AccountView } from '../usage';
 const SIGN_IN = '/connexion?next=/analyser';
 /** The sign-in a visitor's report offers; the server counts an account opened through it. */
 const SIGN_UP_AFTER_VISIT = `/connexion?next=${encodeURIComponent('/analyser?apres=essai')}`;
-/** The same, from a report with findings kept back, counted apart. */
+/** The same, from a report with findings kept back (`Rapport`), counted apart. */
 const SIGN_UP_AFTER_WITHHELD = `/connexion?next=${encodeURIComponent('/analyser?apres=flou')}`;
 
 type Phase =
@@ -1038,7 +1039,9 @@ function AnalyserPage() {
           </p>
         ) : null}
         <Rapport report={phase.report} blocks={phase.blocks} times={phase.times} signUp={SIGN_UP_AFTER_WITHHELD} />
-        {phase.visitor ? <KeepReport withheld={Boolean(phase.report.withheld?.length)} /> : null}
+        {/* A report with findings kept back already ends on the same offer, under them. */}
+        {phase.visitor && !phase.report.withheld?.length ? <KeepReport /> : null}
+        {account ? <InstallHint /> : null}
         {account && view ? (
           view.needsSubscription ? (
             <div className="mt-12">
@@ -1072,6 +1075,16 @@ function AnalyserPage() {
       <h1 className={TITLE}>Analyser un article ou un message</h1>
       <p className="mt-3 mb-0 max-w-[55ch] text-lg leading-relaxed text-muted">
         Collez le texte. Le rapport arrive en une à deux minutes.
+        {/* The home's button brings readers who hold no article yet. */}
+        {!account && !article.text ? (
+          <>
+            {' '}
+            Pas d’article sous la main ?{' '}
+            <a href="/#exemple" className="text-foreground underline underline-offset-4 hover:text-accentInk">
+              Voir un exemple
+            </a>
+          </>
+        ) : null}
       </p>
       {guideLink ? <LinkGuide address={guideLink} searching={searching === guideLink} /> : null}
       {partial && article.text ? (
@@ -1472,7 +1485,7 @@ function Stages({ progress, onCancel }: { progress: Progress; onCancel: () => vo
  * After a visitor's report: the account is what keeps it, and what comes with
  * it. The same card as the offer a signed-in reader meets when the trial runs out.
  */
-function KeepReport({ withheld }: { withheld: boolean }) {
+function KeepReport() {
   return (
     <div className="mt-12">
       <section
@@ -1486,7 +1499,7 @@ function KeepReport({ withheld }: { withheld: boolean }) {
           Créez un compte gratuit, sans carte bancaire : ce rapport vous attend au retour, et {FREE_ANALYSES} analyses
           vous sont offertes, ici, dans l’appli et dans l’extension.
         </p>
-        <Link to={withheld ? SIGN_UP_AFTER_WITHHELD : SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+        <Link to={SIGN_UP_AFTER_VISIT} className={`${PRIMARY_BUTTON} max-sm:w-full`}>
           Créer un compte gratuit
         </Link>
       </section>
@@ -1525,8 +1538,11 @@ function Action({
           Analyser le texte
         </button>
         <p className="mt-3 mb-0 text-sm text-muted">
-          Une analyse offerte sans compte.{' '}
-          <Link to={SIGN_IN} className="underline underline-offset-4 hover:text-foreground">
+          Une analyse offerte sans compte : la note et le premier constat.{' '}
+          <Link
+            to={SIGN_IN}
+            className="relative underline underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-3.5 after:content-[''] hover:text-foreground"
+          >
             Se connecter
           </Link>
         </p>

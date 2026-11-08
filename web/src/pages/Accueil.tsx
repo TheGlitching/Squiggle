@@ -11,6 +11,9 @@
  * read from `<html data-device>` (set before the first paint, `index.html`), so the
  * page the build renders is right from its first paint; only the browser's own install
  * prompt, which arrives later, changes a button.
+ *
+ * A reader who has just seen the example, or reached the last question, is offered that
+ * same way in again: the page never leaves its reader with nothing to do next.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -289,6 +292,62 @@ function StoreAction({ className, fallback }: { className: string; fallback: Rea
   );
 }
 
+/** The one primary action of this device: the store of this computer's browser, the analysis on a phone. */
+function MainAction() {
+  return (
+    <>
+      <span className={`contents ${ON_COMPUTER}`}>
+        <StoreAction
+          className={`${PRIMARY_BUTTON} max-sm:w-full`}
+          fallback={
+            <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+              Analyser un article
+            </Link>
+          }
+        />
+      </span>
+      <span className={ON_PHONE_INLINE}>
+        <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
+          Analyser un article
+        </Link>
+      </span>
+    </>
+  );
+}
+
+/** The offer in one line. On a phone the first analysis is on the site, without an account; the extension needs one. */
+function Offer() {
+  return (
+    <>
+      <p className={`mt-2 mb-0 text-lg text-foreground ${ON_COMPUTER}`}>{OFFER}</p>
+      <p className={`mt-2 mb-0 text-lg text-foreground ${ON_PHONE}`}>{OFFER_ON_PHONE}</p>
+    </>
+  );
+}
+
+/** What comes next, once the page has shown its proof: the device's way in, then the site beside a store. */
+function TryIt() {
+  const hasStore = installUrlFor(useUserAgent()) !== null;
+  return (
+    <div className="mt-10">
+      <h3 className={H3}>Essayez sur un article que vous lisez</h3>
+      <div className={`mt-4 ${ACTIONS}`}>
+        <MainAction />
+        {hasStore ? (
+          <span className={`contents ${ON_COMPUTER}`}>
+            <Link to="/analyser" className={`${SECONDARY_BUTTON} max-sm:w-full`}>
+              Coller un texte sur le site
+            </Link>
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-3">
+        <Offer />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Installing the app on Android, whatever the browser offers: its own prompt when it
  * has one, a word for the reader inside the installed app, and otherwise the gesture
@@ -443,14 +502,14 @@ export const CRITERIA: Record<string, [Criterion, string]> = {
   'Déontologie et transparence': ['transparence', 'Transparence'],
   'Soin de la langue': ['langue', 'Langue'],
 };
-/** The trial without an account is becoming a single one: the page promises a trial, not a daily analysis. */
+/** A single analysis without an account: the page promises a trial, not a daily analysis. */
 const OFFER = `Essai gratuit, sans carte. Puis ${PRICE_MONTHLY} par mois.`;
+const OFFER_ON_PHONE = `Essai gratuit, sans compte ni carte. Puis ${PRICE_MONTHLY} par mois.`;
 
 /** What the subscription pays for, shown with the stages it pays for. */
-const PAID_FOR: Array<[Step | null, string]> = [
+const PAID_FOR: Array<[Step, string]> = [
   ['lecture', 'L’IA qui relit chaque article'],
   ['sources', 'Les sources consultées'],
-  [null, 'Un outil financé par ses lecteurs : ni publicité, ni revente de données'],
 ];
 
 export function Accueil() {
@@ -467,21 +526,7 @@ export function Accueil() {
               qui tient.
             </p>
             <div className={`mt-8 ${ACTIONS}`}>
-              <span className={`contents ${ON_COMPUTER}`}>
-                <StoreAction
-                  className={`${PRIMARY_BUTTON} max-sm:w-full`}
-                  fallback={
-                    <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-                      Analyser un article
-                    </Link>
-                  }
-                />
-              </span>
-              <span className={ON_PHONE_INLINE}>
-                <Link to="/analyser" className={`${PRIMARY_BUTTON} max-sm:w-full`}>
-                  Analyser un article
-                </Link>
-              </span>
+              <MainAction />
               <a href="#exemple" onClick={() => count('click_example')} className={`${SECONDARY_BUTTON} max-sm:w-full`}>
                 Voir un exemple
               </a>
@@ -492,7 +537,7 @@ export function Accueil() {
               <Link to="/analyser" className={INLINE_LINK}>
                 collez le texte sur le site
               </Link>
-              .
+              , sans compte.
             </p>
             <p className={`mt-5 mb-0 text-lg text-foreground ${ON_ANDROID}`}>
               Ou partagez l’article vers{' '}
@@ -508,7 +553,7 @@ export function Accueil() {
               </Link>
               , sur l’article ouvert dans Safari.
             </p>
-            <p className="mt-2 mb-0 text-lg text-foreground">{OFFER}</p>
+            <Offer />
           </div>
 
           <LoopingHero />
@@ -523,9 +568,15 @@ export function Accueil() {
             <span className={ON_PHONE}>Touchez un passage surligné</span>
           </>
         }
-        intro="Le rapport donne sa raison, à côté."
+        intro={
+          <>
+            <span className={ON_COMPUTER}>Le rapport donne sa raison, à côté.</span>
+            <span className={ON_PHONE}>Le rapport donne sa raison, juste dessous.</span>
+          </>
+        }
       >
         <Exemple />
+        <TryIt />
         <p className={`mt-10 mb-0 ${BODY} ${MEASURE}`}>
           Chaque raison porte un nom, du faux dilemme au chiffre sans origine.{' '}
           <Link to="/glossaire" className={INLINE_LINK}>
@@ -693,9 +744,9 @@ export function Accueil() {
               </p>
             </div>
             <ul className={PLAIN_LIST}>
-              <li>Un essai sans compte, pour voir</li>
-              <li>{FREE_ANALYSES} analyses offertes avec un compte, sans carte bancaire</li>
-              <li>{MONTHLY_ANALYSES} analyses par mois, rien à installer</li>
+              <li>{MONTHLY_ANALYSES} analyses par mois</li>
+              <li>Sur le site, dans l’appli de votre téléphone et dans le bouton du navigateur</li>
+              <li>Sans engagement, résiliable à tout moment</li>
             </ul>
             <div>
               <h4 className="m-0 text-lg font-semibold">Ce que paie votre abonnement</h4>
@@ -703,18 +754,29 @@ export function Accueil() {
                 {PAID_FOR.map(([step, text]) => (
                   <li key={text} className="flex items-center gap-4 text-lg leading-snug">
                     <span className="w-16 shrink-0" aria-hidden="true">
-                      {step ? <StepFigure step={step} /> : null}
+                      <StepFigure step={step} />
                     </span>
                     {text}
                   </li>
                 ))}
               </ul>
+              <p className="mt-3 mb-0 text-lg leading-snug">Un outil financé par ses lecteurs : ni publicité, ni revente de données.</p>
             </div>
-            <Link to="/analyser" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
-              Essayer gratuitement
-            </Link>
+            <div className="grid justify-items-start gap-4">
+              <p className="m-0 text-lg leading-snug">
+                Pour essayer : une analyse sans compte, puis {FREE_ANALYSES} analyses offertes avec un compte, sans carte
+                bancaire.
+              </p>
+              <Link to="/analyser" className={`${PRIMARY_BUTTON} w-fit max-sm:w-full`}>
+                Essayer gratuitement
+              </Link>
+              {/* Whoever has already tried: the account page holds the subscription, behind the sign-in. */}
+              <Link to="/connexion?next=/compte" className={QUIET_LINK}>
+                Déjà essayé ? S’abonner
+              </Link>
+            </div>
           </div>
-          <div className={`${CARD} grid content-start gap-4 ${ON_COMPUTER}`}>
+          <div className={`${CARD} grid content-start gap-4 md:self-start ${ON_COMPUTER}`}>
             <h3 className={H3}>Vous avez déjà une clé d’IA ?</h3>
             <p className={BODY}>
               L’extension est gratuite chez Squiggle : votre fournisseur d’IA facture chaque analyse, {OWN_KEY_TOP_MODEL_MONTHLY}{' '}
@@ -822,6 +884,7 @@ export function Accueil() {
             Une autre question ? Écrivez-nous
           </a>
         </p>
+        <TryIt />
       </Section>
     </>
   );

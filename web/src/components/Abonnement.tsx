@@ -79,6 +79,8 @@ export function Abonnement({ account, retour = '/compte' }: { account: Account; 
       >
         {SUBSCRIBE_LABEL}
       </button>
+      {/* A dimmed button says nothing by itself. */}
+      {startNow ? null : <p className="mt-2 mb-0 text-sm text-foreground">Cochez la case ci-dessus pour continuer.</p>}
       <p className="mt-3 mb-0 text-sm text-muted">
         {MONTHLY_ANALYSES} analyses par mois, sans engagement, renouvelé chaque mois. {VAT_NOTE}.{' '}
         <Link to="/cgv" className="underline underline-offset-4 hover:text-foreground">
