@@ -242,7 +242,7 @@ export const NOTIONS: readonly Notion[] = [
     famille: 'raisonnement',
     resume: 'Tirer une règle générale de quelques cas, parfois d’un seul.',
     description:
-      'Comment reconnaître une généralisation hâtive, ou conclusion hâtive, dans un article ? Définition, exemples et les mots qui la trahissent.',
+      'La généralisation hâtive, ou conclusion hâtive, tire une règle générale de quelques cas, parfois d’un seul. Exemples et mots qui la trahissent.',
     definition: [
       'La généralisation hâtive part d’un petit nombre d’exemples, souvent frappants, et en tire une conclusion sur tout un groupe. Un témoignage devient une tendance, trois cas deviennent « les jeunes », « les médecins », « les habitants ».',
       'Les psychologues Amos Tversky et Daniel Kahneman ont montré en 1971 que nous attendons des petits échantillons qu’ils ressemblent à l’ensemble, ce qui rend ce raccourci très naturel.',
@@ -305,7 +305,7 @@ export const NOTIONS: readonly Notion[] = [
     famille: 'raisonnement',
     resume: 'Affirmer qu’un premier pas mènera forcément, de proche en proche, à une catastrophe.',
     description:
-      'Comment reconnaître une pente savonneuse dans un article ? Définition, trois exemples et les chaînes d’événements annoncées sans preuve.',
+      'La pente savonneuse affirme qu’un premier pas mènera forcément, de proche en proche, à une catastrophe, sans le prouver. Exemples et comment la repérer.',
     definition: [
       'La pente savonneuse annonce qu’une mesure modeste entraînera une suite d’autres, chacune pire que la précédente, jusqu’à un résultat inacceptable. Le lecteur, effrayé par l’arrivée, rejette le point de départ.',
       'Certaines chaînes de conséquences sont réelles. Le raisonnement devient fautif quand chaque marche est affirmée sans être démontrée, et que l’arrivée est présentée comme inévitable.',
@@ -362,6 +362,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Appel à l’autorité', 'Ad verecundiam'],
     famille: 'raisonnement',
     resume: 'Tenir une affirmation pour vraie parce qu’une personne prestigieuse l’a dite.',
+    description:
+      'L’argument d’autorité tient une affirmation pour vraie parce qu’une personne prestigieuse l’a dite. Exemple et comment le repérer.',
     definition: [
       'L’argument d’autorité remplace la preuve par le prestige de celui qui parle, un titre ou un prix. Il trompe d’autant plus que cette personne s’exprime hors de son domaine.',
       'S’appuyer sur des experts n’a rien de fautif, c’est même souvent ce qu’il y a de plus raisonnable. La question est de savoir s’ils sont compétents sur ce sujet précis, et si ce qu’ils disent est étayé.',
@@ -396,7 +398,7 @@ export const NOTIONS: readonly Notion[] = [
     famille: 'raisonnement',
     resume: 'Présenter une idée comme vraie parce que beaucoup de gens y croient.',
     description:
-      'Un article dit « tout le monde sait » : est-ce une preuve ? Définition de l’appel à la popularité, trois exemples et comment le repérer.',
+      'L’appel à la popularité présente une idée comme vraie parce que beaucoup de gens y croient : « tout le monde le sait ». Exemples et comment le repérer.',
     definition: [
       'L’appel à la popularité fait du nombre une preuve : « tout le monde le sait », « les Français l’ont compris », « le bon sens le dit ». Qu’une opinion soit répandue renseigne sur l’opinion, pas sur la réalité qu’elle décrit.',
       'Le procédé est efficace parce qu’il met le lecteur mal à l’aise : douter, c’est se mettre à part.',
@@ -453,7 +455,7 @@ export const NOTIONS: readonly Notion[] = [
     famille: 'raisonnement',
     resume: 'Rapprocher deux situations qui se ressemblent en surface pour conclure de l’une à l’autre.',
     description:
-      'Comment savoir si une comparaison éclaire ou trompe ? Définition de la fausse analogie, trois exemples et la question à poser.',
+      'La fausse analogie est un sophisme : elle conclut d’une situation à l’autre alors qu’elles diffèrent sur le point qui compte. Exemples et question à poser.',
     definition: [
       'Une analogie aide à comprendre en rapprochant une situation nouvelle d’une situation connue. Elle devient fausse quand les deux situations diffèrent justement sur le point qui compte, et que l’article conclut quand même de l’une à l’autre.',
       'L’image est souvent choisie pour son effet : une mesure comparée à une dictature, une entreprise à une famille, le budget d’un État à celui d’un ménage.',
@@ -585,6 +587,8 @@ export const NOTIONS: readonly Notion[] = [
     aussi: ['Conclusion qui dépasse les données'],
     famille: 'faits',
     resume: 'Tirer d’une étude ou d’un fait une conclusion plus large ou plus forte que ce qu’ils permettent.',
+    description:
+      'La surinterprétation tire d’une étude ou d’un fait une conclusion plus large ou plus forte que ce qu’ils permettent. Exemple et comment la repérer.',
     definition: [
       'La surinterprétation part d’un résultat réel et le pousse trop loin : un essai sur des souris devient un traitement, un effet modeste une révolution. Chaque pas paraît petit, mais à l’arrivée la conclusion ne repose plus sur rien.',
       'En 2014, une équipe de l’université de Cardiff a comparé des communiqués de presse universitaires sur la santé aux articles qui en ont été tirés : une bonne part des exagérations relevées dans la presse figurait déjà dans les communiqués.',
@@ -841,7 +845,7 @@ export const NOTIONS: readonly Notion[] = [
     famille: 'cadrage',
     resume: 'Une question que les spécialistes discutent encore, présentée comme réglée.',
     description:
-      'Les études l’ont montré, vraiment ? Définition du débat présenté comme tranché, trois exemples et comment repérer un désaccord caché.',
+      'Les études l’ont montré, vraiment ? Définition du débat présenté comme tranché, exemples et comment repérer un désaccord caché.',
     definition: [
       'Sur certains sujets, les spécialistes ne sont pas d’accord : les données manquent, les études divergent, les valeurs en jeu diffèrent. Un article qui présente l’une des positions comme « ce que montrent les études » ou comme une évidence cache ce désaccord au lecteur.',
       'C’est le miroir du faux équilibre, qui fait l’inverse : il donne l’apparence d’un débat à une question que les spécialistes ont tranchée.',
@@ -969,7 +973,7 @@ export const NOTIONS: readonly Notion[] = [
     famille: 'cadrage',
     resume: 'Prêter à quelqu’un des motivations cachées sans apporter de preuve.',
     description:
-      'Comment reconnaître un procès d’intention dans un article ? Définition, exemples et les mots qui le trahissent.',
+      'Faire un procès d’intention, c’est prêter à quelqu’un des motivations cachées sans apporter de preuve. Exemples et mots qui le trahissent.',
     definition: [
       'Le procès d’intention ne discute pas ce que quelqu’un fait ou dit : il affirme savoir pourquoi il le fait. « En réalité, il cherche à… », « derrière cette mesure se cache… ». Les intentions d’une personne sont presque toujours invérifiables, et c’est justement ce qui rend l’accusation difficile à contester.',
       'Un article peut rapporter que quelqu’un est soupçonné d’arrière-pensées. Il dit alors qui le soupçonne, sur quels éléments, et laisse la personne répondre.',

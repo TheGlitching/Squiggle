@@ -23,12 +23,13 @@ const BRAND = ' - Squiggle';
 /** A page's title, signed with the site's name when that still fits before the cut. */
 const titled = (title: string) => (title.length + BRAND.length <= TITLE_MAX ? `${title}${BRAND}` : title);
 
-/** A notion's title: what a search types first, then what the page gives, shortened until it fits. */
+/** A notion's title: what a search types first, then what the page gives, shortened until it fits. The site's name gives way first: a result prints it anyway. */
 const notionTitle = (notion: Notion) =>
   titled(
-    [`${notion.nom} : définition et ${notion.exemples ? 'exemples' : 'exemple'}`, `${notion.nom} : définition`].find(
-      (title) => title.length + BRAND.length <= TITLE_MAX,
-    ) ?? notion.nom,
+    [
+      `${notion.nom} : définition et ${notion.exemples ? `${notion.exemples.length + 1} exemples` : 'exemple'}`,
+      `${notion.nom} : définition`,
+    ].find((title) => title.length <= TITLE_MAX) ?? notion.nom,
   );
 
 const HOME_TITLE = `Squiggle : ${TAGLINE.charAt(0).toLowerCase()}${TAGLINE.slice(1, -1)}`;
@@ -173,7 +174,7 @@ export function blogPages(articles: readonly Article[]): PublicPage[] {
       const url = `${ORIGIN}${blogPath(item.slug)}`;
       const page: PublicPage = {
         path: blogPath(item.slug),
-        title: titled(item.titre),
+        title: titled(item.titreRecherche ?? item.titre),
         description: item.description,
         // The chapo would not fit under a title of three lines: the card says what the page is.
         share: { kicker: BLOG_TITLE, title: item.titre, text: 'Une méthode de lecture, sur un article inventé.', figure: 'lecture' },

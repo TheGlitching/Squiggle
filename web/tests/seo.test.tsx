@@ -10,7 +10,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../src/App';
-import { ALL_ARTICLES, BLOG_PATH } from '../src/blog';
+import { ALL_ARTICLES, BLOG_PATH, PUBLISHED } from '../src/blog';
 import { FAMILLES, NOTIONS } from '../src/glossaire';
 import { OWNER_PATH } from '../src/api';
 import { APP_PATHS, NOT_FOUND_TITLE, ORIGIN, PUBLIC_PAGES, TITLE_MAX, appHeadFor, blogPages, headFor, pageSources, redirects, shareImagePath, sitemap, titleFor } from '../src/seo';
@@ -37,8 +37,8 @@ describe('search engines and link previews', () => {
     // The drafts too: an article is titled the day it is published.
     for (const page of [...PUBLIC_PAGES, ...blogPages(ALL_ARTICLES)]) expect(page.title.length, page.path).toBeLessThanOrEqual(TITLE_MAX);
     const page = (slug: string) => PUBLIC_PAGES.find((item) => item.path === `/glossaire/${slug}`)!;
-    // A long notion name keeps its definition and loses its examples before it loses the site's name.
-    expect(page('correlation-causalite').title).toBe('Corrélation prise pour causalité : définition - Squiggle');
+    // A long notion name keeps its examples and loses the site's name.
+    expect(page('correlation-causalite').title).toBe('Corrélation prise pour causalité : définition et 4 exemples');
   });
 
   it.each(PUBLIC_PAGES.map((page) => [page.path, page] as const))('%s is a page of the app, with its own head', (path, page) => {
@@ -89,11 +89,24 @@ describe('search engines and link previews', () => {
     }
   });
 
-  it('titles a notion with several examples in the plural, and describes it by the question a search asks', () => {
+  it('counts a notion’s examples in its title, and opens its description on the answer a search asks for', () => {
     const page = (slug: string) => PUBLIC_PAGES.find((item) => item.path === `/glossaire/${slug}`)!;
-    expect(page('proces-d-intention').title).toBe('Procès d’intention : définition et exemples - Squiggle');
-    expect(page('proces-d-intention').description).toMatch(/^Comment reconnaître un procès d’intention/);
+    const notion = NOTIONS.find((item) => item.slug === 'proces-d-intention')!;
+    expect(page('proces-d-intention').title).toBe(`Procès d’intention : définition et ${notion.exemples!.length + 1} exemples - Squiggle`);
     expect(page('faux-dilemme').title).toBe('Faux dilemme : définition et exemple - Squiggle');
+    // A phone cuts a result's description at about 120 characters: the definition must end before that.
+    const definition = page('proces-d-intention').description.split('. ')[0];
+    expect(definition).toMatch(/^Faire un procès d’intention, c’est prêter à quelqu’un/);
+    expect(definition.length).toBeLessThanOrEqual(120);
+  });
+
+  it('gives an article the title a search asks for, and keeps its own on the page', () => {
+    const item = PUBLISHED.find((article) => article.slug === 'conclusion-hative')!;
+    const page = PUBLIC_PAGES.find((candidate) => candidate.path === `/blog/${item.slug}`)!;
+    expect(page.title).toBe(item.titreRecherche);
+    expect(page.title.length).toBeLessThanOrEqual(TITLE_MAX);
+    expect(page.share?.title).toBe(item.titre);
+    expect(JSON.stringify(page.jsonLd)).toContain(`"headline":"${item.titre}"`);
   });
 
   it('describes the teacher pages as learning resources for teachers', () => {
