@@ -46,7 +46,10 @@ export interface StartedGoogleAuth {
   state: string;
 }
 
-export async function startGoogleAuth(deps: GoogleDeps, input: { next?: unknown } = {}): Promise<StartedGoogleAuth> {
+export async function startGoogleAuth(
+  deps: GoogleDeps,
+  input: { next?: unknown; marketing?: boolean } = {},
+): Promise<StartedGoogleAuth> {
   const now = deps.clock.now();
   const codeVerifier = randomToken(32);
   const digest = await crypto.subtle.digest(
@@ -64,6 +67,7 @@ export async function startGoogleAuth(deps: GoogleDeps, input: { next?: unknown 
     nonce,
     redirectUri,
     next: sanitizeNext(input.next),
+    marketingConsent: input.marketing === true,
     now,
     ttlMs: OAUTH_PENDING_TTL_MS,
   });
@@ -161,6 +165,7 @@ export async function completeGoogleAuth(
     if (claims.sub && !user.googleSub) await deps.db.attachGoogleSub(user.id, claims.sub, now);
     if (claims.email_verified && !user.emailVerified) await deps.db.markEmailVerified(user.id, now);
   }
+  if (pending.marketingConsent) await deps.db.setMarketingConsent(user.id, true, now);
 
   const sessionToken = await createWebSession({ db: deps.db, clock: deps.clock }, user.id);
   return { ok: true, userId: user.id, email: claims.email ?? null, sessionToken, next: pending.next, created };

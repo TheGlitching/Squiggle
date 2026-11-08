@@ -45,6 +45,40 @@ function posted(calls: Call[], suffix: string): Call[] {
   return calls.filter((c) => c.method === 'POST' && c.url.endsWith(suffix));
 }
 
+describe('the accord for commercial e-mail', () => {
+  const LABEL = /un exercice de lecture par semaine/;
+  const CONSENT_AT = Date.UTC(2026, 10, 8, 12);
+
+  it('starts unticked, and ticking it sends the choice and shows the date', async () => {
+    const user = userEvent.setup();
+    const { calls } = renderCompte('/compte', {
+      respond: (call) =>
+        call.url.endsWith('/web/account/marketing') ? jsonResponse({ ok: true, marketingConsentAt: CONSENT_AT }) : undefined,
+    });
+    const box = await screen.findByRole('checkbox', { name: LABEL });
+    expect(box).not.toBeChecked();
+
+    await user.click(box);
+    await waitFor(() => expect(box).toBeChecked());
+    expect(calls.find((c) => c.url.endsWith('/web/account/marketing'))?.body).toEqual({ consent: true });
+    expect(screen.getByText(/Accord donné le 8 novembre 2026/)).toBeInTheDocument();
+  });
+
+  it('stays as it was when the server refuses', async () => {
+    const user = userEvent.setup();
+    renderCompte('/compte', {
+      respond: (call) =>
+        call.url.endsWith('/web/account/marketing')
+          ? jsonResponse({ ok: false, error: 'internal', message: 'Réessayez.' }, 500)
+          : undefined,
+    });
+    const box = await screen.findByRole('checkbox', { name: LABEL });
+    await user.click(box);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Réessayez.');
+    expect(box).not.toBeChecked();
+  });
+});
+
 describe('extensions connectées', () => {
   it('lists the installs and revokes the one the reader picks', async () => {
     const user = userEvent.setup();

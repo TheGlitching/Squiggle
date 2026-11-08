@@ -56,7 +56,7 @@ export function normalizeEmail(raw: string): string {
 
 export async function requestMagicLink(
   deps: MagicLinkRequestDeps,
-  input: { email: string; ip?: string | null; next?: unknown },
+  input: { email: string; ip?: string | null; next?: unknown; marketing?: unknown },
 ): Promise<Outcome<{ sent: true }>> {
   const email = normalizeEmail(input.email);
   if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
@@ -97,6 +97,7 @@ export async function requestMagicLink(
     }
   }
 
+  const marketingConsent = input.marketing === true;
   const code = generateHumanCode(MAGIC_LINK_CODE_LENGTH);
   await deps.db.createMagicLink({
     email,
@@ -105,6 +106,7 @@ export async function requestMagicLink(
     // Stored with the row, not put in the link: the link opens in a fresh tab
     // that has lost the page which asked for the sign-in.
     next: sanitizeNext(input.next),
+    marketingConsent,
     now,
     ttlMs: MAGIC_LINK_TTL_MS,
   });
@@ -117,7 +119,7 @@ export async function requestMagicLink(
     await deps.email.send({
       to: email,
       subject: 'Votre code de connexion Squiggle',
-      html: magicLinkEmailHtml(code, linkUrl),
+      html: magicLinkEmailHtml(code, linkUrl, marketingConsent),
     });
   } catch {
     return apiError('internal', 'We could not send the email right now. Please try again.');
@@ -126,13 +128,18 @@ export async function requestMagicLink(
   return { ok: true, sent: true };
 }
 
-function magicLinkEmailHtml(code: string, linkUrl: string): string {
+function magicLinkEmailHtml(code: string, linkUrl: string, marketingConsent: boolean): string {
   return [
     '<p>Voici votre code de connexion Squiggle :</p>',
     `<p style="font-size:24px;letter-spacing:4px"><strong>${code}</strong></p>`,
     '<p>Ou cliquez sur ce lien, valable 10 minutes :</p>',
     `<p><a href="${linkUrl}">Se connecter</a></p>`,
     '<p>Si vous n’avez pas demandé ce code, vous pouvez ignorer cet e-mail.</p>',
+    // Anyone can type an address into the form, so the box only counts once the
+    // mailbox's owner has read what it says and signed in with this code.
+    ...(marketingConsent
+      ? ['<p>La case pour recevoir un exercice par semaine et nos messages a été cochée. En vous connectant, vous confirmez cet accord ; vous pourrez le retirer dans votre compte.</p>']
+      : []),
   ].join('\n');
 }
 
@@ -177,6 +184,7 @@ export async function verifyMagicLink(
   } else if (!user.emailVerified) {
     await deps.db.markEmailVerified(user.id, now);
   }
+  if (link.marketingConsent) await deps.db.setMarketingConsent(user.id, true, now);
 
   const sessionToken = await createWebSession(deps, user.id);
   return { ok: true, userId: user.id, email: link.email, sessionToken, next: link.next, created };

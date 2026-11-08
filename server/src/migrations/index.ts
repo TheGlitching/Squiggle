@@ -28,6 +28,7 @@ import { name as visitorRunsName, sql as visitorRunsSql } from './014_visitor_ru
 import { name as byLinkName, sql as byLinkSql } from './015_reports_by_link';
 import { name as visitorUsesName, sql as visitorUsesSql } from './016_visitor_uses';
 import { name as xPostsName, sql as xPostsSql } from './017_x_posts';
+import { name as marketingName, sql as marketingSql } from './018_marketing_consent';
 
 export interface Migration {
   name: string;
@@ -57,6 +58,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { name: byLinkName, sql: byLinkSql },
   { name: visitorUsesName, sql: visitorUsesSql },
   { name: xPostsName, sql: xPostsSql },
+  { name: marketingName, sql: marketingSql },
 ];
 
 function splitStatements(sql: string): string[] {

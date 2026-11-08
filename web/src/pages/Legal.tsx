@@ -287,6 +287,10 @@ const PROCESSING = [
     'Mesurer l’audience du site, en données agrégées, sans cookie ni rien qui vous désigne (section 6)',
     'Intérêt légitime (art. 6.1.f) : savoir ce qui est utile',
   ],
+  [
+    'Vous envoyer un exercice de lecture par semaine et des messages sur Squiggle et son abonnement, si vous avez coché la case prévue',
+    'Consentement (art. 6.1.a), retirable à tout moment',
+  ],
   ['Répondre à vos demandes et réclamations', 'Exécution du contrat (art. 6.1.b), ou intérêt légitime si vous n’êtes pas client'],
 ] as const;
 
@@ -315,7 +319,7 @@ const TRANSFERS = [
     'Allemagne (Francfort) pour les données, États-Unis pour la société',
     'Clauses contractuelles types, dans l’accord de traitement de Neon',
   ],
-  ['Brevo (e-mails de connexion, réponses aux e-mails transférés)', 'France', 'Aucun transfert hors UE'],
+  ['Brevo (e-mails de connexion, réponses aux e-mails transférés, e-mails commerciaux si vous les avez acceptés)', 'France', 'Aucun transfert hors UE'],
 ] as const;
 
 function Table({ head, rows }: { head: readonly string[]; rows: readonly (readonly string[])[] }) {
@@ -447,6 +451,13 @@ export function Confidentialite() {
           rattaché. Pour le reste, écrivez à <Mail /> : nous répondons sous un mois.
         </p>
         <p>
+          E-mails commerciaux. La case qui les accepte n’est jamais cochée d’avance, et un compte existant n’a pas donné
+          cet accord. Nous gardons sa date, et celle de son retrait, tant que le compte existe. Vous le retirez à tout
+          moment depuis <A to="/compte">Mon compte</A>, ou par le lien de désinscription présent dans chacun de ces
+          messages, sans vous connecter. Sans accord, seuls partent les messages de service : le code de connexion, la
+          confirmation d’une nouvelle adresse et la réponse à un e-mail que vous avez transféré.
+        </p>
+        <p>
           Vous pouvez introduire une réclamation auprès de la CNIL, 3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07,
           cnil.fr.
         </p>
@@ -466,7 +477,8 @@ export function Confidentialite() {
           enregistre rien, et ne nous montre que des données agrégées : combien de pages sont vues, d’où viennent les
           visites, depuis quel pays et quel type d’appareil. Rien ne permet de vous reconnaître d’une visite à l’autre.
           Le site compte aussi lui-même, jour par jour, combien de fois quelques boutons sont utilisés, comme « Installer
-          l’extension » ou « S’abonner », et combien de visites arrivent par un lien de campagne connu : un simple
+          l’extension » ou « S’abonner », et combien de visites arrivent par un lien de campagne connu, y compris un
+          lien de publicité, sans pixel publicitaire ni identifiant de clic gardé : un simple
           nombre par jour et par nom d’événement, sans cookie, sans identifiant, sans adresse IP et sans lien avec votre
           compte. Ces totaux ne servent qu’à nous, pour savoir ce qui est utile.
         </p>

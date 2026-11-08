@@ -53,6 +53,10 @@
  *    requests, whose `Origin` handling differs between Chrome and Firefox.
  *    A *mismatched* origin is still refused everywhere.
  *
+ * **The one-click unsubscribe takes any origin.** `/web/unsubscribe` is posted by
+ * mailbox providers (RFC 8058), reads no cookie and can only withdraw the accord
+ * whose token it is given, so no origin could gain anything from it.
+ *
  * **A same-origin GET has no `Origin`.** The web app and the API share one
  * origin, and a browser omits `Origin` on a same-origin `GET`. So on the
  * endpoints above, a request with no `Origin` is also accepted when it carries

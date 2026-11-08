@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
-import { getAccount, googleSignInUrl, messageForError, requestMagicLink, verifyMagicLink } from '../api';
+import { getAccount, googleSignInUrl, MARKETING_CONSENT_LABEL, messageForError, requestMagicLink, verifyMagicLink } from '../api';
 import { isStandalone } from '../install';
 import { StepFigure } from '../components/Iso';
 import { FIELD, PAGE, PRIMARY_BUTTON, TITLE } from '../components/Landing';
@@ -54,6 +54,7 @@ export function Connexion() {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [marketing, setMarketing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +99,7 @@ export function Connexion() {
     setBusy(true);
     setError(null);
     try {
-      await requestMagicLink(email, requestedNext ?? undefined);
+      await requestMagicLink(email, requestedNext ?? undefined, marketing);
       setStep('code');
     } catch (err) {
       setError(messageForError(err));
@@ -155,6 +156,16 @@ export function Connexion() {
                 placeholder="vous@exemple.fr"
               />
             </label>
+            {/* Never ticked for the reader; it also applies to the Google button below. */}
+            <label className="flex items-start gap-3 text-base text-muted">
+              <input
+                type="checkbox"
+                checked={marketing}
+                onChange={(event) => setMarketing(event.target.checked)}
+                className="mt-1 h-4.5 w-4.5 shrink-0 accent-accent"
+              />
+              <span>{MARKETING_CONSENT_LABEL}</span>
+            </label>
             <button type="submit" disabled={busy} className={`${PRIMARY_BUTTON} w-full disabled:opacity-60`}>
               Recevoir mon code
             </button>
@@ -204,7 +215,7 @@ export function Connexion() {
           <span className="h-px flex-1 bg-border" />
         </div>
 
-        <a href={googleSignInUrl(requestedNext ?? undefined)} className={GOOGLE_BUTTON}>
+        <a href={googleSignInUrl(requestedNext ?? undefined, marketing)} className={GOOGLE_BUTTON}>
           <GoogleG />
           Continuer avec Google
         </a>

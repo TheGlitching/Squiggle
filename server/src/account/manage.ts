@@ -19,6 +19,7 @@ import type { Clock } from '../lib/clock';
 import { apiError, type Outcome } from '../lib/errors';
 import { generateHumanCode, normalizeHumanCode } from '../lib/humanCode';
 import { logEvent } from '../lib/log';
+import { hasMarketingConsent } from '../mail/commercial';
 import { HOUR_MS } from '../usage/abuse';
 import { EMAIL_CHANGE_RATE_SCOPE } from './rateScopes';
 
@@ -185,6 +186,19 @@ export async function confirmEmailChange(
     }
   }
   return { ok: true, email: link.email };
+}
+
+/** Tick or untick the accord for commercial e-mail. `consent` has to be a real boolean. */
+export async function setMarketingConsent(
+  deps: ManageDeps,
+  user: UserRow,
+  consent: unknown,
+): Promise<Outcome<{ marketingConsentAt: number | null }>> {
+  if (typeof consent !== 'boolean') return apiError('invalid_payload', 'Requête invalide : consent.');
+  await deps.db.setMarketingConsent(user.id, consent, deps.clock.now());
+  logEvent({ event: 'marketing_consent_changed', requestId: deps.requestId, userId: user.id });
+  const fresh = await deps.db.getUserById(user.id);
+  return { ok: true, marketingConsentAt: fresh && hasMarketingConsent(fresh) ? fresh.marketingConsentAt : null };
 }
 
 export interface DeleteDeps extends ManageDeps {

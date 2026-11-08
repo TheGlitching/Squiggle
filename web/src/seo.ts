@@ -395,6 +395,7 @@ export const APP_PATHS: readonly string[] = [
   '/magic-link',
   '/compte',
   '/account',
+  '/desinscription',
   '/pont',
   '/legal',
   // Without its signed file, /raccourci only sends the reader on to /favori.
