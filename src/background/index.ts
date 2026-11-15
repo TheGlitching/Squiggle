@@ -131,11 +131,15 @@ export class BackgroundServiceWorker {
    */
   public setupSidepanelAction(): void {
     if (__TARGET__ === 'chrome') {
-      // Chrome sidePanel opens the whole side panel on toolbar click; the
-      // programmatic open is the fallback when setPanelBehavior is absent.
+      // The toolbar click must reach `action.onClicked`, which opens the panel
+      // itself: that click is what grants `activeTab` on the page. When Chrome
+      // opens the panel on its own (`openPanelOnActionClick: true`) the click
+      // grants nothing, and every page stays unreadable unless the reader has
+      // allowed all sites. Chrome keeps this setting across updates, so it is
+      // set to false explicitly rather than left out.
       if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
         chrome.sidePanel
-          .setPanelBehavior({ openPanelOnActionClick: true })
+          .setPanelBehavior({ openPanelOnActionClick: false })
           .catch((err) => console.warn('Failed to setPanelBehavior on chrome.sidePanel:', err));
       }
       if (typeof chrome !== 'undefined' && chrome.action && chrome.action.onClicked) {
@@ -381,9 +385,11 @@ export class BackgroundServiceWorker {
    * invoked the extension on. So the first read of any page finds no receiver,
    * and a page that was already open when the extension loaded looks the same.
    * Ask first (a tab that already holds the script answers), inject on a miss,
-   * ask again.
+   * ask again. `'no-access'` means the browser refused the injection because the
+   * extension holds no right to this tab: the reader reached it without clicking
+   * the toolbar icon on it, and has not allowed all sites.
    */
-  private async extractArticle(tabId: number): Promise<ExtractedArticle | undefined> {
+  private async extractArticle(tabId: number): Promise<ExtractedArticle | 'no-access' | undefined> {
     const ask = async (): Promise<ExtractedArticle | undefined> => {
       const resp = await UnifiedRuntime.sendTabMessage<{
         success: boolean;
@@ -402,7 +408,9 @@ export class BackgroundServiceWorker {
       await UnifiedRuntime.injectScript(tabId, [CONTENT_SCRIPT_FILE]);
     } catch (err) {
       console.warn('Could not inject the content script into the tab:', err);
-      return undefined;
+      // Chrome, then Firefox, when the tab is an ordinary page the extension may not
+      // read yet; a browser page (settings, extension gallery) fails differently.
+      return /must request permission|missing host permission/i.test(String(err)) ? 'no-access' : undefined;
     }
 
     try {
@@ -591,6 +599,7 @@ export class BackgroundServiceWorker {
     // 1. If article not provided, read it from the page: a YouTube video's
     // captions, or the article through the content script.
     let extracted: ExtractedArticle | undefined;
+    let noAccess = false;
     let video: (VideoRead & { ok: true }) | undefined;
     let videoId: string | null = null;
     if (!articleText) {
@@ -618,7 +627,9 @@ export class BackgroundServiceWorker {
         return { success: false, error: err };
       }
     } else if (!articleText) {
-      extracted = await this.extractArticle(tabId);
+      const read = await this.extractArticle(tabId);
+      noAccess = read === 'no-access';
+      extracted = read === 'no-access' ? undefined : read;
       if (extracted) {
         articleText = extracted.fullText || extracted.cleanText;
         articleTitle = extracted.metadata?.title || undefined;
@@ -634,6 +645,11 @@ export class BackgroundServiceWorker {
       const err = extracted?.detectionMethod === 'social-thread'
         ? 'Cette publication n’a pas pu être lue : le réseau ne l’affiche pas à un lecteur non ' +
           'connecté. Connectez-vous, ou collez le texte dans Squiggle pour l’analyser.'
+        : noAccess
+        ? 'Squiggle n’a pas encore accès à cet onglet : le navigateur ne lui ouvre une page ' +
+          'que lorsque vous cliquez sur son icône depuis cette page. Cliquez sur l’icône ' +
+          'Squiggle dans la barre d’outils, puis relancez. Pour ne plus avoir à le faire, ' +
+          'autorisez l’accès à tous les sites dans les réglages.'
         : readButEmpty
         ? 'Cette page a été lue, mais aucun article n’y a été trouvé. Squiggle ' +
           'analyse un article de presse : sur un fil de réseau social, une page ' +
