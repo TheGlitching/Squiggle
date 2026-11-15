@@ -140,6 +140,21 @@ describe('BackgroundServiceWorker & TabStateManager', () => {
       sw.destroy();
     });
 
+    /**
+     * Measured in Chrome 152: when Chrome opens the panel on its own, the toolbar
+     * click grants no `activeTab`, `action.onClicked` never fires, and every page
+     * answers "Cannot access contents of the page" unless the reader has allowed
+     * all sites. A fresh install could read no article at all.
+     */
+    it('lets the toolbar click reach onClicked, so it grants activeTab', () => {
+      const sw = new BackgroundServiceWorker();
+      sw.init();
+
+      const chromeObj = (globalThis as unknown as { chrome: { sidePanel: { setPanelBehavior: ReturnType<typeof vi.fn> } } }).chrome;
+      expect(chromeObj.sidePanel.setPanelBehavior).toHaveBeenCalledWith({ openPanelOnActionClick: false });
+      sw.destroy();
+    });
+
     it('responds to GET_TAB_STATE and refuses analysis when no key is configured', async () => {
       const busClient = new TypedMessageBus('sidepanel');
       const sw = new BackgroundServiceWorker();

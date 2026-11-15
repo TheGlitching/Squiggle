@@ -104,6 +104,30 @@ describe('article extraction recovery', () => {
     expect(res.error).toContain('autorisez l’accès à tous les sites');
   });
 
+  /**
+   * A fresh install with the panel already open, on an article the reader reached
+   * without clicking the icon there: Chrome refuses the injection. The message
+   * used to open on pages the browser forbids (its settings, the extension
+   * gallery), which read as a permission the reader had failed to grant.
+   */
+  it('says the extension has no access to this tab yet when the browser refuses it', async () => {
+    const chromeMock = (globalThis as unknown as { chrome: { scripting: { executeScript: unknown } } }).chrome;
+    chromeMock.scripting.executeScript = vi.fn(async () => {
+      // Chrome's own words, measured on www.lemonde.fr.
+      throw new Error(
+        'Cannot access contents of the page. Extension manifest must request permission to access the respective host.'
+      );
+    });
+
+    const sw = new BackgroundServiceWorker();
+    const res = await sw.runAnalysisForTab(TAB);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('n’a pas encore accès à cet onglet');
+    expect(res.error).toContain('Cliquez sur l’icône Squiggle dans la barre d’outils');
+    expect(res.error).not.toContain('interdit aux extensions');
+  });
+
   it('declines a paywalled teaser instead of scoring it as the article', async () => {
     receiverMissing = false;
     extraction = {
