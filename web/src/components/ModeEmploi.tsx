@@ -191,7 +191,7 @@ export function ModeEmploiPage() {
         <ol className="m-0 grid list-none gap-x-6 gap-y-4 p-0 sm:grid-cols-2">
           {GUIDE.map(({ step, title, text, tip }, index) => (
             <li key={step} className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-3 break-inside-avoid">
-              <div className="rounded-[10px] bg-[#1b1b1f] px-1.5 py-2 print:[print-color-adjust:exact]">
+              <div className="rounded-[10px] bg-lineSoft px-1.5 py-2 print:[print-color-adjust:exact]">
                 <GuideFigure step={step} />
               </div>
               <div className="grid gap-1">

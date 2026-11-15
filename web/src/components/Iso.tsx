@@ -10,7 +10,7 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { SEVERITY_COLORS, type HighlightSeverity } from '../demo';
+import type { HighlightSeverity } from '../demo';
 
 const COS = Math.cos(Math.PI / 6);
 type V3 = readonly [number, number, number];
@@ -107,14 +107,15 @@ export function SquiggleMark() {
   );
 }
 
-function tint(severity: HighlightSeverity, alpha = 0.42): string {
-  return SEVERITY_COLORS[severity].tint.replace(/[\d.]+\)$/, `${alpha})`);
+/** A severity's wash on a drawing, stronger than on text since nothing has to be read through it. */
+function tint(severity: HighlightSeverity, alpha = 0.42) {
+  return { fill: `var(--color-${severity}Wash)`, fillOpacity: alpha };
 }
 
 /** Text lines on a sheet, as grey bars: `[y, from, to]` in the sheet's own units. */
 function Lines({
   lines,
-  fill = '#a3a1a6',
+  fill = 'var(--color-paperLine)',
   h = 5,
 }: {
   lines: Array<readonly [number, number, number]>;
@@ -148,11 +149,11 @@ function Mark({
 }) {
   return (
     <g className={i === undefined ? undefined : 'iso-mark'} style={{ '--i': i } as CSSProperties}>
-      <rect x={x - 2} y={y - (h - 5) / 2} width={w + 4} height={h} rx={2.5} fill={tint(severity)} />
+      <rect x={x - 2} y={y - (h - 5) / 2} width={w + 4} height={h} rx={2.5} {...tint(severity)} />
       <path
         d={squiggle(x - 1, y + h / 2 + 3.5, w + 2, 2, 6)}
         className="iso-line"
-        stroke={SEVERITY_COLORS[severity].color}
+        stroke={`var(--color-${severity})`}
         strokeWidth={1.5}
         strokeLinecap="round"
       />
@@ -199,13 +200,13 @@ function ScoreRing({
   const c = 2 * Math.PI * r;
   return (
     <g>
-      <circle cx={cx} cy={cy} r={r} fill="#0f0f11" stroke="#3a3a42" strokeWidth={4} />
+      <circle cx={cx} cy={cy} r={r} fill="var(--color-surface)" stroke="var(--color-isoDot)" strokeWidth={4} />
       <circle
         cx={cx}
         cy={cy}
         r={r}
         fill="none"
-        stroke={SEVERITY_COLORS[severity].color}
+        stroke={`var(--color-${severity})`}
         strokeWidth={4}
         strokeLinecap="round"
         strokeDasharray={`${n((c * score) / 100)} ${n(c)}`}
@@ -218,7 +219,7 @@ function ScoreRing({
           textAnchor="middle"
           fontSize={r * 0.9}
           fontWeight={600}
-          fill="#ece9e3"
+          fill="var(--color-foreground)"
           fontFamily="var(--font-display)"
         >
           {label}
@@ -275,7 +276,7 @@ export function HeroFigure({ pins = true, loop = false }: { pins?: boolean; loop
       {/* The article: a sheet of paper, as you read it. */}
       <Box v={v} at={[0, 0, 0]} size={[W, D, 3]} r={4} face="iso-paper" edge="iso-paper-edge" />
       <g transform={v.top(0, 0, 3)}>
-        <rect x={20} y={20} width={44} height={5} rx={2.5} fill="#8c8a90" />
+        <rect x={20} y={20} width={44} height={5} rx={2.5} fill="var(--color-paperRule)" />
         <rect x={20} y={34} width={150} height={12} rx={3} fill="var(--color-paperInk)" />
         <rect x={20} y={51} width={98} height={12} rx={3} fill="var(--color-paperInk)" />
         <Lines lines={body} />
@@ -333,7 +334,7 @@ export function HeroFigure({ pins = true, loop = false }: { pins?: boolean; loop
 export type Criterion = 'sources' | 'logique' | 'cadrage' | 'transparence' | 'langue';
 
 /**
- * One criterion of the grid, as a small scene on a dark slab, in the hero's materials:
+ * One criterion of the grid, as a small scene on a slab, in the hero's materials:
  * paper for the article, violet for what Squiggle checks.
  */
 export function CriterionFigure({ kind }: { kind: Criterion }) {
@@ -379,8 +380,8 @@ export function CriterionFigure({ kind }: { kind: Criterion }) {
         <>
           <Box v={v} at={[14, 26, 4]} size={[30, 4, 34]} r={2} face="iso-paper" edge="iso-paper-edge" />
           <g transform={v.front(14, 26, 38)}>
-            <circle cx={15} cy={10} r={5} fill="#8c8a90" />
-            <path d="M 7 21 Q 15 13 23 21" fill="none" stroke="#8c8a90" strokeWidth={3} />
+            <circle cx={15} cy={10} r={5} fill="var(--color-paperRule)" />
+            <path d="M 7 21 Q 15 13 23 21" fill="none" stroke="var(--color-paperRule)" strokeWidth={3} />
             <rect x={5} y={25} width={20} height={3} rx={1.5} fill="var(--color-paperInk)" />
           </g>
           <g transform={v.top(10, 10, 4)}>
@@ -505,7 +506,7 @@ export function StepFigure({ step }: { step: Step }) {
                 [18, 8, 28],
                 [26, 8, 30],
               ]}
-              fill="#55555d"
+              fill="var(--color-isoBar)"
               h={3}
             />
           </g>
@@ -516,7 +517,7 @@ export function StepFigure({ step }: { step: Step }) {
                 [18, 8, 26],
                 [26, 8, 30],
               ]}
-              fill="#55555d"
+              fill="var(--color-isoBar)"
               h={3}
             />
           </g>
@@ -604,7 +605,7 @@ export function RunScene({ step }: { step: RunStep }) {
                     [30, 9, 38],
                     [39, 9, 30],
                   ]}
-                  fill="#55555d"
+                  fill="var(--color-isoBar)"
                   h={3.5}
                 />
                 {step === 'verification' ? (
@@ -715,7 +716,7 @@ export function DeviceFigure({ device }: { device: Device }) {
         <Box v={v} at={[0, 0, 0]} size={[150, 112, 4]} r={6} />
         <g transform={v.top(0, 0, 4)}>
           {[0, 1, 2].map((i) => (
-            <circle key={i} cx={10 + i * 7} cy={9} r={2.2} fill="#3a3a42" />
+            <circle key={i} cx={10 + i * 7} cy={9} r={2.2} fill="var(--color-isoDot)" />
           ))}
           <rect x={10} y={20} width={130} height={58} rx={4} fill="var(--color-paper)" />
           <Lines
@@ -744,14 +745,14 @@ export function DeviceFigure({ device }: { device: Device }) {
           <rect x={6} y={10} width={68} height={130} rx={7} fill="var(--color-paper)" />
           <rect x={13} y={20} width={44} height={7} rx={2} fill="var(--color-paperInk)" />
           <Lines lines={[[33, 13, 66], [41, 13, 62], [49, 13, 50]]} h={3.5} />
-          <rect x={6} y={62} width={68} height={78} rx={7} fill="#17171a" />
-          <rect x={30} y={67} width={20} height={3} rx={1.5} fill="#3a3a42" />
-          <rect x={10} y={88} width={14} height={14} rx={4} fill="#2c2c33" />
-          <rect x={56} y={88} width={14} height={14} rx={4} fill="#2c2c33" />
+          <rect x={6} y={62} width={68} height={78} rx={7} fill="var(--color-isoPanel)" />
+          <rect x={30} y={67} width={20} height={3} rx={1.5} fill="var(--color-isoDot)" />
+          <rect x={10} y={88} width={14} height={14} rx={4} fill="var(--color-isoControl)" />
+          <rect x={56} y={88} width={14} height={14} rx={4} fill="var(--color-isoControl)" />
           <rect x={26.5} y={78.5} width={27} height={27} rx={8} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
           <BadgeMark x={29} y={81} s={22} />
           <rect x={22} y={112} width={36} height={4} rx={2} fill="var(--color-accentInk)" />
-          <rect x={14} y={124} width={52} height={4} rx={2} fill="#2c2c33" />
+          <rect x={14} y={124} width={52} height={4} rx={2} fill="var(--color-isoControl)" />
         </g>
       </>,
     );
@@ -767,13 +768,13 @@ export function DeviceFigure({ device }: { device: Device }) {
           <rect x={6} y={10} width={68} height={130} rx={7} fill="var(--color-paper)" />
           <rect x={13} y={56} width={44} height={7} rx={2} fill="var(--color-paperInk)" />
           <Lines lines={[[69, 13, 66], [77, 13, 62], [85, 13, 66], [93, 13, 46]]} h={3.5} />
-          <rect x={6} y={10} width={68} height={40} rx={7} fill="#17171a" />
-          <rect x={11} y={15} width={58} height={10} rx={5} fill="#2c2c33" />
+          <rect x={6} y={10} width={68} height={40} rx={7} fill="var(--color-isoPanel)" />
+          <rect x={11} y={15} width={58} height={10} rx={5} fill="var(--color-isoControl)" />
           <rect x={15} y={18.5} width={22} height={3} rx={1.5} fill="var(--color-foreground)" />
           <rect x={9} y={29} width={62} height={17} rx={4} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} />
           <BadgeMark x={12} y={31.5} s={12} />
           <rect x={28} y={34} width={36} height={3} rx={1.5} fill="var(--color-accentInk)" />
-          <rect x={28} y={40} width={24} height={2.5} rx={1.25} fill="#3a3a42" />
+          <rect x={28} y={40} width={24} height={2.5} rx={1.25} fill="var(--color-isoDot)" />
         </g>
       </>,
     );
@@ -787,15 +788,15 @@ export function DeviceFigure({ device }: { device: Device }) {
       <Box v={v} at={[0, 8, 0]} size={[140, 90, 5]} r={5} />
       <g transform={v.top(0, 8, 5)}>
         {[0, 1, 2, 3].map((row) => (
-          <path key={row} d={`M 14 ${14 + row * 11} H 126`} className="iso-line" stroke="#2c2c33" />
+          <path key={row} d={`M 14 ${14 + row * 11} H 126`} className="iso-line" stroke="var(--color-isoControl)" />
         ))}
-        <rect x={48} y={62} width={44} height={20} rx={3} fill="none" stroke="#2c2c33" />
+        <rect x={48} y={62} width={44} height={20} rx={3} fill="none" stroke="var(--color-isoControl)" />
       </g>
       <Box v={v} at={[0, 0, 5]} size={[140, 8, 92]} r={5} />
       <g transform={v.front(0, 8, 97)}>
-        <rect x={5} y={5} width={130} height={82} rx={3} fill="#0a0a0b" />
-        <rect x={5} y={5} width={130} height={13} rx={3} fill="#17171a" />
-        <rect x={12} y={8.5} width={70} height={6} rx={3} fill="#2c2c33" />
+        <rect x={5} y={5} width={130} height={82} rx={3} fill="var(--color-isoScreen)" />
+        <rect x={5} y={5} width={130} height={13} rx={3} fill="var(--color-isoPanel)" />
+        <rect x={12} y={8.5} width={70} height={6} rx={3} fill="var(--color-isoControl)" />
         <BadgeMark x={121} y={7} s={9} />
         <rect x={10} y={22} width={80} height={60} rx={2} fill="var(--color-paper)" />
         <rect x={16} y={28} width={46} height={5} rx={1.5} fill="var(--color-paperInk)" />
@@ -809,22 +810,22 @@ export function DeviceFigure({ device }: { device: Device }) {
           ]}
           h={3}
         />
-        <rect x={40} y={43.5} width={30} height={5.5} rx={1.5} fill={tint('warning')} />
-        <rect x={16} y={57.5} width={26} height={5.5} rx={1.5} fill={tint('info')} />
+        <rect x={40} y={43.5} width={30} height={5.5} rx={1.5} {...tint('warning')} />
+        <rect x={16} y={57.5} width={26} height={5.5} rx={1.5} {...tint('info')} />
         <rect
           x={94}
           y={22}
           width={36}
           height={60}
           rx={2}
-          fill="#17171a"
+          fill="var(--color-isoPanel)"
           stroke="var(--color-accent)"
           strokeWidth={0.75}
         />
-        <circle cx={112} cy={36} r={8} fill="none" stroke={SEVERITY_COLORS.warning.color} strokeWidth={2.5} />
-        <rect x={99} y={52} width={26} height={3} rx={1.5} fill="#55555d" />
-        <rect x={99} y={59} width={20} height={3} rx={1.5} fill="#55555d" />
-        <rect x={99} y={66} width={24} height={3} rx={1.5} fill="#55555d" />
+        <circle cx={112} cy={36} r={8} fill="none" stroke="var(--color-warning)" strokeWidth={2.5} />
+        <rect x={99} y={52} width={26} height={3} rx={1.5} fill="var(--color-isoBar)" />
+        <rect x={99} y={59} width={20} height={3} rx={1.5} fill="var(--color-isoBar)" />
+        <rect x={99} y={66} width={24} height={3} rx={1.5} fill="var(--color-isoBar)" />
       </g>
     </>,
   );
@@ -845,7 +846,7 @@ export function ClassFigure() {
     <svg viewBox="0 0 290 290" className="block h-auto w-full overflow-visible" aria-hidden="true">
       <Box v={v} at={[0, 0, 0]} size={[200, 8, 124]} r={4} />
       <g transform={v.front(0, 8, 124)}>
-        <rect x={6} y={6} width={188} height={112} rx={3} fill="#0a0a0b" />
+        <rect x={6} y={6} width={188} height={112} rx={3} fill="var(--color-isoScreen)" />
         <rect x={12} y={12} width={122} height={100} rx={2} fill="var(--color-paper)" />
         <rect x={20} y={20} width={74} height={8} rx={2} fill="var(--color-paperInk)" />
         <Lines
@@ -860,22 +861,22 @@ export function ClassFigure() {
           ]}
           h={4}
         />
-        <rect x={52} y={43.5} width={44} height={7} rx={1.5} fill={tint('warning')} />
-        <rect x={20} y={70.5} width={40} height={7} rx={1.5} fill={tint('info')} />
-        <rect x={64} y={88.5} width={34} height={7} rx={1.5} fill={tint('positive')} />
+        <rect x={52} y={43.5} width={44} height={7} rx={1.5} {...tint('warning')} />
+        <rect x={20} y={70.5} width={40} height={7} rx={1.5} {...tint('info')} />
+        <rect x={64} y={88.5} width={34} height={7} rx={1.5} {...tint('positive')} />
         <rect
           x={140}
           y={12}
           width={48}
           height={100}
           rx={2}
-          fill="#17171a"
+          fill="var(--color-isoPanel)"
           stroke="var(--color-accent)"
           strokeWidth={0.75}
         />
-        <circle cx={164} cy={32} r={11} fill="none" stroke={SEVERITY_COLORS.warning.color} strokeWidth={3} />
+        <circle cx={164} cy={32} r={11} fill="none" stroke="var(--color-warning)" strokeWidth={3} />
         {[54, 63, 72, 81, 90].map((y, i) => (
-          <rect key={y} x={147} y={y} width={i % 2 ? 26 : 34} height={3.5} rx={1.75} fill="#55555d" />
+          <rect key={y} x={147} y={y} width={i % 2 ? 26 : 34} height={3.5} rx={1.75} fill="var(--color-isoBar)" />
         ))}
       </g>
       {sheets.map(([x, y], index) => (
@@ -896,7 +897,7 @@ export function ClassFigure() {
             <path
               d={squiggle(6, index === 1 ? 29 : 22, index === 2 ? 22 : 28, 1.6, 4)}
               className="iso-line"
-              stroke="#5c5b61"
+              stroke="var(--color-paperMuted)"
               strokeWidth={1.25}
               strokeLinecap="round"
             />
@@ -953,12 +954,12 @@ function Laptop({ v, at: [x, y], w, d, h, children }: { v: Iso; at: [number, num
       <Box v={v} at={[x, y + 6, 0]} size={[w, d, 4]} r={4} />
       <g transform={v.top(x, y + 6, 4)}>
         {[0, 1, 2].map((row) => (
-          <path key={row} d={`M 10 ${10 + row * 9} H ${w - 10}`} className="iso-line" stroke="#2c2c33" />
+          <path key={row} d={`M 10 ${10 + row * 9} H ${w - 10}`} className="iso-line" stroke="var(--color-isoControl)" />
         ))}
       </g>
       <Box v={v} at={[x, y, 4]} size={[w, 6, h]} r={4} />
       <g transform={v.front(x, y + 6, 4 + h)}>
-        <rect x={4} y={4} width={w - 8} height={h - 8} rx={2.5} fill="#0a0a0b" />
+        <rect x={4} y={4} width={w - 8} height={h - 8} rx={2.5} fill="var(--color-isoScreen)" />
         <g transform="translate(4 4)">{children}</g>
       </g>
     </g>
@@ -973,7 +974,7 @@ function Monitor({ v, at: [x, y], w, h, children }: { v: Iso; at: [number, numbe
       <Box v={v} at={[x + w / 2 - 5, y + 2, 3]} size={[10, 6, 22]} r={1} />
       <Box v={v} at={[x, y, 22]} size={[w, 6, h]} r={4} />
       <g transform={v.front(x, y + 6, 22 + h)}>
-        <rect x={4} y={4} width={w - 8} height={h - 8} rx={2.5} fill="#0a0a0b" />
+        <rect x={4} y={4} width={w - 8} height={h - 8} rx={2.5} fill="var(--color-isoScreen)" />
         <g transform="translate(4 4)">{children}</g>
       </g>
     </g>
@@ -986,7 +987,7 @@ function Wall({ v, at: [x, y, z], w, h, children }: { v: Iso; at: V3; w: number;
     <g>
       <Box v={v} at={[x, y, z]} size={[w, 4, h]} r={3} />
       <g transform={v.front(x, y + 4, z + h)}>
-        <rect x={3} y={3} width={w - 6} height={h - 6} rx={2} fill="#0a0a0b" />
+        <rect x={3} y={3} width={w - 6} height={h - 6} rx={2} fill="var(--color-isoScreen)" />
         <g transform="translate(3 3)">{children}</g>
       </g>
     </g>
@@ -1073,14 +1074,14 @@ function MiniBoard({ w, h, marks = 0, live = false }: { w: number; h: number; ma
       {passages.slice(0, marks).map(([line, from, to, severity], index) =>
         lines[line] ? (
           <g key={index} className={live ? 'guide-mark' : undefined} style={{ '--i': index } as CSSProperties}>
-            <rect x={from - 1} y={lines[line][0] - 1.5} width={to - from + 2} height={6} rx={1.5} fill={tint(severity, 0.6)} />
-            <rect x={from - 1} y={lines[line][0] + 4.5} width={to - from + 2} height={1.2} fill={SEVERITY_COLORS[severity].color} />
+            <rect x={from - 1} y={lines[line][0] - 1.5} width={to - from + 2} height={6} rx={1.5} {...tint(severity, 0.6)} />
+            <rect x={from - 1} y={lines[line][0] + 4.5} width={to - from + 2} height={1.2} fill={`var(--color-${severity})`} />
           </g>
         ) : null,
       )}
-      <rect x={paper + 6} y={2} width={w - paper - 8} height={h - 4} rx={2} fill="#17171a" stroke="var(--color-accent)" strokeWidth={0.6} />
+      <rect x={paper + 6} y={2} width={w - paper - 8} height={h - 4} rx={2} fill="var(--color-isoPanel)" stroke="var(--color-accent)" strokeWidth={0.6} />
       {[10, 17, 24].map((y, i) => (
-        <rect key={y} x={paper + 11} y={y} width={(w - paper - 18) * (i ? 0.7 : 1)} height={3} rx={1.5} fill="#55555d" />
+        <rect key={y} x={paper + 11} y={y} width={(w - paper - 18) * (i ? 0.7 : 1)} height={3} rx={1.5} fill="var(--color-isoBar)" />
       ))}
     </g>
   );
@@ -1149,7 +1150,7 @@ export function GuideFigure({ step }: { step: GuideStep }) {
         {/* The downloads folder: a back and a front panel, the file slipping in between. */}
         <Box v={v} at={[130, 62, 0]} size={[80, 4, 40]} r={3} />
         <g transform={v.front(130, 66, 40)}>
-          <rect x={4} y={-6} width={20} height={8} rx={2} fill="#17171a" stroke="#55555d" />
+          <rect x={4} y={-6} width={20} height={8} rx={2} fill="var(--color-isoPanel)" stroke="var(--color-isoBar)" />
         </g>
         <g className="guide-drop" style={{ '--dx': '-46px', '--dy': '-58px' } as CSSProperties}>
           <SeanceFile v={v} at={[154, 70, 12]} />
@@ -1187,17 +1188,17 @@ export function GuideFigure({ step }: { step: GuideStep }) {
     return frame(
       <>
         <Monitor v={v} at={[0, 0]} w={W} h={H}>
-          <rect width={W - 8} height={14} rx={2.5} fill="#17171a" />
+          <rect width={W - 8} height={14} rx={2.5} fill="var(--color-isoPanel)" />
           {[0, 1, 2].map((i) => (
-            <circle key={i} cx={7 + i * 6} cy={7} r={1.8} fill="#3a3a42" />
+            <circle key={i} cx={7 + i * 6} cy={7} r={1.8} fill="var(--color-isoDot)" />
           ))}
-          <rect x={28} y={3} width={106} height={8} rx={4} fill="#2c2c33" />
+          <rect x={28} y={3} width={106} height={8} rx={4} fill="var(--color-isoControl)" />
           <Label x={34} y={9.3} size={6} fill="var(--color-foreground)" weight={500}>
             squiggle.fr/classe
           </Label>
           {opened ? null : (
             // The address typed in, a letter at a time.
-            <rect className="guide-type" x={33} y={3.5} width={98} height={7} fill="#2c2c33" />
+            <rect className="guide-type" x={33} y={3.5} width={98} height={7} fill="var(--color-isoControl)" />
           )}
           {opened ? (
             <g className="guide-late">
@@ -1214,7 +1215,7 @@ export function GuideFigure({ step }: { step: GuideStep }) {
               <Label x={66} y={57.5} size={6.8} fill="var(--color-accentForeground)" anchor="middle">
                 Ouvrir le fichier de séance
               </Label>
-              <rect x={10} y={72} width={70} height={3} rx={1.5} fill="#55555d" />
+              <rect x={10} y={72} width={70} height={3} rx={1.5} fill="var(--color-isoBar)" />
             </g>
           )}
         </Monitor>
@@ -1241,14 +1242,14 @@ export function GuideFigure({ step }: { step: GuideStep }) {
           </g>
         </Wall>
         <Laptop v={v} at={[0, 40]} w={96} d={58} h={58}>
-          <rect x={4} y={4} width={80} height={14} rx={2} fill="#17171a" stroke="var(--color-accent)" strokeWidth={0.6} />
-          <rect x={4} y={22} width={80} height={24} rx={2} fill="#17171a" />
+          <rect x={4} y={4} width={80} height={14} rx={2} fill="var(--color-isoPanel)" stroke="var(--color-accent)" strokeWidth={0.6} />
+          <rect x={4} y={22} width={80} height={24} rx={2} fill="var(--color-isoPanel)" />
           {[27, 33, 39].map((y) => (
-            <rect key={y} x={9} y={y} width={50} height={2.5} rx={1.25} fill="#55555d" />
+            <rect key={y} x={9} y={y} width={50} height={2.5} rx={1.25} fill="var(--color-isoBar)" />
           ))}
           {/* The board's window leaves the laptop for the projector. */}
           <g className="guide-slide" style={{ '--dx': '102px', '--dy': '-96px' } as CSSProperties}>
-            <rect x={10} y={8} width={64} height={40} rx={2} fill="#0a0a0b" stroke="var(--color-accent)" />
+            <rect x={10} y={8} width={64} height={40} rx={2} fill="var(--color-isoScreen)" stroke="var(--color-accent)" />
             <g transform="translate(12 10) scale(0.37)">
               <MiniBoard w={164} h={98} />
             </g>

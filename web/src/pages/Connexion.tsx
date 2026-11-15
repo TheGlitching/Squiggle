@@ -12,13 +12,13 @@ function searchOf(path: string): URLSearchParams {
 }
 
 /**
- * Google's sign-in button, dark theme, as its branding guidelines draw it: the
- * #131314 fill, a 1 px #8E918F outline, #E3E3E3 text, the four-colour "G" at 20 px
- * with 12 px of padding and 10 px before the label, and an 8 % light state layer
- * on hover. The height matches the page's other buttons.
+ * Google's sign-in button, as its branding guidelines draw it in the page's theme
+ * (`--color-google*` in index.css): the fill, a 1 px outline, the text, the four-colour
+ * "G" at 20 px with 12 px of padding and 10 px before the label, and a state layer on
+ * hover. The height matches the page's other buttons.
  */
 const GOOGLE_BUTTON =
-  'inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-control border border-[#8E918F] bg-[#131314] px-3 text-base font-medium text-[#E3E3E3] transition-[transform,background-color] duration-160 ease-out hover:bg-[#242425] active:scale-[0.97] motion-reduce:active:scale-100';
+  'inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-control border border-googleEdge bg-googleFill px-3 text-base font-medium text-googleInk transition-[transform,background-color] duration-160 ease-out hover:bg-googleHover active:scale-[0.97] motion-reduce:active:scale-100';
 
 /** The official Google "G", unaltered. */
 function GoogleG() {

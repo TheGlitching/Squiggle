@@ -77,7 +77,12 @@
   line-gap-override: 0%;
 }
 
-@theme {
+/*
+  `static`: every token is written out, even one only the drawings name, since the
+  light theme below redefines them all. This block is the dark theme, and it is what
+  `src/share.tsx` and `tests/contrast.test.ts` read as such.
+*/
+@theme static {
   --color-background: #0a0a0b;
   --color-surface: #0f0f11;
   --color-muted: #948f88;
@@ -102,12 +107,50 @@
   /* A destructive confirmation: light ink on the critical fill, darker on hover. */
   --color-criticalForeground: #faf9f5;
   --color-criticalHover: #b91c1c;
+  /* The four severities of a finding (`SEVERITY_COLORS` in `demo.ts`): `critical` and
+     `warning` above and these two fill the bar and dot, *Label is the AA tone for a
+     label, *Tint the wash over a passage, *Wash its colour for a drawing's own opacity. */
+  --color-info: #2563eb;
+  --color-positive: #059669;
+  --color-criticalLabel: #f87171;
+  --color-warningLabel: #fbbf24;
+  --color-infoLabel: #60a5fa;
+  --color-positiveLabel: #34d399;
+  --color-criticalWash: #ef4444;
+  --color-warningWash: #f59e0b;
+  --color-infoWash: #3b82f6;
+  --color-positiveWash: #10b981;
+  --color-criticalTint: #ef44442e;
+  --color-warningTint: #f59e0b2e;
+  --color-infoTint: #3b82f62e;
+  --color-positiveTint: #10b9812e;
+  /* The few fixed surfaces: a neutral chip, the accent's outline, a field's hint. */
+  --color-chip: #121215;
+  --color-accentBorder: #3a2a66;
+  --color-placeholder: #99a1af;
+  /* Google's own button, in the variant its guidelines give for this theme. */
+  --color-googleFill: #131314;
+  --color-googleHover: #242425;
+  --color-googleEdge: #8e918f;
+  --color-googleInk: #e3e3e3;
   /* The page a reader is on: a publisher's light sheet. Every drawing keeps the
      same two materials, paper for the article and violet for Squiggle's reading. */
   --color-paper: #f2f1ee;
   --color-paperInk: #1c1b1f;
   --color-paperMuted: #5c5b61;
   --color-paperEdge: #c9c6bf;
+  --color-paperLine: #a3a1a6;
+  --color-paperRule: #8c8a90;
+  /* What the drawings build the rest of the world from: a slab or a device's body,
+     its side, their outline, a screen, a panel on it, a control, a dot, a line of text. */
+  --color-isoSolid: #17171a;
+  --color-isoSolidSide: #0f0f11;
+  --color-isoEdge: #55555d;
+  --color-isoScreen: #0a0a0b;
+  --color-isoPanel: #17171a;
+  --color-isoControl: #2c2c33;
+  --color-isoDot: #3a3a42;
+  --color-isoBar: #55555d;
 
   --font-display: 'Bricolage Grotesque', 'Bricolage Grotesque Fallback', system-ui, sans-serif;
   --font-sans: 'Bricolage Grotesque', 'Bricolage Grotesque Fallback', system-ui, sans-serif;
@@ -124,6 +167,80 @@
 }
 
 /*
+  The light theme, when the device asks for it; a device that says nothing keeps the
+  dark one. Warm paper and a dark ink, not white and greys. Its drawings are a paper
+  model, not the dark ones inverted: bodies in card with an ink outline, the article
+  the brightest sheet on the table. The contract is `tests/contrast.test.ts`.
+*/
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --color-background: #f4efe4;
+    --color-surface: #fbf8f1;
+    --color-muted: #5f574a;
+    --color-faint: #665e50;
+    --color-border: #dcd3c1;
+    --color-borderControl: #8d8370;
+    --color-lineSoft: #e7e0d1;
+    --color-foreground: #201c16;
+    --color-accent: #5f35c7;
+    --color-accentForeground: #fffdf8;
+    --color-accentHover: #4b27a6;
+    --color-accentSoft: #e8e0f8;
+    --color-accentInk: #43219a;
+    --color-critical: #c81e1e;
+    --color-criticalSoft: #f9e6e0;
+    --color-criticalInk: #9b1c1c;
+    --color-warning: #b45309;
+    --color-warningSoft: #f8ebcf;
+    --color-warningInk: #7c4405;
+    --color-criticalForeground: #fffdf8;
+    --color-criticalHover: #a31919;
+    --color-info: #1d4ed8;
+    --color-positive: #047857;
+    --color-criticalLabel: #a81919;
+    --color-warningLabel: #8a4606;
+    --color-infoLabel: #1c45c4;
+    --color-positiveLabel: #04694c;
+    --color-criticalWash: #ef4444;
+    --color-warningWash: #f59e0b;
+    --color-infoWash: #3b82f6;
+    --color-positiveWash: #10b981;
+    --color-criticalTint: #ef444433;
+    --color-warningTint: #f59e0b40;
+    --color-infoTint: #3b82f633;
+    --color-positiveTint: #10b98133;
+    --color-chip: #efe9dc;
+    --color-accentBorder: #b9a5ea;
+    --color-placeholder: #6d6557;
+    --color-googleFill: #ffffff;
+    --color-googleHover: #f3f1ec;
+    --color-googleEdge: #747775;
+    --color-googleInk: #1f1f1f;
+    --color-paper: #fffdf8;
+    --color-paperInk: #201c16;
+    --color-paperMuted: #5f574a;
+    --color-paperEdge: #cfc5b2;
+    --color-paperLine: #bdb4a4;
+    --color-paperRule: #8f8675;
+    --color-isoSolid: #e6decd;
+    --color-isoSolidSide: #d3c9b5;
+    --color-isoEdge: #857b69;
+    --color-isoScreen: #efe8da;
+    --color-isoPanel: #f8f4ea;
+    --color-isoControl: #d9d0be;
+    --color-isoDot: #b3a994;
+    --color-isoBar: #a79d8a;
+  }
+
+  /* Over warm paper the sheet needs a little more violet to read as laid on top. */
+  .iso-glass {
+    fill-opacity: 0.13;
+  }
+}
+
+/*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
   looks the same as it did with Tailwind CSS v3.
@@ -135,7 +252,7 @@
 @layer base {
   input::placeholder,
   textarea::placeholder {
-    color: var(--color-gray-400);
+    color: var(--color-placeholder);
   }
 }
 
@@ -172,13 +289,13 @@
   }
 
   .iso-solid {
-    fill: #17171a;
-    stroke: #55555d;
+    fill: var(--color-isoSolid);
+    stroke: var(--color-isoEdge);
   }
 
   .iso-solid-side {
-    fill: #0f0f11;
-    stroke: #55555d;
+    fill: var(--color-isoSolidSide);
+    stroke: var(--color-isoEdge);
   }
 
   /* Squiggle's reading: a violet sheet laid over the article. */
@@ -414,7 +531,12 @@
     }
   }
 
-  /* A black screen hides the board without a sound: the class looks back at the teacher. */
+  /* A black screen hides the board without a sound: the class looks back at the teacher.
+     Black in either theme: a projector left on a paper-coloured screen lights the room. */
+  .board[data-black='true'] {
+    background: #0a0a0b;
+  }
+
   .board[data-black='true'] > * {
     visibility: hidden;
   }
@@ -994,7 +1116,7 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
-    /* The site is dark-only: native scrollbars, resize handles and pickers follow. */
+    /* Native scrollbars, resize handles and pickers follow the theme (light: its own block). */
     color-scheme: dark;
     scrollbar-color: var(--color-borderControl) var(--color-background);
   }

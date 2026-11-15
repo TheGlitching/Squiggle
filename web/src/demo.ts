@@ -32,12 +32,32 @@ export const SEVERITY_COLORS: Record<
   positive: { color: '#059669', tint: 'rgba(16, 185, 129, 0.18)', text: '#34d399' },
 };
 
+/**
+ * The same severities on the site, where they follow its theme: the tokens of
+ * `index.css`, whose dark values are `SEVERITY_COLORS`. A share image, which has no
+ * theme, reads those values directly.
+ */
+function severityTone(severity: HighlightSeverity): { color: string; tint: string; text: string } {
+  return {
+    color: `var(--color-${severity})`,
+    tint: `var(--color-${severity}Tint)`,
+    text: `var(--color-${severity}Label)`,
+  };
+}
+
+export const SEVERITY_TONES: Record<HighlightSeverity, { color: string; tint: string; text: string }> = {
+  critical: severityTone('critical'),
+  warning: severityTone('warning'),
+  info: severityTone('info'),
+  positive: severityTone('positive'),
+};
+
 export function severityColor(severity: HighlightSeverity): {
   color: string;
   tint: string;
   text: string;
 } {
-  return SEVERITY_COLORS[severity];
+  return SEVERITY_TONES[severity];
 }
 
 /**
@@ -274,25 +294,25 @@ export const VERIFICATION_STATES: Array<{
     state: 'verifiee',
     label: 'Vérifiée',
     hint: 'Les sources donnent raison à l’article.',
-    chip: 'border-[#059669]/50 bg-[#059669]/15 text-[#34d399]',
+    chip: 'border-positive/50 bg-positive/15 text-positiveLabel',
   },
   {
     state: 'non-sourcee',
     label: 'Non sourcée dans l’article',
     hint: 'L’article ne cite rien à l’appui.',
-    chip: 'border-border bg-[#121215] text-muted',
+    chip: 'border-border bg-chip text-muted',
   },
   {
     state: 'douteuse',
     label: 'Douteuse',
     hint: 'Les sources le mettent en doute.',
-    chip: 'border-[#dc2626]/50 bg-[#dc2626]/15 text-[#f87171]',
+    chip: 'border-critical/50 bg-critical/15 text-criticalLabel',
   },
   {
     state: 'non-verifiable',
     label: 'Non vérifiable telle qu’écrite',
     hint: 'Trop flou pour être confronté aux sources.',
-    chip: 'border-dashed border-[#d97706]/50 bg-surface text-[#fbbf24]',
+    chip: 'border-dashed border-warning/50 bg-surface text-warningLabel',
   },
 ];
 
