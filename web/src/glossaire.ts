@@ -280,6 +280,36 @@ export const NOTIONS: readonly Notion[] = [
         lecture:
           'Un accident, même grave, ne dit pas si la trottinette est plus dangereuse que le vélo ou la voiture. Il faudrait compter les accidents par trajet ou par kilomètre parcouru, sur une longue période.',
       },
+      {
+        rubrique: 'École',
+        titre: ['Les devoirs à la maison ne servent à rien'],
+        texte: [
+          'Dans la classe de ma fille, plusieurs parents ont dit que les devoirs créent des tensions le soir. ',
+          ['Les devoirs à la maison sont une source de stress pour toutes les familles.'],
+          '',
+        ],
+        lecture: 'Quelques parents d’une classe parlent de leur expérience. L’article en tire une conclusion sur toutes les familles. Pour savoir ce qu’il en est, il faudrait interroger un échantillon large de parents, dans des écoles variées.',
+      },
+      {
+        rubrique: 'Santé',
+        titre: ['Le jeûne intermittent, la solution miracle'],
+        texte: [
+          'Trois collègues qui ont essayé le jeûne intermittent disent avoir perdu du poids. ',
+          ['Cette méthode marche pour tout le monde et règle les problèmes de poids.'],
+          '',
+        ],
+        lecture: 'Trois personnes, trois expériences. L’article en fait une règle générale. Pour évaluer une méthode, il faut des études sur un grand nombre de participants, avec un groupe de comparaison.',
+      },
+      {
+        rubrique: 'Travail',
+        titre: ['Les jeunes ne veulent plus travailler'],
+        texte: [
+          'Dans une start-up, deux stagiaires ont refusé une mission le week-end. ',
+          ['Les jeunes ne veulent plus travailler, ils fuient les responsabilités.'],
+          '',
+        ],
+        lecture: 'Deux stagiaires dans une entreprise ne représentent pas toute une génération. Pour parler des jeunes, il faudrait une enquête sur un échantillon représentatif, pas deux cas.',
+      },
     ],
     reperer: [
       'Un passage brusque de « ici », « chez eux » à « les Français », « tout le monde ».',
