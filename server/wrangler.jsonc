@@ -4,8 +4,13 @@
   "main": "src/index.ts",
   // Bump when the runtime gains new features we start relying on.
   "compatibility_date": "2025-01-01",
+  // Only the lines server/src/lib/log.ts writes are kept. Invocation logs would
+  // store every request's URL (an article address), IP and city, which
+  // /transparence and PRIVACY.md promise we never keep in clear.
+  // tests/deploy.test.ts checks they stay off in every environment.
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false }
   },
   // One Worker serves the API and the web app, so the app and the API share an
   // origin (see web/src/api.ts). `web/dist` is built by `npm run build:web`
