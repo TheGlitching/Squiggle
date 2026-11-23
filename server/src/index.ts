@@ -876,6 +876,7 @@ async function accountForUser(
       customerId: user.stripeCustomerId,
       successUrl: `${s.webAppOrigin}${returnPage ?? '/compte'}?paiement=ok`,
       cancelUrl: `${s.webAppOrigin}${returnPage ?? '/tarifs'}?paiement=annule`,
+      requestId,
     });
     if (outcome.ok) await countMetric(s.db, 'checkout_started', now, requestId);
     return finish(outcome);
@@ -900,6 +901,7 @@ async function accountForUser(
       successUrl: `${s.webAppOrigin}${returnPage ?? '/compte'}?paiement=ok`,
       cancelUrl: `${s.webAppOrigin}${returnPage ?? '/compte'}?paiement=annule`,
       teacherCoupon: coupon,
+      requestId,
     });
     // Completed, it comes back free: counted as `checkout_free` by the webhook.
     if (outcome.ok) await countMetric(s.db, 'checkout_started', now, requestId);

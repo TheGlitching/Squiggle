@@ -7,7 +7,7 @@
  * prove they drive the same billing helpers the signed `/v1/account*` route
  * does rather than a second copy of the logic.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CHROME_ORIGIN, magicLogin, makeTestEnv, postStripeEvent, type TestEnv } from './helpers';
 
@@ -168,6 +168,71 @@ describe('POST /web/account/checkout', () => {
     expect(call?.form.success_url).toBe(`${env.webAppOrigin}/compte?paiement=ok`);
     expect(call?.form.cancel_url).toBe(`${env.webAppOrigin}/tarifs?paiement=annule`);
     expect(call?.form['metadata[user_id]']).toBe(user.id);
+  });
+
+  it('sends a new reader as an email, with no customer to update', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+
+    await web(env, '/web/account/checkout', { method: 'POST', cookie: sessionCookie, body: {} });
+
+    const form = env.stripe.calls.find((c) => c.path === '/checkout/sessions')!.form;
+    expect(form.customer_email).toBe('marie@example.com');
+    expect(form['automatic_tax[enabled]']).toBe('true');
+    expect(form.customer).toBeUndefined();
+    expect(Object.keys(form).filter((k) => k.startsWith('customer_update'))).toEqual([]);
+  });
+
+  it('resubscribes a former subscriber on their Stripe customer, saving the address tax needs', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie, user } = await magicLogin(env, 'marie@example.com');
+    // Subscribed once (the webhook writes the customer id), then cancelled.
+    await postStripeEvent(env, {
+      id: 'evt_1',
+      type: 'checkout.session.completed',
+      data: { object: { customer: 'cus_test_1', subscription: 'sub_test_1', metadata: { user_id: user.id } } },
+    });
+    await postStripeEvent(env, {
+      id: 'evt_2',
+      type: 'customer.subscription.deleted',
+      data: { object: { id: 'sub_test_1', customer: 'cus_test_1', status: 'canceled', metadata: { user_id: user.id } } },
+    });
+
+    const res = await web(env, '/web/account/checkout', { method: 'POST', cookie: sessionCookie, body: {} });
+    expect(res.status).toBe(200);
+
+    const form = env.stripe.calls.find((c) => c.path === '/checkout/sessions')!.form;
+    expect(form.customer).toBe('cus_test_1');
+    expect(form.customer_email).toBeUndefined();
+    expect(form['automatic_tax[enabled]']).toBe('true');
+    // An object, not the bare `customer_update=auto` Stripe refuses.
+    expect(Object.entries(form).filter(([k]) => k.startsWith('customer_update'))).toEqual([
+      ['customer_update[address]', 'auto'],
+    ]);
+  });
+
+  it('logs what Stripe refused by type, code and parameter name, never its message', async () => {
+    const env = makeTestEnv();
+    const { sessionCookie } = await magicLogin(env, 'marie@example.com');
+    env.stripe.failNext = true;
+    const logged = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const res = await web(env, '/web/account/checkout', { method: 'POST', cookie: sessionCookie, body: {} });
+      expect(res.status).toBe(502);
+      const lines = logged.mock.calls.map(([line]) => String(line));
+      const failure = lines.map((l) => JSON.parse(l)).find((l) => l.event === 'stripe_request_failed');
+      expect(failure).toMatchObject({
+        path: '/checkout/sessions',
+        status: 400,
+        stripeType: 'invalid_request_error',
+        code: 'resource_missing',
+        fields: ['customer'],
+        requestId: res.headers.get('x-squiggle-request-id'),
+      });
+      expect(lines.join('\n')).not.toContain('boom');
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it('comes back to the analysis page when the reader paid from under a report, and nowhere else', async () => {

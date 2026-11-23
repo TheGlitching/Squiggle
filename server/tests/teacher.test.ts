@@ -88,6 +88,8 @@ describe('POST /web/account/teacher-checkout', () => {
     expect(call?.form['metadata[user_id]']).toBe(user.id);
     expect(call?.form['subscription_data[metadata][offer]']).toBe('teacher');
     expect(call?.form.customer_email).toBe('marie.curie@ac-versailles.fr');
+    expect(call?.form.customer).toBeUndefined();
+    expect(Object.keys(call?.form ?? {}).filter((k) => k.startsWith('customer_update'))).toEqual([]);
   });
 
   it('refuses an address that is not academic, and says so on the account', async () => {
