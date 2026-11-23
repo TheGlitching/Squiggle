@@ -66,19 +66,22 @@ const ACCESS_STEPS = [
 ] as const;
 
 /**
- * The 2027 press week (CLEMI): a shared code the CLEMI publishes on its page for
- * registered teachers. The code itself is never printed here: this page is
- * public, and the code is meant for those teachers only.
+ * The 2027 press week (CLEMI). An academic address needs no code at all, so it
+ * comes first. Otherwise, a shared access code the CLEMI publishes on its page
+ * for registered teachers. The code itself is never printed here: this page is
+ * public, and the code is meant for those teachers only. The partners' charter
+ * rules out any promotional offer, so the page calls it an access code and names
+ * Stripe's « code promotionnel » field only where the teacher has to find it.
  */
 const PRESS_WEEK_STEPS = [
-  'Retrouvez le code Squiggle sur la page des offres réservée aux enseignants inscrits, sur le site du CLEMI.',
-  `Créez votre compte sur squiggle.fr, ouvrez « Mon compte », puis cliquez sur « ${SUBSCRIBE_LABEL} ».`,
-  'Cliquez sur « Ajouter un code promotionnel » et saisissez le code : le total passe à 0 €.',
+  'Avec une adresse académique, il n’y a rien à saisir : créez votre compte avec elle, puis cliquez sur « Accès enseignant » dans « Mon compte ».',
+  'Sans adresse académique, retrouvez le code d’accès Squiggle sur la page des offres réservée aux enseignants inscrits, sur le site du CLEMI.',
+  `Ouvrez « Mon compte », cliquez sur « ${SUBSCRIBE_LABEL} », puis, sur la page de paiement, sur « Ajouter un code promotionnel », et saisissez ce code : le total passe à 0 €.`,
 ] as const;
 
 const PRESS_WEEK_FACTS = [
-  'L’abonnement complet, gratuit pendant 6 mois.',
-  'Aucune carte bancaire n’est demandée, et rien ne sera prélevé : au bout de 6 mois, l’accès s’arrête de lui-même.',
+  'L’abonnement complet, gratuit : jusqu’au 30 juin avec une adresse académique, 6 mois avec le code d’accès.',
+  'Aucune carte bancaire n’est demandée, et rien ne sera prélevé : à la fin, l’accès s’arrête de lui-même.',
   'Aucun compte élève : vous seul lancez l’analyse, les élèves lisent, soulignent et débattent.',
   'De la 4e au lycée. En 4e et en 3e, seul l’enseignant se sert de l’outil.',
 ] as const;
@@ -412,7 +415,7 @@ export function Enseignants() {
         </div>
         <p className={`mt-8 mb-0 text-base leading-relaxed text-muted ${MEASURE}`}>
           Pas d’adresse académique ? Écrivez-nous à {CONTACT_EMAIL} avec votre établissement et votre discipline. Vous
-          recevez un code de réduction à saisir en vous abonnant : le total passe à 0 €, sans carte bancaire.{' '}
+          recevez un code d’accès à saisir en vous abonnant : le total passe à 0 €, sans carte bancaire.{' '}
           <a href={TEACHER_REQUEST_URL} className={QUIET_LINK}>
             Demander un code par e-mail
           </a>

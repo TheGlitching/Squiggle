@@ -64,8 +64,12 @@ describe('Enseignants', () => {
       'rien ne sera prélevé',
     );
     const steps = week.getByRole('list', { name: 'Comment activer l’accès des Semaines de la presse' });
+    // An academic address needs no code, so it is the first way in.
+    expect(within(steps).getAllByRole('listitem')[0]).toHaveTextContent('adresse académique');
     expect(steps).toHaveTextContent('site du CLEMI');
+    // Stripe's own field label is named, so the teacher finds it; our words say access code.
     expect(steps).toHaveTextContent('Ajouter un code promotionnel');
+    expect(steps).toHaveTextContent('code d’accès');
     expect(week.getByText(/Aucun compte élève/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/SEMAINEPRESSE|[A-Z]{6,}\d{2}/);
     expect(screen.getByText(/jamais un texte d’élève/)).toBeInTheDocument();
