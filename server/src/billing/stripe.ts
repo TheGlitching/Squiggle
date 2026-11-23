@@ -12,6 +12,7 @@
  * against a fake Stripe, with no account and no network.
  */
 import { apiError, type Outcome } from '../lib/errors';
+import { logEvent } from '../lib/log';
 
 const STRIPE_API = 'https://api.stripe.com/v1';
 
@@ -31,12 +32,17 @@ export interface StripeConfig {
   fetchImpl?: typeof fetch;
 }
 
+/** The endpoint, with the Stripe ids in it (`cus_…`, `sub_…`) replaced, for a log line. */
+function logPath(path: string): string {
+  return path.replace(/\/(cus|sub)_[^/]+/g, '/:id');
+}
+
 async function stripeRequest(
   config: StripeConfig,
   method: 'POST' | 'DELETE',
   path: string,
   form: Record<string, string>,
-  opts: { missingIsFine?: boolean } = {},
+  opts: { missingIsFine?: boolean; requestId?: string } = {},
 ): Promise<Outcome<{ data: Record<string, unknown> }>> {
   const fetchImpl = config.fetchImpl ?? fetch;
   let res: Response;
@@ -50,20 +56,34 @@ async function stripeRequest(
       body: method === 'POST' ? new URLSearchParams(form).toString() : undefined,
     });
   } catch {
+    logEvent({ event: 'stripe_request_failed', requestId: opts.requestId ?? '', path: logPath(path) });
     return apiError('billing_unavailable', 'Le service de paiement est momentanément indisponible.');
   }
   // A resource that is already gone is the state a delete is after.
   if (res.status === 404 && opts.missingIsFine) return { ok: true, data: {} };
   if (!res.ok) {
-    // Stripe's error body can echo the parameters we sent; it is never
-    // forwarded to the caller and never logged.
+    // Stripe's error body can echo the parameters we sent, so it is never
+    // forwarded to the caller and its free-text `message` is never logged.
+    // Its type, code and the NAME of the parameter it refused are fixed
+    // identifiers, and enough to tell which request Stripe objected to.
+    const error = ((await res.json().catch(() => null)) as { error?: Record<string, unknown> } | null)?.error;
+    const id = (value: unknown) => (typeof value === 'string' ? value : undefined);
+    logEvent({
+      event: 'stripe_request_failed',
+      requestId: opts.requestId ?? '',
+      path: logPath(path),
+      status: res.status,
+      stripeType: id(error?.type),
+      code: id(error?.code),
+      fields: id(error?.param) ? [id(error?.param)!] : undefined,
+    });
     return apiError('billing_unavailable', 'Le service de paiement a refusé la demande.');
   }
   return { ok: true, data: (await res.json()) as Record<string, unknown> };
 }
 
-function stripePost(config: StripeConfig, path: string, form: Record<string, string>) {
-  return stripeRequest(config, 'POST', path, form);
+function stripePost(config: StripeConfig, path: string, form: Record<string, string>, requestId?: string) {
+  return stripeRequest(config, 'POST', path, form, { requestId });
 }
 
 /**
@@ -120,6 +140,8 @@ export interface CheckoutArgs {
   cancelUrl: string;
   /** The teacher offer: this coupon is applied to the session instead of a code being typed. */
   teacherCoupon?: string;
+  /** Correlates a refusal from Stripe with the request that asked. */
+  requestId?: string;
 }
 
 export async function createCheckoutSession(args: CheckoutArgs): Promise<Outcome<{ url: string }>> {
@@ -144,7 +166,6 @@ export async function createCheckoutSession(args: CheckoutArgs): Promise<Outcome
     // With nothing due, Checkout then asks for no card at all.
     allow_promotion_codes: 'true',
     payment_method_collection: 'if_required',
-    customer_update: args.customerId ? 'auto' : '',
   };
   if (args.teacherCoupon) {
     // Stripe takes either a discount or a promotion-code field, never both.
@@ -155,11 +176,16 @@ export async function createCheckoutSession(args: CheckoutArgs): Promise<Outcome
     form['metadata[offer]'] = 'teacher';
     form['subscription_data[metadata][offer]'] = 'teacher';
   }
-  if (args.customerId) form.customer = args.customerId;
-  else if (args.email) form.customer_email = args.email;
-  if (!args.customerId) delete form.customer_update;
+  if (args.customerId) {
+    form.customer = args.customerId;
+    // Automatic tax needs an address on an existing customer, and a returning
+    // one usually has none on file: Checkout saves the address it collects.
+    // `customer_update` is an object; no tax id or shipping is collected, so
+    // `address` is the only sub-field Stripe requires.
+    form['customer_update[address]'] = 'auto';
+  } else if (args.email) form.customer_email = args.email;
 
-  const res = await stripePost(args.config, '/checkout/sessions', form);
+  const res = await stripePost(args.config, '/checkout/sessions', form, args.requestId);
   if (!res.ok) return res;
   const url = res.data.url;
   if (typeof url !== 'string') {

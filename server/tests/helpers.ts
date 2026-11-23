@@ -303,9 +303,24 @@ export function makeFakeStripe(): FakeStripe {
       state.calls.push({ method: init?.method ?? 'GET', path, form });
       if (state.failNext) {
         state.failNext = false;
-        return Response.json({ error: { message: 'boom' } }, { status: 400 });
+        return Response.json(
+          { error: { type: 'invalid_request_error', code: 'resource_missing', param: 'customer', message: 'boom' } },
+          { status: 400 },
+        );
       }
       if (path === '/checkout/sessions') {
+        // Stripe's own refusals for this request: `customer_update` is an
+        // object, and automatic tax on an existing customer needs it to save
+        // the address Checkout collects.
+        const refuse = (param: string) =>
+          Response.json(
+            { error: { type: 'invalid_request_error', code: 'parameter_invalid_string', param, message: `Invalid ${param}` } },
+            { status: 400 },
+          );
+        if ('customer_update' in form) return refuse('customer_update');
+        if (form.customer && form['automatic_tax[enabled]'] === 'true' && form['customer_update[address]'] !== 'auto') {
+          return refuse('customer_update[address]');
+        }
         return Response.json({ id: 'cs_test_1', url: 'https://checkout.stripe.example/cs_test_1' });
       }
       if (path === '/billing_portal/sessions') {

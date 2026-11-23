@@ -38,6 +38,8 @@ export interface LogFields {
     | 'install_revoked'
     | 'stripe_email_sync_failed'
     | 'stripe_teacher_end_failed'
+    // A Stripe API call that failed, with Stripe's `type`, `code` and refused `param` (as `fields`).
+    | 'stripe_request_failed'
     | 'metric_failed'
     // A message to the forwarding address, with its outcome as `code` (`mail/inbound.ts`).
     | 'mail_received'
@@ -55,6 +57,8 @@ export interface LogFields {
   urlHash?: string;
   /** A machine-readable error code from `ErrorCodes`. */
   code?: string;
+  /** Stripe's error `type` (e.g. `invalid_request_error`). Never its message. */
+  stripeType?: string;
   /** Which limit tripped, e.g. `magic_link:ip`. Never the value it limited. */
   scope?: string;
   count?: number;
