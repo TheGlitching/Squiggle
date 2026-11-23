@@ -63,19 +63,20 @@ export const HostedAccountCard: React.FC<HostedAccountCardProps> = ({
           <p className="mt-1 text-xs leading-relaxed text-muted">
             {view.detail}
           </p>
-          {/* The quota reads as a bar of pips before it is read as a sentence. */}
+          {/* The quota reads as a bar before it is read as a sentence. One track for
+              any limit: a pip per analysis overflowed the card at a monthly 60. */}
           {account.usage.limit > 0 && (
-            <div className="mt-2 flex items-center gap-1.5" aria-hidden="true">
-              {Array.from({ length: account.usage.limit }).map((_, i) => (
+            <div className="mt-3 flex items-center gap-3" aria-hidden="true" data-testid="quota-meter">
+              <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-line">
                 <span
-                  key={i}
-                  className={`h-1.5 w-6 rounded-full ${
-                    i < account.usage.remaining ? 'bg-accent' : 'bg-line'
-                  }`}
+                  className="block h-full rounded-full bg-accent"
+                  style={{
+                    width: `${(Math.min(Math.max(account.usage.remaining, 0), account.usage.limit) / account.usage.limit) * 100}%`,
+                  }}
                 />
-              ))}
-              <span className="ml-1 font-mono text-xs text-muted">
-                {account.usage.remaining} / {account.usage.limit}
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted">
+                {account.usage.remaining}&nbsp;/&nbsp;{account.usage.limit}
               </span>
             </div>
           )}
