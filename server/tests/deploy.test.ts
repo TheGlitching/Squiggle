@@ -115,6 +115,16 @@ describe('environments', () => {
   });
 });
 
+describe('logs', () => {
+  it('keep the log.ts lines and drop invocation logs, which carry article URLs', () => {
+    expect(wrangler.observability.enabled).toBe(true);
+    expect(wrangler.observability.logs).toEqual({ enabled: true, invocation_logs: false });
+    for (const env of Object.values(wrangler.env as Record<string, any>)) {
+      expect(env.observability).toBeUndefined();
+    }
+  });
+});
+
 describe('the PENDING guard', () => {
   it('reads the placeholders of one environment, ignoring URLs and comments', () => {
     const text = `{
