@@ -7,9 +7,12 @@
   // Only the lines server/src/lib/log.ts writes are kept. Invocation logs would
   // store every request's URL (an article address), IP and city, which
   // /transparence and PRIVACY.md promise we never keep in clear.
-  // tests/deploy.test.ts checks they stay off in every environment.
+  // The log.ts lines still carry the request URL, whose ?url= is the article
+  // address, so its query string is redacted too.
+  // tests/deploy.test.ts checks both hold in every environment.
   "observability": {
     "enabled": true,
+    "redact_query_string": true,
     "logs": { "enabled": true, "invocation_logs": false }
   },
   // One Worker serves the API and the web app, so the app and the API share an
